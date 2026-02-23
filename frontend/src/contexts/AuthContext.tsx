@@ -31,16 +31,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     useEffect(() => {
         // Get initial session
         const getInitialSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setSession(session);
-            setUser(session?.user ?? null);
-
-            if (session) {
-                // Initial sync with backend
-                api.get('users/me').catch(err => console.error("Initial sync failed:", err));
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                setSession(session);
+                setUser(session?.user ?? null);
+            } catch (err) {
+                console.error("Failed to get session:", err);
+            } finally {
+                // Always stop loading, even if session fetch fails
+                setLoading(false);
             }
-
-            setLoading(false);
         };
 
         getInitialSession();
@@ -50,17 +50,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             async (_event, session) => {
                 setSession(session);
                 setUser(session?.user ?? null);
-
-                if (session) {
-                    // Sync with backend on login/change
-                    try {
-                        await api.get('users/me');
-                    } catch (err) {
-                        console.error("Auth change sync failed:", err);
-                    }
-                }
-
                 setLoading(false);
+
+                // Sync with backend in background (non-blocking)
+                if (session) {
+                    api.get('users/me').catch(err => console.error("Auth sync failed:", err));
+                }
             }
         );
 
