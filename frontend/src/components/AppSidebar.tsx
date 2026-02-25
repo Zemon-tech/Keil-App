@@ -10,6 +10,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -32,6 +34,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { useTheme } from "next-themes";
 
 const navigationItems = [
   {
@@ -75,25 +78,45 @@ export function AppSidebar() {
     .join("")
     .toUpperCase() || user?.email?.[0].toUpperCase() || "U";
 
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const logoSrc = isDark ? "/keilhq-white.svg" : "/keilhq.svg";
+
   const userDisplayName = user?.user_metadata?.full_name || user?.email || "User";
   const userEmail = user?.email || "";
 
+  const { state } = useSidebar();
+
+  const isCollapsed = state === "collapsed";
+
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader>
+    <Sidebar collapsible="icon" className="border-r-0 bg-white dark:bg-slate-950">
+      <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link to="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <span className="text-lg font-bold">K</span>
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">KeilApp</span>
-                  <span className="truncate text-xs text-muted-foreground">Dashboard</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
+            {isCollapsed ? (
+              <div className="relative group/trigger flex items-center justify-center h-8 w-8 mx-auto transition-all duration-300">
+                <img
+                  src={logoSrc}
+                  alt="Keil HQ"
+                  className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90"
+                />
+                <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border-none shadow-none" />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2">
+                <Link to="/" className="flex items-center gap-2.5 group">
+                  <div className="flex size-8 items-center justify-center rounded-xl transition-transform group-hover:scale-105 active:scale-95">
+                    <img src={logoSrc} alt="Logo" className="size-6" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-50">KeilHQ</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">Assistant</span>
+                  </div>
+                </Link>
+                <SidebarTrigger className="size-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-none shadow-none" />
+              </div>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
