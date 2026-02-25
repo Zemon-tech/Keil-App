@@ -14,8 +14,8 @@ All environment variables required for the authentication system.
 
 ### Example:
 ```env
-VITE_SUPABASE_URL=https://tmqklbarumarutqeygjx.supabase.co
-VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sb_publishable_ERkZE-cXfgUd36TckmYRvQ_6WBMCTZ8
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=
 VITE_API_URL=http://localhost:5000/api
 ```
 
@@ -29,7 +29,7 @@ VITE_API_URL=http://localhost:5000/api
 | -------------------------- | -------- | ---------------------------------------------- | ------------------------------------------------ |
 | `PORT`                     | ❌        | Server port (defaults to `5000`)               | `5000`                                           |
 | `NODE_ENV`                 | ❌        | Environment mode                               | `development`                                    |
-| `MONGODB_URI`              | ✅        | MongoDB connection string                      | `mongodb+srv://user:pass@cluster.mongodb.net/db` |
+| `MONGODB_URI`              | ✅        | MongoDB connection string                      | `` |
 | `SUPABASE_URL`             | ✅        | Your Supabase project URL (same as frontend)   | `https://abcdefgh.supabase.co`                   |
 | `SUPABASE_PUBLISHABLE_KEY` | ✅        | Supabase publishable key                       | `sb_publishable_...`                             |
 | `SUPABASE_SECRET_KEY`      | ✅        | Supabase service/secret key (**keep private**) | `sb_secret_...`                                  |
