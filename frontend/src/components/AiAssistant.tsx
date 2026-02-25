@@ -279,7 +279,7 @@ export function AiAssistant() {
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="size-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 title="New chat"
                 onClick={handleNewChat}
             >
@@ -289,8 +289,8 @@ export function AiAssistant() {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                    "size-7 rounded-lg hover:bg-slate-100",
-                    mode === "floating" ? "text-blue-500 bg-blue-50" : "text-slate-400 hover:text-slate-600"
+                    "size-7 rounded-lg hover:bg-muted/60",
+                    mode === "floating" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
                 )}
                 title="Floating chat"
                 onClick={() => switchMode("floating")}
@@ -301,8 +301,8 @@ export function AiAssistant() {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                    "size-7 rounded-lg hover:bg-slate-100",
-                    mode === "sidebar" ? "text-blue-500 bg-blue-50" : "text-slate-400 hover:text-slate-600"
+                    "size-7 rounded-lg hover:bg-muted/60",
+                    mode === "sidebar" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
                 )}
                 title="Sidebar"
                 onClick={() => switchMode("sidebar")}
@@ -313,19 +313,19 @@ export function AiAssistant() {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                    "size-7 rounded-lg hover:bg-slate-100",
-                    mode === "fullscreen" ? "text-blue-500 bg-blue-50" : "text-slate-400 hover:text-slate-600"
+                    "size-7 rounded-lg hover:bg-muted/60",
+                    mode === "fullscreen" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
                 )}
                 title="Full screen"
                 onClick={() => switchMode("fullscreen")}
             >
                 <Maximize2 className="size-3.5" />
             </Button>
-            <div className="w-px h-4 bg-slate-200 mx-1" />
+            <div className="w-px h-4 bg-border/60 mx-1" />
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="size-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 title="Minimize"
                 onClick={() => switchMode("hidden")}
             >
@@ -335,15 +335,15 @@ export function AiAssistant() {
     );
 
     const renderHeader = (showTitle: boolean = true) => (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white/80 backdrop-blur-sm shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-card/90 backdrop-blur-sm shrink-0">
             <div className="flex items-center gap-2">
                 {showTitle && (
                     <>
                         <div className="flex items-center gap-1.5">
-                            <Sparkles className="size-3.5 text-amber-500" />
-                            <span className="text-[13px] font-bold text-slate-800">KeilHQ AI</span>
+                            <Sparkles className="size-3.5 text-amber-400" />
+                            <span className="text-[13px] font-bold text-foreground">KeilHQ AI</span>
                         </div>
-                        <Badge className="bg-emerald-50 text-emerald-600 border-none text-[9px] font-bold px-1.5 py-0 hover:bg-emerald-50">
+                        <Badge className="bg-emerald-500/10 text-emerald-400 border-none text-[9px] font-bold px-1.5 py-0 hover:bg-emerald-500/20">
                             Online
                         </Badge>
                     </>
@@ -354,15 +354,15 @@ export function AiAssistant() {
     );
 
     const renderInput = () => (
-        <div className="p-3 border-t border-slate-100 bg-white shrink-0">
-            <div className="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-2 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+        <div className="p-3 border-t border-border/60 bg-card shrink-0">
+            <div className="relative flex items-end gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-2 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                 <div className="flex items-center gap-2 shrink-0 pb-0.5">
-                    <button className="text-slate-300 hover:text-slate-500 transition-colors" title="Attach file">
+                    <button className="text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Attach file">
                         <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                         </svg>
                     </button>
-                    <button className="text-slate-300 hover:text-slate-500 transition-colors" title="Settings">
+                    <button className="text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Settings">
                         <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -376,19 +376,19 @@ export function AiAssistant() {
                     onKeyDown={handleKeyDown}
                     placeholder="Do anything with AI..."
                     rows={1}
-                    className="flex-1 resize-none bg-transparent text-[13px] text-slate-700 placeholder:text-slate-400 focus:outline-none py-0.5 max-h-[120px] min-h-[20px]"
+                    className="flex-1 resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none py-0.5 max-h-[120px] min-h-[20px]"
                     style={{ overflow: inputValue.split("\n").length > 3 ? "auto" : "hidden" }}
                 />
                 <div className="flex items-center gap-2 shrink-0 pb-0.5">
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md select-none">Auto</span>
+                    <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md select-none">Auto</span>
                     <button
                         onClick={handleSend}
                         disabled={!inputValue.trim()}
                         className={cn(
                             "size-7 rounded-full flex items-center justify-center transition-all",
                             inputValue.trim()
-                                ? "bg-blue-500 text-white hover:bg-blue-600 shadow-sm shadow-blue-200"
-                                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/30"
+                                : "bg-muted text-muted-foreground cursor-not-allowed"
                         )}
                     >
                         <Send className="size-3.5" />
@@ -404,16 +404,16 @@ export function AiAssistant() {
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8">
                         <KeilMascot size={64} className="mb-4 ai-mascot-bounce" />
-                        <h3 className="text-sm font-bold text-slate-800 mb-1">On call and ready, how can I help?</h3>
+                        <h3 className="text-sm font-bold text-foreground mb-1">On call and ready, how can I help?</h3>
                         <div className="w-full space-y-1.5 mt-4">
                             {QUICK_SUGGESTIONS.map((suggestion) => (
                                 <button
                                     key={suggestion.label}
                                     onClick={() => handleSuggestionClick(suggestion.prompt)}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all group"
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-muted/60 border border-transparent hover:border-border/60 transition-all group bg-card/80"
                                 >
-                                    <suggestion.icon className="size-4 text-slate-400 group-hover:text-blue-500 transition-colors shrink-0" />
-                                    <span className="text-[12px] font-medium text-slate-600 group-hover:text-slate-800 transition-colors">{suggestion.label}</span>
+                                    <suggestion.icon className="size-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                                    <span className="text-[12px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{suggestion.label}</span>
                                 </button>
                             ))}
                         </div>
@@ -436,8 +436,8 @@ export function AiAssistant() {
                                 className={cn(
                                     "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed",
                                     msg.role === "user"
-                                        ? "bg-blue-500 text-white rounded-br-md"
-                                        : "bg-slate-50 border border-slate-100 text-slate-700 rounded-bl-md"
+                                        ? "bg-primary text-primary-foreground rounded-br-md"
+                                        : "bg-card border border-border text-foreground rounded-bl-md"
                                 )}
                             >
                                 {msg.content.split("\n").map((line, i) => (
@@ -462,11 +462,11 @@ export function AiAssistant() {
                         <div className="shrink-0 mt-0.5">
                             <KeilMascot size={28} />
                         </div>
-                        <div className="bg-slate-50 border border-slate-100 rounded-2xl rounded-bl-md px-4 py-3">
+                        <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3">
                             <div className="flex gap-1.5">
-                                <span className="size-2 rounded-full bg-slate-300 ai-typing-dot" style={{ animationDelay: "0ms" }} />
-                                <span className="size-2 rounded-full bg-slate-300 ai-typing-dot" style={{ animationDelay: "150ms" }} />
-                                <span className="size-2 rounded-full bg-slate-300 ai-typing-dot" style={{ animationDelay: "300ms" }} />
+                                <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "0ms" }} />
+                                <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "150ms" }} />
+                                <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "300ms" }} />
                             </div>
                         </div>
                     </div>
@@ -482,13 +482,13 @@ export function AiAssistant() {
             {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center flex-1 w-full max-w-2xl mx-auto px-6">
                     <KeilMascot size={80} className="mb-5 ai-mascot-bounce" />
-                    <h2 className="text-2xl font-bold text-slate-800 mb-8">On call and ready, how can I help?</h2>
+                    <h2 className="text-2xl font-bold text-foreground mb-8">On call and ready, how can I help?</h2>
 
                     {/* Get started cards */}
                     <div className="w-full max-w-lg">
                         <div className="flex items-center justify-between mb-3">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Get started</span>
-                            <button className="text-slate-300 hover:text-slate-500 transition-colors">
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Get started</span>
+                            <button className="text-muted-foreground/60 hover:text-muted-foreground transition-colors">
                                 <X className="size-4" />
                             </button>
                         </div>
@@ -497,13 +497,13 @@ export function AiAssistant() {
                                 <button
                                     key={suggestion.label}
                                     onClick={() => handleSuggestionClick(suggestion.prompt)}
-                                    className="flex items-start gap-3 p-4 rounded-2xl text-left bg-white border border-slate-100 hover:border-slate-200 hover:shadow-md transition-all group"
+                                    className="flex items-start gap-3 p-4 rounded-2xl text-left bg-card border border-border hover:border-border/80 hover:shadow-md transition-all group"
                                 >
-                                    <suggestion.icon className="size-5 text-slate-400 group-hover:text-blue-500 transition-colors shrink-0 mt-0.5" />
+                                    <suggestion.icon className="size-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-0.5" />
                                     <div>
-                                        <span className="text-[13px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors block">{suggestion.label}</span>
+                                        <span className="text-[13px] font-bold text-foreground group-hover:text-primary transition-colors block">{suggestion.label}</span>
                                         {suggestion.description && (
-                                            <span className="text-[11px] text-slate-400 mt-0.5 block">{suggestion.description}</span>
+                                            <span className="text-[11px] text-muted-foreground mt-0.5 block">{suggestion.description}</span>
                                         )}
                                     </div>
                                 </button>
@@ -530,8 +530,8 @@ export function AiAssistant() {
                                 className={cn(
                                     "max-w-[75%] rounded-2xl px-4 py-3 text-[13.5px] leading-relaxed",
                                     msg.role === "user"
-                                        ? "bg-blue-500 text-white rounded-br-md"
-                                        : "bg-white border border-slate-100 text-slate-700 rounded-bl-md shadow-sm"
+                                        ? "bg-primary text-primary-foreground rounded-br-md"
+                                        : "bg-card border border-border text-foreground rounded-bl-md shadow-sm"
                                 )}
                             >
                                 {msg.content.split("\n").map((line, i) => (
@@ -554,11 +554,11 @@ export function AiAssistant() {
                             <div className="shrink-0 mt-0.5">
                                 <KeilMascot size={32} />
                             </div>
-                            <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+                            <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
                                 <div className="flex gap-1.5">
-                                    <span className="size-2 rounded-full bg-slate-300 ai-typing-dot" style={{ animationDelay: "0ms" }} />
-                                    <span className="size-2 rounded-full bg-slate-300 ai-typing-dot" style={{ animationDelay: "150ms" }} />
-                                    <span className="size-2 rounded-full bg-slate-300 ai-typing-dot" style={{ animationDelay: "300ms" }} />
+                                    <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "0ms" }} />
+                                    <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "150ms" }} />
+                                    <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "300ms" }} />
                                 </div>
                             </div>
                         </div>
@@ -585,21 +585,21 @@ export function AiAssistant() {
                         className="group relative ai-fab-appear"
                     >
                         {/* Glow ring */}
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400 via-indigo-400 to-violet-400 opacity-0 group-hover:opacity-30 blur-lg transition-opacity duration-500" />
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary via-indigo-500 to-violet-500 opacity-0 group-hover:opacity-30 blur-lg transition-opacity duration-500" />
 
                         {/* Main button */}
-                        <div className="relative size-14 rounded-full bg-white border border-slate-200 shadow-xl shadow-slate-200/60 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-2xl group-hover:shadow-blue-200/40 group-active:scale-95">
+                        <div className="relative size-14 rounded-full bg-card border border-border shadow-xl shadow-black/20 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-2xl group-hover:shadow-primary/30 group-active:scale-95">
                             <KeilMascot size={38} className={cn("transition-transform duration-500", fabHovered && "scale-105")} />
                         </div>
 
                         {/* Tooltip */}
                         <div className={cn(
-                            "absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-lg whitespace-nowrap transition-all duration-200 pointer-events-none",
+                            "absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-popover text-popover-foreground text-[11px] font-bold rounded-lg whitespace-nowrap border border-border/60 shadow-lg transition-all duration-200 pointer-events-none",
                             fabHovered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"
                         )}>
                             KeilHQ AI
-                            <kbd className="ml-2 bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[9px]">⌘J</kbd>
-                            <div className="absolute top-full right-5 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-slate-900" />
+                            <kbd className="ml-2 bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[9px] border border-border/60">⌘J</kbd>
+                            <div className="absolute top-full right-5 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-popover" />
                         </div>
                     </button>
                 </div>
@@ -608,7 +608,7 @@ export function AiAssistant() {
             {/* ─── FLOATING CHAT POPOVER ─────────────────────────────── */}
             {mode === "floating" && (
                 <div className="fixed bottom-6 right-6 z-50 ai-panel-appear">
-                    <div className="w-[380px] h-[520px] bg-white rounded-2xl shadow-2xl shadow-slate-300/40 border border-slate-200/80 flex flex-col overflow-hidden">
+                    <div className="w-[380px] h-[520px] bg-card rounded-2xl shadow-2xl shadow-black/40 border border-border flex flex-col overflow-hidden">
                         {renderHeader()}
                         {renderMessages()}
                         {renderInput()}
@@ -618,7 +618,7 @@ export function AiAssistant() {
 
             {/* ─── SIDEBAR PANEL ─────────────────────────────────────── */}
             {mode === "sidebar" && (
-                <div className="fixed top-0 right-0 bottom-0 z-30 w-[400px] bg-white border-l border-slate-200 flex flex-col ai-sidebar-appear shadow-2xl shadow-slate-400/20">
+                <div className="fixed top-0 right-0 bottom-0 z-30 w-[400px] bg-card border-l border-border flex flex-col ai-sidebar-appear shadow-2xl shadow-black/40">
                     {renderHeader()}
                     {renderMessages()}
                     {renderInput()}
@@ -627,11 +627,11 @@ export function AiAssistant() {
 
             {/* ─── FULLSCREEN ────────────────────────────────────────── */}
             {mode === "fullscreen" && (
-                <div className="fixed inset-0 z-50 bg-[#F8FAFC] flex flex-col ai-fullscreen-appear">
+                <div className="fixed inset-0 z-50 bg-background flex flex-col ai-fullscreen-appear">
                     {/* Fullscreen Header */}
-                    <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-white/80 backdrop-blur-sm shrink-0">
+                    <div className="flex items-center justify-between px-6 py-3 border-b border-border/60 bg-card/90 backdrop-blur-sm shrink-0">
                         <div className="flex items-center gap-3">
-                            <button className="text-slate-400 hover:text-slate-600 transition-colors" title="History">
+                            <button className="text-muted-foreground hover:text-foreground transition-colors" title="History">
                                 <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                                 </svg>
@@ -645,10 +645,10 @@ export function AiAssistant() {
 
                         <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1.5">
-                                <Sparkles className="size-3.5 text-amber-500" />
-                                <span className="text-[13px] font-bold text-slate-800">KeilHQ AI</span>
+                                <Sparkles className="size-3.5 text-amber-400" />
+                                <span className="text-[13px] font-bold text-foreground">KeilHQ AI</span>
                             </div>
-                            <Badge className="bg-emerald-50 text-emerald-600 border-none text-[9px] font-bold px-1.5 py-0 hover:bg-emerald-50">
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-none text-[9px] font-bold px-1.5 py-0 hover:bg-emerald-500/20">
                                 Online
                             </Badge>
                         </div>
@@ -657,7 +657,7 @@ export function AiAssistant() {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                className="size-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60"
                                 title="New chat"
                                 onClick={handleNewChat}
                             >
@@ -681,11 +681,11 @@ export function AiAssistant() {
                             >
                                 <Minimize2 className="size-3.5" />
                             </Button>
-                            <div className="w-px h-4 bg-slate-200 mx-1" />
+                            <div className="w-px h-4 bg-border/60 mx-1" />
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                className="size-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60"
                                 title="Close"
                                 onClick={() => switchMode("hidden")}
                             >

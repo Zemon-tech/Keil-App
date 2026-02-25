@@ -146,28 +146,28 @@ const BLOCKERS = [
 
 const StatusIcon = ({ type }: { type: string }) => {
   switch (type) {
-    case "urgent": return <Flame className="size-4 text-orange-600" />;
-    case "important": return <TargetIcon className="size-4 text-emerald-600" />;
-    case "scheduled": return <Clock className="size-4 text-blue-600" />;
+    case "urgent": return <Flame className="size-4 text-destructive" />;
+    case "important": return <TargetIcon className="size-4 text-primary" />;
+    case "scheduled": return <Clock className="size-4 text-blue-500" />;
     default: return <Star className="size-4 text-amber-500" />;
   }
 };
 
 const MetricSquare = ({ title, value, icon: Icon, trend, color }: { title: string, value: string, icon: any, trend?: string, color: string }) => (
-  <Card className="border-none bg-white shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col justify-between p-4 min-h-[140px]">
+  <Card className="border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col justify-between p-4 min-h-[140px]">
     <div className="flex justify-between items-start">
       <div className={cn("p-2 rounded-xl", color)}>
         <Icon className="size-4 text-white" />
       </div>
       {trend && (
-        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+        <span className="text-[10px] font-bold text-success bg-success/10 px-1.5 py-0.5 rounded-md">
           {trend}
         </span>
       )}
     </div>
     <div className="space-y-1">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{title}</p>
-      <h4 className="text-xl font-bold text-slate-900">{value}</h4>
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
+      <h4 className="text-xl font-bold text-foreground">{value}</h4>
     </div>
   </Card>
 );
@@ -199,21 +199,21 @@ export function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans pb-20">
+    <div className="min-h-screen bg-background text-foreground pb-20">
       <main className={cn(containerClassName, "pt-8 space-y-8")}>
 
         {/* Header Section */}
         <header className="flex items-center justify-between">
           <div className="space-y-1">
-            <h1 className="text-4xl font-black tracking-tight text-[#0F172A]">
+            <h1 className="text-4xl font-black tracking-tight text-foreground">
               Good {currentTime.getHours() < 12 ? "morning" : currentTime.getHours() < 17 ? "afternoon" : "evening"}, {userName}.
             </h1>
-            <p className="text-sm font-medium text-slate-400">You have 3 priorities and 2 blockers today.</p>
+            <p className="text-sm font-medium text-muted-foreground">You have 3 priorities and 2 blockers today.</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-100">
-              <div className="size-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-xs font-bold">AI Co-pilot: Active</span>
+            <div className="flex items-center gap-2 bg-card px-4 py-2 rounded-2xl shadow-sm border border-border">
+              <div className="size-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-xs font-bold text-foreground">AI Co-pilot: Active</span>
             </div>
           </div>
         </header>
@@ -224,13 +224,13 @@ export function Dashboard() {
           <div className="lg:col-span-9 space-y-8">
 
             {/* Row 1: Project Table */}
-            <Card className="border-none shadow-sm bg-white overflow-hidden">
-              <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+            <Card className="border border-border shadow-sm bg-card overflow-hidden">
+              <div className="p-6 border-b border-border flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Active Workstream</h2>
-                  <p className="text-xs text-slate-400 font-medium">Your currently prioritized tasks and projects</p>
+                  <h2 className="text-lg font-bold text-foreground">Active Workstream</h2>
+                  <p className="text-xs text-muted-foreground font-medium">Your currently prioritized tasks and projects</p>
                 </div>
-                <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl border-slate-200 text-slate-600 font-bold text-[11px] gap-2 hover:bg-slate-50">
+                <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl border-border text-foreground font-bold text-[11px] gap-2 hover:bg-accent hover:text-accent-foreground">
                   <Plus className="size-3.5" />
                   Add Project
                 </Button>
@@ -238,10 +238,10 @@ export function Dashboard() {
               <div className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow className="hover:bg-transparent border-slate-50">
-                      <TableHead className="w-[120px] text-[10px] font-bold uppercase tracking-widest text-slate-400 pl-6 h-10">Type</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-widest text-slate-400 h-10">Task & Timeline</TableHead>
-                      <TableHead className="text-right text-[10px] font-bold uppercase tracking-widest text-slate-400 h-10 pr-6">Budget</TableHead>
+                    <TableRow className="hover:bg-transparent border-border/40">
+                      <TableHead className="w-[120px] text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-6 h-10">Type</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground h-10">Task & Timeline</TableHead>
+                      <TableHead className="text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground h-10 pr-6">Budget</TableHead>
                       <TableHead className="w-[50px] h-10"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -254,13 +254,13 @@ export function Dashboard() {
                       >
                         <TableCell className="pl-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="size-8 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-100 shadow-sm">
+                            <div className="size-8 flex items-center justify-center rounded-xl bg-muted border border-border/60 shadow-sm">
                               <StatusIcon type={priority.type} />
                             </div>
                             <span className={cn(
                               "text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md",
-                              priority.type === "urgent" ? "bg-orange-50 text-orange-600" :
-                                priority.type === "important" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"
+                              priority.type === "urgent" ? "bg-destructive/10 text-destructive" :
+                                priority.type === "important" ? "bg-primary/10 text-primary" : "bg-blue-500/10 text-blue-500"
                             )}>
                               {priority.type}
                             </span>
@@ -268,15 +268,15 @@ export function Dashboard() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className="text-[13px] font-bold text-slate-900 tracking-tight">{priority.title}</span>
-                            <span className="text-[11px] font-medium text-slate-400 mt-0.5">{priority.subtext}</span>
+                            <span className="text-[13px] font-bold text-foreground tracking-tight">{priority.title}</span>
+                            <span className="text-[11px] font-medium text-muted-foreground mt-0.5">{priority.subtext}</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-right pr-6">
-                          <span className="text-[11px] font-bold text-slate-600">{priority.duration}</span>
+                          <span className="text-[11px] font-bold text-foreground">{priority.duration}</span>
                         </TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" className="size-8 opacity-0 group-hover:opacity-100 rounded-full text-slate-300 hover:text-slate-600 transition-opacity">
+                          <Button variant="ghost" size="icon" className="size-8 opacity-0 group-hover:opacity-100 rounded-full text-muted-foreground hover:text-foreground transition-opacity">
                             <MoreVertical className="size-4" />
                           </Button>
                         </TableCell>
@@ -329,37 +329,37 @@ export function Dashboard() {
             <div className="grid grid-cols-5 gap-6">
 
               {/* Blockers - Width of 2 squares */}
-              <Card className="col-span-5 md:col-span-2 border-none shadow-sm bg-white flex flex-col">
-                <div className="p-4 border-b border-slate-50 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900 italic">Blockers</h3>
-                  <Badge variant="outline" className="text-[9px] font-bold text-red-500 border-red-100 bg-red-50">Action Needed</Badge>
+              <Card className="col-span-5 md:col-span-2 border border-border shadow-sm bg-card flex flex-col">
+                <div className="p-4 border-b border-border flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-foreground italic">Blockers</h3>
+                  <Badge variant="outline" className="text-[9px] font-bold text-destructive border-destructive/20 bg-destructive/10">Action Needed</Badge>
                 </div>
                 <div className="p-4 space-y-4 flex-1">
                   {BLOCKERS.map(blocker => (
-                    <div key={blocker.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/50 border border-slate-100 group hover:border-slate-200 transition-colors">
-                      <div className={cn("size-2 rounded-full mt-1.5 shrink-0", blocker.urgent ? "bg-red-500 animate-pulse" : "bg-slate-300")} />
+                    <div key={blocker.id} className="flex items-start gap-3 p-3 rounded-xl bg-muted/60 border border-border group hover:border-border/80 transition-colors">
+                      <div className={cn("size-2 rounded-full mt-1.5 shrink-0", blocker.urgent ? "bg-destructive animate-pulse" : "bg-muted-foreground/40")} />
                       <div className="space-y-1 flex-1 min-w-0">
-                        <p className="text-[12px] font-bold text-slate-900 truncate">{blocker.task}</p>
-                        <p className="text-[10px] font-medium text-slate-400">Blocked by: <span className="text-slate-600">{blocker.blockedBy}</span></p>
+                        <p className="text-[12px] font-bold text-foreground truncate">{blocker.task}</p>
+                        <p className="text-[10px] font-medium text-muted-foreground">Blocked by: <span className="text-foreground">{blocker.blockedBy}</span></p>
                       </div>
-                      <Button variant="ghost" size="icon" className="size-6 text-slate-300 hover:text-blue-500 opacity-0 group-hover:opacity-100">
+                      <Button variant="ghost" size="icon" className="size-6 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100">
                         <Plus className="size-3" />
                       </Button>
                     </div>
                   ))}
                 </div>
-                <div className="p-3 bg-slate-50/30 border-t border-slate-50">
-                  <Button variant="ghost" className="w-full h-8 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest">
+                <div className="p-3 bg-muted/40 border-t border-border/60">
+                  <Button variant="ghost" className="w-full h-8 text-[10px] font-bold text-muted-foreground hover:text-foreground uppercase tracking-widest">
                     View All Blockers
                   </Button>
                 </div>
               </Card>
 
               {/* Efficiency Snapshot - Width of 3 squares */}
-              <Card className="col-span-5 md:col-span-3 border-none shadow-sm bg-white flex flex-col">
-                <div className="p-4 border-b border-slate-50 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900 italic">Efficiency Snapshot</h3>
-                  <Badge variant="outline" className="text-[9px] font-bold text-slate-400 border-slate-100">Private</Badge>
+              <Card className="col-span-5 md:col-span-3 border border-border shadow-sm bg-card flex flex-col">
+                <div className="p-4 border-b border-border flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-foreground italic">Efficiency Snapshot</h3>
+                  <Badge variant="outline" className="text-[9px] font-bold text-muted-foreground border-border/60">Private</Badge>
                 </div>
                 <div className="p-6 flex items-center justify-between flex-1">
                   <div className="w-[180px] h-[180px] relative">
@@ -376,25 +376,25 @@ export function Dashboard() {
                       </RadialBarChart>
                     </ChartContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-2xl font-black text-slate-900 leading-none">88</span>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Score</span>
+                      <span className="text-2xl font-black text-foreground leading-none">88</span>
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Score</span>
                     </div>
                   </div>
                   <div className="flex-1 pl-8 space-y-4">
                     {EFFICIENCY_CHART_DATA.map((item) => (
                       <div key={item.metric} className="space-y-1">
                         <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tight">
-                          <span className="text-slate-400">{(EFFICIENCY_CHART_CONFIG as any)[item.metric].label}</span>
-                          <span className="text-slate-900">{item.value}%</span>
+                          <span className="text-muted-foreground">{(EFFICIENCY_CHART_CONFIG as any)[item.metric].label}</span>
+                          <span className="text-foreground">{item.value}%</span>
                         </div>
-                        <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${item.value}%`, backgroundColor: (EFFICIENCY_CHART_CONFIG as any)[item.metric].color }} />
+                        <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${item.value}%`, backgroundColor: (EFFICIENCY_CHART_CONFIG as any)[item.metric].color }} />
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="p-3 bg-slate-50/30 border-t border-slate-50">
+                <div className="p-3 bg-muted/40 border-t border-border/60">
                   <p className="text-[10px] font-bold text-emerald-600 text-center flex items-center justify-center gap-1.5">
                     <TrendingUp className="size-3" />
                     Overall efficiency up by 5.2% this week
@@ -410,7 +410,7 @@ export function Dashboard() {
 
             {/* Active Focus Block - Persistent & Sexy */}
             <Card className={cn(
-              "border-none bg-[#022C22] relative overflow-hidden shadow-xl flex flex-col transition-all duration-500 min-h-[180px]",
+              "border-none bg-emerald-950 relative overflow-hidden shadow-xl flex flex-col transition-all duration-500 min-h-[180px]",
               isFocusActive ? "ring-2 ring-emerald-500/20" : "opacity-90"
             )}>
               <div className="absolute inset-0 opacity-10 pointer-events-none">
@@ -422,11 +422,11 @@ export function Dashboard() {
               <div className="relative z-10 p-5 flex flex-col h-full justify-between">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Focus Mode</h3>
-                  {isFocusActive && <Badge className="bg-emerald-500/20 text-emerald-400 border-none px-2 py-0 text-[9px] font-black">ACTIVE</Badge>}
+                  {isFocusActive && <Badge className="bg-emerald-500/20 text-emerald-100 border-none px-2 py-0 text-[9px] font-black">ACTIVE</Badge>}
                 </div>
 
                 <div className="py-6 space-y-1">
-                  <h2 className={cn("text-lg font-bold leading-tight", isFocusActive ? "text-white" : "text-emerald-900/40 italic")}>
+                  <h2 className={cn("text-lg font-bold leading-tight", isFocusActive ? "text-white" : "text-emerald-200/60 italic")}>
                     {activeTask?.title || "No task in focus"}
                   </h2>
                   <p className="text-[10px] font-medium text-emerald-400/60 uppercase">
@@ -444,7 +444,7 @@ export function Dashboard() {
                     </Button>
                   </div>
                 ) : (
-                  <Button className="bg-emerald-500 hover:bg-emerald-600 text-[#022C22] font-black text-xs rounded-xl h-10 w-full shadow-lg shadow-emerald-900/20">
+                  <Button className="bg-emerald-500 hover:bg-emerald-600 text-emerald-950 font-black text-xs rounded-xl h-10 w-full shadow-lg shadow-emerald-900/20">
                     Quick Start
                   </Button>
                 )}
@@ -452,29 +452,29 @@ export function Dashboard() {
             </Card>
 
             {/* Decisions Card */}
-            <Card className="border-none shadow-sm bg-white overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-slate-50">
-                <h3 className="text-sm font-bold text-slate-900 italic">Decisions</h3>
+            <Card className="border border-border shadow-sm bg-card overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-border">
+                <h3 className="text-sm font-bold text-foreground italic">Decisions</h3>
               </div>
               <div className="p-4 space-y-5">
                 {DECISIONS.map(decision => (
                   <div key={decision.id} className="space-y-3 group">
                     <div className="flex justify-between items-start gap-2">
-                      <h4 className="text-[12px] font-bold text-slate-900 leading-tight group-hover:text-blue-600 transition-colors">{decision.title}</h4>
-                      <Badge className={cn("text-[8px] font-black uppercase border-none shrink-0 px-1", decision.priority === "High" ? "bg-red-50 text-red-500" : "bg-amber-50 text-amber-500")}>
+                      <h4 className="text-[12px] font-bold text-foreground leading-tight group-hover:text-primary transition-colors">{decision.title}</h4>
+                      <Badge className={cn("text-[8px] font-black uppercase border-none shrink-0 px-1", decision.priority === "High" ? "bg-destructive/10 text-destructive" : "bg-amber-50 text-amber-500")}>
                         {decision.priority}
                       </Badge>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium line-clamp-2 italic leading-relaxed">{decision.context}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium line-clamp-2 italic leading-relaxed">{decision.context}</p>
                     <div className="flex items-center gap-2 pt-1">
-                      <Button size="sm" className="h-7 text-[9px] font-black bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex-1">Approve</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-[9px] font-black border-slate-100 rounded-lg flex-1">Review</Button>
+                      <Button size="sm" className="h-7 text-[9px] font-black bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex-1">Approve</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-[9px] font-black border-border rounded-lg flex-1">Review</Button>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="p-3 bg-slate-50/30 border-t border-slate-50">
-                <Button variant="ghost" className="w-full h-8 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest">
+              <div className="p-3 bg-muted/40 border-t border-border/60">
+                <Button variant="ghost" className="w-full h-8 text-[10px] font-bold text-muted-foreground hover:text-foreground uppercase tracking-widest">
                   History
                 </Button>
               </div>
