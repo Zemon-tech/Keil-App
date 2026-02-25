@@ -76,14 +76,20 @@ const DECISIONS = [
     type: "Approval Required",
     title: "Approve updated homepage scope",
     context: "Scope increased by 15% due to new requirements and user feedback.",
-    risk: "Delays client milestone by 2 days",
+    risk: "High Impact - Delays client milestone by 2 days",
+    priority: "High",
+    deadline: "Nov 28",
+    status: "Pending"
   },
   {
     id: 2,
     type: "Resource Request",
     title: "Add extra designer for Sprint 4",
     context: "Current capacity is at 110% for the next two weeks.",
-    risk: "Potential burnout and quality drop",
+    risk: "Quality Risk - Potential burnout and quality drop",
+    priority: "Medium",
+    deadline: "Nov 30",
+    status: "Review Required"
   }
 ];
 
@@ -117,30 +123,6 @@ const StatusIcon = ({ type }: { type: string }) => {
   }
 };
 
-const DecisionCard = ({ decision }: { decision: typeof DECISIONS[0] }) => (
-  <Card className="border-none bg-white shadow-sm p-4 space-y-3 transition-all duration-200 hover:shadow-md h-full">
-    <div className="flex items-center justify-between">
-      <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] uppercase tracking-wider font-bold border-none">
-        {decision.type}
-      </Badge>
-    </div>
-    <div className="space-y-1">
-      <h4 className="font-semibold text-[#0F172A] text-sm leading-tight">{decision.title}</h4>
-      <p className="text-xs text-[#64748B] line-clamp-2">{decision.context}</p>
-    </div>
-    <p className="text-[11px] font-medium text-red-500 flex items-center gap-1">
-      {decision.risk}
-    </p>
-    <div className="flex items-center gap-2 pt-1">
-      <Button size="sm" className="flex-1 h-7 text-[10px] font-bold rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] shadow-sm">
-        Approve
-      </Button>
-      <Button size="sm" variant="outline" className="flex-1 h-7 text-[10px] font-bold rounded-lg border-slate-200 text-slate-600">
-        Review
-      </Button>
-    </div>
-  </Card>
-);
 
 const BlockerCard = ({ blocker }: { blocker: typeof BLOCKERS[0] }) => (
   <Card className="border-none bg-white shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md mb-3">
@@ -430,15 +412,82 @@ export function Dashboard() {
             </section>
 
             {/* Decisions Section */}
-            <section className="space-y-6">
+            <section className="space-y-4">
               <div className="flex items-center justify-between px-1">
-                <h2 className="text-xl font-bold tracking-tight text-[#0F172A]">Decisions</h2>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-red-500 bg-red-50 px-2 py-0.5 rounded-full">ACTION REQUIRED</span>
+                <div className="space-y-1">
+                  <h2 className="text-xl font-bold tracking-tight text-[#0F172A]">Decisions</h2>
+                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">Action Required</p>
+                </div>
+                <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
               </div>
-              <div className="grid grid-cols-1 gap-4">
-                {DECISIONS.map(decision => (
-                  <DecisionCard key={decision.id} decision={decision} />
-                ))}
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 hover:shadow-md">
+                <Table>
+                  <TableBody>
+                    {DECISIONS.map((decision) => (
+                      <TableRow key={decision.id} className="group hover:bg-slate-50/10 border-slate-100 transition-colors">
+                        <TableCell className="px-4 py-4">
+                          <div className="flex flex-col space-y-3">
+                            {/* Header: Title and Priority */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[13px] font-bold text-slate-900 leading-tight group-hover:text-[#4F46E5] transition-colors">
+                                  {decision.title}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-medium italic line-clamp-2">
+                                  {decision.context}
+                                </span>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[8px] h-4 px-1.5 font-black uppercase tracking-tighter border-none shrink-0",
+                                  decision.priority === "High" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"
+                                )}
+                              >
+                                {decision.priority}
+                              </Badge>
+                            </div>
+
+                            {/* Meta: Type, Deadline, Status */}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+                              <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 text-[8px] uppercase tracking-wider font-extrabold border-none px-1.5 py-0">
+                                {decision.type}
+                              </Badge>
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400">
+                                <Clock className="size-2.5" />
+                                {decision.deadline}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className={cn(
+                                  "h-1 w-1 rounded-full",
+                                  decision.status === "Pending" ? "bg-amber-400" : "bg-blue-400"
+                                )} />
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{decision.status}</span>
+                              </div>
+                            </div>
+
+                            {/* Risk Highlight */}
+                            <span className="text-[9px] font-bold text-red-500/80 flex items-center gap-1.5 bg-red-50/50 w-fit px-2 py-0.5 rounded-md border border-red-100/50">
+                              <span className="h-1 w-1 rounded-full bg-red-500" />
+                              {decision.risk}
+                            </span>
+
+                            {/* Actions: Full width compact buttons */}
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <Button size="sm" className="h-8 text-[10px] font-bold bg-[#4F46E5] hover:bg-[#4338CA] shadow-sm hover:shadow-indigo-500/20 transition-all rounded-lg text-white">
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-8 text-[10px] font-bold text-slate-600 border-slate-200 hover:bg-slate-50 transition-all rounded-lg">
+                                Review
+                              </Button>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </section>
           </aside>
