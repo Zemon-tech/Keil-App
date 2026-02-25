@@ -3,6 +3,7 @@ import "./App.css";
 import { Layout } from "./components/Layout";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Dashboard } from "./components/Dashboard";
+import { ChatPage } from "./components/ChatPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -28,6 +29,14 @@ function App() {
           element={
             <Layout>
               <Dashboard />
+            </Layout>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <Layout>
+              <ChatPage />
             </Layout>
           }
         />

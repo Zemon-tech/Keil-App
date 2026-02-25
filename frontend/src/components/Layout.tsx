@@ -11,7 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Search, LayoutDashboard, Activity, User, Settings } from "lucide-react";
+import { Search, LayoutDashboard, Activity, User, Settings, MessageSquare } from "lucide-react";
 import {
   CommandDialog,
   CommandInput,
@@ -21,6 +21,7 @@ import {
   CommandItem
 } from "@/components/ui/command";
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
 
 
@@ -31,6 +32,7 @@ type LayoutProps = {
 
 export function Layout({ children, className }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -42,6 +44,17 @@ export function Layout({ children, className }: LayoutProps) {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
+
+  const getBreadcrumbTitle = () => {
+    switch (location.pathname) {
+      case "/":
+        return "Dashboard";
+      case "/chat":
+        return "Chat";
+      default:
+        return "Dashboard";
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -56,7 +69,7 @@ export function Layout({ children, className }: LayoutProps) {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block opacity-50" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-xs font-bold text-foreground">Dashboard</BreadcrumbPage>
+                  <BreadcrumbPage className="text-xs font-bold text-foreground">{getBreadcrumbTitle()}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -86,7 +99,11 @@ export function Layout({ children, className }: LayoutProps) {
             <CommandGroup heading="Suggestions">
               <CommandItem>
                 <LayoutDashboard className="mr-2 h-4 w-4 text-slate-400" />
-                <span>Go to Overview</span>
+                <span>Go to Dashboard</span>
+              </CommandItem>
+              <CommandItem>
+                <MessageSquare className="mr-2 h-4 w-4 text-slate-400" />
+                <span>Open Chat</span>
               </CommandItem>
               <CommandItem>
                 <Activity className="mr-2 h-4 w-4 text-slate-400" />

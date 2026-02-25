@@ -36,6 +36,7 @@ import {
   User,
   CreditCard,
   HelpCircle,
+  MessageSquare,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -46,6 +47,11 @@ const navigationItems = [
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Chat",
+    url: "/chat",
+    icon: MessageSquare,
   },
   {
     title: "Users",
@@ -92,7 +98,7 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar collapsible="icon" className="border-r-0 bg-white dark:bg-slate-950">
+      <Sidebar collapsible="icon" className="border-r-0 bg-card">
         <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6">
           <SidebarMenu>
             <SidebarMenuItem>
@@ -103,7 +109,7 @@ export function AppSidebar() {
                     alt="Keil HQ"
                     className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90"
                   />
-                  <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border-none shadow-none" />
+                  <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2">
@@ -112,11 +118,11 @@ export function AppSidebar() {
                       <img src={logoSrc} alt="Logo" className="size-6" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-50">KeilHQ</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">Assistant</span>
+                      <span className="text-sm font-bold tracking-tight text-foreground">KeilHQ</span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mt-0.5">Assistant</span>
                     </div>
                   </Link>
-                  <SidebarTrigger className="size-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-none shadow-none" />
+                  <SidebarTrigger className="size-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground border-none shadow-none" />
                 </div>
               )}
             </SidebarMenuItem>
