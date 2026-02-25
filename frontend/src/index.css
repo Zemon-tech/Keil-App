@@ -72,6 +72,13 @@ body {
   min-height: 100vh;
 }
 
+/* When AI sidebar is open, shift the app left to make room
+   so the sidebar and page content share the same layer. */
+body.ai-sidebar-open {
+  transition: padding-right 0.3s ease;
+  padding-right: 400px; /* match AI sidebar width */
+}
+
 .fade-in {
   animation: auth-fade-in 250ms ease-out;
 }

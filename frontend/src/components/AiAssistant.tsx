@@ -254,6 +254,24 @@ export function AiAssistant() {
         setMode(newMode);
     };
 
+    // Keep body layout in sync with sidebar mode so that
+    // the main app content is pushed left when the AI
+    // sidebar is visible instead of being covered.
+    useEffect(() => {
+        const body = document.body;
+        if (!body) return;
+
+        if (mode === "sidebar") {
+            body.classList.add("ai-sidebar-open");
+        } else {
+            body.classList.remove("ai-sidebar-open");
+        }
+
+        return () => {
+            body.classList.remove("ai-sidebar-open");
+        };
+    }, [mode]);
+
     // ─── Render Helpers ───────────────────────────────────────────────
 
     const renderModeControls = () => (
@@ -600,19 +618,11 @@ export function AiAssistant() {
 
             {/* ─── SIDEBAR PANEL ─────────────────────────────────────── */}
             {mode === "sidebar" && (
-                <>
-                    {/* Backdrop */}
-                    <div
-                        className="fixed inset-0 z-40 bg-black/5 ai-backdrop-appear"
-                        onClick={() => switchMode("hidden")}
-                    />
-                    {/* Panel */}
-                    <div className="fixed top-0 right-0 bottom-0 z-50 w-[400px] bg-white border-l border-slate-200 flex flex-col ai-sidebar-appear shadow-2xl shadow-slate-400/20">
-                        {renderHeader()}
-                        {renderMessages()}
-                        {renderInput()}
-                    </div>
-                </>
+                <div className="fixed top-0 right-0 bottom-0 z-30 w-[400px] bg-white border-l border-slate-200 flex flex-col ai-sidebar-appear shadow-2xl shadow-slate-400/20">
+                    {renderHeader()}
+                    {renderMessages()}
+                    {renderInput()}
+                </div>
             )}
 
             {/* ─── FULLSCREEN ────────────────────────────────────────── */}
