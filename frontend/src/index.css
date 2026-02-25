@@ -188,3 +188,144 @@ h1 {
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── AI Assistant Animations ─────────────────────────────────── */
+
+/* FAB appear */
+@keyframes ai-fab-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(20px);
+  }
+
+  60% {
+    transform: scale(1.1) translateY(-2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ai-fab-appear {
+  animation: ai-fab-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Panel appear (floating) */
+@keyframes ai-panel-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ai-panel-appear {
+  animation: ai-panel-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Sidebar slide in */
+@keyframes ai-sidebar-slide {
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.ai-sidebar-appear {
+  animation: ai-sidebar-slide 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Fullscreen enter */
+@keyframes ai-fullscreen-fade {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ai-fullscreen-appear {
+  animation: ai-fullscreen-fade 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Backdrop */
+@keyframes ai-backdrop-in {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.ai-backdrop-appear {
+  animation: ai-backdrop-in 0.3s ease forwards;
+}
+
+/* Message appear */
+@keyframes ai-msg-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-message-appear {
+  animation: ai-msg-in 0.25s ease-out forwards;
+}
+
+/* Typing dots */
+@keyframes ai-dot-bounce {
+
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.ai-typing-dot {
+  animation: ai-dot-bounce 1.4s ease-in-out infinite;
+}
+
+/* Mascot idle bounce */
+@keyframes ai-mascot-idle {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.ai-mascot-bounce {
+  animation: ai-mascot-idle 3s ease-in-out infinite;
+}

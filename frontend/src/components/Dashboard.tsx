@@ -483,14 +483,6 @@ export function Dashboard() {
           </div>
         </div>
       </main>
-
-      {/* Customize View Trigger */}
-      <div className="fixed bottom-8 right-8">
-        <Button className="rounded-full shadow-2xl h-12 px-6 bg-[#0F172A] hover:bg-[#1E293B] text-white font-black gap-2 transition-transform duration-200 hover:scale-105 active:scale-95">
-          <Plus className="h-4 w-4" />
-          Customize
-        </Button>
-      </div>
     </div>
   );
 }

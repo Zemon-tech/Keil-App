@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { AppSidebar } from "./AppSidebar";
+import { AiAssistant } from "./AiAssistant";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import {
   Breadcrumb,
@@ -108,6 +109,9 @@ export function Layout({ children, className }: LayoutProps) {
           {children}
         </main>
       </SidebarInset>
+
+      {/* AI Assistant - Available on all pages */}
+      <AiAssistant />
     </SidebarProvider>
   );
 }
