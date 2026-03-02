@@ -7,8 +7,6 @@ import { NextEventCard } from "./dashboard/NextEventCard";
 import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
 import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
 import { UpNextCard } from "./dashboard/UpNextCard";
-import { QuickCaptureCard } from "./dashboard/QuickCaptureCard";
-
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
