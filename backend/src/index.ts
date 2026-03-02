@@ -1,6 +1,5 @@
 import app from "./app";
 import { config } from "./config";
-import connectDB from "./config/db";
 import pool from "./config/pg";
 import "./config/supabase";
 
@@ -9,7 +8,6 @@ const port = config.port;
 // Start the server
 const startServer = async () => {
     try {
-        await connectDB();
 
         // Test PostgreSQL connection
         await pool.query('SELECT NOW()');
