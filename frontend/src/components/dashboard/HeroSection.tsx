@@ -1,9 +1,4 @@
-import {
-  Ghost,
-  Asterisk,
-  Plus,
-  AudioLines
-} from "lucide-react";
+import { Ghost, Asterisk, Plus, AudioLines } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   PromptInput,
@@ -31,20 +26,20 @@ export function HeroSection() {
   const userName =
     user?.user_metadata?.full_name ||
     user?.email?.split("@")[0] ||
-    "phantom";
+    "there";
 
   return (
     <section className="w-full max-w-4xl flex flex-col items-center gap-10 relative px-4 pt-16">
       {/* Ghost icon - Top right corner of screen */}
-      <div className="fixed top-6 right-6 opacity-40 hover:opacity-100 transition-opacity">
+      <div className="fixed top-6 right-6 text-muted-foreground/60 hover:text-foreground transition-colors">
         <Ghost className="h-6 w-6" />
       </div>
 
       {/* Greeting */}
       <div className="flex items-center gap-5 text-center">
-        <Asterisk className="h-10 w-10 text-[#d97757] animate-spin-slow" />
-        <h1 className="text-5xl md:text-6xl font-medium tracking-tight font-serif text-[#dcdcdc]">
-          Hey there, {userName}
+        <Asterisk className="h-10 w-10 text-primary animate-spin-slow" />
+        <h1 className="text-5xl md:text-6xl font-medium tracking-tight font-serif text-foreground">
+          Hey, {userName}
         </h1>
       </div>
 
