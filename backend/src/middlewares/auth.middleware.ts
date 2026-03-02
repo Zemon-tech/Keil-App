@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin } from "../config/supabase";
-import User from "../models/user.model";
-
+import pool from "../config/pg";
 /**
- * Middleware to protect routes and synchronize Supabase users with MongoDB.
- * Verifies the JWT token from the Authorization header and attaches the user document to req.user.
- * Automatically creates a MongoDB user if it doesn't already exist.
+ * Verifies the JWT token from the Authorization header and attaches the user row to req.user.
+ * Relies on Supabase webhook/trigger to have already created the user profile.
  * 
  * @param req - Express Request object
  * @param res - Express Response object
@@ -49,28 +47,20 @@ export const protect = async (
             return;
         }
 
-        // Find or create user in MongoDB
-        // We use the supabaseId to link accounts
-        // supabaseUser.user_metadata typically contains fields like full_name during signup
-        let user = await User.findOne({ supabaseId: supabaseUser.id });
+        // Query user from PostgreSQL public.users table (created via trigger)
+        const result = await pool.query('SELECT * FROM public.users WHERE id = $1', [supabaseUser.id]);
 
-        if (!user) {
-            user = await User.create({
-                supabaseId: supabaseUser.id,
-                email: supabaseUser.email,
-                fullName: supabaseUser.user_metadata?.full_name || "",
-                role: "user",
+        if (result.rows.length === 0) {
+            // It's possible the trigger hasn't fired yet or the user was deleted manually.
+            res.status(401).json({
+                success: false,
+                message: "User profile not found in database",
             });
-            console.log(`✅ [auth]: New user created in MongoDB: ${user.email}`);
-        } else if (user.email !== supabaseUser.email || user.fullName !== supabaseUser.user_metadata?.full_name) {
-            // Sync email or full name if they changed (optional but good practice)
-            user.email = supabaseUser.email || user.email;
-            user.fullName = supabaseUser.user_metadata?.full_name || user.fullName;
-            await user.save();
+            return;
         }
 
         // Attach user to request object
-        (req as any).user = user;
+        (req as any).user = result.rows[0];
 
         next();
     } catch (err) {

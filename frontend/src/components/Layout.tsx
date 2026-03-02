@@ -33,6 +33,7 @@ type LayoutProps = {
 export function Layout({ children, className }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const location = useLocation();
+  const isDashboard = location.pathname === "/";
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -60,36 +61,38 @@ export function Layout({ children, className }: LayoutProps) {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="bg-background">
-        <header className="flex h-14 shrink-0 items-center justify-between px-6 transition-all bg-background border-b border-border/60">
-          <div className="flex items-center gap-4">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/" className="text-xs font-medium text-muted-foreground hover:text-foreground">KeilApp</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block opacity-50" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="text-xs font-bold text-foreground">{getBreadcrumbTitle()}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
+        {!isDashboard && (
+          <header className="flex h-14 shrink-0 items-center justify-between px-6 transition-all bg-background border-b border-border/60">
+            <div className="flex items-center gap-4">
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink href="/" className="text-xs font-medium text-muted-foreground hover:text-foreground">KeilApp</BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block opacity-50" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-xs font-bold text-foreground">{getBreadcrumbTitle()}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </div>
 
-          <div className="flex items-center gap-4">
-            <div
-              className="relative group cursor-pointer"
-              onClick={() => setIsCommandOpen(true)}
-            >
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card/80 border border-border/60 shadow-sm hover:bg-card hover:border-border transition-all duration-200">
-                <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[11px] font-medium text-muted-foreground pr-8">Search...</span>
-                <kbd className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none h-4 px-1.5 flex items-center gap-1 rounded border border-border/60 bg-muted font-mono text-[9px] font-bold text-muted-foreground">
-                  ⌘K
-                </kbd>
+            <div className="flex items-center gap-4">
+              <div
+                className="relative group cursor-pointer"
+                onClick={() => setIsCommandOpen(true)}
+              >
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card/80 border border-border/60 shadow-sm hover:bg-card hover:border-border transition-all duration-200">
+                  <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[11px] font-medium text-muted-foreground pr-8">Search...</span>
+                  <kbd className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none h-4 px-1.5 flex items-center gap-1 rounded border border-border/60 bg-muted font-mono text-[9px] font-bold text-muted-foreground">
+                    ⌘K
+                  </kbd>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         {/* Command Palette */}
         <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
