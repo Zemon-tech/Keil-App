@@ -9,4 +9,5 @@ export const config = {
     supabaseUrl: process.env.SUPABASE_URL || "",
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || "",
     supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || "",
+    databaseUrl: process.env.DATABASE_URL || "",
 };
