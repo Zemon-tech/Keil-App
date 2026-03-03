@@ -1,0 +1,381 @@
+import {
+  taskRepository,
+  taskAssigneeRepository,
+  taskDependencyRepository,
+  activityRepository
+} from '../repositories';
+import { Task } from '../types/entities';
+import { TaskStatus, TaskPriority, LogEntityType, LogActionType } from '../types/enums';
+import { TaskQueryOptions } from '../types/repository';
+import { ApiError } from '../utils/ApiError';
+
+/**
+ * Task Service - Business logic layer using repositories
+ * Repositories return Entities, Services convert Entity → DTO
+ */
+
+// DTOs (Data Transfer Objects) for API responses
+export interface TaskDTO {
+  id: string;
+  workspace_id: string;
+  parent_task_id: string | null;
+  title: string;
+  description: string | null;
+  objective: string | null;
+  success_criteria: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  start_date: string | null;
+  due_date: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTaskData {
+  workspace_id: string;
+  parent_task_id?: string | null;
+  title: string;
+  description?: string;
+  objective?: string;
+  success_criteria?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  start_date?: Date;
+  due_date?: Date;
+  created_by: string;
+}
+
+export interface UpdateTaskData {
+  title?: string;
+  description?: string;
+  objective?: string;
+  success_criteria?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  start_date?: Date;
+  due_date?: Date;
+}
+
+/**
+ * Convert Task entity to DTO
+ */
+const taskToDTO = (task: Task): TaskDTO => {
+  return {
+    id: task.id,
+    workspace_id: task.workspace_id,
+    parent_task_id: task.parent_task_id,
+    title: task.title,
+    description: task.description,
+    objective: task.objective,
+    success_criteria: task.success_criteria,
+    status: task.status,
+    priority: task.priority,
+    start_date: task.start_date ? task.start_date.toISOString() : null,
+    due_date: task.due_date ? task.due_date.toISOString() : null,
+    created_by: task.created_by,
+    created_at: task.created_at.toISOString(),
+    updated_at: task.updated_at.toISOString()
+  };
+};
+
+/**
+ * Create a new task
+ */
+export const createTask = async (data: CreateTaskData): Promise<TaskDTO> => {
+  // Validate date order
+  if (data.start_date && data.due_date && data.due_date < data.start_date) {
+    throw new ApiError(400, 'due_date must be on or after start_date');
+  }
+
+  const task = await taskRepository.executeInTransaction(async (client) => {
+    // Create task
+    const newTask = await taskRepository.create(data, client);
+
+    // Log activity
+    await activityRepository.log({
+      workspace_id: data.workspace_id,
+      user_id: data.created_by,
+      entity_type: LogEntityType.TASK,
+      entity_id: newTask.id,
+      action_type: LogActionType.TASK_CREATED,
+      old_value: null,
+      new_value: { title: newTask.title, status: newTask.status }
+    }, client);
+
+    return newTask;
+  });
+
+  return taskToDTO(task);
+};
+
+/**
+ * Get tasks by workspace with filters
+ */
+export const getTasksByWorkspace = async (
+  workspaceId: string,
+  options: TaskQueryOptions = {}
+): Promise<TaskDTO[]> => {
+  const tasks = await taskRepository.findByWorkspace(workspaceId, options);
+  return tasks.map(taskToDTO);
+};
+
+/**
+ * Get task by ID
+ */
+export const getTaskById = async (taskId: string): Promise<TaskDTO | null> => {
+  const task = await taskRepository.findById(taskId);
+  return task ? taskToDTO(task) : null;
+};
+
+/**
+ * Update task
+ */
+export const updateTask = async (
+  taskId: string,
+  data: UpdateTaskData,
+  userId: string,
+  workspaceId: string
+): Promise<TaskDTO | null> => {
+  // Validate date order if both are provided
+  if (data.start_date && data.due_date && data.due_date < data.start_date) {
+    throw new ApiError(400, 'due_date must be on or after start_date');
+  }
+
+  const result = await taskRepository.executeInTransaction(async (client) => {
+    // Get old task for activity log
+    const oldTask = await taskRepository.findById(taskId, client);
+    if (!oldTask) {
+      return null;
+    }
+
+    // Update task
+    const updatedTask = await taskRepository.update(taskId, data, client);
+    if (!updatedTask) {
+      return null;
+    }
+
+    // Log changes
+    const changes: Record<string, any> = {};
+    if (data.title && data.title !== oldTask.title) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.TITLE_UPDATED,
+        old_value: { title: oldTask.title },
+        new_value: { title: data.title }
+      }, client);
+    }
+
+    if (data.status && data.status !== oldTask.status) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.STATUS_CHANGED,
+        old_value: { status: oldTask.status },
+        new_value: { status: data.status }
+      }, client);
+    }
+
+    if (data.priority && data.priority !== oldTask.priority) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.PRIORITY_CHANGED,
+        old_value: { priority: oldTask.priority },
+        new_value: { priority: data.priority }
+      }, client);
+    }
+
+    return updatedTask;
+  });
+
+  return result ? taskToDTO(result) : null;
+};
+
+/**
+ * Delete task (soft delete)
+ */
+export const deleteTask = async (
+  taskId: string,
+  userId: string,
+  workspaceId: string
+): Promise<void> => {
+  await taskRepository.executeInTransaction(async (client) => {
+    const task = await taskRepository.findById(taskId, client);
+    if (!task) {
+      throw new ApiError(404, 'Task not found');
+    }
+
+    // Soft delete task (cascades handled by DB)
+    await taskRepository.softDelete(taskId, client);
+
+    // Log deletion
+    await activityRepository.log({
+      workspace_id: workspaceId,
+      user_id: userId,
+      entity_type: LogEntityType.TASK,
+      entity_id: taskId,
+      action_type: LogActionType.TASK_DELETED,
+      old_value: { title: task.title },
+      new_value: null
+    }, client);
+  });
+};
+
+/**
+ * Change task status with dependency validation
+ */
+export const changeTaskStatus = async (
+  taskId: string,
+  newStatus: TaskStatus,
+  userId: string,
+  workspaceId: string
+): Promise<TaskDTO | null> => {
+  // If changing to 'done', check dependencies
+  if (newStatus === TaskStatus.DONE) {
+    const allDependenciesComplete = await taskDependencyRepository.checkAllDependenciesComplete(taskId);
+    if (!allDependenciesComplete) {
+      throw new ApiError(400, 'Cannot mark task as done. Some dependencies are incomplete.');
+    }
+  }
+
+  const result = await taskRepository.executeInTransaction(async (client) => {
+    const oldTask = await taskRepository.findById(taskId, client);
+    if (!oldTask) {
+      return null;
+    }
+
+    const updatedTask = await taskRepository.updateStatus(taskId, newStatus, client);
+    if (!updatedTask) {
+      return null;
+    }
+
+    // Log status change
+    await activityRepository.log({
+      workspace_id: workspaceId,
+      user_id: userId,
+      entity_type: LogEntityType.TASK,
+      entity_id: taskId,
+      action_type: LogActionType.STATUS_CHANGED,
+      old_value: { status: oldTask.status },
+      new_value: { status: newStatus }
+    }, client);
+
+    return updatedTask;
+  });
+
+  return result ? taskToDTO(result) : null;
+};
+
+/**
+ * Assign user to task
+ */
+export const assignUserToTask = async (
+  taskId: string,
+  assigneeUserId: string,
+  userId: string,
+  workspaceId: string
+): Promise<void> => {
+  await taskRepository.executeInTransaction(async (client) => {
+    await taskAssigneeRepository.assign(taskId, assigneeUserId, client);
+
+    // Log assignment
+    await activityRepository.log({
+      workspace_id: workspaceId,
+      user_id: userId,
+      entity_type: LogEntityType.TASK,
+      entity_id: taskId,
+      action_type: LogActionType.ASSIGNMENT_ADDED,
+      old_value: null,
+      new_value: { assigned_user_id: assigneeUserId }
+    }, client);
+  });
+};
+
+/**
+ * Remove user from task
+ */
+export const removeUserFromTask = async (
+  taskId: string,
+  assigneeUserId: string,
+  userId: string,
+  workspaceId: string
+): Promise<void> => {
+  await taskRepository.executeInTransaction(async (client) => {
+    await taskAssigneeRepository.unassign(taskId, assigneeUserId, client);
+
+    // Log removal
+    await activityRepository.log({
+      workspace_id: workspaceId,
+      user_id: userId,
+      entity_type: LogEntityType.TASK,
+      entity_id: taskId,
+      action_type: LogActionType.ASSIGNMENT_REMOVED,
+      old_value: { assigned_user_id: assigneeUserId },
+      new_value: null
+    }, client);
+  });
+};
+
+/**
+ * Add dependency
+ */
+export const addDependency = async (
+  taskId: string,
+  dependsOnTaskId: string,
+  userId: string,
+  workspaceId: string
+): Promise<void> => {
+  // Check for circular dependency
+  const hasCircular = await taskDependencyRepository.hasCircularDependency(taskId, dependsOnTaskId);
+  if (hasCircular) {
+    throw new ApiError(400, 'Cannot add dependency. This would create a circular dependency.');
+  }
+
+  await taskRepository.executeInTransaction(async (client) => {
+    await taskDependencyRepository.addDependency(taskId, dependsOnTaskId, client);
+
+    // Log dependency
+    await activityRepository.log({
+      workspace_id: workspaceId,
+      user_id: userId,
+      entity_type: LogEntityType.TASK,
+      entity_id: taskId,
+      action_type: LogActionType.DEPENDENCY_ADDED,
+      old_value: null,
+      new_value: { depends_on_task_id: dependsOnTaskId }
+    }, client);
+  });
+};
+
+/**
+ * Remove dependency
+ */
+export const removeDependency = async (
+  taskId: string,
+  dependsOnTaskId: string,
+  userId: string,
+  workspaceId: string
+): Promise<void> => {
+  await taskRepository.executeInTransaction(async (client) => {
+    await taskDependencyRepository.removeDependency(taskId, dependsOnTaskId, client);
+
+    // Log removal
+    await activityRepository.log({
+      workspace_id: workspaceId,
+      user_id: userId,
+      entity_type: LogEntityType.TASK,
+      entity_id: taskId,
+      action_type: LogActionType.DEPENDENCY_REMOVED,
+      old_value: { depends_on_task_id: dependsOnTaskId },
+      new_value: null
+    }, client);
+  });
+};
