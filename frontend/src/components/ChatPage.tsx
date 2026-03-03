@@ -91,7 +91,6 @@ export function ChatPage() {
   const [selectedChannel, setSelectedChannel] = useState<Channel>(mockChannels[0]);
   const [messages, setMessages] = useState<Message[]>(mockMessages);
   const [newMessage, setNewMessage] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

@@ -1,56 +1,10 @@
 import { useMemo, useState } from "react";
-import { useSidebar } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
-import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
-
-export type TaskStatus = "Backlog" | "In Progress" | "Blocked" | "Done";
-export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
-
-export type CalendarBlockType =
-  | "meeting"
-  | "focus_block"
-  | "task_slot"
-  | "deadline_marker"
-  | "reminder";
-
-export type CalendarBlock = {
-  id: string;
-  type: CalendarBlockType;
-  title: string;
-  startISO: string;
-  endISO?: string;
-  taskId?: string;
-  notes?: string;
-};
-
-export type Subtask = {
-  id: string;
-  title: string;
-  done: boolean;
-};
-
-export type Task = {
-  id: string;
-  projectId: string;
-  projectTitle: string;
-  title: string;
-  description?: string;
-  objective: string;
-  successCriteria: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  owner: string;
-  dueDateISO: string;
-  plannedStartISO?: string;
-  plannedEndISO?: string;
-  dependencies: { id: string; title: string; status: TaskStatus }[];
-  context: { title: string; kind: "link" | "file" | "doc"; href?: string }[];
-  subtasks: Subtask[];
-  activity: { id: string; label: string; timestamp: string }[];
-  comments: { id: string; author: string; body: string; timestamp: string }[];
-};
+import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
+import { TaskTimelinePane } from "@/components/tasks/TaskTimelinePane";
+import type { CalendarBlock, Task, TaskStatus } from "@/components/TasksPage";
 
 const mockTasks: Task[] = [
   {
@@ -158,19 +112,54 @@ const mockTasks: Task[] = [
   },
 ];
 
-export function TasksPage() {
-  const { state } = useSidebar();
-  const isCollapsed = state === "collapsed";
+const mockCalendarBlocks: CalendarBlock[] = [
+  {
+    id: "blk_01",
+    type: "meeting",
+    title: "Client sync",
+    startISO: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
+    endISO: new Date(Date.now() + 1000 * 60 * 90).toISOString(),
+    notes: "Agenda: gantt + calendar + task slot semantics",
+  },
+  {
+    id: "blk_02",
+    type: "focus_block",
+    title: "Deep work: Task UI",
+    startISO: new Date(Date.now() + 1000 * 60 * 120).toISOString(),
+    endISO: new Date(Date.now() + 1000 * 60 * 240).toISOString(),
+  },
+  {
+    id: "blk_03",
+    type: "task_slot",
+    title: "Work on: Define Task Module UI",
+    taskId: "tsk_01",
+    startISO: new Date(Date.now() + 1000 * 60 * 300).toISOString(),
+    endISO: new Date(Date.now() + 1000 * 60 * 360).toISOString(),
+  },
+  {
+    id: "blk_04",
+    type: "deadline_marker",
+    title: "Due: Stabilize auth refresh flow",
+    taskId: "tsk_03",
+    startISO: new Date(Date.now() + 1000 * 60 * 60 * 10).toISOString(),
+  },
+  {
+    id: "blk_05",
+    type: "reminder",
+    title: "Send update to Aisha",
+    startISO: new Date(Date.now() + 1000 * 60 * 60 * 3).toISOString(),
+  },
+];
 
+export function SchedulePage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "All">("All");
   const [selectedTaskId, setSelectedTaskId] = useState<string>(mockTasks[0]?.id ?? "");
-
-  const tasks = mockTasks;
+  const [activeTab, setActiveTab] = useState<"schedule" | "timeline">("schedule");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return tasks.filter((t) => {
+    return mockTasks.filter((t) => {
       if (statusFilter !== "All" && t.status !== statusFilter) return false;
       if (!q) return true;
       return (
@@ -179,21 +168,16 @@ export function TasksPage() {
         t.objective.toLowerCase().includes(q)
       );
     });
-  }, [query, statusFilter, tasks]);
+  }, [query, statusFilter]);
 
-  const selected = useMemo(
-    () => tasks.find((t) => t.id === selectedTaskId) ?? null,
-    [selectedTaskId, tasks]
-  );
-
-  const containerClassName = cn(
-    "h-full w-full transition-all duration-500 ease-in-out",
-    isCollapsed ? "" : ""
+  const selectedTask = useMemo(
+    () => mockTasks.find((t) => t.id === selectedTaskId) ?? null,
+    [selectedTaskId]
   );
 
   return (
     <div className="h-[100dvh] w-full bg-background text-foreground overflow-hidden overscroll-none">
-      <main className={containerClassName}>
+      <main className="h-full w-full">
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
           <ResizablePanel defaultSize={34} minSize={26} className="bg-card">
             <TaskListPane
@@ -210,7 +194,22 @@ export function TasksPage() {
           <ResizableHandle withHandle className="bg-border/60" />
 
           <ResizablePanel defaultSize={66} minSize={40} className="bg-background">
-            <TaskDetailPane task={selected} />
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full">
+              <div className="border-b border-border/60 bg-gradient-to-b from-card/50 to-background px-4 pt-3">
+                <TabsList className="rounded-xl">
+                  <TabsTrigger value="schedule">Schedule</TabsTrigger>
+                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="schedule" className="h-[calc(100%-52px)]">
+                <TaskSchedulePane tasks={mockTasks} blocks={mockCalendarBlocks} selectedTask={selectedTask} />
+              </TabsContent>
+
+              <TabsContent value="timeline" className="h-[calc(100%-52px)]">
+                <TaskTimelinePane tasks={mockTasks} selectedTask={selectedTask} />
+              </TabsContent>
+            </Tabs>
           </ResizablePanel>
         </ResizablePanelGroup>
       </main>
