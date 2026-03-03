@@ -37,6 +37,7 @@ import {
   CreditCard,
   HelpCircle,
   MessageSquare,
+  CheckSquare,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -52,6 +53,11 @@ const navigationItems = [
     title: "Chat",
     url: "/chat",
     icon: MessageSquare,
+  },
+  {
+    title: "Tasks",
+    url: "/tasks",
+    icon: CheckSquare,
   },
   {
     title: "Users",
