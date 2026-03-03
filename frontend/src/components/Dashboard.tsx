@@ -7,6 +7,7 @@ import { NextEventCard } from "./dashboard/NextEventCard";
 import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
 import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
 import { UpNextCard } from "./dashboard/UpNextCard";
+
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
@@ -24,11 +25,13 @@ export function Dashboard() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-16">
+    <div
+      className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none"
+    >
       <main
         className={cn(
           containerClassName,
-          "pt-10 lg:pt-12 flex flex-col items-center relative"
+          "h-full pt-10 lg:pt-12 flex flex-col items-center relative overflow-hidden overscroll-none"
         )}
       >
         {/* Hero: greeting + input area */}
