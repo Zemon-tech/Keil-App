@@ -536,6 +536,47 @@ html,
     filter: brightness(1.05);
 }
 
+/* Drag and Drop Styling */
+.fc-event-dragging {
+    opacity: 0.7 !important;
+    cursor: grabbing !important;
+    z-index: 999 !important;
+}
+
+.fc-highlight {
+    background: var(--primary) !important;
+    opacity: 0.15 !important;
+}
+
+/* External drag mirror */
+.fc-event-mirror {
+    opacity: 0.8 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Draggable task cards */
+.draggable-task-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.draggable-task-card:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Scheduled task events */
+.fc-event.scheduled-task {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 4px 8px !important;
+}
+
+.fc-event.scheduled-task .fc-event-title {
+    font-weight: 600 !important;
+    font-size: 0.75rem !important;
+}
+
 /* ─────────────────────────────────────────────────────────── */
 /* FRAPPE GANTT CUSTOM DARK THEME — scoped to .task-gantt-root */
 /* ─────────────────────────────────────────────────────────── */

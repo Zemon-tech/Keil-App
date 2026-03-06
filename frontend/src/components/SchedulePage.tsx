@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { TaskTimelinePane } from "@/components/tasks/TaskTimelinePane";
@@ -165,6 +166,22 @@ export function SchedulePage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string>(mockTasks[0]?.id ?? "");
   const [activeTab, setActiveTab] = useState<"schedule" | "timeline">("schedule");
   const [calendarView, setCalendarView] = useState<string>("timeGridWeek");
+  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+
+  // Handle task scheduling updates
+  const handleTaskSchedule = (taskId: string, startISO: string, endISO: string) => {
+    console.log("📅 Scheduling task:", { taskId, startISO, endISO });
+    
+    setTasks((prevTasks) =>
+      prevTasks.map((task) =>
+        task.id === taskId
+          ? { ...task, plannedStartISO: startISO, plannedEndISO: endISO }
+          : task
+      )
+    );
+    
+    console.log("✅ Task scheduled successfully");
+  };
 
   // Calculate minimum pixel width for calendar based on view
   const calendarMinPixels = useMemo(() => {
@@ -175,7 +192,7 @@ export function SchedulePage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return mockTasks.filter((t) => {
+    return tasks.filter((t) => {
       if (statusFilter !== "All" && t.status !== statusFilter) return false;
       if (!q) return true;
       return (
@@ -184,15 +201,16 @@ export function SchedulePage() {
         t.objective.toLowerCase().includes(q)
       );
     });
-  }, [query, statusFilter]);
+  }, [query, statusFilter, tasks]);
 
   const selectedTask = useMemo(
-    () => mockTasks.find((t) => t.id === selectedTaskId) ?? null,
-    [selectedTaskId]
+    () => tasks.find((t) => t.id === selectedTaskId) ?? null,
+    [selectedTaskId, tasks]
   );
 
   return (
     <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
+      <Toaster />
       <main className="h-full w-full">
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
           <ResizablePanel defaultSize={30} minSize={20} className="bg-card">
@@ -227,18 +245,19 @@ export function SchedulePage() {
 
               <TabsContent value="schedule" className="h-[calc(100%-52px)]">
                 <TaskSchedulePane 
-                  tasks={mockTasks} 
+                  tasks={tasks} 
                   blocks={mockCalendarBlocks} 
                   selectedTask={selectedTask}
                   onViewChange={(view) => {
                     console.log('📅 Calendar view changed to:', view);
                     setCalendarView(view);
                   }}
+                  onTaskSchedule={handleTaskSchedule}
                 />
               </TabsContent>
 
               <TabsContent value="timeline" className="h-[calc(100%-52px)]">
-                <TaskTimelinePane tasks={mockTasks} selectedTask={selectedTask} />
+                <TaskTimelinePane tasks={tasks} selectedTask={selectedTask} />
               </TabsContent>
             </Tabs>
           </ResizablePanel>

@@ -1,5 +1,6 @@
-import { useMemo } from "react";
-import { Search, ListFilter, Plus, CircleDot, AlertTriangle, CheckCircle2, PauseCircle } from "lucide-react";
+import { useMemo, useEffect, useRef } from "react";
+import { Draggable } from "@fullcalendar/interaction";
+import { Search, ListFilter, Plus, CircleDot, AlertTriangle, CheckCircle2, PauseCircle, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,9 @@ export function TaskListPane({
   selectedTaskId,
   onSelectTask,
 }: Props) {
+  const draggableRef = useRef<Draggable | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const grouped = useMemo(() => {
     const map = new Map<string, Task[]>();
     for (const t of tasks) {
@@ -73,6 +77,38 @@ export function TaskListPane({
       projectTitle,
       items,
     }));
+  }, [tasks]);
+
+  // Initialize FullCalendar Draggable for task cards
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    draggableRef.current = new Draggable(containerRef.current, {
+      itemSelector: ".draggable-task-card",
+      eventData: (eventEl) => {
+        const taskId = eventEl.getAttribute("data-task-id");
+        const taskTitle = eventEl.getAttribute("data-task-title");
+        const taskStatus = eventEl.getAttribute("data-task-status");
+        
+        console.log("🎯 Dragging task:", { taskId, taskTitle, taskStatus });
+        
+        return {
+          id: taskId,
+          title: taskTitle,
+          duration: "01:00", // 1 hour default duration
+          extendedProps: {
+            taskId,
+            taskTitle,
+            taskStatus,
+            isDraggedTask: true,
+          },
+        };
+      },
+    });
+
+    return () => {
+      draggableRef.current?.destroy();
+    };
   }, [tasks]);
 
   return (
@@ -120,7 +156,7 @@ export function TaskListPane({
       </div>
 
       <ScrollArea className="flex-1 min-h-0">
-        <div className="p-3 space-y-4">
+        <div ref={containerRef} className="p-3 space-y-4">
           {grouped.map((g) => (
             <div key={g.projectTitle} className="space-y-2">
               <div className="px-2 text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
@@ -130,18 +166,29 @@ export function TaskListPane({
                 {g.items.map((t) => {
                   const active = t.id === selectedTaskId;
                   const Icon = statusIcon(t.status);
+                  const isDraggable = t.status !== "Done";
+                  
                   return (
                     <button
                       key={t.id}
                       onClick={() => onSelectTask(t.id)}
+                      data-task-id={t.id}
+                      data-task-title={t.title}
+                      data-task-status={t.status}
                       className={cn(
                         "w-full text-left rounded-2xl border transition-colors px-3 py-3 group",
                         active
                           ? "bg-primary/10 border-primary/20"
-                          : "bg-card hover:bg-muted/60 border-border/60"
+                          : "bg-card hover:bg-muted/60 border-border/60",
+                        isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
                       )}
                     >
                       <div className="flex items-start gap-3">
+                        {isDraggable && (
+                          <div className="mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity">
+                            <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
                         <div
                           className={cn(
                             "mt-0.5 size-8 rounded-xl flex items-center justify-center border",
