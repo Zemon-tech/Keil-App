@@ -26,7 +26,10 @@ type Props = {
   tasks: Task[];
   blocks: CalendarBlock[];
   selectedTask: Task | null;
+  onViewChange?: (view: string) => void;
 };
+
+type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
 
 const typeMeta: Record<CalendarBlockType, { label: string; icon: any; pill: string; bg: string; border: string }> = {
   meeting: {
@@ -146,7 +149,7 @@ function renderEventContent(arg: EventContentArg) {
 
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask }: Props) {
+export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange }: Props) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>("");
 
   const eventInputs = useMemo(() => {
@@ -199,6 +202,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask }: Props) {
             }}
             select={() => {
               setSelectedBlockId("");
+            }}
+            datesSet={(dateInfo) => {
+              const view = dateInfo.view.type as CalendarView;
+              onViewChange?.(view);
             }}
           />
         </div>

@@ -65,3 +65,5 @@ temp/
 *.tgz
 *.tar.gz
 docs/ClarityOS_Team_Brief.docx
+.kiro/
+docs/tasks/

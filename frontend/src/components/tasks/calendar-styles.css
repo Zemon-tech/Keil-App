@@ -422,6 +422,25 @@ html,
 .fc-header-toolbar {
     padding: 1rem !important;
     margin-bottom: 0 !important;
+    flex-wrap: nowrap !important;
+    min-width: 400px;
+}
+
+/* View-specific minimum widths */
+.fc-timeGridWeek-view .fc-header-toolbar {
+    min-width: 700px;
+}
+
+.fc-timeGridDay-view .fc-header-toolbar {
+    min-width: 400px;
+}
+
+.fc-dayGridMonth-view .fc-header-toolbar {
+    min-width: 600px;
+}
+
+.fc-listWeek-view .fc-header-toolbar {
+    min-width: 400px;
 }
 
 .fc-toolbar-title {
@@ -435,6 +454,9 @@ html,
     border-color: var(--border) !important;
     color: var(--foreground) !important;
     box-shadow: none !important;
+    white-space: nowrap !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
 }
 
 .fc-button-primary:hover {
@@ -444,6 +466,21 @@ html,
 .fc-button-active {
     background-color: var(--accent) !important;
     border-color: var(--accent) !important;
+}
+
+/* Ensure button groups don't wrap */
+.fc-button-group {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    gap: 0 !important;
+}
+
+/* Toolbar sections */
+.fc-toolbar-chunk {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem !important;
 }
 
 .fc-col-header-cell {

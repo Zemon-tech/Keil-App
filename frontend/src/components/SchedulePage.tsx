@@ -6,6 +6,14 @@ import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { TaskTimelinePane } from "@/components/tasks/TaskTimelinePane";
 import type { CalendarBlock, Task, TaskStatus } from "@/components/TasksPage";
 
+// Minimum pixel widths for each calendar view
+const MIN_WIDTHS = {
+  timeGridWeek: 750,  // 7 days + time column fully visible
+  timeGridDay: 450,   // Single day + time column comfortable
+  dayGridMonth: 650,  // All dates visible without wrap
+  listWeek: 400,      // List items readable
+} as const;
+
 const mockTasks: Task[] = [
   {
     id: "tsk_01",
@@ -156,6 +164,14 @@ export function SchedulePage() {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "All">("All");
   const [selectedTaskId, setSelectedTaskId] = useState<string>(mockTasks[0]?.id ?? "");
   const [activeTab, setActiveTab] = useState<"schedule" | "timeline">("schedule");
+  const [calendarView, setCalendarView] = useState<string>("timeGridWeek");
+
+  // Calculate minimum pixel width for calendar based on view
+  const calendarMinPixels = useMemo(() => {
+    const minPixels = MIN_WIDTHS[calendarView as keyof typeof MIN_WIDTHS] || MIN_WIDTHS.timeGridWeek;
+    console.log('📊 Calendar Min Pixels:', minPixels, 'for view:', calendarView);
+    return `${minPixels}px`;
+  }, [calendarView]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -176,10 +192,10 @@ export function SchedulePage() {
   );
 
   return (
-    <div className="h-[100dvh] w-full bg-background text-foreground overflow-hidden overscroll-none">
+    <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
       <main className="h-full w-full">
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-          <ResizablePanel defaultSize={34} minSize={26} className="bg-card">
+          <ResizablePanel defaultSize={30} minSize={20} className="bg-card">
             <TaskListPane
               query={query}
               onQueryChange={setQuery}
@@ -193,9 +209,16 @@ export function SchedulePage() {
 
           <ResizableHandle withHandle className="bg-border/60" />
 
-          <ResizablePanel defaultSize={66} minSize={40} className="bg-background">
+          <ResizablePanel 
+            defaultSize={70} 
+            minSize={calendarMinPixels}
+            className="bg-background"
+            onResize={(size) => {
+              console.log('📏 Calendar panel resized to:', size);
+            }}
+          >
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full">
-              <div className="border-b border-border/60 bg-gradient-to-b from-card/50 to-background px-4 pt-3">
+              <div className="border-b border-border/60 bg-linear-to-b from-card/50 to-background px-4 pt-3">
                 <TabsList className="rounded-xl">
                   <TabsTrigger value="schedule">Schedule</TabsTrigger>
                   <TabsTrigger value="timeline">Timeline</TabsTrigger>
@@ -203,7 +226,15 @@ export function SchedulePage() {
               </div>
 
               <TabsContent value="schedule" className="h-[calc(100%-52px)]">
-                <TaskSchedulePane tasks={mockTasks} blocks={mockCalendarBlocks} selectedTask={selectedTask} />
+                <TaskSchedulePane 
+                  tasks={mockTasks} 
+                  blocks={mockCalendarBlocks} 
+                  selectedTask={selectedTask}
+                  onViewChange={(view) => {
+                    console.log('📅 Calendar view changed to:', view);
+                    setCalendarView(view);
+                  }}
+                />
               </TabsContent>
 
               <TabsContent value="timeline" className="h-[calc(100%-52px)]">
