@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import type { CalendarBlock, CalendarBlockType, Task } from "@/components/TasksPage";
+import type { CalendarBlock, CalendarBlockType, Task } from "@/types/task";
 
 type Props = {
   tasks: Task[];
