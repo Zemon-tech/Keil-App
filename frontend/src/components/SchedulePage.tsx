@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useSidebar } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
@@ -48,9 +50,12 @@ const mockCalendarBlocks: CalendarBlock[] = [
 ];
 
 export function SchedulePage() {
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
+
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(mockTasks[0]?.id ?? "");
+  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>(mockTasks);
   const [activeTab, setActiveTab] = useState<"schedule" | "timeline">("schedule");
@@ -76,11 +81,16 @@ export function SchedulePage() {
     [selectedTaskId, tasks]
   );
 
+  const containerClassName = cn(
+    "h-full w-full transition-all duration-500 ease-in-out",
+    isCollapsed ? "" : ""
+  );
+
   return (
     <div className="h-[100dvh] w-full bg-background text-foreground overflow-hidden overscroll-none">
-      <main className="h-full w-full">
+      <main className={containerClassName}>
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-          <ResizablePanel defaultSize={34} minSize={26} className="bg-card">
+          <ResizablePanel defaultSize={25} minSize="25%" className="bg-card">
             <TaskListPane
               query={query}
               onQueryChange={setQuery}
@@ -102,24 +112,24 @@ export function SchedulePage() {
             />
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="bg-border/60" />
-
-          <ResizablePanel defaultSize={66} minSize={40} className="bg-background">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full">
-              <div className="border-b border-border/60 bg-gradient-to-b from-card/50 to-background px-4 pt-3">
+          <ResizablePanel defaultSize={75} minSize={30} className="bg-background">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
+              <div className="shrink-0 border-b border-border/60 bg-gradient-to-b from-card/50 to-background px-4 pt-3">
                 <TabsList className="rounded-xl">
                   <TabsTrigger value="schedule">Schedule</TabsTrigger>
                   <TabsTrigger value="timeline">Timeline</TabsTrigger>
                 </TabsList>
               </div>
 
-              <TabsContent value="schedule" className="h-[calc(100%-52px)]">
-                <TaskSchedulePane tasks={tasks} blocks={mockCalendarBlocks} selectedTask={selectedTask} />
-              </TabsContent>
+              <div className="flex-1 min-h-0">
+                <TabsContent value="schedule" className="h-full mt-0 focus-visible:outline-none">
+                  <TaskSchedulePane tasks={tasks} blocks={mockCalendarBlocks} selectedTask={selectedTask} />
+                </TabsContent>
 
-              <TabsContent value="timeline" className="h-[calc(100%-52px)]">
-                <TaskTimelinePane tasks={tasks} selectedTask={selectedTask} />
-              </TabsContent>
+                <TabsContent value="timeline" className="h-full mt-0 focus-visible:outline-none">
+                  <TaskTimelinePane tasks={tasks} selectedTask={selectedTask} />
+                </TabsContent>
+              </div>
             </Tabs>
           </ResizablePanel>
         </ResizablePanelGroup>
