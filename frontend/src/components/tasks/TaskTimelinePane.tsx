@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Task } from "@/components/TasksPage";
+import type { Task } from "@/types/task";
 
 type Props = {
   tasks: Task[];
@@ -123,7 +123,6 @@ export function TaskTimelinePane({ tasks, selectedTask }: Props) {
     if (!wrapperRef.current) return;
     const observer = new ResizeObserver(() => {
       if (!containerRef.current || !wrapperRef.current || !ganttRef.current) return;
-      const h = wrapperRef.current.clientHeight;
       // frappe doesn't expose a resize API, so we just re-render
       // by triggering the main effect — change_view_mode is the lightest hook
       try { ganttRef.current.change_view_mode(viewMode); } catch { /* ignore */ }
@@ -163,7 +162,7 @@ export function TaskTimelinePane({ tasks, selectedTask }: Props) {
                 <ChevronDown className="h-3.5 w-3.5 ml-2 opacity-40" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-2xl border-border/40 bg-card/95 backdrop-blur-xl shadow-2xl min-w-[140px]">
+            <DropdownMenuContent align="end" className="rounded-2xl border-border/40 bg-card/95 backdrop-blur-xl shadow-2xl min-w-[240px]">
               {(["Day", "Week", "Month", "Year"] as GanttViewMode[]).map((mode) => (
                 <DropdownMenuItem
                   key={mode}
