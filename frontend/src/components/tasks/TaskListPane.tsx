@@ -174,7 +174,7 @@ export function TaskListPane({
       subtasks: [],
       assignees: [],
       labels: [],
-      activity: [{ id: "act_created", label: "Created", timestamp: "Just now" }],
+      history: [],
       comments: [],
     };
 

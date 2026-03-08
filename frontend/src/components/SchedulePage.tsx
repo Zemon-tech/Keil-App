@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";

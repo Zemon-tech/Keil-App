@@ -582,7 +582,7 @@ const DependencyRow = ({ dep }: { dep: Dependency }) => (
 
 const DependenciesTab = ({ task }: { task: Task }) => {
   const blockedByCount = task.dependencies.length;
-  const blockingCount = 0; // populated from API in the future
+  const blockingCount: number = 0; // populated from API in the future
   const blockingTasks: Dependency[] = [];
   const blockedByTasks = task.dependencies;
 
