@@ -4,8 +4,9 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
+import type { EventReceiveArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import type { EventContentArg, EventInput } from "@fullcalendar/core";
-import { addMinutes, format, parseISO } from "date-fns";
+import { addMinutes, format, parseISO, isPast } from "date-fns";
 import {
   Bell,
   CalendarClock,
@@ -20,13 +21,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
-import type { CalendarBlock, CalendarBlockType, Task } from "@/components/TasksPage";
+import { toast } from "sonner";
+import type { CalendarBlock, CalendarBlockType, Task } from "@/types/task";
 
 type Props = {
   tasks: Task[];
   blocks: CalendarBlock[];
   selectedTask: Task | null;
+  onViewChange?: (view: string) => void;
+  onTaskSchedule?: (taskId: string, startISO: string, endISO: string) => void;
 };
+
+type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
 
 const typeMeta: Record<CalendarBlockType, { label: string; icon: any; pill: string; bg: string; border: string }> = {
   meeting: {
@@ -108,6 +114,32 @@ function makeEventInput(block: CalendarBlock, task?: Task): EventInput {
 
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
+  const isScheduledTask = arg.event.extendedProps.isScheduledTask;
+  
+  // Handle scheduled tasks (no type metadata)
+  if (isScheduledTask) {
+    return (
+      <div className="h-full w-full p-2 overflow-hidden">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
+                Scheduled Task
+              </span>
+            </div>
+          </div>
+          <Timer className="h-3.5 w-3.5 opacity-40" />
+        </div>
+      </div>
+    );
+  }
+  
+  // Handle calendar blocks with type metadata
+  if (!type || !typeMeta[type]) {
+    return <div className="p-2 text-xs">{arg.event.title}</div>;
+  }
+  
   const meta = typeMeta[type];
   const Icon = meta.icon;
   const isBg = arg.event.display === "background";
@@ -133,7 +165,7 @@ function renderEventContent(arg: EventContentArg) {
         <div className="min-w-0 flex-1">
           <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
           <div className="mt-1 flex items-center gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-[0.1em] opacity-60">
+            <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
               {meta.label}
             </span>
           </div>
@@ -146,12 +178,168 @@ function renderEventContent(arg: EventContentArg) {
 
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask }: Props) {
+export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>("");
+
+  // Check for scheduling conflicts
+  const checkConflicts = (taskId: string, startDate: Date, endDate: Date): { hasConflict: boolean; conflictingTasks: Task[] } => {
+    const conflictingTasks = tasks.filter((task) => {
+      if (task.id === taskId) return false;
+      if (!task.plannedStartISO || !task.plannedEndISO) return false;
+      
+      const taskStart = parseISO(task.plannedStartISO);
+      const taskEnd = parseISO(task.plannedEndISO);
+      
+      // Check for overlap
+      return (startDate < taskEnd && endDate > taskStart);
+    });
+    
+    return {
+      hasConflict: conflictingTasks.length > 0,
+      conflictingTasks,
+    };
+  };
+
+  // Handle external task drop
+  const handleEventReceive = (info: EventReceiveArg) => {
+    try {
+      const taskId = info.event.extendedProps.taskId;
+      const taskStatus = info.event.extendedProps.taskStatus;
+      const startDate = info.event.start;
+      const endDate = info.event.end;
+      
+      console.log("🎯 Task dropped on calendar:", {
+        taskId,
+        taskStatus,
+        start: startDate,
+        end: endDate,
+      });
+
+      // Validation 1: Check if task is "Done"
+      if (taskStatus === "Done") {
+        console.error("❌ Cannot schedule completed tasks");
+        toast.error("Cannot schedule completed tasks", {
+          description: "This task is already marked as done.",
+        });
+        info.revert();
+        return;
+      }
+
+      // Validation 2: Check if scheduled in the past
+      if (startDate && isPast(startDate)) {
+        console.error("❌ Cannot schedule tasks in the past");
+        toast.error("Cannot schedule in the past", {
+          description: "Please select a future time slot.",
+        });
+        info.revert();
+        return;
+      }
+
+      // Validation 3: Check for conflicts
+      if (startDate && endDate) {
+        const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
+        
+        if (hasConflict) {
+          console.warn("⚠️ Scheduling conflict detected:", conflictingTasks.map(t => t.title));
+          toast.warning("Scheduling conflict detected", {
+            description: `This time overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
+            duration: 5000,
+          });
+          // Allow scheduling but warn the user
+        }
+      }
+
+      // Update task with new schedule
+      if (startDate && endDate && onTaskSchedule) {
+        const startISO = startDate.toISOString();
+        const endISO = endDate.toISOString();
+        
+        console.log("✅ Scheduling task:", {
+          taskId,
+          startISO,
+          endISO,
+          duration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
+        });
+        
+        onTaskSchedule(taskId, startISO, endISO);
+        
+        toast.success("Task scheduled", {
+          description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error in handleEventReceive:", error);
+      toast.error("Failed to schedule task");
+      info.revert();
+    }
+  };
+
+  // Handle event resize (duration change)
+  const handleEventResize = (info: EventResizeDoneArg) => {
+    try {
+      const taskId = info.event.extendedProps.taskId;
+      const startDate = info.event.start;
+      const endDate = info.event.end;
+      
+      if (!taskId || !startDate || !endDate) {
+        console.warn("⚠️ Missing required data for resize");
+        return;
+      }
+
+      console.log("📏 Task duration resized:", {
+        taskId,
+        newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
+      });
+
+      // Check for conflicts after resize
+      const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
+      
+      if (hasConflict) {
+        console.warn("⚠️ Resize caused conflict:", conflictingTasks.map(t => t.title));
+        toast.warning("Scheduling conflict detected", {
+          description: `New duration overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
+          duration: 5000,
+        });
+      }
+
+      if (onTaskSchedule) {
+        onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+        toast.success("Task duration updated");
+      }
+    } catch (error) {
+      console.error("❌ Error in handleEventResize:", error);
+      toast.error("Failed to resize task");
+    }
+  };
 
   const eventInputs = useMemo(() => {
     const byTaskId = new Map(tasks.map((t) => [t.id, t] as const));
-    return blocks.map((b) => makeEventInput(b, b.taskId ? byTaskId.get(b.taskId) : undefined));
+    
+    // Add calendar blocks
+    const blockEvents = blocks.map((b) => makeEventInput(b, b.taskId ? byTaskId.get(b.taskId) : undefined));
+    
+    // Add scheduled tasks as events
+    const taskEvents = tasks
+      .filter((t) => t.plannedStartISO && t.plannedEndISO)
+      .map((t) => ({
+        id: `task-${t.id}`,
+        title: t.title,
+        start: t.plannedStartISO,
+        end: t.plannedEndISO,
+        backgroundColor: "#8b5cf6",
+        borderColor: "#7c3aed",
+        textColor: "#ffffff",
+        extendedProps: {
+          taskId: t.id,
+          taskTitle: t.title,
+          projectTitle: t.projectTitle,
+          taskStatus: t.status,
+          isScheduledTask: true,
+        },
+        editable: t.status !== "Done", // Only allow editing non-done tasks
+      } satisfies EventInput));
+    
+    return [...blockEvents, ...taskEvents];
   }, [blocks, tasks]);
 
   const selectedBlock = useMemo(() => blocks.find((b) => b.id === selectedBlockId) ?? null, [blocks, selectedBlockId]);
@@ -179,6 +367,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask }: Props) {
             nowIndicator
             editable
             selectable
+            droppable
             weekends
             dayHeaderFormat={{ weekday: "short", day: "numeric", omitCommas: true }}
             slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
@@ -199,6 +388,46 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask }: Props) {
             }}
             select={() => {
               setSelectedBlockId("");
+            }}
+            datesSet={(dateInfo) => {
+              const view = dateInfo.view.type as CalendarView;
+              onViewChange?.(view);
+            }}
+            eventReceive={handleEventReceive}
+            eventResize={handleEventResize}
+            eventResizeStart={() => {
+              console.log("📏 Started resizing event");
+            }}
+            eventDrop={(info) => {
+              // Handle moving existing scheduled tasks
+              const taskId = info.event.extendedProps.taskId;
+              const startDate = info.event.start;
+              const endDate = info.event.end;
+              
+              if (!taskId || !startDate || !endDate) return;
+              
+              console.log("🔄 Task moved:", { taskId, newStart: startDate, newEnd: endDate });
+              
+              // Check if moved to past
+              if (isPast(startDate)) {
+                console.error("❌ Cannot move task to the past");
+                toast.error("Cannot schedule in the past");
+                info.revert();
+                return;
+              }
+              
+              // Check for conflicts
+              const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
+              if (hasConflict) {
+                toast.warning("Scheduling conflict", {
+                  description: `Overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
+                });
+              }
+              
+              if (onTaskSchedule) {
+                onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+                toast.success("Task rescheduled");
+              }
             }}
           />
         </div>

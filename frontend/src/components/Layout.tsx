@@ -13,6 +13,8 @@ import {
   CommandItem
 } from "@/components/ui/command";
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
 
 
 
@@ -23,6 +25,7 @@ type LayoutProps = {
 
 export function Layout({ children, className }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -40,7 +43,7 @@ export function Layout({ children, className }: LayoutProps) {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="bg-background">
-        
+
         {/* Command Palette */}
         <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
           <CommandInput placeholder="Type a command or search..." />
@@ -77,8 +80,9 @@ export function Layout({ children, className }: LayoutProps) {
         </main>
       </SidebarInset>
 
-      {/* AI Assistant - Available on all pages */}
-      <AiAssistant />
+      {/* AI Assistant - Available on all pages except dashboard */}
+      {location.pathname !== "/" && location.pathname !== "/dashboard" ? <AiAssistant /> : null}
+      <Toaster />
     </SidebarProvider>
   );
 }

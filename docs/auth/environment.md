@@ -1,62 +1,70 @@
 # Environment Variables
 
-All environment variables required for the authentication system.
-
----
+This document lists the configuration required for the authentication system as it exists today.
 
 ## Frontend (`frontend/.env`)
 
-| Variable                                | Required | Description                                                    | Example                        |
-| --------------------------------------- | -------- | -------------------------------------------------------------- | ------------------------------ |
-| `VITE_SUPABASE_URL`                     | ✅        | Your Supabase project URL                                      | `https://abcdefgh.supabase.co` |
-| `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | ✅        | Supabase publishable/anon key (safe for client)                | `sb_publishable_...`           |
-| `VITE_API_URL`                          | ❌        | Backend API base URL (defaults to `http://localhost:5000/api`) | `http://localhost:5000/api`    |
+| Variable Name | Required | Description | Example |
+| --- | --- | --- | --- |
+| `VITE_SUPABASE_URL` | Yes | Supabase project URL used by the browser client | `https://abcdefgh.supabase.co` |
+| `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Yes | Supabase publishable key for frontend auth calls | `sb_publishable_...` |
+| `VITE_API_URL` | No | Backend API base URL. Defaults to `http://localhost:5000/api` in code | `http://localhost:5000/api` |
 
-### Example:
+Example:
+
 ```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=
+VITE_SUPABASE_URL=https://abcdefgh.supabase.co
+VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sb_publishable_xxxxx
 VITE_API_URL=http://localhost:5000/api
 ```
 
-> **Note:** All Vite environment variables must be prefixed with `VITE_` to be accessible via `import.meta.env`.
-
----
-
 ## Backend (`backend/.env`)
 
-| Variable                   | Required | Description                                    | Example                                          |
-| -------------------------- | -------- | ---------------------------------------------- | ------------------------------------------------ |
-| `PORT`                     | ❌        | Server port (defaults to `5000`)               | `5000`                                           |
-| `NODE_ENV`                 | ❌        | Environment mode                               | `development`                                    |
-| `MONGODB_URI`              | ✅        | MongoDB connection string                      | `` |
-| `SUPABASE_URL`             | ✅        | Your Supabase project URL (same as frontend)   | `https://abcdefgh.supabase.co`                   |
-| `SUPABASE_PUBLISHABLE_KEY` | ✅        | Supabase publishable key                       | `sb_publishable_...`                             |
-| `SUPABASE_SECRET_KEY`      | ✅        | Supabase service/secret key (**keep private**) | `sb_secret_...`                                  |
+| Variable Name | Required | Description | Example |
+| --- | --- | --- | --- |
+| `PORT` | No | Express server port. Defaults to `5000` | `5000` |
+| `NODE_ENV` | No | Runtime environment | `development` |
+| `DATABASE_URL` | Yes | PostgreSQL connection string used by the backend pool | `postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres` |
+| `SUPABASE_URL` | Yes | Supabase project URL | `https://abcdefgh.supabase.co` |
+| `SUPABASE_PUBLISHABLE_KEY` | Yes | Publishable key for server config consistency | `sb_publishable_...` |
+| `SUPABASE_SECRET_KEY` | Yes | Service-role key used by the backend admin client | `sb_secret_...` |
 
----
+Example:
 
-## Where to Find These Values
+```env
+PORT=5000
+NODE_ENV=development
+DATABASE_URL=postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
+SUPABASE_URL=https://abcdefgh.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxx
+SUPABASE_SECRET_KEY=sb_secret_xxxxx
+```
 
-### Supabase Keys
-1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project
-3. Navigate to **Settings** → **API**
-4. Copy the **Project URL**, **anon/public key** (publishable), and **service_role key** (secret)
+## Sourcing Instructions
 
-### MongoDB URI
-1. Go to [MongoDB Atlas](https://cloud.mongodb.com)
-2. Select your cluster → **Connect**
-3. Choose **Connect your application**
-4. Copy the connection string and replace `<password>` with your database user's password
+### Supabase values
 
----
+1. Open the Supabase dashboard.
+2. Select the project.
+3. Go to `Settings -> API`.
+4. Copy:
+   - project URL
+   - publishable key
+   - service-role key
+
+### Database URL
+
+1. Open the same Supabase project.
+2. Go to the database connection settings.
+3. Copy the Postgres connection string.
+4. Replace placeholders such as `<password>` before using it locally.
 
 ## Security Reminders
 
-| ⚠️ Rule                                 | Details                                                            |
-| -------------------------------------- | ------------------------------------------------------------------ |
-| **Never commit `.env` files**          | Ensure `.env` is listed in `.gitignore`                            |
-| **Never expose `SUPABASE_SECRET_KEY`** | This key has full admin access and bypasses all RLS                |
-| **Publishable keys are safe**          | The `PUBLISHABLE_KEY` is designed to be used on the client         |
-| **Use different keys per environment** | Create separate Supabase projects for dev, staging, and production |
+| Rule | Details |
+| --- | --- |
+| Keep `SUPABASE_SECRET_KEY` private | It is backend-only and must never be exposed to the browser |
+| Treat `DATABASE_URL` as sensitive | It grants direct database access |
+| Publishable keys are safe for frontend use | They still depend on your backend and database security posture |
+| Do not commit `.env` files | Keep local and deployed secrets outside version control |
+| Separate environments cleanly | Use different Supabase projects or credentials for dev, staging, and production |

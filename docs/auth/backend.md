@@ -2,204 +2,135 @@
 
 ## File Structure
 
-```
+```text
 backend/src/
 ├── config/
-│   ├── index.ts              # App config (env vars)
-│   ├── db.ts                 # MongoDB connection
-│   └── supabase.ts           # Supabase Admin client
+│   ├── index.ts                    # Environment-backed app config
+│   ├── pg.ts                       # PostgreSQL pool
+│   └── supabase.ts                 # Supabase admin client
 ├── middlewares/
-│   └── auth.middleware.ts     # JWT verification + user sync
-├── models/
-│   └── user.model.ts         # MongoDB User schema
+│   └── auth.middleware.ts          # Bearer token verification and user lookup
+├── migrations/
+│   ├── 001_initial_schema.sql      # Creates public.users and other app tables
+│   └── 002_auth_users_trigger.sql  # Mirrors auth.users into public.users
 └── routes/
-    ├── index.ts               # Route registration
-    └── user.routes.ts         # User endpoints
+    ├── index.ts                    # Mounts /api/users and /api/v1
+    └── user.routes.ts              # GET /api/users/me
 ```
 
----
+## Models / Schema
 
-## Supabase Admin Client (`config/supabase.ts`)
+### `public.users`
 
-The backend uses the **Admin/Service** client (with the secret key) for token verification. This client bypasses Row Level Security (RLS) — it is only used server-side.
+The backend auth flow depends on `public.users`, not a MongoDB collection.
 
-```typescript
-import { createClient } from "@supabase/supabase-js";
-import { config } from "./index";
+| Column | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `UUID` | Yes | Matches `auth.users.id` |
+| `email` | `TEXT` | Yes | Unique email address |
+| `name` | `TEXT` | No | User name from Supabase metadata |
+| `created_at` | `TIMESTAMPTZ` | Yes | Profile creation timestamp |
 
-export const supabaseAdmin = createClient(
-    config.supabaseUrl,
-    config.supabaseSecretKey
+### Relationship to Supabase Auth
+
+| Source | Target | Mechanism |
+| --- | --- | --- |
+| `auth.users` | `public.users` | Database trigger created in `002_auth_users_trigger.sql` |
+
+## Middleware and Logic
+
+### Supabase admin client
+
+The backend creates a server-side Supabase client with:
+
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
+
+This client is used for token verification only.
+
+### `protect` middleware
+
+`backend/src/middlewares/auth.middleware.ts` performs the current auth flow:
+
+1. Read `Authorization: Bearer <token>`
+2. Reject if no token exists
+3. Verify the token with `supabaseAdmin.auth.getUser(token)`
+4. Query `public.users` with the authenticated Supabase user id
+5. Attach the row to `(req as any).user`
+
+Simplified shape:
+
+```ts
+const {
+  data: { user: supabaseUser },
+  error,
+} = await supabaseAdmin.auth.getUser(token);
+
+const result = await pool.query(
+  "SELECT * FROM public.users WHERE id = $1",
+  [supabaseUser.id]
 );
+
+(req as any).user = result.rows[0];
 ```
 
-> **Security:** Never expose `SUPABASE_SECRET_KEY` on the frontend. It has full admin access.
+### Current behavior
 
----
+| Situation | Result |
+| --- | --- |
+| Missing bearer token | `401` |
+| Invalid or expired token | `401` |
+| Valid token but no `public.users` row | `401` |
+| Unexpected middleware error | `500` |
+| Valid token and user row found | request continues |
 
-## User Model (`models/user.model.ts`)
+## Routing
 
-The MongoDB schema that stores user data linked to Supabase.
+### Route registration
 
-### Schema Fields
+`backend/src/routes/index.ts` mounts:
 
-| Field        | Type     | Required | Description                                          |
-| ------------ | -------- | -------- | ---------------------------------------------------- |
-| `supabaseId` | `String` | Yes      | Unique ID from Supabase Auth (links the two systems) |
-| `fullName`   | `String` | No       | User's display name (synced from Supabase metadata)  |
-| `email`      | `String` | Yes      | User's email (unique, lowercase, trimmed)            |
-| `role`       | `String` | No       | `"user"` or `"admin"` (defaults to `"user"`)         |
-| `createdAt`  | `Date`   | Auto     | Mongoose timestamp                                   |
-| `updatedAt`  | `Date`   | Auto     | Mongoose timestamp                                   |
+- `/api/health`
+- `/api/users`
+- `/api/v1`
 
-### Indexes
-- `supabaseId`: unique + indexed (fast lookups during auth)
-- `email`: unique
+### Auth-related endpoint
 
----
+Currently documented and clearly wired:
 
-## Auth Middleware (`middlewares/auth.middleware.ts`)
+| Method | Path | Protection | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/users/me` | `protect` | Return the authenticated `public.users` row |
 
-The `protect` middleware is the core of backend authentication. It performs three jobs:
+Example:
 
-### 1. Token Extraction
-Reads the JWT from the `Authorization: Bearer <token>` header.
-
-### 2. Token Verification
-Calls `supabaseAdmin.auth.getUser(token)` to verify the JWT with Supabase. This ensures:
-- The token is valid and not expired
-- The user exists in Supabase
-- Returns the Supabase user object with metadata
-
-### 3. User Sync (Find or Create)
-After verification, the middleware checks MongoDB:
-- **User exists:** Syncs email/name if changed, then attaches to request
-- **User doesn't exist:** Creates a new MongoDB document, then attaches to request
-
-```typescript
-// Simplified flow
-const { data: { user: supabaseUser } } = await supabaseAdmin.auth.getUser(token);
-
-let user = await User.findOne({ supabaseId: supabaseUser.id });
-
-if (!user) {
-    user = await User.create({
-        supabaseId: supabaseUser.id,
-        email: supabaseUser.email,
-        fullName: supabaseUser.user_metadata?.full_name || "",
-        role: "user",
-    });
-}
-
-(req as any).user = user;
-next();
+```ts
+router.get("/me", protect, (req, res) => {
+  res.json({
+    success: true,
+    data: (req as any).user,
+  });
+});
 ```
 
-### Response Codes
+## Protection Pattern
 
-| Status   | Meaning                                                              |
-| -------- | -------------------------------------------------------------------- |
-| `401`    | No token provided or token invalid/expired                           |
-| `500`    | Internal error during verification or DB operation                   |
-| (passes) | Token valid, user attached to `req`, control passed to route handler |
+Use `protect` on any endpoint that requires identity:
 
----
-
-## Protecting a Route
-
-Apply the `protect` middleware to any route that requires authentication:
-
-```typescript
+```ts
 import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-// This route requires authentication
-router.get("/me", protect, (req, res) => {
-    res.json({
-        success: true,
-        data: (req as any).user,
-    });
-});
-
-// This route is public
-router.get("/public", (req, res) => {
-    res.json({ message: "Anyone can access this" });
+router.get("/private", protect, (req, res) => {
+  res.json({ user: (req as any).user });
 });
 ```
 
-### Accessing the User in Route Handlers
+## Current Gaps
 
-After the `protect` middleware runs, the authenticated MongoDB user document is available as `(req as any).user`:
-
-```typescript
-router.put("/profile", protect, async (req, res) => {
-    const user = (req as any).user;
-    
-    user.fullName = req.body.fullName;
-    await user.save();
-    
-    res.json({ success: true, data: user });
-});
-```
-
----
-
-## Route Registration (`routes/index.ts`)
-
-All routes are registered in the central router and mounted under `/api`:
-
-```typescript
-// routes/index.ts
-router.use("/health", healthRoutes);   // /api/health
-router.use("/users", userRoutes);      // /api/users/*
-
-// app.ts
-app.use("/api", routes);
-```
-
----
-
-## Adding a New Protected Endpoint
-
-1. Create a new route file (e.g., `routes/project.routes.ts`):
-   ```typescript
-   import { Router } from "express";
-   import { protect } from "../middlewares/auth.middleware";
-
-   const router = Router();
-
-   router.get("/", protect, async (req, res) => {
-       const user = (req as any).user;
-       // ... your logic using user._id, user.email, etc.
-       res.json({ success: true, data: projects });
-   });
-
-   export default router;
-   ```
-
-2. Register it in `routes/index.ts`:
-   ```typescript
-   import projectRoutes from "./project.routes";
-   router.use("/projects", projectRoutes);
-   ```
-
-3. The endpoint is now accessible at `GET /api/projects` (requires JWT)
-
----
-
-## Troubleshooting
-
-### `Cannot GET /api/...` (404)
-- **Cause:** The route file may have a TypeScript compile error, preventing the entire module from loading.
-- **Check:** Look at the backend terminal for `ts-node` errors.
-- **Common fix:** Ensure all imports are valid and there are no type errors.
-
-### `401 Not authorized`
-- **Cause:** No `Authorization` header or invalid token.
-- **Check:** Ensure the frontend's Axios interceptor is attaching the token.
-
-### User not appearing in MongoDB
-- **Cause:** The `AuthContext` sync call (`api.get('users/me')`) may be failing silently.
-- **Check:** Open browser DevTools → Network tab → look for the `/api/users/me` request.
+- Auth middleware is live.
+- User lookup is live.
+- `users/me` is live.
+- Many feature controllers under `/api/v1` are still placeholder handlers, so auth is implemented more completely than the rest of the application API.
