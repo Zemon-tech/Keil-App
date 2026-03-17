@@ -68,3 +68,4 @@ docs/ClarityOS_Team_Brief.docx
 .kiro/
 docs/tasks/
 skills-lock.json
+.agent\rules\merge-conflict-resolution.md
