@@ -44,21 +44,19 @@ type Props = {
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
 };
 
-const STATUS_OPTIONS: TaskStatus[] = ["Backlog", "In Progress", "Blocked", "Done"];
+const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
 
 const statusColorMap: Record<TaskStatus, string> = {
-  "In Progress": "bg-blue-500",
-  Blocked: "bg-red-500",
-  Done: "bg-green-500",
-  Backlog: "bg-zinc-500",
+  "in-progress": "bg-blue-500",
+  done: "bg-green-500",
+  backlog: "bg-zinc-500",
+  todo: "bg-violet-500",
 };
 
-// Shortened labels so all 5 chips fit on one row at any pane width
 const FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "All", label: "All" },
   { value: "Mine", label: "Mine" },
-  { value: "In Progress", label: "Active" },
-  { value: "Blocked", label: "Blocked" },
+  { value: "in-progress", label: "Active" },
   { value: "High Priority", label: "High" },
 ];
 
@@ -86,8 +84,8 @@ export function TaskListPane({
   const [newDueDateISO, setNewDueDateISO] = useState("");
   const [newPlannedStartISO, setNewPlannedStartISO] = useState("");
   const [newPlannedEndISO, setNewPlannedEndISO] = useState("");
-  const [newStatus, setNewStatus] = useState<TaskStatus>("Backlog");
-  const [newPriority, setNewPriority] = useState<Task["priority"]>("Medium");
+  const [newStatus, setNewStatus] = useState<TaskStatus>("backlog");
+  const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Keyboard shortcut: press C to open create dialog
@@ -171,8 +169,8 @@ export function TaskListPane({
     setNewDueDateISO("");
     setNewPlannedStartISO("");
     setNewPlannedEndISO("");
-    setNewStatus("Backlog");
-    setNewPriority("Medium");
+    setNewStatus("backlog");
+    setNewPriority("medium");
   }
 
   function handleCreateSubmit(e: React.FormEvent) {
@@ -306,10 +304,10 @@ export function TaskListPane({
                 {g.items.map((t) => {
                   const active = t.id === selectedTaskId;
                   const isChecked = selectedTaskIds.has(t.id);
-                  const isDone = t.status === "Done";
+                  const isDone = t.status === "done";
                   const isHighPriority =
-                    t.priority === "High" || t.priority === "Critical";
-                  const isDraggable = t.status !== "Done";
+                    t.priority === "high" || t.priority === "urgent";
+                  const isDraggable = t.status !== "done";
 
                   return (
                     <div
@@ -586,7 +584,7 @@ export function TaskListPane({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {["Low", "Medium", "High", "Critical"].map((p) => (
+                           {["low", "medium", "high", "urgent"].map((p) => (
                             <SelectItem key={p} value={p} className="text-xs">
                               {p}
                             </SelectItem>

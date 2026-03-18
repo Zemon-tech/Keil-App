@@ -1,5 +1,5 @@
-export type TaskStatus = "Backlog" | "In Progress" | "Blocked" | "Done";
-export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
+export type TaskStatus = "backlog" | "todo" | "in-progress" | "done";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export type CalendarBlockType =
     | "meeting"

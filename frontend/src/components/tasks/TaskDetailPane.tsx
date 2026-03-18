@@ -52,20 +52,20 @@ type Props = {
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 
-const STATUS_OPTIONS: TaskStatus[] = ["Backlog", "In Progress", "Blocked", "Done"];
+const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
 
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  Done: "bg-emerald-500",
-  Blocked: "bg-red-500",
-  "In Progress": "bg-blue-500",
-  Backlog: "bg-zinc-500",
+  done: "bg-emerald-500",
+  "in-progress": "bg-blue-500",
+  backlog: "bg-zinc-500",
+  todo: "bg-violet-500",
 };
 
 const PRIORITY_CONFIG: Record<TaskPriority, { color: string; dot: string }> = {
-  Critical: { color: "text-red-400 border-red-500/20", dot: "bg-red-400" },
-  High: { color: "text-orange-400 border-orange-500/20", dot: "bg-orange-400" },
-  Medium: { color: "text-yellow-400 border-yellow-500/20", dot: "bg-yellow-400" },
-  Low: { color: "text-zinc-500 border-zinc-600/30", dot: "bg-zinc-500" },
+  urgent: { color: "text-red-400 border-red-500/20", dot: "bg-red-400" },
+  high: { color: "text-orange-400 border-orange-500/20", dot: "bg-orange-400" },
+  medium: { color: "text-yellow-400 border-yellow-500/20", dot: "bg-yellow-400" },
+  low: { color: "text-zinc-500 border-zinc-600/30", dot: "bg-zinc-500" },
 };
 
 const formatDate = (dateStr: string) => format(new Date(dateStr), "d MMM");
@@ -121,7 +121,7 @@ const StatusBadge = ({
 
 /** Priority badge with colored flag */
 const PriorityBadge = ({ priority }: { priority: TaskPriority }) => {
-  const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.Low;
+  const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.low;
   return (
     <Badge variant="outline" className={cn("h-5 gap-1 px-1.5 text-[11px]", cfg.color)}>
       <Flag className="h-3 w-3" />
@@ -172,7 +172,7 @@ const TaskDetailHeader = ({
     onUpdateTask?.(task.id, { status: newStatus });
 
   const handleMarkDone = () =>
-    onUpdateTask?.(task.id, { status: "Done" });
+    onUpdateTask?.(task.id, { status: "done" });
 
   return (
     <div className="shrink-0 border-b border-border px-5 pt-4 pb-3">
@@ -199,12 +199,12 @@ const TaskDetailHeader = ({
 
         <Button
           size="sm"
-          variant={task.status === "Done" ? "secondary" : "default"}
+          variant={task.status === "done" ? "secondary" : "default"}
           className="h-6 px-3 text-xs"
           onClick={handleMarkDone}
-          disabled={task.status === "Done"}
+          disabled={task.status === "done"}
         >
-          {task.status === "Done" ? "Done ✓" : "Mark done"}
+          {task.status === "done" ? "Done ✓" : "Mark done"}
         </Button>
       </div>
 
