@@ -11,7 +11,7 @@ import { ApiError } from "../utils/ApiError";
 export const getMe = async (req: any, res: Response, next: NextFunction) => {
     try {
         const user = req.user;
-        
+
         // 1. Validate user existence
         if (!user || !user.id) {
             throw new ApiError(401, "Unauthorized access");
@@ -37,7 +37,7 @@ export const getMe = async (req: any, res: Response, next: NextFunction) => {
         // 5. Structure exactly matching the API Contract from Phase-0
         return res.status(200).json(
             new ApiResponse(
-                200, 
+                200,
                 {
                     id: user.id,
                     email: user.email,
@@ -48,7 +48,7 @@ export const getMe = async (req: any, res: Response, next: NextFunction) => {
                         name: workspace.name,
                         role: userRole
                     }
-                }, 
+                },
                 "User profile retrieved successfully"
             )
         );
