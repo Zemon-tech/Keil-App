@@ -1,3 +1,13 @@
+/**
+ * Task Controller
+ * 
+ * Workspace Resolution Approach:
+ * Each user belongs to exactly one workspace. The 'protect' middleware in 'auth.middleware.ts'
+ * automatically fetches the user's workspace ID and attaches it to 'req.workspaceId'.
+ * This centralizes workspace identification and ensures all task operations are properly scoped
+ * without requiring redundant lookups in every controller.
+ */
+
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
 import { ApiResponse } from "../utils/ApiResponse";
@@ -34,6 +44,14 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
 
     if (status && !validateStatus(status)) throw new ApiError(400, "Invalid status enum value");
     if (priority && !validatePriority(priority)) throw new ApiError(400, "Invalid priority enum value");
+
+    // Parent task validation: must exist in same workspace
+    if (parent_task_id) {
+        const parentTask = await taskService.getTaskById(parent_task_id);
+        if (!parentTask || parentTask.workspace_id !== workspaceId) {
+            throw new ApiError(400, "Parent task not found or belongs to a different workspace");
+        }
+    }
 
     let startDate: Date | undefined;
     let dueDate: Date | undefined;
@@ -85,10 +103,13 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
         parent_task_id 
     } = req.query;
 
+    const limitVal = limit ? parseInt(limit as string, 10) : 20;
+    const offsetVal = offset ? parseInt(offset as string, 10) : 0;
+
     const options: TaskQueryOptions = {
         pagination: {
-            limit: limit ? parseInt(limit as string, 10) : 20,
-            offset: offset ? parseInt(offset as string, 10) : 0
+            limit: isNaN(limitVal) ? 20 : limitVal,
+            offset: isNaN(offsetVal) ? 0 : offsetVal
         },
         filters: {}
     };
@@ -97,8 +118,16 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
     if (priority) options.filters!.priority = priority as TaskPriority;
     if (assignee_id) options.filters!.assigneeId = assignee_id as string;
     
-    if (due_date_start) options.filters!.dueDateStart = new Date(due_date_start as string);
-    if (due_date_end) options.filters!.dueDateEnd = new Date(due_date_end as string);
+    if (due_date_start) {
+        const d = new Date(due_date_start as string);
+        if (isNaN(d.getTime())) throw new ApiError(400, "Invalid due_date_start format");
+        options.filters!.dueDateStart = d;
+    }
+    if (due_date_end) {
+        const d = new Date(due_date_end as string);
+        if (isNaN(d.getTime())) throw new ApiError(400, "Invalid due_date_end format");
+        options.filters!.dueDateEnd = d;
+    }
 
     if (parent_task_id !== undefined) {
         options.filters!.parentTaskId = parent_task_id === 'null' ? null : (parent_task_id as string);
@@ -120,8 +149,10 @@ export const getTaskById = catchAsync(async (req: Request, res: Response) => {
 
     const task = await taskService.getTaskById(id);
     
-    if (!task) throw new ApiError(404, "Task not found");
-    if (task.workspace_id !== workspaceId) throw new ApiError(403, "Access denied to this task");
+    // Return 404 for workspace mismatch to prevent data leaking as per security instructions
+    if (!task || task.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
 
     res.status(200).json(new ApiResponse(200, task, "Task retrieved successfully"));
 });
@@ -132,8 +163,10 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
     const id = req.params.id as string;
 
     const existingTask = await taskService.getTaskById(id);
-    if (!existingTask) throw new ApiError(404, "Task not found");
-    if (existingTask.workspace_id !== workspaceId) throw new ApiError(403, "Access denied to this task");
+    // Consistent 404 for security
+    if (!existingTask || existingTask.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
 
     const {
         title,
@@ -196,8 +229,10 @@ export const changeTaskStatus = catchAsync(async (req: Request, res: Response) =
     if (!status || !validateStatus(status)) throw new ApiError(400, "Invalid or missing status value");
 
     const existingTask = await taskService.getTaskById(id);
-    if (!existingTask) throw new ApiError(404, "Task not found");
-    if (existingTask.workspace_id !== workspaceId) throw new ApiError(403, "Access denied to this task");
+    // Consistent 404 for security
+    if (!existingTask || existingTask.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
 
     const updatedTask = await taskService.changeTaskStatus(id, status, userId, workspaceId);
     
@@ -212,8 +247,10 @@ export const deleteTask = catchAsync(async (req: Request, res: Response) => {
     const id = req.params.id as string;
 
     const existingTask = await taskService.getTaskById(id);
-    if (!existingTask) throw new ApiError(404, "Task not found");
-    if (existingTask.workspace_id !== workspaceId) throw new ApiError(403, "Access denied to this task");
+    // Consistent 404 for security
+    if (!existingTask || existingTask.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
 
     await taskService.deleteTask(id, userId, workspaceId);
     
@@ -241,3 +278,4 @@ export const removeDependency = catchAsync(async (req: Request, res: Response) =
     // TODO: Implement
     res.status(200).json(new ApiResponse(200, {}, "Dependency removed from task"));
 });
+

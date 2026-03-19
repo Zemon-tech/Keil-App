@@ -109,4 +109,3 @@ Implement all stubs in `backend/src/controllers/task.controller.ts`.
 ### [x] API Contract Stability
 - [x] Enums match frontend requirements (`urgent` instead of `critical`, lowercase status).
 - [x] Response payloads follow the `TaskDTO` structure defined in `task.service.ts`.
-@

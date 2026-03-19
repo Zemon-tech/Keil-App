@@ -2,9 +2,10 @@ import {
   taskRepository,
   taskAssigneeRepository,
   taskDependencyRepository,
-  activityRepository
+  activityRepository,
+  commentRepository
 } from '../repositories';
-import { Task } from '../types/entities';
+import { Task, User } from '../types/entities';
 import { TaskStatus, TaskPriority, LogEntityType, LogActionType } from '../types/enums';
 import { TaskQueryOptions } from '../types/repository';
 import { ApiError } from '../utils/ApiError';
@@ -30,6 +31,7 @@ export interface TaskDTO {
   created_by: string;
   created_at: string;
   updated_at: string;
+  assignees?: User[];
 }
 
 export interface CreateTaskData {
@@ -60,7 +62,7 @@ export interface UpdateTaskData {
 /**
  * Convert Task entity to DTO
  */
-const taskToDTO = (task: Task): TaskDTO => {
+const taskToDTO = (task: Task & { assignees?: User[] }): TaskDTO => {
   return {
     id: task.id,
     workspace_id: task.workspace_id,
@@ -75,7 +77,8 @@ const taskToDTO = (task: Task): TaskDTO => {
     due_date: task.due_date ? task.due_date.toISOString() : null,
     created_by: task.created_by,
     created_at: task.created_at.toISOString(),
-    updated_at: task.updated_at.toISOString()
+    updated_at: task.updated_at.toISOString(),
+    assignees: task.assignees
   };
 };
 
@@ -121,10 +124,10 @@ export const getTasksByWorkspace = async (
 };
 
 /**
- * Get task by ID
+ * Get task by ID including assignees
  */
 export const getTaskById = async (taskId: string): Promise<TaskDTO | null> => {
-  const task = await taskRepository.findById(taskId);
+  const task = await taskRepository.findWithAssignees(taskId);
   return task ? taskToDTO(task) : null;
 };
 
@@ -156,7 +159,6 @@ export const updateTask = async (
     }
 
     // Log changes
-    const changes: Record<string, any> = {};
     if (data.title && data.title !== oldTask.title) {
       await activityRepository.log({
         workspace_id: workspaceId,
@@ -166,6 +168,42 @@ export const updateTask = async (
         action_type: LogActionType.TITLE_UPDATED,
         old_value: { title: oldTask.title },
         new_value: { title: data.title }
+      }, client);
+    }
+
+    if (data.description && data.description !== oldTask.description) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.DESCRIPTION_UPDATED,
+        old_value: { description: oldTask.description },
+        new_value: { description: data.description }
+      }, client);
+    }
+
+    if (data.objective && data.objective !== oldTask.objective) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.OBJECTIVE_UPDATED,
+        old_value: { objective: oldTask.objective },
+        new_value: { objective: data.objective }
+      }, client);
+    }
+
+    if (data.success_criteria && data.success_criteria !== oldTask.success_criteria) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.SUCCESS_CRITERIA_UPDATED,
+        old_value: { success_criteria: oldTask.success_criteria },
+        new_value: { success_criteria: data.success_criteria }
       }, client);
     }
 
@@ -193,6 +231,30 @@ export const updateTask = async (
       }, client);
     }
 
+    if (data.start_date && data.start_date.getTime() !== oldTask.start_date?.getTime()) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.START_DATE_CHANGED,
+        old_value: { start_date: oldTask.start_date },
+        new_value: { start_date: data.start_date }
+      }, client);
+    }
+
+    if (data.due_date && data.due_date.getTime() !== oldTask.due_date?.getTime()) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.DUE_DATE_CHANGED,
+        old_value: { due_date: oldTask.due_date },
+        new_value: { due_date: data.due_date }
+      }, client);
+    }
+
     return updatedTask;
   });
 
@@ -213,8 +275,9 @@ export const deleteTask = async (
       throw new ApiError(404, 'Task not found');
     }
 
-    // Soft delete task (cascades handled by DB)
+    // Soft delete task and its associations (comments)
     await taskRepository.softDelete(taskId, client);
+    await commentRepository.softDeleteByTaskId(taskId, client);
 
     // Log deletion
     await activityRepository.log({
