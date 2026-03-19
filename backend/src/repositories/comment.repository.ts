@@ -130,4 +130,17 @@ export class CommentRepository extends BaseRepository<Comment> {
 
     return result.rows as Array<Comment & { user: User }>;
   }
+  /**
+   * Soft delete all comments for a task
+   */
+  async softDeleteByTaskId(taskId: string, client?: PoolClient): Promise<void> {
+    const query = `
+      UPDATE ${this.tableName}
+      SET deleted_at = NOW()
+      WHERE task_id = $1 AND deleted_at IS NULL
+    `;
+
+    const executor = client || this.pool;
+    await executor.query(query, [taskId]);
+  }
 }
