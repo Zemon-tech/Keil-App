@@ -21,8 +21,8 @@ const validateStatus = (status: any) => Object.values(TaskStatus).includes(statu
 const validatePriority = (priority: any) => Object.values(TaskPriority).includes(priority);
 
 export const createTask = catchAsync(async (req: Request, res: Response) => {
-    const workspaceId = (req as any).workspaceId;
-    const userId = (req as any).user?.id;
+    const workspaceId = (req as any).workspaceId as string;
+    const userId = (req as any).user?.id as string;
 
     if (!workspaceId) throw new ApiError(403, "Workspace not found for user");
 
@@ -53,8 +53,8 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         }
     }
 
-    let startDate: Date | undefined;
-    let dueDate: Date | undefined;
+    let startDate: Date | null = null;
+    let dueDate: Date | null = null;
 
     if (start_date) {
         startDate = new Date(start_date);
@@ -78,8 +78,8 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         success_criteria,
         status,
         priority,
-        start_date: startDate,
-        due_date: dueDate,
+        start_date: startDate || undefined,
+        due_date: dueDate || undefined,
         parent_task_id
     });
 
@@ -163,59 +163,56 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
     const id = req.params.id as string;
 
     const existingTask = await taskService.getTaskById(id);
-    // Consistent 404 for security
     if (!existingTask || existingTask.workspace_id !== workspaceId) {
         throw new ApiError(404, "Task not found");
     }
 
-    const {
-        title,
-        description,
-        objective,
-        success_criteria,
-        status,
-        priority,
-        start_date,
-        due_date
-    } = req.body;
+    // Explicitly build the updates object to handle partial fields and naming
+    const updates: any = {};
+    const allowedFields = ['title', 'description', 'objective', 'success_criteria', 'status', 'priority'];
+    
+    allowedFields.forEach(field => {
+        if (req.body[field] !== undefined) {
+            updates[field] = field === 'title' ? req.body[field]?.trim() : req.body[field];
+        }
+    });
 
-    if (status && !validateStatus(status)) throw new ApiError(400, "Invalid status enum value");
-    if (priority && !validatePriority(priority)) throw new ApiError(400, "Invalid priority enum value");
+    // Handle enums validation if present
+    if (updates.status && !validateStatus(updates.status)) throw new ApiError(400, "Invalid status value");
+    if (updates.priority && !validatePriority(updates.priority)) throw new ApiError(400, "Invalid priority value");
 
-    let startDate: Date | undefined;
-    let dueDate: Date | undefined;
-
-    if (start_date) {
-        startDate = new Date(start_date);
-        if (isNaN(startDate.getTime())) throw new ApiError(400, "Invalid start_date format");
+    // Handle dates with proper clearing support (null)
+    if (req.body.start_date !== undefined) {
+        if (req.body.start_date === null) {
+            updates.start_date = null;
+        } else {
+            const d = new Date(req.body.start_date);
+            if (isNaN(d.getTime())) throw new ApiError(400, "Invalid start_date format");
+            updates.start_date = d;
+        }
     }
     
-    if (due_date) {
-        dueDate = new Date(due_date);
-        if (isNaN(dueDate.getTime())) throw new ApiError(400, "Invalid due_date format");
+    if (req.body.due_date !== undefined) {
+        if (req.body.due_date === null) {
+            updates.due_date = null;
+        } else {
+            const d = new Date(req.body.due_date);
+            if (isNaN(d.getTime())) throw new ApiError(400, "Invalid due_date format");
+            updates.due_date = d;
+        }
     }
 
     // Comprehensive date validation against existing data
-    const effectiveStartDate = startDate || (existingTask.start_date ? new Date(existingTask.start_date) : undefined);
-    const effectiveDueDate = dueDate || (existingTask.due_date ? new Date(existingTask.due_date) : undefined);
+    const finalStart = updates.start_date !== undefined ? updates.start_date : (existingTask.start_date ? new Date(existingTask.start_date) : null);
+    const finalDue = updates.due_date !== undefined ? updates.due_date : (existingTask.due_date ? new Date(existingTask.due_date) : null);
 
-    if (effectiveStartDate && effectiveDueDate && effectiveDueDate < effectiveStartDate) {
+    if (finalStart && finalDue && finalDue < finalStart) {
          throw new ApiError(400, "due_date must be on or after start_date");
     }
 
-    const updatedTask = await taskService.updateTask(id, {
-        title: title?.trim(),
-        description,
-        objective,
-        success_criteria,
-        status,
-        priority,
-        start_date: startDate,
-        due_date: dueDate
-    }, userId, workspaceId);
+    const updatedTask = await taskService.updateTask(id, updates, userId, workspaceId);
 
-    // If result is null, it means update failed within transaction somehow
-    if (!updatedTask) throw new ApiError(404, "Task not found or update failed");
+    if (!updatedTask) throw new ApiError(404, "Task update failed");
 
     res.status(200).json(new ApiResponse(200, updatedTask, "Task updated successfully"));
 });

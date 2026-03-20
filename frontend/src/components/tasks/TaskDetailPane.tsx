@@ -427,7 +427,7 @@ const OverviewTab = ({
                 Success Criteria
               </span>
               <EditableTextarea
-                value={task.success_criteria ?? task.successCriteria ?? ""}
+                value={task.success_criteria ?? ""}
                 onSave={(success_criteria) => onUpdateField?.({ success_criteria })}
                 placeholder="No criteria set"
                 minRows={2}

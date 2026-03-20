@@ -69,7 +69,7 @@ export type Task = {
     title: string;
     description?: string;
     objective: string;
-    successCriteria: string;
+    success_criteria: string;
     status: TaskStatus;
     priority: TaskPriority;
     owner: string;

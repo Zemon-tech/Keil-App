@@ -50,13 +50,13 @@ export interface CreateTaskData {
 
 export interface UpdateTaskData {
   title?: string;
-  description?: string;
-  objective?: string;
-  success_criteria?: string;
+  description?: string | null;
+  objective?: string | null;
+  success_criteria?: string | null;
   status?: TaskStatus;
   priority?: TaskPriority;
-  start_date?: Date;
-  due_date?: Date;
+  start_date?: Date | null;
+  due_date?: Date | null;
 }
 
 /**
@@ -159,7 +159,7 @@ export const updateTask = async (
     }
 
     // Log changes
-    if (data.title && data.title !== oldTask.title) {
+    if (data.title !== undefined && data.title !== oldTask.title) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -171,7 +171,7 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.description && data.description !== oldTask.description) {
+    if (data.description !== undefined && data.description !== oldTask.description) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -183,7 +183,7 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.objective && data.objective !== oldTask.objective) {
+    if (data.objective !== undefined && data.objective !== oldTask.objective) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -195,7 +195,7 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.success_criteria && data.success_criteria !== oldTask.success_criteria) {
+    if (data.success_criteria !== undefined && data.success_criteria !== oldTask.success_criteria) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -207,7 +207,7 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.status && data.status !== oldTask.status) {
+    if (data.status !== undefined && data.status !== oldTask.status) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -219,7 +219,7 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.priority && data.priority !== oldTask.priority) {
+    if (data.priority !== undefined && data.priority !== oldTask.priority) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -231,7 +231,9 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.start_date && data.start_date.getTime() !== oldTask.start_date?.getTime()) {
+    const oldStart = oldTask.start_date ? new Date(oldTask.start_date).getTime() : null;
+    const newStart = data.start_date ? data.start_date.getTime() : null;
+    if (data.start_date !== undefined && newStart !== oldStart) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -243,7 +245,9 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.due_date && data.due_date.getTime() !== oldTask.due_date?.getTime()) {
+    const oldDue = oldTask.due_date ? new Date(oldTask.due_date).getTime() : null;
+    const newDue = data.due_date ? data.due_date.getTime() : null;
+    if (data.due_date !== undefined && newDue !== oldDue) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,

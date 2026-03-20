@@ -37,7 +37,7 @@ export interface TaskDTO {
   context?: Task["context"];
   history?: Task["history"];
   comments?: Task["comments"];
-  successCriteria?: string;
+
 }
 
 export interface TaskFilters {
