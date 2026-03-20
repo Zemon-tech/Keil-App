@@ -40,14 +40,17 @@ export interface TaskDTO {
 
 }
 
+export type SortBy = "due_date" | "priority" | "created_at";
+export type SortOrder = "asc" | "desc";
+
 export interface TaskFilters {
   status?: TaskStatus;
   priority?: TaskPriority;
   assignee_id?: string;
   due_date_start?: string;
   due_date_end?: string;
-  sort_by?: "due_date" | "priority" | "created_at";
-  sort_order?: "asc" | "desc";
+  sort_by?: SortBy;
+  sort_order?: SortOrder;
   limit?: number;
   offset?: number;
   parent_task_id?: string | null;

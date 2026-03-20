@@ -7,19 +7,23 @@ import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { FileText } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 import type { TaskStatus, TaskPriority } from "../types/task";
-import { useTasks, useUpdateTask, type TaskFilters } from "../hooks/api/useTasks";
+import { useTasks, useUpdateTask, type TaskFilters, type SortBy, type SortOrder } from "../hooks/api/useTasks";
 
 const PAGE_SIZE = 20;
 
 export function TasksPage() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const { user } = useAuth();
 
-  // ── Filter / search state ──
+  // ── Filter / search / sort state ──
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [sortBy, setSortBy] = useState<SortBy>("created_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
@@ -28,10 +32,12 @@ export function TasksPage() {
 
   // ── Build server-side filter params ──
   const serverFilters = useMemo((): TaskFilters => {
-    const filters: TaskFilters = { limit };
+    const filters: TaskFilters = { limit, sort_by: sortBy, sort_order: sortOrder };
 
     // Map UI filter chips to API params
-    if (statusFilter === "in-progress") {
+    if (statusFilter === "Mine" && user?.id) {
+      filters.assignee_id = user.id;
+    } else if (statusFilter === "in-progress") {
       filters.status = "in-progress" as TaskStatus;
     } else if (statusFilter === "todo") {
       filters.status = "todo" as TaskStatus;
@@ -43,7 +49,7 @@ export function TasksPage() {
       filters.priority = "high" as TaskPriority;
     }
     return filters;
-  }, [statusFilter, limit]);
+  }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
   // ── Fetch real tasks from backend ──
   const { data: tasks, isLoading, isFetching } = useTasks(serverFilters);
@@ -58,9 +64,15 @@ export function TasksPage() {
     setLimit((prev) => prev + PAGE_SIZE);
   }, []);
 
-  // Reset limit when filter changes
+  // Reset limit when filter or sort changes
   const handleStatusFilterChange = useCallback((value: string) => {
     setStatusFilter(value);
+    setLimit(PAGE_SIZE);
+  }, []);
+
+  const handleSortChange = useCallback((by: SortBy, order: SortOrder) => {
+    setSortBy(by);
+    setSortOrder(order);
     setLimit(PAGE_SIZE);
   }, []);
 
@@ -100,6 +112,9 @@ export function TasksPage() {
               onQueryChange={setQuery}
               statusFilter={statusFilter}
               onStatusFilterChange={handleStatusFilterChange}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortChange={handleSortChange}
               tasks={filtered}
               allTasks={taskList}
               selectedTaskId={selectedTaskId}

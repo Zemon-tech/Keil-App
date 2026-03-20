@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Draggable } from "@fullcalendar/interaction";
-import { Search, Plus, GripVertical, Flag } from "lucide-react";
+import { Search, Plus, GripVertical, Flag, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,13 +29,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { Task, TaskStatus } from "@/types/task";
-import { useCreateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
+import { useCreateTask, type TaskDTO, type CreateTaskInput, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
 
 type Props = {
   query: string;
   onQueryChange: (value: string) => void;
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
+  /** Sort state — controlled by parent */
+  sortBy: SortBy;
+  sortOrder: SortOrder;
+  onSortChange: (by: SortBy, order: SortOrder) => void;
   tasks: TaskDTO[];
   /** All tasks (unfiltered) — used for the parent task dropdown */
   allTasks?: TaskDTO[];
@@ -64,6 +68,7 @@ const statusColorMap: Record<TaskStatus, string> = {
 
 const FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "All", label: "All" },
+  { value: "Mine", label: "Mine" },
   { value: "backlog", label: "Backlog" },
   { value: "todo", label: "To Do" },
   { value: "in-progress", label: "Active" },
@@ -71,11 +76,20 @@ const FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "High Priority", label: "High Priority" },
 ];
 
+const SORT_OPTIONS: { value: SortBy; label: string }[] = [
+  { value: "created_at", label: "Created" },
+  { value: "due_date", label: "Due Date" },
+  { value: "priority", label: "Priority" },
+];
+
 export function TaskListPane({
   query,
   onQueryChange,
   statusFilter,
   onStatusFilterChange,
+  sortBy,
+  sortOrder,
+  onSortChange,
   tasks,
   allTasks,
   selectedTaskId,
@@ -266,6 +280,33 @@ export function TaskListPane({
               </button>
             );
           })}
+        </div>
+
+        {/* Sort row */}
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />
+          <Select
+            value={sortBy}
+            onValueChange={(v) => onSortChange(v as SortBy, sortOrder)}
+          >
+            <SelectTrigger className="h-6 text-[11px] flex-1 rounded border-border/60 bg-muted/40 px-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map(({ value, label }) => (
+                <SelectItem key={value} value={value} className="text-xs">
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button
+            onClick={() => onSortChange(sortBy, sortOrder === "asc" ? "desc" : "asc")}
+            className="shrink-0 h-6 px-2 rounded text-[11px] font-medium bg-muted/40 border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title={sortOrder === "asc" ? "Ascending" : "Descending"}
+          >
+            {sortOrder === "asc" ? "↑ Asc" : "↓ Desc"}
+          </button>
         </div>
       </div>
 
