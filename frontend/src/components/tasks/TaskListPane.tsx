@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Draggable } from "@fullcalendar/interaction";
 import { Search, Plus, GripVertical, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,19 +29,22 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { Task, TaskStatus } from "@/types/task";
+import { useCreateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
 
 type Props = {
   query: string;
   onQueryChange: (value: string) => void;
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
-  tasks: Task[];
+  tasks: TaskDTO[];
   selectedTaskId: string;
   onSelectTask: (id: string) => void;
   createDialogOpen: boolean;
   onCreateDialogOpenChange: (open: boolean) => void;
-  onCreateTask: (task: Task) => void;
+  /** Called with the new task's id after a successful create */
+  onTaskCreated: (newTaskId: string) => void;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  isLoading?: boolean;
 };
 
 const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
@@ -70,20 +73,18 @@ export function TaskListPane({
   onSelectTask,
   createDialogOpen,
   onCreateDialogOpenChange,
-  onCreateTask,
+  onTaskCreated,
   onUpdateTask,
+  isLoading = false,
 }: Props) {
+  const createTask = useCreateTask();
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [newProjectTitle, setNewProjectTitle] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newObjective, setNewObjective] = useState("");
   const [newSuccessCriteria, setNewSuccessCriteria] = useState("");
-  const [newOwner, setNewOwner] = useState("");
   const [newDueDateISO, setNewDueDateISO] = useState("");
-  const [newPlannedStartISO, setNewPlannedStartISO] = useState("");
-  const [newPlannedEndISO, setNewPlannedEndISO] = useState("");
   const [newStatus, setNewStatus] = useState<TaskStatus>("backlog");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -107,18 +108,8 @@ export function TaskListPane({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onCreateDialogOpenChange]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, Task[]>();
-    for (const t of tasks) {
-      const prev = map.get(t.projectTitle);
-      if (prev) prev.push(t);
-      else map.set(t.projectTitle, [t]);
-    }
-    return Array.from(map.entries()).map(([projectTitle, items]) => ({
-      projectTitle,
-      items,
-    }));
-  }, [tasks]);
+  // No grouping needed — tasks are flat from the API
+  const taskList = tasks;
 
   // Initialize FullCalendar Draggable for task cards
   useEffect(() => {
@@ -160,58 +151,32 @@ export function TaskListPane({
   };
 
   function resetCreateForm() {
-    setNewProjectTitle("");
     setNewTitle("");
     setNewDescription("");
     setNewObjective("");
     setNewSuccessCriteria("");
-    setNewOwner("");
     setNewDueDateISO("");
-    setNewPlannedStartISO("");
-    setNewPlannedEndISO("");
     setNewStatus("backlog");
     setNewPriority("medium");
   }
 
-  function handleCreateSubmit(e: React.FormEvent) {
+  async function handleCreateSubmit(e: React.FormEvent) {
     e.preventDefault();
     const title = newTitle.trim();
-    const projectTitle = newProjectTitle.trim();
-    const objective = newObjective.trim();
-    const successCriteria = newSuccessCriteria.trim();
-    const owner = newOwner.trim();
-    const dueISO = newDueDateISO ? new Date(newDueDateISO).toISOString() : "";
-    if (!title || !projectTitle || !objective || !successCriteria || !owner || !dueISO)
-      return;
+    if (!title) return;
 
-    const task: Task = {
-      id: `tsk_${Math.random().toString(16).slice(2, 10)}`,
-      projectId: `prj_${Math.random().toString(16).slice(2, 10)}`,
-      projectTitle,
+    const input: CreateTaskInput = {
       title,
-      description: newDescription.trim() || undefined,
-      objective,
-      successCriteria,
       status: newStatus,
       priority: newPriority,
-      owner,
-      dueDateISO: dueISO,
-      plannedStartISO: newPlannedStartISO
-        ? new Date(newPlannedStartISO).toISOString()
-        : undefined,
-      plannedEndISO: newPlannedEndISO
-        ? new Date(newPlannedEndISO).toISOString()
-        : undefined,
-      dependencies: [],
-      context: [],
-      subtasks: [],
-      assignees: [],
-      labels: [],
-      history: [],
-      comments: [],
     };
+    if (newDescription.trim()) input.description = newDescription.trim();
+    if (newObjective.trim()) input.objective = newObjective.trim();
+    if (newSuccessCriteria.trim()) input.success_criteria = newSuccessCriteria.trim();
+    if (newDueDateISO) input.due_date = new Date(newDueDateISO).toISOString();
 
-    onCreateTask(task);
+    const result = await createTask.mutateAsync(input);
+    onTaskCreated(result.id);
     resetCreateForm();
   }
 
@@ -291,129 +256,137 @@ export function TaskListPane({
 
       {/* ── Task list ──────────────────────────────────────────── */}
       <ScrollArea className="flex-1 min-h-0">
-        <div ref={containerRef} className="px-2 py-2 space-y-3 pb-20">
-          {grouped.map((g) => (
-            <div key={g.projectTitle}>
-              {/* Group header */}
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 px-2 pt-2 pb-1">
-                {g.projectTitle}
-              </div>
+        <div ref={containerRef} className="px-2 py-2 space-y-px pb-20">
 
-              {/* Task rows */}
-              <div className="space-y-px">
-                {g.items.map((t) => {
-                  const active = t.id === selectedTaskId;
-                  const isChecked = selectedTaskIds.has(t.id);
-                  const isDone = t.status === "done";
-                  const isHighPriority =
-                    t.priority === "high" || t.priority === "urgent";
-                  const isDraggable = t.status !== "done";
-
-                  return (
-                    <div
-                      key={t.id}
-                      onClick={() => !isMultiSelecting && onSelectTask(t.id)}
-                      data-task-id={t.id}
-                      data-task-title={t.title}
-                      data-task-status={t.status}
-                      className={cn(
-                        "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
-                        active && !isMultiSelecting
-                          ? "bg-accent"
-                          : "hover:bg-accent/50",
-                        isDone && "opacity-50",
-                        isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
-                      )}
-                    >
-                      {/* Drag handle - only show for draggable tasks */}
-                      {isDraggable && (
-                        <div className="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity">
-                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
-                      )}
-
-                      {/* Multi-select checkbox */}
-                      <div
-                        className={cn(
-                          "shrink-0 transition-opacity",
-                          !isChecked && !isMultiSelecting
-                            ? "opacity-0 group-hover:opacity-100"
-                            : "opacity-100"
-                        )}
-                        onClick={(e) => toggleSelection(e, t.id)}
-                      >
-                        <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
-                      </div>
-
-                      {/* Status dot — click opens popover */}
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            onClick={(e) => e.stopPropagation()}
-                            className={cn(
-                              "w-2 h-2 rounded-full shrink-0 transition-transform hover:scale-125",
-                              statusColorMap[t.status]
-                            )}
-                          />
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="start"
-                          className="w-36 p-1 rounded-lg shadow-lg"
-                        >
-                          {STATUS_OPTIONS.map((s) => (
-                            <button
-                              key={s}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onUpdateTask?.(t.id, { status: s });
-                              }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors"
-                            >
-                              <div
-                                className={cn(
-                                  "w-2 h-2 rounded-full shrink-0",
-                                  statusColorMap[s]
-                                )}
-                              />
-                              {s}
-                            </button>
-                          ))}
-                        </PopoverContent>
-                      </Popover>
-
-                      {/* Title */}
-                      <span className="text-sm font-medium truncate flex-1 leading-snug min-w-0">
-                        {t.title}
-                      </span>
-
-                      {/* Right meta */}
-                      <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground">
-                        {isHighPriority && (
-                          <Flag className="w-3 h-3 text-orange-400 shrink-0" />
-                        )}
-                        {/* Owner — hide on very narrow panes */}
-                        <span className="hidden sm:inline truncate max-w-[60px]">
-                          {t.owner}
-                        </span>
-                        <span className="tabular-nums">
-                          {t.dueDateISO
-                            ? new Date(t.dueDateISO).toLocaleDateString(
-                              undefined,
-                              { month: "short", day: "numeric" }
-                            )
-                            : "—"}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Loading skeleton */}
+          {isLoading && (
+            <div className="space-y-px px-2 py-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md animate-pulse"
+                >
+                  <div className="w-2 h-2 rounded-full bg-muted-foreground/20 shrink-0" />
+                  <div
+                    className="h-3 rounded bg-muted-foreground/15 flex-1"
+                    style={{ width: `${50 + (i % 3) * 20}%` }}
+                  />
+                  <div className="h-3 w-10 rounded bg-muted-foreground/10 shrink-0" />
+                </div>
+              ))}
             </div>
-          ))}
+          )}
 
-          {grouped.length === 0 && (
+          {/* Task rows */}
+          {!isLoading && taskList.map((t) => {
+            const active = t.id === selectedTaskId;
+            const isChecked = selectedTaskIds.has(t.id);
+            const isDone = t.status === "done";
+            const isHighPriority =
+              t.priority === "high" || t.priority === "urgent";
+            const isDraggable = t.status !== "done";
+            // Use backend date field, falling back to dueDateISO for compat
+            const displayDate = t.due_date || t.dueDateISO;
+
+            return (
+              <div
+                key={t.id}
+                onClick={() => !isMultiSelecting && onSelectTask(t.id)}
+                data-task-id={t.id}
+                data-task-title={t.title}
+                data-task-status={t.status}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+                  active && !isMultiSelecting
+                    ? "bg-accent"
+                    : "hover:bg-accent/50",
+                  isDone && "opacity-50",
+                  isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
+                )}
+              >
+                {/* Drag handle */}
+                {isDraggable && (
+                  <div className="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity">
+                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                )}
+
+                {/* Multi-select checkbox */}
+                <div
+                  className={cn(
+                    "shrink-0 transition-opacity",
+                    !isChecked && !isMultiSelecting
+                      ? "opacity-0 group-hover:opacity-100"
+                      : "opacity-100"
+                  )}
+                  onClick={(e) => toggleSelection(e, t.id)}
+                >
+                  <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                </div>
+
+                {/* Status dot — click opens popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        "w-2 h-2 rounded-full shrink-0 transition-transform hover:scale-125",
+                        statusColorMap[t.status]
+                      )}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-36 p-1 rounded-lg shadow-lg"
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <button
+                        key={s}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateTask?.(t.id, { status: s });
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors"
+                      >
+                        <div
+                          className={cn(
+                            "w-2 h-2 rounded-full shrink-0",
+                            statusColorMap[s]
+                          )}
+                        />
+                        {s}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+
+                {/* Title */}
+                <span className="text-sm font-medium truncate flex-1 leading-snug min-w-0">
+                  {t.title}
+                </span>
+
+                {/* Right meta */}
+                <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground">
+                  {isHighPriority && (
+                    <Flag className="w-3 h-3 text-orange-400 shrink-0" />
+                  )}
+                  <span className="tabular-nums">
+                    {displayDate
+                      ? new Date(displayDate).toLocaleDateString(
+                          undefined,
+                          { month: "short", day: "numeric" }
+                        )
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Empty state */}
+          {!isLoading && taskList.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
-              <p className="text-sm text-muted-foreground">No tasks found</p>
+              <p className="text-sm text-muted-foreground">No tasks yet</p>
               <p className="text-xs text-muted-foreground/60">
                 Press{" "}
                 <kbd className="px-1.5 py-0.5 text-[10px] rounded border border-border bg-muted font-mono">
@@ -497,31 +470,17 @@ export function TaskListPane({
               <div className="px-5 pt-3 pb-4 min-h-[220px]">
                 {/* ── Basics tab ── */}
                 <TabsContent value="basics" className="mt-0 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Project
-                      </Label>
-                      <Input
-                        value={newProjectTitle}
-                        onChange={(e) => setNewProjectTitle(e.target.value)}
-                        placeholder="e.g. ClarityOS Launch"
-                        className="h-8 text-xs"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Title
-                      </Label>
-                      <Input
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        placeholder="e.g. Draft dependency graph UI"
-                        className="h-8 text-xs"
-                        required
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      Title
+                    </Label>
+                    <Input
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      placeholder="e.g. Draft dependency graph UI"
+                      className="h-8 text-xs"
+                      required
+                    />
                   </div>
 
                   <div className="space-y-1">
@@ -537,19 +496,7 @@ export function TaskListPane({
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Owner
-                      </Label>
-                      <Input
-                        value={newOwner}
-                        onChange={(e) => setNewOwner(e.target.value)}
-                        placeholder="e.g. Shivang"
-                        className="h-8 text-xs"
-                        required
-                      />
-                    </div>
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">
                         Status
@@ -625,59 +572,22 @@ export function TaskListPane({
 
                 {/* ── Schedule tab ── */}
                 <TabsContent value="schedule" className="mt-0 space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Due date
-                      </Label>
-                      <Input
-                        type="date"
-                        value={toDateInputValue(newDueDateISO)}
-                        onChange={(e) =>
-                          setNewDueDateISO(
-                            e.target.value
-                              ? new Date(e.target.value).toISOString()
-                              : ""
-                          )
-                        }
-                        className="h-8 text-xs"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Planned start
-                      </Label>
-                      <Input
-                        type="date"
-                        value={toDateInputValue(newPlannedStartISO)}
-                        onChange={(e) =>
-                          setNewPlannedStartISO(
-                            e.target.value
-                              ? new Date(e.target.value).toISOString()
-                              : ""
-                          )
-                        }
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Planned end
-                      </Label>
-                      <Input
-                        type="date"
-                        value={toDateInputValue(newPlannedEndISO)}
-                        onChange={(e) =>
-                          setNewPlannedEndISO(
-                            e.target.value
-                              ? new Date(e.target.value).toISOString()
-                              : ""
-                          )
-                        }
-                        className="h-8 text-xs"
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      Due date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={toDateInputValue(newDueDateISO)}
+                      onChange={(e) =>
+                        setNewDueDateISO(
+                          e.target.value
+                            ? new Date(e.target.value).toISOString()
+                            : ""
+                        )
+                      }
+                      className="h-8 text-xs"
+                    />
                   </div>
                 </TabsContent>
               </div>
@@ -693,8 +603,8 @@ export function TaskListPane({
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm">
-                Create task
+              <Button type="submit" size="sm" disabled={createTask.isPending}>
+                {createTask.isPending ? "Creating…" : "Create task"}
               </Button>
             </div>
           </form>

@@ -8,38 +8,55 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { FileText } from "lucide-react";
 
-import type { Task } from "../types/task";
-import { mockTasks } from "../data/mockTasks";
+import type { TaskStatus, TaskPriority } from "../types/task";
+import { useTasks, useUpdateTask, type TaskFilters } from "../hooks/api/useTasks";
 
 export function TasksPage() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
 
+  // ── Filter / search state ──
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
 
+  // ── Build server-side filter params ──
+  const serverFilters = useMemo((): TaskFilters => {
+    const filters: TaskFilters = {};
+
+    // Map UI filter chips to API params
+    if (statusFilter === "in-progress") {
+      filters.status = "in-progress" as TaskStatus;
+    } else if (statusFilter === "High Priority") {
+      filters.priority = "high" as TaskPriority;
+    }
+    // "Mine" and "All" are handled client-side via text search / future assignee_id
+    return filters;
+  }, [statusFilter]);
+
+  // ── Fetch real tasks from backend ──
+  const { data: tasks = [], isLoading } = useTasks(serverFilters);
+
+  // ── Update mutation (wired to onUpdateTask callbacks) ──
+  const updateTask = useUpdateTask();
+
+  // ── Client-side text filter on top of server results ──
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks.filter((t) => {
-      if (statusFilter === "Mine" && t.owner !== "Shivang") return false;
-      if (statusFilter === "In Progress" && t.status !== "In Progress") return false;
-      if (statusFilter === "Blocked" && t.status !== "Blocked") return false;
-      if (statusFilter === "High Priority" && t.priority !== "High" && t.priority !== "Critical") return false;
       if (!q) return true;
       return (
         t.title.toLowerCase().includes(q) ||
-        t.projectTitle.toLowerCase().includes(q) ||
         (t.objective && t.objective.toLowerCase().includes(q))
       );
     });
-  }, [query, statusFilter, tasks]);
+  }, [query, tasks]);
 
+  // ── Selected task ──
   const selected = useMemo(
-    () => tasks.find((t) => t.id === selectedTaskId) ?? null,
-    [selectedTaskId, tasks]
+    () => filtered.find((t) => t.id === selectedTaskId) ?? null,
+    [selectedTaskId, filtered]
   );
 
   const containerClassName = cn(
@@ -62,13 +79,13 @@ export function TasksPage() {
               onSelectTask={setSelectedTaskId}
               createDialogOpen={createDialogOpen}
               onCreateDialogOpenChange={setCreateDialogOpen}
-              onCreateTask={(task: Task) => {
-                setTasks((prev) => [task, ...prev]);
-                setSelectedTaskId(task.id);
+              isLoading={isLoading}
+              onTaskCreated={(newTaskId) => {
+                setSelectedTaskId(newTaskId);
                 setCreateDialogOpen(false);
               }}
               onUpdateTask={(id, updates) => {
-                setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+                updateTask.mutate({ id, updates });
               }}
             />
           </ResizablePanel>
@@ -78,7 +95,7 @@ export function TasksPage() {
               <TaskDetailPane
                 task={selected}
                 onUpdateTask={(id, updates) => {
-                  setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+                  updateTask.mutate({ id, updates });
                 }}
               />
             ) : (
@@ -113,4 +130,3 @@ export function TasksPage() {
     </div>
   );
 }
-

@@ -42,11 +42,13 @@ import {
 } from "@/components/ui/empty";
 
 import type { Task, TaskPriority, TaskStatus, Dependency } from "@/types/task";
+import type { TaskDTO } from "@/hooks/api/useTasks";
+import { useChangeTaskStatus, useTask } from "@/hooks/api/useTasks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Props = {
-  task: Task | null;
+  task: TaskDTO | null;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
 };
 
@@ -163,16 +165,18 @@ const AssigneesChip = ({ assignees }: { assignees: string[] }) => (
 
 const TaskDetailHeader = ({
   task,
-  onUpdateTask,
 }: {
-  task: Task;
-  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  task: TaskDTO;
 }) => {
-  const handleStatusChange = (newStatus: TaskStatus) =>
-    onUpdateTask?.(task.id, { status: newStatus });
+  const changeStatus = useChangeTaskStatus();
 
-  const handleMarkDone = () =>
-    onUpdateTask?.(task.id, { status: "done" });
+  const handleStatusChange = (newStatus: TaskStatus) => {
+    changeStatus.mutate({ id: task.id, status: newStatus });
+  };
+
+  const handleMarkDone = () => {
+    changeStatus.mutate({ id: task.id, status: "done" });
+  };
 
   return (
     <div className="shrink-0 border-b border-border px-5 pt-4 pb-3">
@@ -183,7 +187,7 @@ const TaskDetailHeader = ({
           <BreadcrumbList className="text-[11px]">
             <BreadcrumbItem>
               <span className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-                {task.projectTitle}
+                Task
               </span>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
@@ -191,7 +195,7 @@ const TaskDetailHeader = ({
             </BreadcrumbSeparator>
             <BreadcrumbItem>
               <BreadcrumbPage className="font-medium text-foreground">
-                {task.id}
+                {task.id.slice(0, 8)}
               </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
@@ -202,27 +206,27 @@ const TaskDetailHeader = ({
           variant={task.status === "done" ? "secondary" : "default"}
           className="h-6 px-3 text-xs"
           onClick={handleMarkDone}
-          disabled={task.status === "done"}
+          disabled={task.status === "done" || changeStatus.isPending}
         >
           {task.status === "done" ? "Done ✓" : "Mark done"}
         </Button>
       </div>
 
-      {/* Title — using div NOT h1 to avoid global heading style overrides */}
+      {/* Title */}
       <div className="text-xl font-semibold leading-snug tracking-tight mb-2.5">
         {task.title}
       </div>
 
-      {/* Chips row — status, priority, assignees, date, story points, labels */}
+      {/* Chips row */}
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge status={task.status} onStatusChange={handleStatusChange} />
         <PriorityBadge priority={task.priority} />
-        <AssigneesChip assignees={task.assignees} />
+        <AssigneesChip assignees={(task.assignees ?? []).map(a => typeof a === 'string' ? a : (a.name ?? a.email))} />
 
-        {task.dueDateISO && (
+        {(task.due_date || task.dueDateISO) && (
           <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[11px]">
             <Calendar className="h-3 w-3" />
-            {formatDate(task.dueDateISO)}
+            {formatDate(task.due_date || task.dueDateISO!)}
           </Badge>
         )}
 
@@ -232,7 +236,7 @@ const TaskDetailHeader = ({
           </Badge>
         )}
 
-        {task.labels?.map((label) => (
+        {(task.labels ?? []).map((label) => (
           <Badge key={label} variant="secondary" className="h-5 px-1.5 text-[10px]">
             {label}
           </Badge>
@@ -248,17 +252,17 @@ const OverviewTab = ({
   task,
   onUpdateTask,
 }: {
-  task: Task;
+  task: TaskDTO;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
 }) => {
-  const completedCount = task.subtasks.filter((s) => s.done).length;
+  const completedCount = (task.subtasks ?? []).filter((s) => s.done).length;
   const progressPercent =
-    task.subtasks.length > 0
-      ? Math.round((completedCount / task.subtasks.length) * 100)
+    (task.subtasks ?? []).length > 0
+      ? Math.round((completedCount / (task.subtasks ?? []).length) * 100)
       : 0;
 
   const toggleSubtask = (subId: string) => {
-    const updated = task.subtasks.map((s) =>
+    const updated = (task.subtasks ?? []).map((s) =>
       s.id === subId ? { ...s, done: !s.done } : s
     );
     onUpdateTask?.(task.id, { subtasks: updated });
@@ -288,8 +292,8 @@ const OverviewTab = ({
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Success Criteria
               </span>
-              {task.successCriteria ? (
-                <p className="text-sm leading-relaxed">{task.successCriteria}</p>
+              {(task.successCriteria || task.success_criteria) ? (
+                <p className="text-sm leading-relaxed">{task.successCriteria || task.success_criteria}</p>
               ) : (
                 <p className="text-sm italic text-muted-foreground">No criteria set</p>
               )}
@@ -303,7 +307,7 @@ const OverviewTab = ({
                 Subtasks
               </span>
               <span className="font-mono text-[11px] text-muted-foreground">
-                {completedCount}/{task.subtasks.length} complete
+                {completedCount}/{(task.subtasks ?? []).length} complete
               </span>
             </div>
 
@@ -311,7 +315,7 @@ const OverviewTab = ({
             <Progress value={progressPercent} className="mb-3 h-1" />
 
             <div>
-              {task.subtasks.map((sub) => (
+              {(task.subtasks ?? []).map((sub) => (
                 <label
                   key={sub.id}
                   className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 hover:bg-accent/40"
@@ -332,7 +336,7 @@ const OverviewTab = ({
                 </label>
               ))}
 
-              {task.subtasks.length === 0 && (
+              {(task.subtasks ?? []).length === 0 && (
                 <p className="px-2 py-1.5 text-xs italic text-muted-foreground">
                   No subtasks yet
                 </p>
@@ -350,9 +354,9 @@ const OverviewTab = ({
             <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Context
             </span>
-            {task.context.length > 0 ? (
+            {(task.context ?? []).length > 0 ? (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {task.context.map((item) => (
+                {(task.context ?? []).map((item) => (
                   <a
                     key={item.id}
                     href={item.url}
@@ -390,16 +394,18 @@ const OverviewTab = ({
               Assignees
             </span>
             <div className="space-y-1.5">
-              {task.assignees.map((a) => (
-                <div key={a} className="flex items-center gap-2">
+              {(task.assignees ?? []).map((a) => {
+                const name = typeof a === 'string' ? a : (a.name || a.email || "Unknown");
+                return (
+                <div key={typeof a === 'string' ? a : a.id} className="flex items-center gap-2">
                   <Avatar className="h-6 w-6">
                     <AvatarFallback className="text-[10px] font-semibold bg-accent">
-                      {a.charAt(0).toUpperCase()}
+                      {name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm">{a}</span>
+                  <span className="text-sm">{name}</span>
                 </div>
-              ))}
+              )})}
               <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
                 <Plus className="h-3 w-3" />
                 Add assignee
@@ -414,12 +420,12 @@ const OverviewTab = ({
             <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Dates
             </span>
-            {task.dueDateISO || task.plannedStartISO || task.plannedEndISO ? (
+            {(task.due_date || task.dueDateISO || task.plannedStartISO || task.plannedEndISO) ? (
               <div className="space-y-1.5 text-xs">
-                {task.dueDateISO && (
+                {(task.due_date || task.dueDateISO) && (
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Due</span>
-                    <span className="font-medium">{formatDate(task.dueDateISO)}</span>
+                    <span className="font-medium">{formatDate(task.due_date || task.dueDateISO!)}</span>
                   </div>
                 )}
                 {task.plannedStartISO && (
@@ -464,7 +470,7 @@ const OverviewTab = ({
           </div>
 
           {/* Labels */}
-          {task.labels?.length > 0 && (
+          {(task.labels ?? []).length > 0 && (
             <>
               <Separator />
               <div>
@@ -472,7 +478,7 @@ const OverviewTab = ({
                   Labels
                 </span>
                 <div className="flex flex-wrap gap-1">
-                  {task.labels.map((label) => (
+                  {(task.labels ?? []).map((label) => (
                     <Badge key={label} variant="secondary" className="h-5 px-1.5 text-[10px]">
                       {label}
                     </Badge>
@@ -494,7 +500,7 @@ const ActivityTab = ({
   task,
   onAddComment,
 }: {
-  task: Task;
+  task: TaskDTO;
   onAddComment: (body: string) => void;
 }) => {
   const [input, setInput] = useState("");
@@ -509,9 +515,9 @@ const ActivityTab = ({
     <div className="flex h-full flex-col">
       <ScrollArea className="flex-1">
         <div className="mx-auto w-full max-w-2xl px-5 py-4">
-          {task.comments.length > 0 ? (
+          {(task.comments ?? []).length > 0 ? (
             <div className="space-y-0">
-              {task.comments.map((comment, i) => (
+              {(task.comments ?? []).map((comment, i) => (
                 <div key={comment.id}>
                   {i > 0 && <Separator className="my-1" />}
                   <div className="py-3">
@@ -564,8 +570,8 @@ const DependencyRow = ({ dep }: { dep: Dependency }) => (
   <div
     className={cn(
       "flex items-center gap-3 rounded-md border px-3 py-2",
-      dep.status === "Blocked"
-        ? "border-red-500/30 bg-red-500/5"
+      dep.status !== "done"
+        ? "border-border bg-muted/20"
         : "border-border bg-muted/20"
     )}
   >
@@ -580,18 +586,18 @@ const DependencyRow = ({ dep }: { dep: Dependency }) => (
   </div>
 );
 
-const DependenciesTab = ({ task }: { task: Task }) => {
-  const blockedByCount = task.dependencies.length;
-  const blockingCount = 0; // populated from API in the future
+const DependenciesTab = ({ task }: { task: TaskDTO }) => {
+  const blockedByCount = (task.dependencies ?? []).length;
+  const blockingCount: number = 0;
   const blockingTasks: Dependency[] = [];
-  const blockedByTasks = task.dependencies;
+  const blockedByTasks = task.dependencies ?? [];
 
   return (
     <ScrollArea className="h-full">
       <div className="mx-auto w-full max-w-2xl space-y-5 p-5">
 
         {/* Impact Summary Banner */}
-        {task.dependencies.length > 0 && (
+        {(task.dependencies ?? []).length > 0 && (
           <div className="flex items-start gap-3 rounded-md border border-border bg-muted/30 p-3">
             <Zap className="mt-0.5 h-4 w-4 shrink-0 text-yellow-400" />
             <div>
@@ -602,11 +608,6 @@ const DependenciesTab = ({ task }: { task: Task }) => {
                 task{blockingCount !== 1 ? "s" : ""} and is waiting on{" "}
                 <span className="font-medium text-foreground">{blockedByCount}</span> upstream{" "}
                 task{blockedByCount !== 1 ? "s" : ""}.
-                {task.status === "Blocked" && (
-                  <span className="ml-1 font-medium text-red-400">
-                    This task is currently blocked.
-                  </span>
-                )}
               </p>
             </div>
           </div>
@@ -661,12 +662,12 @@ const DependenciesTab = ({ task }: { task: Task }) => {
 
 // ─── Tab: History ─────────────────────────────────────────────────────────────
 
-const HistoryTab = ({ task }: { task: Task }) => (
+const HistoryTab = ({ task }: { task: TaskDTO }) => (
   <ScrollArea className="h-full">
     <div className="mx-auto w-full max-w-2xl p-5">
-      {task.history.length > 0 ? (
+      {(task.history ?? []).length > 0 ? (
         <div>
-          {task.history.map((entry, i) => (
+          {(task.history ?? []).map((entry, i) => (
             <div key={entry.id}>
               {i > 0 && <Separator />}
               <div className="flex items-start gap-3 py-3">
@@ -721,8 +722,13 @@ const HistoryTab = ({ task }: { task: Task }) => (
 export function TaskDetailPane({ task, onUpdateTask }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
 
-  // ── Empty state ──
-  if (!task) {
+  // Fetch fresh server data whenever a task is selected
+  const { data: freshTask } = useTask(task?.id ?? "");
+
+  // Use fresh data from server if available, fall back to prop (list data)
+  const displayTask = freshTask ?? task;
+
+  if (!displayTask) {
     return (
       <div className="flex h-full flex-col items-center justify-center bg-background">
         <Empty className="w-full max-w-sm border-none shadow-none">
@@ -751,14 +757,14 @@ export function TaskDetailPane({ task, onUpdateTask }: Props) {
       body,
       timestamp: "Just now",
     };
-    onUpdateTask?.(task.id, { comments: [...task.comments, newComment] });
+    onUpdateTask?.(displayTask.id, { comments: [...(displayTask.comments ?? []), newComment] });
   };
 
   return (
     <div className="flex h-full flex-col bg-background">
 
       {/* Zone 1: Compact header — never scrolls */}
-      <TaskDetailHeader task={task} onUpdateTask={onUpdateTask} />
+      <TaskDetailHeader task={displayTask} />
 
       {/* Zone 2 + 3: Tab bar + content */}
       <Tabs
@@ -778,7 +784,7 @@ export function TaskDetailPane({ task, onUpdateTask }: Props) {
               {
                 value: "dependencies",
                 label: "Dependencies",
-                count: task.dependencies.length,
+                count: (displayTask.dependencies ?? []).length,
               },
               { value: "history", label: "History" },
             ] as const
@@ -808,19 +814,19 @@ export function TaskDetailPane({ task, onUpdateTask }: Props) {
 
         {/* Tab content — each fills remaining height and scrolls independently */}
         <TabsContent value="overview" className="m-0 min-h-0 flex-1">
-          <OverviewTab task={task} onUpdateTask={onUpdateTask} />
+          <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} />
         </TabsContent>
 
         <TabsContent value="activity" className="m-0 min-h-0 flex-1">
-          <ActivityTab task={task} onAddComment={handleAddComment} />
+          <ActivityTab task={displayTask} onAddComment={handleAddComment} />
         </TabsContent>
 
         <TabsContent value="dependencies" className="m-0 min-h-0 flex-1">
-          <DependenciesTab task={task} />
+          <DependenciesTab task={displayTask} />
         </TabsContent>
 
         <TabsContent value="history" className="m-0 min-h-0 flex-1">
-          <HistoryTab task={task} />
+          <HistoryTab task={displayTask} />
         </TabsContent>
       </Tabs>
 
