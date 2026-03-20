@@ -162,9 +162,9 @@ Both developers must agree on and freeze these shapes before writing code.
 
 ## Acceptance Criteria
 
-- [ ] A task can be created via the UI and appears in the list after refresh without a page reload
-- [ ] Task list reflects real database data — not `mockTasks`
-- [ ] Selecting a task shows its real detail from the backend
+- [x] A task can be created via the UI and appears in the list after refresh without a page reload
+- [x] Task list reflects real database data — not `mockTasks`
+- [x] Selecting a task shows its real detail from the backend
 - [ ] A task's title and description can be edited and the change persists after page refresh
 - [ ] A task can be deleted and disappears from the list
 - [ ] Status can be changed inline; the updated status persists

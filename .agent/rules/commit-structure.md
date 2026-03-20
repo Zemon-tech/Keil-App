@@ -10,7 +10,9 @@ To ensure our project's history remains readable, consistent, and easy to traver
 ## Rule for AI Assistant
 When asked to write or suggest a commit message, the AI MUST:
 1.  **Draft the full message** (Header, Body in points, Footer).
-2.  **Output the entire git commit command** in a code block using the `git commit -m` format, ensuring it is ready for the user to copy and run in their terminal. Use multiple `-m` flags for multi-line messages and backticks (`` ` ``) for line continuation if the command is long.
+2.  **Output the entire git commit command** in a code block using the `git commit -m` format, ensuring it is ready for the user to copy and run in their terminal. Use multiple `-m` flags for multi-line messages and the correct line continuation character for the user's OS:
+    *   **Bash (Linux/Mac)**: Use (`\`)
+    *   **PowerShell (Windows)**: Use (`` ` ``)
 
 ## Commit Message Format
 
@@ -99,7 +101,15 @@ To write a multi-line commit message in the terminal, use multiple `-m` flags or
 ### Using Terminal Command
 Each `-m` flag treats the input as a new paragraph:
 ```bash
-git commit -m "feat(scope): subject" -m "- first point" -m "- second point"
+# Bash (Linux/Mac)
+git commit -m "feat(scope): subject" \
+-m "- first point" \
+-m "- second point"
+
+# PowerShell (Windows)
+git commit -m "feat(scope): subject" `
+-m "- first point" `
+-m "- second point"
 ```
 
 ### Using Git Editor

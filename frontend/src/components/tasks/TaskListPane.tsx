@@ -37,6 +37,8 @@ type Props = {
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
   tasks: TaskDTO[];
+  /** All tasks (unfiltered) — used for the parent task dropdown */
+  allTasks?: TaskDTO[];
   selectedTaskId: string;
   onSelectTask: (id: string) => void;
   createDialogOpen: boolean;
@@ -45,6 +47,10 @@ type Props = {
   onTaskCreated: (newTaskId: string) => void;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
   isLoading?: boolean;
+  /** Pagination props */
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
 };
 
 const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
@@ -58,9 +64,11 @@ const statusColorMap: Record<TaskStatus, string> = {
 
 const FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "All", label: "All" },
-  { value: "Mine", label: "Mine" },
+  { value: "backlog", label: "Backlog" },
+  { value: "todo", label: "To Do" },
   { value: "in-progress", label: "Active" },
-  { value: "High Priority", label: "High" },
+  { value: "done", label: "Done" },
+  { value: "High Priority", label: "High Priority" },
 ];
 
 export function TaskListPane({
@@ -69,6 +77,7 @@ export function TaskListPane({
   statusFilter,
   onStatusFilterChange,
   tasks,
+  allTasks,
   selectedTaskId,
   onSelectTask,
   createDialogOpen,
@@ -76,6 +85,9 @@ export function TaskListPane({
   onTaskCreated,
   onUpdateTask,
   isLoading = false,
+  hasMore = false,
+  onLoadMore,
+  isLoadingMore = false,
 }: Props) {
   const createTask = useCreateTask();
   const draggableRef = useRef<Draggable | null>(null);
@@ -87,6 +99,7 @@ export function TaskListPane({
   const [newDueDateISO, setNewDueDateISO] = useState("");
   const [newStatus, setNewStatus] = useState<TaskStatus>("backlog");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
+  const [newParentTaskId, setNewParentTaskId] = useState<string>("");
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Keyboard shortcut: press C to open create dialog
@@ -158,6 +171,7 @@ export function TaskListPane({
     setNewDueDateISO("");
     setNewStatus("backlog");
     setNewPriority("medium");
+    setNewParentTaskId("");
   }
 
   async function handleCreateSubmit(e: React.FormEvent) {
@@ -174,6 +188,7 @@ export function TaskListPane({
     if (newObjective.trim()) input.objective = newObjective.trim();
     if (newSuccessCriteria.trim()) input.success_criteria = newSuccessCriteria.trim();
     if (newDueDateISO) input.due_date = new Date(newDueDateISO).toISOString();
+    if (newParentTaskId && newParentTaskId !== "none") input.parent_task_id = newParentTaskId;
 
     const result = await createTask.mutateAsync(input);
     onTaskCreated(result.id);
@@ -396,6 +411,21 @@ export function TaskListPane({
               </p>
             </div>
           )}
+
+          {/* Load more button */}
+          {!isLoading && hasMore && taskList.length > 0 && (
+            <div className="flex justify-center py-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? "Loading…" : "Load more tasks"}
+              </Button>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
@@ -540,6 +570,34 @@ export function TaskListPane({
                       </Select>
                     </div>
                   </div>
+
+                  {/* Parent task (optional) */}
+                  {(allTasks ?? tasks).length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Parent task{" "}
+                        <span className="opacity-50">(optional)</span>
+                      </Label>
+                      <Select
+                        value={newParentTaskId}
+                        onValueChange={setNewParentTaskId}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="None (top-level task)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" className="text-xs">
+                            None (top-level)
+                          </SelectItem>
+                          {(allTasks ?? tasks).map((t) => (
+                            <SelectItem key={t.id} value={t.id} className="text-xs">
+                              {t.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </TabsContent>
 
                 {/* ── Strategy tab ── */}

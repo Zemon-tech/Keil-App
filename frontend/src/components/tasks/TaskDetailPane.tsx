@@ -10,6 +10,8 @@ import {
   Link2,
   FileText,
   Box,
+  MoreVertical,
+  Trash2,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -40,16 +42,35 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { EditableText, EditableTextarea } from "@/components/ui/editable-text";
 
 import type { Task, TaskPriority, TaskStatus, Dependency } from "@/types/task";
-import type { TaskDTO } from "@/hooks/api/useTasks";
-import { useChangeTaskStatus, useTask } from "@/hooks/api/useTasks";
+import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
+import { useChangeTaskStatus, useTask, useUpdateTask, useDeleteTask } from "@/hooks/api/useTasks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Props = {
   task: TaskDTO | null;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  /** Called when the user deletes the displayed task */
+  onTaskDeleted?: (id: string) => void;
 };
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
@@ -62,6 +83,8 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
   backlog: "bg-zinc-500",
   todo: "bg-violet-500",
 };
+
+const PRIORITY_OPTIONS: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
 const PRIORITY_CONFIG: Record<TaskPriority, { color: string; dot: string }> = {
   urgent: { color: "text-red-400 border-red-500/20", dot: "bg-red-400" },
@@ -121,14 +144,53 @@ const StatusBadge = ({
   </Popover>
 );
 
-/** Priority badge with colored flag */
-const PriorityBadge = ({ priority }: { priority: TaskPriority }) => {
+/** Clickable priority badge that opens a popover to change priority */
+const PriorityBadge = ({
+  priority,
+  onPriorityChange,
+}: {
+  priority: TaskPriority;
+  onPriorityChange?: (p: TaskPriority) => void;
+}) => {
   const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.low;
+
+  if (!onPriorityChange) {
+    return (
+      <Badge variant="outline" className={cn("h-5 gap-1 px-1.5 text-[11px]", cfg.color)}>
+        <Flag className="h-3 w-3" />
+        {priority}
+      </Badge>
+    );
+  }
+
   return (
-    <Badge variant="outline" className={cn("h-5 gap-1 px-1.5 text-[11px]", cfg.color)}>
-      <Flag className="h-3 w-3" />
-      {priority}
-    </Badge>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Badge
+          variant="outline"
+          className={cn("h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors", cfg.color)}
+        >
+          <Flag className="h-3 w-3" />
+          {priority}
+        </Badge>
+      </PopoverTrigger>
+      <PopoverContent className="w-40 p-1" align="start">
+        {PRIORITY_OPTIONS.map((p) => {
+          const pcfg = PRIORITY_CONFIG[p];
+          return (
+            <button
+              key={p}
+              onClick={() => onPriorityChange(p)}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
+                         hover:bg-accent transition-colors text-left"
+            >
+              <span className={cn("h-1.5 w-1.5 rounded-full", pcfg.dot)} />
+              {p}
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -165,10 +227,15 @@ const AssigneesChip = ({ assignees }: { assignees: string[] }) => (
 
 const TaskDetailHeader = ({
   task,
+  onUpdateField,
+  onDelete,
 }: {
   task: TaskDTO;
+  onUpdateField?: (updates: UpdateTaskInput) => void;
+  onDelete?: () => void;
 }) => {
   const changeStatus = useChangeTaskStatus();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleStatusChange = (newStatus: TaskStatus) => {
     changeStatus.mutate({ id: task.id, status: newStatus });
@@ -178,10 +245,14 @@ const TaskDetailHeader = ({
     changeStatus.mutate({ id: task.id, status: "done" });
   };
 
+  const handlePriorityChange = (newPriority: TaskPriority) => {
+    onUpdateField?.({ priority: newPriority });
+  };
+
   return (
     <div className="shrink-0 border-b border-border px-5 pt-4 pb-3">
 
-      {/* Breadcrumb + Mark done — same row */}
+      {/* Breadcrumb + Actions row */}
       <div className="flex items-center justify-between mb-2">
         <Breadcrumb>
           <BreadcrumbList className="text-[11px]">
@@ -201,26 +272,52 @@ const TaskDetailHeader = ({
           </BreadcrumbList>
         </Breadcrumb>
 
-        <Button
-          size="sm"
-          variant={task.status === "done" ? "secondary" : "default"}
-          className="h-6 px-3 text-xs"
-          onClick={handleMarkDone}
-          disabled={task.status === "done" || changeStatus.isPending}
-        >
-          {task.status === "done" ? "Done ✓" : "Mark done"}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant={task.status === "done" ? "secondary" : "default"}
+            className="h-6 px-3 text-xs"
+            onClick={handleMarkDone}
+            disabled={task.status === "done" || changeStatus.isPending}
+          >
+            {task.status === "done" ? "Done ✓" : "Mark done"}
+          </Button>
+
+          {/* Actions dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                <MoreVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete task
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {/* Title */}
-      <div className="text-xl font-semibold leading-snug tracking-tight mb-2.5">
-        {task.title}
+      {/* Title — editable */}
+      <div className="mb-2.5">
+        <EditableText
+          value={task.title}
+          onSave={(title) => onUpdateField?.({ title })}
+          placeholder="Untitled task"
+          className="text-xl font-semibold leading-snug tracking-tight"
+          inputClassName="text-xl font-semibold leading-snug tracking-tight"
+        />
       </div>
 
       {/* Chips row */}
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge status={task.status} onStatusChange={handleStatusChange} />
-        <PriorityBadge priority={task.priority} />
+        <PriorityBadge priority={task.priority} onPriorityChange={handlePriorityChange} />
         <AssigneesChip assignees={(task.assignees ?? []).map(a => typeof a === 'string' ? a : (a.name ?? a.email))} />
 
         {(task.due_date || task.dueDateISO) && (
@@ -242,6 +339,27 @@ const TaskDetailHeader = ({
           </Badge>
         ))}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete task</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{task.title}"</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => onDelete?.()}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -251,9 +369,11 @@ const TaskDetailHeader = ({
 const OverviewTab = ({
   task,
   onUpdateTask,
+  onUpdateField,
 }: {
   task: TaskDTO;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onUpdateField?: (updates: UpdateTaskInput) => void;
 }) => {
   const completedCount = (task.subtasks ?? []).filter((s) => s.done).length;
   const progressPercent =
@@ -276,27 +396,42 @@ const OverviewTab = ({
       <ScrollArea className="flex-1">
         <div className="space-y-6 p-5">
 
+          {/* Description */}
+          <div>
+            <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Description
+            </span>
+            <EditableTextarea
+              value={task.description ?? ""}
+              onSave={(description) => onUpdateField?.({ description })}
+              placeholder="Add a description…"
+              minRows={2}
+            />
+          </div>
+
           {/* Objective + Success Criteria */}
           <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 rounded-md overflow-hidden border border-border/40">
             <div className="bg-background p-3">
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Objective
               </span>
-              {task.objective ? (
-                <p className="text-sm leading-relaxed">{task.objective}</p>
-              ) : (
-                <p className="text-sm italic text-muted-foreground">No objective set</p>
-              )}
+              <EditableTextarea
+                value={task.objective ?? ""}
+                onSave={(objective) => onUpdateField?.({ objective })}
+                placeholder="No objective set"
+                minRows={2}
+              />
             </div>
             <div className="bg-background p-3">
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Success Criteria
               </span>
-              {(task.successCriteria || task.success_criteria) ? (
-                <p className="text-sm leading-relaxed">{task.successCriteria || task.success_criteria}</p>
-              ) : (
-                <p className="text-sm italic text-muted-foreground">No criteria set</p>
-              )}
+              <EditableTextarea
+                value={task.success_criteria ?? task.successCriteria ?? ""}
+                onSave={(success_criteria) => onUpdateField?.({ success_criteria })}
+                placeholder="No criteria set"
+                minRows={2}
+              />
             </div>
           </div>
 
@@ -719,14 +854,31 @@ const HistoryTab = ({ task }: { task: TaskDTO }) => (
 
 // ─── Root Component ───────────────────────────────────────────────────────────
 
-export function TaskDetailPane({ task, onUpdateTask }: Props) {
+export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
 
   // Fetch fresh server data whenever a task is selected
   const { data: freshTask } = useTask(task?.id ?? "");
 
+  // Mutations
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+
   // Use fresh data from server if available, fall back to prop (list data)
   const displayTask = freshTask ?? task;
+
+  // Centralized field-update handler — used by header, overview tab, etc.
+  const handleUpdateField = (updates: UpdateTaskInput) => {
+    if (!displayTask) return;
+    updateTask.mutate({ id: displayTask.id, updates });
+  };
+
+  const handleDelete = () => {
+    if (!displayTask) return;
+    deleteTask.mutate(displayTask.id, {
+      onSuccess: () => onTaskDeleted?.(displayTask.id),
+    });
+  };
 
   if (!displayTask) {
     return (
@@ -764,7 +916,11 @@ export function TaskDetailPane({ task, onUpdateTask }: Props) {
     <div className="flex h-full flex-col bg-background">
 
       {/* Zone 1: Compact header — never scrolls */}
-      <TaskDetailHeader task={displayTask} />
+      <TaskDetailHeader
+        task={displayTask}
+        onUpdateField={handleUpdateField}
+        onDelete={handleDelete}
+      />
 
       {/* Zone 2 + 3: Tab bar + content */}
       <Tabs
@@ -814,7 +970,7 @@ export function TaskDetailPane({ task, onUpdateTask }: Props) {
 
         {/* Tab content — each fills remaining height and scrolls independently */}
         <TabsContent value="overview" className="m-0 min-h-0 flex-1">
-          <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} />
+          <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} onUpdateField={handleUpdateField} />
         </TabsContent>
 
         <TabsContent value="activity" className="m-0 min-h-0 flex-1">
