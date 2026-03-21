@@ -45,13 +45,18 @@ export function TasksPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks.filter((t) => {
+      // Client-side execution of "Blocked" filter as it's derived
+      if (statusFilter === "Blocked") {
+        const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
+        if (!isBlocked) return false;
+      }
       if (!q) return true;
       return (
         t.title.toLowerCase().includes(q) ||
         (t.objective && t.objective.toLowerCase().includes(q))
       );
     });
-  }, [query, tasks]);
+  }, [query, tasks, statusFilter]);
 
   // ── Selected task ──
   const selected = useMemo(

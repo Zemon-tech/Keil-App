@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Draggable } from "@fullcalendar/interaction";
-import { Search, Plus, GripVertical, Flag } from "lucide-react";
+import { Search, Plus, GripVertical, Flag, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,7 @@ const FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "All", label: "All" },
   { value: "Mine", label: "Mine" },
   { value: "in-progress", label: "Active" },
+  { value: "Blocked", label: "Blocked" },
   { value: "High Priority", label: "High" },
 ];
 
@@ -287,6 +288,7 @@ export function TaskListPane({
             const isDraggable = t.status !== "done";
             // Use backend date field, falling back to dueDateISO for compat
             const displayDate = t.due_date || t.dueDateISO;
+            const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
 
             return (
               <div
@@ -367,6 +369,9 @@ export function TaskListPane({
 
                 {/* Right meta */}
                 <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground">
+                  {isBlocked && (
+                    <Zap className="w-3 h-3 text-yellow-400 shrink-0" />
+                  )}
                   {isHighPriority && (
                     <Flag className="w-3 h-3 text-orange-400 shrink-0" />
                   )}

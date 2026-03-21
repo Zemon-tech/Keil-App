@@ -10,6 +10,8 @@ import {
   Link2,
   FileText,
   Box,
+  Search,
+  X,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -43,7 +45,15 @@ import {
 
 import type { Task, TaskPriority, TaskStatus, Dependency } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
-import { useChangeTaskStatus, useTask } from "@/hooks/api/useTasks";
+import { 
+  useChangeTaskStatus, 
+  useTask, 
+  useAssignUser, 
+  useRemoveAssignee, 
+  useAddDependency, 
+  useRemoveDependency 
+} from "@/hooks/api/useTasks";
+import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,20 +143,20 @@ const PriorityBadge = ({ priority }: { priority: TaskPriority }) => {
 };
 
 /** Stacked avatar chips with tooltip for each assignee */
-const AssigneesChip = ({ assignees }: { assignees: string[] }) => (
+const AssigneesChip = ({ assignees }: { assignees: {id: string, name: string | null, email: string}[] }) => (
   <TooltipProvider delayDuration={300}>
     <div className="flex items-center -space-x-1.5">
       {assignees.slice(0, 3).map((a) => (
-        <Tooltip key={a}>
+        <Tooltip key={a.id}>
           <TooltipTrigger asChild>
             <Avatar className="h-5 w-5 cursor-default ring-1 ring-background">
               <AvatarFallback className="text-[9px] font-semibold bg-accent">
-                {a.charAt(0).toUpperCase()}
+                {(a.name || a.email).charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
-            {a}
+            {a.name || a.email}
           </TooltipContent>
         </Tooltip>
       ))}
@@ -221,7 +231,7 @@ const TaskDetailHeader = ({
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge status={task.status} onStatusChange={handleStatusChange} />
         <PriorityBadge priority={task.priority} />
-        <AssigneesChip assignees={(task.assignees ?? []).map(a => typeof a === 'string' ? a : (a.name ?? a.email))} />
+        <AssigneesChip assignees={task.assignees ?? []} />
 
         {(task.due_date || task.dueDateISO) && (
           <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[11px]">
@@ -255,6 +265,20 @@ const OverviewTab = ({
   task: TaskDTO;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
 }) => {
+  const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+
+  const { data: members } = useWorkspaceMembers(task.workspace_id);
+  const assignUser = useAssignUser();
+  const removeAssignee = useRemoveAssignee();
+
+  const handleAssignUser = (userId: string) => {
+    assignUser.mutate({ id: task.id, userId });
+  };
+  
+  const handleRemoveAssignee = (userId: string) => {
+    removeAssignee.mutate({ id: task.id, userId });
+  };
   const completedCount = (task.subtasks ?? []).filter((s) => s.done).length;
   const progressPercent =
     (task.subtasks ?? []).length > 0
@@ -395,21 +419,72 @@ const OverviewTab = ({
             </span>
             <div className="space-y-1.5">
               {(task.assignees ?? []).map((a) => {
-                const name = typeof a === 'string' ? a : (a.name || a.email || "Unknown");
+                const name = a.name || a.email;
                 return (
-                <div key={typeof a === 'string' ? a : a.id} className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback className="text-[10px] font-semibold bg-accent">
-                      {name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm">{name}</span>
-                </div>
-              )})}
-              <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                <Plus className="h-3 w-3" />
-                Add assignee
-              </button>
+                  <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 -mx-1">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-[10px] font-semibold bg-accent">
+                          {name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveAssignee(a.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+              
+              <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
+                <PopoverTrigger asChild>
+                  <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+                    <Plus className="h-3 w-3" />
+                    Add assignee
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-2" align="start">
+                  <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
+                    <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      placeholder="Search members..."
+                      value={assigneeSearch}
+                      onChange={(e) => setAssigneeSearch(e.target.value)}
+                      className="h-7 border-none shadow-none focus-visible:ring-0 px-0 outline-none"
+                    />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {members
+                      ?.filter(m => !(task.assignees ?? []).some(a => a.id === m.user_id))
+                      .filter(m => (m.user.name || m.user.email).toLowerCase().includes(assigneeSearch.toLowerCase()))
+                      .map((m) => {
+                        const mName = m.user.name || m.user.email;
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => {
+                              handleAssignUser(m.user_id);
+                              setIsAssigneePickerOpen(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
+                          >
+                            <Avatar className="h-5 w-5 shrink-0">
+                              <AvatarFallback className="text-[9px] bg-accent">
+                                {mName.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="truncate">{mName}</span>
+                          </button>
+                        );
+                      })
+                    }
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
@@ -566,30 +641,63 @@ const ActivityTab = ({
 
 // ─── Tab: Dependencies ────────────────────────────────────────────────────────
 
-const DependencyRow = ({ dep }: { dep: Dependency }) => (
-  <div
-    className={cn(
-      "flex items-center gap-3 rounded-md border px-3 py-2",
-      dep.status !== "done"
-        ? "border-border bg-muted/20"
-        : "border-border bg-muted/20"
-    )}
-  >
-    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATUS_COLOR[dep.status as TaskStatus] ?? "bg-zinc-500")} />
-    <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium">{dep.title}</p>
-      <p className="font-mono text-[10px] uppercase text-muted-foreground">{dep.taskId}</p>
+const DependencyRow = ({ dep, onRemove }: { dep: Dependency, onRemove?: () => void }) => {
+  const priorityCfg = PRIORITY_CONFIG[dep.priority as TaskPriority] ?? PRIORITY_CONFIG.low;
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-3 rounded-md border px-3 py-2",
+        dep.status !== "done"
+          ? "border-border bg-muted/20"
+          : "border-border bg-muted/20"
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATUS_COLOR[dep.status as TaskStatus] ?? "bg-zinc-500")} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium">{dep.title}</p>
+          <Badge variant="outline" className={cn("h-4 shrink-0 px-1 gap-1 text-[9px]", priorityCfg.color)}>
+            <Flag className="h-2 w-2" />
+            {dep.priority}
+          </Badge>
+        </div>
+        <p className="font-mono text-[10px] uppercase text-muted-foreground">{dep.taskId}</p>
+      </div>
+      <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+        {dep.status}
+      </Badge>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md shrink-0"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
-    <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
-      {dep.status}
-    </Badge>
-  </div>
-);
+  );
+};
 
 const DependenciesTab = ({ task }: { task: TaskDTO }) => {
+  const [dependencyInput, setDependencyInput] = useState("");
+  const addDependency = useAddDependency();
+  const removeDependency = useRemoveDependency();
+
+  const handleAddDependency = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dependencyInput.trim()) return;
+    addDependency.mutate(
+      { id: task.id, dependsOnTaskId: dependencyInput.trim() },
+      { onSuccess: () => setDependencyInput("") }
+    );
+  };
+
+  const handleRemoveDependency = (blockedByTaskId: string) => {
+    removeDependency.mutate({ id: task.id, blockedByTaskId });
+  };
+
   const blockedByCount = (task.dependencies ?? []).length;
-  const blockingCount: number = 0;
-  const blockingTasks: Dependency[] = [];
   const blockedByTasks = task.dependencies ?? [];
 
   return (
@@ -603,9 +711,7 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
             <div>
               <p className="mb-0.5 text-xs font-semibold">Impact Summary</p>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                This task is blocking{" "}
-                <span className="font-medium text-foreground">{blockingCount}</span> downstream{" "}
-                task{blockingCount !== 1 ? "s" : ""} and is waiting on{" "}
+                This task is waiting on{" "}
                 <span className="font-medium text-foreground">{blockedByCount}</span> upstream{" "}
                 task{blockedByCount !== 1 ? "s" : ""}.
               </p>
@@ -613,40 +719,35 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
           </div>
         )}
 
-        {/* Blocking */}
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Blocking
-            </span>
-            <button className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
-              <Plus className="h-3 w-3" /> Add
-            </button>
-          </div>
-          <div className="space-y-1.5">
-            {blockingTasks.length > 0 ? (
-              blockingTasks.map((dep) => <DependencyRow key={dep.id} dep={dep} />)
-            ) : (
-              <p className="px-2 text-xs italic text-muted-foreground">
-                Not blocking any tasks
-              </p>
-            )}
-          </div>
-        </div>
-
         {/* Blocked By */}
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Blocked By
             </span>
-            <button className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
-              <Plus className="h-3 w-3" /> Add
-            </button>
           </div>
+          
+          <form className="mb-3 flex items-center gap-2" onSubmit={handleAddDependency}>
+            <Input 
+              placeholder="Paste Task ID to add dependency..."
+              value={dependencyInput}
+              onChange={(e) => setDependencyInput(e.target.value)}
+              className="h-8 text-xs"
+            />
+            <Button size="sm" type="submit" className="h-8 text-xs shrink-0" disabled={addDependency.isPending}>
+              Add
+            </Button>
+          </form>
+
           <div className="space-y-1.5">
             {blockedByTasks.length > 0 ? (
-              blockedByTasks.map((dep) => <DependencyRow key={dep.id} dep={dep} />)
+              blockedByTasks.map((dep) => (
+                <DependencyRow 
+                  key={dep.id} 
+                  dep={dep} 
+                  onRemove={() => handleRemoveDependency(dep.taskId)} 
+                />
+              ))
             ) : (
               <p className="px-2 text-xs italic text-muted-foreground">
                 Not blocked by anything
