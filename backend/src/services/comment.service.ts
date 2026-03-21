@@ -40,6 +40,13 @@ export interface CreateCommentData {
 }
 
 /**
+ * Safe ISO string conversion — handles both Date objects (top-level pg columns)
+ * and strings (values inside json/jsonb aggregates, which pg never auto-parses).
+ */
+const toISO = (val: Date | string): string =>
+  val instanceof Date ? val.toISOString() : val as string;
+
+/**
  * Convert Comment entity to DTO
  */
 const commentToDTO = (comment: Comment & { user: User }): CommentDTO => {
@@ -49,12 +56,12 @@ const commentToDTO = (comment: Comment & { user: User }): CommentDTO => {
     user_id: comment.user_id,
     content: comment.content,
     parent_comment_id: comment.parent_comment_id,
-    created_at: comment.created_at.toISOString(),
+    created_at: toISO(comment.created_at),
     user: {
       id: comment.user.id,
       email: comment.user.email,
       name: comment.user.name,
-      created_at: comment.user.created_at.toISOString()
+      created_at: toISO(comment.user.created_at)
     }
   };
 };
@@ -71,12 +78,12 @@ const threadedCommentToDTO = (
     user_id: comment.user_id,
     content: comment.content,
     parent_comment_id: comment.parent_comment_id,
-    created_at: comment.created_at.toISOString(),
+    created_at: toISO(comment.created_at),
     user: {
       id: comment.user.id,
       email: comment.user.email,
       name: comment.user.name,
-      created_at: comment.user.created_at.toISOString()
+      created_at: toISO(comment.user.created_at)
     },
     replies: comment.replies.map(reply => ({
       id: reply.id,
@@ -84,12 +91,12 @@ const threadedCommentToDTO = (
       user_id: reply.user_id,
       content: reply.content,
       parent_comment_id: reply.parent_comment_id,
-      created_at: reply.created_at.toISOString(),
+      created_at: toISO(reply.created_at),
       user: {
         id: reply.user.id,
         email: reply.user.email,
         name: reply.user.name,
-        created_at: reply.user.created_at.toISOString()
+        created_at: toISO(reply.user.created_at)
       }
     }))
   };
