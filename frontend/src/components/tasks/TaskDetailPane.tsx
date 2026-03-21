@@ -14,6 +14,7 @@ import {
   Trash2,
   Search,
   X,
+  Loader2,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -75,6 +76,9 @@ import {
   useRemoveDependency 
 } from "@/hooks/api/useTasks";
 import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
+import { useTaskComments, useCreateComment, useDeleteComment } from "@/hooks/api/useComments";
+import type { Comment } from "@/types/task";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -706,52 +710,152 @@ const OverviewTab = ({
   );
 };
 
+// ─── Comment Node ─────────────────────────────────────────────────────────────
+
+const CommentNode = ({ comment, taskId }: { comment: Comment; taskId: string }) => {
+  const authorName = comment.user?.name || comment.user?.email || "Unknown";
+  const [isReplying, setIsReplying] = useState(false);
+  const [replyInput, setReplyInput] = useState("");
+  const createComment = useCreateComment();
+  const deleteComment = useDeleteComment();
+  const { user } = useAuth();
+
+  const handleReplySubmit = () => {
+    if (!replyInput.trim()) return;
+    createComment.mutate(
+      { taskId, content: replyInput.trim(), parent_comment_id: comment.id },
+      { 
+        onSuccess: () => { 
+          setReplyInput(""); 
+          setIsReplying(false); 
+        } 
+      }
+    );
+  };
+
+  const handleDelete = () => {
+    if (window.confirm("Are you sure you want to delete this comment?")) {
+      deleteComment.mutate({ commentId: comment.id, taskId });
+    }
+  };
+
+  return (
+    <div className="py-3">
+      {/* Author and Time */}
+      <div className="mb-1.5 flex items-center gap-2">
+        <Avatar className="h-6 w-6 shrink-0 border border-border/50">
+          <AvatarFallback className="text-[10px] font-semibold bg-accent">
+            {authorName.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <span className="text-xs font-semibold">{authorName}</span>
+        <span className="text-[11px] text-muted-foreground">{formatRelTime(comment.created_at)}</span>
+      </div>
+
+      {/* Content */}
+      <div className="pl-8">
+        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+          {comment.content}
+        </p>
+
+        {/* Action Row */}
+        <div className="mt-1.5 flex items-center gap-3">
+          <button
+            onClick={() => setIsReplying(!isReplying)}
+            className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Reply
+          </button>
+          {user?.id === comment.user_id && (
+            <button
+              onClick={handleDelete}
+              disabled={deleteComment.isPending}
+              className="group flex items-center text-[11px] font-medium text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+              title="Delete comment"
+            >
+              {deleteComment.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Reply Box Toggle */}
+        {isReplying && (
+          <div className="mt-2 flex items-center gap-2">
+            <Input
+              autoFocus
+              placeholder="Write a reply..."
+              value={replyInput}
+              onChange={(e) => setReplyInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleReplySubmit()}
+              className="h-8 flex-1 text-xs"
+            />
+            <Button
+              size="sm"
+              className="h-8 shrink-0 px-3 text-xs"
+              onClick={handleReplySubmit}
+              disabled={createComment.isPending || !replyInput.trim()}
+            >
+              {createComment.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Post"}
+            </Button>
+          </div>
+        )}
+
+        {/* Nested Replies tree */}
+        {(comment.replies?.length ?? 0) > 0 && (
+          <div className="mt-3 space-y-1 border-l-2 border-border/40 pl-3 md:pl-4">
+            {comment.replies.map((reply) => (
+              <CommentNode key={reply.id} comment={reply} taskId={taskId} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── Tab: Activity ────────────────────────────────────────────────────────────
 
 const ActivityTab = ({
   task,
-  onAddComment,
 }: {
   task: TaskDTO;
-  onAddComment: (body: string) => void;
 }) => {
   const [input, setInput] = useState("");
+  const { data: comments, isPending } = useTaskComments(task.id);
+  const createComment = useCreateComment();
 
   const handleSend = () => {
     if (!input.trim()) return;
-    onAddComment(input.trim());
-    setInput("");
+    createComment.mutate(
+      { taskId: task.id, content: input.trim() },
+      { onSuccess: () => setInput("") }
+    );
   };
 
   return (
     <div className="flex h-full flex-col">
       <ScrollArea className="flex-1">
         <div className="mx-auto w-full max-w-2xl px-5 py-4">
-          {(task.comments ?? []).length > 0 ? (
+          {isPending ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (comments ?? []).length > 0 ? (
             <div className="space-y-0">
-              {(task.comments ?? []).map((comment, i) => (
+              {(comments ?? []).map((comment, i) => (
                 <div key={comment.id}>
                   {i > 0 && <Separator className="my-1" />}
-                  <div className="py-3">
-                    <div className="mb-1.5 flex items-center gap-2">
-                      <Avatar className="h-6 w-6 shrink-0">
-                        <AvatarFallback className="text-[10px] font-semibold bg-accent">
-                          {comment.author.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs font-semibold">{comment.author}</span>
-                      <span className="text-[11px] text-muted-foreground">{comment.timestamp}</span>
-                    </div>
-                    <p className="pl-8 text-sm leading-relaxed text-foreground">
-                      {comment.body}
-                    </p>
-                  </div>
+                  <CommentNode comment={comment} taskId={task.id} />
                 </div>
               ))}
             </div>
           ) : (
             <p className="py-4 text-xs italic text-muted-foreground">
-              No activity yet. Be the first to comment.
+              No comments yet. Start the conversation!
             </p>
           )}
         </div>
@@ -759,16 +863,21 @@ const ActivityTab = ({
 
       {/* Sticky comment input */}
       <div className="shrink-0 border-t border-border px-5 py-3">
-        <div className="mx-auto flex w-full max-w-2xl gap-2">
+        <div className="mx-auto flex w-full max-w-2xl items-center gap-2">
           <Input
-            placeholder="Add a comment…"
+            placeholder="Add a new comment..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            className="h-8 text-sm"
+            className="h-9 text-sm focus-visible:ring-1"
           />
-          <Button size="sm" className="h-8 shrink-0 px-3 text-xs" onClick={handleSend}>
-            Send
+          <Button 
+            size="sm" 
+            className="h-9 shrink-0 px-4 text-sm" 
+            onClick={handleSend}
+            disabled={createComment.isPending || !input.trim()}
+          >
+            {createComment.isPending ? <Loader2 className="mx-1 h-4 w-4 animate-spin" /> : "Send"}
           </Button>
         </div>
       </div>
@@ -1005,15 +1114,6 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
     );
   }
 
-  const handleAddComment = (body: string) => {
-    const newComment = {
-      id: `c_${Date.now()}`,
-      author: "You",
-      body,
-      timestamp: "Just now",
-    };
-    onUpdateTask?.(displayTask.id, { comments: [...(displayTask.comments ?? []), newComment] });
-  };
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -1077,7 +1177,7 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
         </TabsContent>
 
         <TabsContent value="activity" className="m-0 min-h-0 flex-1">
-          <ActivityTab task={displayTask} onAddComment={handleAddComment} />
+          <ActivityTab task={displayTask} />
         </TabsContent>
 
         <TabsContent value="dependencies" className="m-0 min-h-0 flex-1">

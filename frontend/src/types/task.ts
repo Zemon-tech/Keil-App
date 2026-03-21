@@ -42,9 +42,13 @@ export type ContextItem = {
 
 export type Comment = {
     id: string;
-    author: string;
-    body: string;
-    timestamp: string;
+    task_id: string;
+    user_id: string;
+    content: string;
+    parent_comment_id: string | null;
+    created_at: string;
+    user: { id: string; email: string; name: string | null };
+    replies: Comment[];
 };
 
 export interface HistoryEntry {
