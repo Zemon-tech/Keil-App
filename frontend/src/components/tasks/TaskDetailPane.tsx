@@ -799,7 +799,7 @@ const DependencyRow = ({ dep, onRemove }: { dep: Dependency, onRemove?: () => vo
             {dep.priority}
           </Badge>
         </div>
-        <p className="font-mono text-[10px] uppercase text-muted-foreground">{dep.taskId}</p>
+        <p className="font-mono text-[10px] uppercase text-muted-foreground">{dep.id}</p>
       </div>
       <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
         {dep.status}
@@ -882,7 +882,7 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
                 <DependencyRow 
                   key={dep.id} 
                   dep={dep} 
-                  onRemove={() => handleRemoveDependency(dep.taskId)} 
+                  onRemove={() => handleRemoveDependency(dep.id)} 
                 />
               ))
             ) : (

@@ -45,3 +45,9 @@ This document outlines the strict guidelines for designing and implementing API 
 - **Error Handling**: Use the existing `catchAsync` wrapper on all controllers to pipe errors gracefully to the central error middleware. Do not scatter `try/catch` in controllers.
 - **Standardized Responses**: All successful responses must use the custom `ApiResponse` class (e.g., `new ApiResponse(200, data, "Message")`).
 - **Authorization**: Protected routes must extract the user from the Supabase JWT (implemented in `auth.middleware.ts`) and append it to `req.user`.
+- **Relationship Endpoint Validation**: For any endpoint that creates a link between two entities (e.g., assignees, dependencies), validate both entity IDs before calling the service. Raw PostgreSQL FK violations (from non-existent IDs) produce 500s because they're not `ApiError` instances. Explicit validation returns a clean 404 instead.
+  ```typescript
+  // ✅ Validate both sides of a relationship
+  const targetTask = await taskService.getTaskById(depends_on_task_id);
+  if (!targetTask || targetTask.workspace_id !== workspaceId) throw new ApiError(404, "Dependency task not found");
+  ```

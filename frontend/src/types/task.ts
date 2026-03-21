@@ -27,7 +27,6 @@ export type Subtask = {
 
 export type Dependency = {
     id: string;
-    taskId: string;
     title: string;
     status: TaskStatus;
     priority: TaskPriority;

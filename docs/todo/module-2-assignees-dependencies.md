@@ -233,16 +233,16 @@ File: `frontend/src/types/task.ts`
 
 ## Acceptance Criteria
 
-- [ ] A user can be assigned to a task and the assignment persists after page refresh
-- [ ] A user can be removed from a task
-- [ ] Only workspace members appear in the assignee picker
-- [ ] A dependency can be added to a task
-- [ ] A dependency can be removed from a task
-- [ ] Attempting to add a circular dependency shows an error message — task does not update
-- [ ] A task with all dependencies marked `done` can be marked `done`
-- [ ] A task with at least one incomplete dependency cannot be marked `done` (backend blocks it with 400)
-- [ ] The "blocked" visual indicator in the task list and detail view is derived from `blocked_by_count > 0`, not a stored status
-- [ ] The "Blocked" filter in the task list works as a derived filter (not a backend status filter)
+- [x] A user can be assigned to a task and the assignment persists after page refresh
+- [x] A user can be removed from a task
+- [x] Only workspace members appear in the assignee picker
+- [x] A dependency can be added to a task
+- [x] A dependency can be removed from a task
+- [x] Attempting to add a circular dependency shows an error message — task does not update
+- [x] A task with all dependencies marked `done` can be marked `done`
+- [x] A task with at least one incomplete dependency cannot be marked `done` (backend blocks it with 400)
+- [x] The "blocked" visual indicator in the task list and detail view is derived from `blocked_by_count > 0`, not a stored status
+- [x] The "Blocked" filter in the task list works as a derived filter (not a backend status filter)
 
 ---
 
