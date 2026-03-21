@@ -107,7 +107,7 @@ data: {
 ### task.controller.ts
 File: `backend/src/controllers/task.controller.ts`
 
-- [ ] Implement `assignUserToTask`
+- [x] Implement `assignUserToTask`
   - Extract `user_id` from `req.body`
   - Extract `task_id` from `req.params.id`
   - Validate both are present and valid UUIDs
@@ -115,13 +115,13 @@ File: `backend/src/controllers/task.controller.ts`
   - Call `taskService.assignUserToTask(taskId, assigneeUserId, req.user.id, workspaceId)`
   - Return 201 on success
 
-- [ ] Implement `removeUserFromTask`
+- [x] Implement `removeUserFromTask`
   - Extract `userId` from `req.params.userId`
   - Extract `task_id` from `req.params.id`
   - Call `taskService.removeUserFromTask(taskId, userId, req.user.id, workspaceId)`
   - Return 200 on success
 
-- [ ] Implement `addDependency`
+- [x] Implement `addDependency`
   - Extract `depends_on_task_id` from `req.body`
   - Extract `task_id` from `req.params.id`
   - Validate both UUIDs present and not equal (no self-dependency)
@@ -129,12 +129,12 @@ File: `backend/src/controllers/task.controller.ts`
   - Service already throws 400 if circular dependency detected — let `catchAsync` propagate it
   - Return 201 on success
 
-- [ ] Implement `removeDependency`
+- [x] Implement `removeDependency`
   - Extract `blockedByTaskId` from `req.params.blockedByTaskId`
   - Call `taskService.removeDependency(taskId, blockedByTaskId, req.user.id, workspaceId)`
   - Return 200 on success
 
-- [ ] Update `getTaskById` to include assignees and dependencies in response
+- [x] Update `getTaskById` to include assignees and dependencies in response
   - Use `taskRepository.findWithAssignees()` and `taskRepository.findWithDependencies()` which already exist
   - Or compose the result from separate repo calls
   - Add `blocked_by_count` to the response (count of incomplete dependencies)
@@ -142,7 +142,7 @@ File: `backend/src/controllers/task.controller.ts`
 ### workspace.controller.ts
 File: `backend/src/controllers/workspace.controller.ts`
 
-- [ ] Implement `getWorkspaceMembers`
+- [x] Implement `getWorkspaceMembers`
   - Extract `id` (workspaceId) from `req.params.id`
   - Verify the requesting user belongs to this workspace
   - Call `workspaceService.getWorkspaceMembers(workspaceId)`

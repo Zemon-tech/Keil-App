@@ -283,3 +283,100 @@ export function useChangeTaskStatus() {
     },
   });
 }
+
+// ─── Assignees & Dependencies ──────────────────────────────────────────────────
+
+export function useAssignUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    Error,
+    { id: string; userId: string }
+  >({
+    mutationFn: async ({ id, userId }) => {
+      await api.post(`v1/tasks/${id}/assignees`, { user_id: userId });
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success("Assignee added");
+    },
+    onError: () => {
+      toast.error("Failed to assign user");
+    },
+  });
+}
+
+export function useRemoveAssignee() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    Error,
+    { id: string; userId: string }
+  >({
+    mutationFn: async ({ id, userId }) => {
+      await api.delete(`v1/tasks/${id}/assignees/${userId}`);
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success("Assignee removed");
+    },
+    onError: () => {
+      toast.error("Failed to remove assignee");
+    },
+  });
+}
+
+export function useAddDependency() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    { response?: { status?: number; data?: { message?: string } } },
+    { id: string; dependsOnTaskId: string }
+  >({
+    mutationFn: async ({ id, dependsOnTaskId }) => {
+      await api.post(`v1/tasks/${id}/dependencies`, { depends_on_task_id: dependsOnTaskId });
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success("Dependency added");
+    },
+    onError: (error) => {
+      const httpStatus = error?.response?.status;
+      const message = error?.response?.data?.message;
+
+      if (httpStatus === 400) {
+        toast.error(message ?? "Cannot add circular dependency.");
+      } else {
+        toast.error("Failed to add dependency.");
+      }
+    },
+  });
+}
+
+export function useRemoveDependency() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    Error,
+    { id: string; blockedByTaskId: string }
+  >({
+    mutationFn: async ({ id, blockedByTaskId }) => {
+      await api.delete(`v1/tasks/${id}/dependencies/${blockedByTaskId}`);
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success("Dependency removed");
+    },
+    onError: () => {
+      toast.error("Failed to remove dependency");
+    },
+  });
+}

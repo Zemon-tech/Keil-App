@@ -30,6 +30,8 @@ export type Dependency = {
     taskId: string;
     title: string;
     status: TaskStatus;
+    priority: TaskPriority;
+    due_date: string | null;
 };
 
 export type ContextItem = {
@@ -62,6 +64,12 @@ export type ActivityLog = {
     timestamp: string;
 };
 
+export type AssigneeUser = {
+    id: string;
+    email: string;
+    name: string | null;
+};
+
 export type Task = {
     id: string;
     projectId: string;
@@ -73,7 +81,7 @@ export type Task = {
     status: TaskStatus;
     priority: TaskPriority;
     owner: string;
-    assignees: string[];
+    assignees: AssigneeUser[];
     labels: string[];
     dueDateISO: string;
     plannedStartISO?: string;

@@ -83,13 +83,18 @@ export function TasksPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return taskList.filter((t) => {
+      // "Blocked" is a derived filter — not sent to backend
+      if (statusFilter === "Blocked") {
+        const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
+        if (!isBlocked) return false;
+      }
       if (!q) return true;
       return (
         t.title.toLowerCase().includes(q) ||
         (t.objective && t.objective.toLowerCase().includes(q))
       );
     });
-  }, [query, taskList]);
+  }, [query, taskList, statusFilter]);
 
   // ── Selected task ──
   const selected = useMemo(
@@ -103,7 +108,7 @@ export function TasksPage() {
   );
 
   return (
-    <div className="h-[100dvh] w-full bg-background text-foreground overflow-hidden overscroll-none">
+    <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
       <main className={containerClassName}>
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
           <ResizablePanel defaultSize={20} minSize="25%" className="bg-card">
