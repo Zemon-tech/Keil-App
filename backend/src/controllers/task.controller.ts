@@ -256,23 +256,97 @@ export const deleteTask = catchAsync(async (req: Request, res: Response) => {
 
 // Assignees
 export const assignUserToTask = catchAsync(async (req: Request, res: Response) => {
-    // TODO: Implement
-    res.status(200).json(new ApiResponse(200, {}, "User assigned to task"));
+    const workspaceId = (req as any).workspaceId as string;
+    const reqUserId = (req as any).user?.id as string;
+    const taskId = req.params.id as string;
+    const { user_id } = req.body;
+
+    if (!workspaceId) throw new ApiError(403, "Workspace not found for user");
+
+    if (!user_id || typeof user_id !== 'string' || user_id.trim() === '') {
+        throw new ApiError(400, "user_id is required");
+    }
+
+    const task = await taskService.getTaskById(taskId);
+    if (!task || task.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
+
+    await taskService.assignUserToTask(taskId, user_id, reqUserId, workspaceId);
+
+    res.status(201).json(new ApiResponse(201, null, "User assigned to task"));
 });
 
 export const removeUserFromTask = catchAsync(async (req: Request, res: Response) => {
-    // TODO: Implement
-    res.status(200).json(new ApiResponse(200, {}, "User removed from task"));
+    const workspaceId = (req as any).workspaceId as string;
+    const reqUserId = (req as any).user?.id as string;
+    const taskId = req.params.id as string;
+    const userId = req.params.userId as string; // the assignee to remove
+
+    if (!workspaceId) throw new ApiError(403, "Workspace not found for user");
+
+    if (!userId || userId.trim() === '') {
+        throw new ApiError(400, "userId param is required");
+    }
+
+    const task = await taskService.getTaskById(taskId);
+    if (!task || task.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
+
+    await taskService.removeUserFromTask(taskId, userId, reqUserId, workspaceId);
+
+    res.status(200).json(new ApiResponse(200, null, "User removed from task"));
 });
 
 // Dependencies
 export const addDependency = catchAsync(async (req: Request, res: Response) => {
-    // TODO: Implement
-    res.status(201).json(new ApiResponse(201, {}, "Dependency added to task"));
+    const workspaceId = (req as any).workspaceId as string;
+    const reqUserId = (req as any).user?.id as string;
+    const taskId = req.params.id as string;
+    const { depends_on_task_id } = req.body;
+
+    if (!workspaceId) throw new ApiError(403, "Workspace not found for user");
+
+    if (!depends_on_task_id || typeof depends_on_task_id !== 'string' || depends_on_task_id.trim() === '') {
+        throw new ApiError(400, "depends_on_task_id is required");
+    }
+
+    // Controller responsibility: block self-dependency before any DB call
+    if (taskId === depends_on_task_id) {
+        throw new ApiError(400, "A task cannot depend on itself");
+    }
+
+    const task = await taskService.getTaskById(taskId);
+    if (!task || task.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
+
+    // Service handles circular dependency check via recursive CTE — catchAsync propagates the 400 automatically
+    await taskService.addDependency(taskId, depends_on_task_id, reqUserId, workspaceId);
+
+    res.status(201).json(new ApiResponse(201, null, "Dependency added"));
 });
 
 export const removeDependency = catchAsync(async (req: Request, res: Response) => {
-    // TODO: Implement
-    res.status(200).json(new ApiResponse(200, {}, "Dependency removed from task"));
+    const workspaceId = (req as any).workspaceId as string;
+    const reqUserId = (req as any).user?.id as string;
+    const taskId = req.params.id as string;
+    const blockedByTaskId = req.params.blockedByTaskId as string; // from route: /:id/dependencies/:blockedByTaskId
+
+    if (!workspaceId) throw new ApiError(403, "Workspace not found for user");
+
+    if (!blockedByTaskId || blockedByTaskId.trim() === '') {
+        throw new ApiError(400, "blockedByTaskId param is required");
+    }
+
+    const task = await taskService.getTaskById(taskId);
+    if (!task || task.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
+
+    await taskService.removeDependency(taskId, blockedByTaskId, reqUserId, workspaceId);
+
+    res.status(200).json(new ApiResponse(200, null, "Dependency removed"));
 });
 

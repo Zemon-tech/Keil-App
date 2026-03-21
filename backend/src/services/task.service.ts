@@ -16,6 +16,21 @@ import { ApiError } from '../utils/ApiError';
  */
 
 // DTOs (Data Transfer Objects) for API responses
+export interface AssigneeDTO {
+  id: string;
+  email: string;
+  name: string | null;
+  assigned_at?: string;
+}
+
+export interface DependencyDTO {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date: string | null;
+}
+
 export interface TaskDTO {
   id: string;
   workspace_id: string;
@@ -31,7 +46,9 @@ export interface TaskDTO {
   created_by: string;
   created_at: string;
   updated_at: string;
-  assignees?: User[];
+  assignees?: AssigneeDTO[];
+  dependencies?: DependencyDTO[];
+  blocked_by_count?: number;
 }
 
 export interface CreateTaskData {
@@ -124,11 +141,37 @@ export const getTasksByWorkspace = async (
 };
 
 /**
- * Get task by ID including assignees
+ * Get task by ID including assignees, dependencies, and blocked_by_count
  */
 export const getTaskById = async (taskId: string): Promise<TaskDTO | null> => {
+  // Fetch task with assignees
   const task = await taskRepository.findWithAssignees(taskId);
-  return task ? taskToDTO(task) : null;
+  if (!task) return null;
+
+  // Fetch task with dependency details
+  const taskWithDeps = await taskRepository.findWithDependencies(taskId);
+  const rawDependencies: any[] = taskWithDeps?.dependencies ?? [];
+
+  // Shape each dependency into DependencyDTO
+  const dependencies: DependencyDTO[] = rawDependencies.map((dep: any) => ({
+    id: dep.id,
+    title: dep.title,
+    status: dep.status,
+    priority: dep.priority,
+    due_date: dep.due_date ? new Date(dep.due_date).toISOString() : null,
+  }));
+
+  // blocked_by_count = number of dependencies where status is NOT 'done'
+  const blocked_by_count = dependencies.filter(
+    (dep) => dep.status !== TaskStatus.DONE
+  ).length;
+
+  return {
+    ...taskToDTO(task),
+    assignees: task.assignees as unknown as AssigneeDTO[],
+    dependencies,
+    blocked_by_count,
+  };
 };
 
 /**
