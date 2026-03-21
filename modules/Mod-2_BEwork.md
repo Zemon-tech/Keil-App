@@ -796,11 +796,11 @@ Complete these in order. Do not skip ahead.
 
 ### ✔️ TypeScript & Quality ✅
 
-- [ ] `npx tsc --noEmit` runs with **zero errors**
-- [ ] No manual `try-catch` blocks in any controller
-- [ ] No `res.json({})` used — always `new ApiResponse(...)`
-- [ ] No `console.log` left in production code
-- [ ] All controller functions are wrapped with `catchAsync`
+- [x] `npx tsc --noEmit` runs with **zero errors**
+- [x] No manual `try-catch` blocks in any controller
+- [x] No `res.json({})` used — always `new ApiResponse(...)`
+- [x] No `console.log` left in production code
+- [x] All controller functions are wrapped with `catchAsync`
 
 ---
 
