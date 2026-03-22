@@ -3,11 +3,21 @@ import { catchAsync } from "../utils/catchAsync";
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import * as activityService from "../services/activity.service";
+import * as dashboardService from "../services/dashboard.service";
 import { LogEntityType } from "../types/enums";
 
 export const getDashboardInfo = catchAsync(async (req: Request, res: Response) => {
-    // TODO: Implement rule-based buckets
-    res.status(200).json(new ApiResponse(200, {}, "Dashboard data retrieved successfully"));
+    // TASK 1: Extract workspaceId from middleware
+    const workspaceId = (req as any).workspaceId as string;
+    if (!workspaceId) {
+        throw new ApiError(404, "No workspace found for this user");
+    }
+
+    // TASK 2: Call dashboard service to get all 4 buckets
+    const dashboardData = await dashboardService.getDashboardBuckets(workspaceId);
+
+    // TASK 3: Return response with dashboard data
+    res.status(200).json(new ApiResponse(200, dashboardData, "Dashboard data retrieved successfully"));
 });
 
 export const getActivityFeed = catchAsync(async (req: Request, res: Response) => {
