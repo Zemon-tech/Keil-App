@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Flag,
   Plus,
-  ArrowRight,
   Zap,
   Github,
   Link2,
@@ -77,8 +76,9 @@ import {
 } from "@/hooks/api/useTasks";
 import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
 import { useTaskComments, useCreateComment, useDeleteComment } from "@/hooks/api/useComments";
-import type { Comment } from "@/types/task";
+import type { Comment, ActivityLogEntry } from "@/types/task";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTaskActivity } from "@/hooks/api/useActivity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1009,60 +1009,87 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
 
 // ─── Tab: History ─────────────────────────────────────────────────────────────
 
-const HistoryTab = ({ task }: { task: TaskDTO }) => (
-  <ScrollArea className="h-full">
-    <div className="mx-auto w-full max-w-2xl p-5">
-      {(task.history ?? []).length > 0 ? (
-        <div>
-          {(task.history ?? []).map((entry, i) => (
-            <div key={entry.id}>
-              {i > 0 && <Separator />}
-              <div className="flex items-start gap-3 py-3">
+/** Maps a raw action_type string to a human-readable description. */
+function formatActionLabel(entry: ActivityLogEntry): string {
+  switch (entry.action_type) {
+    case "task_created":             return "Task created";
+    case "status_changed":           return `Status changed from "${entry.old_value?.status}" to "${entry.new_value?.status}"`;
+    case "priority_changed":         return `Priority changed from "${entry.old_value?.priority}" to "${entry.new_value?.priority}"`;
+    case "assignment_added":         return "Assigned to a user";
+    case "assignment_removed":       return "Unassigned a user";
+    case "due_date_changed":         return "Due date updated";
+    case "dependency_added":         return "Dependency added";
+    case "dependency_removed":       return "Dependency removed";
+    case "comment_created":          return "Comment added";
+    case "comment_deleted":          return "Comment deleted";
+    case "objective_updated":        return "Objective updated";
+    case "success_criteria_updated": return "Success criteria updated";
+    case "title_updated":            return "Title updated";
+    case "description_updated":      return "Description updated";
+    default:                         return entry.action_type; // raw fallback for unknown types
+  }
+}
 
-                {/* Field tag */}
-                <Badge
-                  variant="outline"
-                  className="mt-0.5 h-5 w-20 shrink-0 justify-center bg-muted/30 font-mono text-[10px] px-1.5"
-                >
-                  {entry.field}
-                </Badge>
+const HistoryTab = ({ task }: { task: TaskDTO }) => {
+  const { data: entries, isPending } = useTaskActivity(task.id);
 
-                {/* Change */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    {entry.from && (
-                      <>
-                        <span className="text-muted-foreground line-through opacity-60">
-                          {entry.from}
-                        </span>
-                        <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      </>
-                    )}
-                    <span className="font-medium text-foreground">{entry.to}</span>
+  return (
+    <ScrollArea className="h-full">
+      <div className="mx-auto w-full max-w-2xl p-5">
+
+        {isPending ? (
+          /* Loading state */
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+
+        ) : (entries ?? []).length > 0 ? (
+          /* Populated state */
+          <div>
+            {(entries ?? []).map((entry, i) => {
+              const actor = entry.user?.name ?? entry.user?.email ?? "Unknown user";
+              return (
+                <div key={entry.id}>
+                  {i > 0 && <Separator />}
+                  <div className="flex items-start gap-3 py-3">
+
+                    {/* Timeline dot */}
+                    <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
+
+                    {/* Action + actor */}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-snug text-foreground">
+                        {formatActionLabel(entry)}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        by {actor}
+                      </p>
+                    </div>
+
+                    {/* Relative timestamp */}
+                    <div className="shrink-0 text-right">
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatRelTime(entry.created_at)}
+                      </p>
+                    </div>
+
                   </div>
-                  {entry.note && (
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{entry.note}</p>
-                  )}
                 </div>
+              );
+            })}
+          </div>
 
-                {/* User + timestamp */}
-                <div className="shrink-0 text-right">
-                  <p className="text-[11px] font-medium">{entry.user}</p>
-                  <p className="text-[10px] text-muted-foreground">{formatRelTime(entry.timestamp)}</p>
-                </div>
+        ) : (
+          /* Empty state */
+          <p className="py-10 text-center text-xs italic text-muted-foreground">
+            No history yet
+          </p>
+        )}
 
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="py-4 text-center text-xs italic text-muted-foreground">
-          No history yet
-        </p>
-      )}
-    </div>
-  </ScrollArea>
-);
+      </div>
+    </ScrollArea>
+  );
+};
 
 // ─── Root Component ───────────────────────────────────────────────────────────
 

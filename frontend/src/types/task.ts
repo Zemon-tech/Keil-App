@@ -51,21 +51,19 @@ export type Comment = {
     replies: Comment[];
 };
 
-export interface HistoryEntry {
+// ─── Real backend shape — used by Module 4 Activity Feed ─────────────────────
+export type ActivityLogEntry = {
     id: string;
-    field: string;         // "Status", "Priority", "Assignee", "Subtask", "Due Date"
-    from?: string;
-    to: string;
-    user: string;
-    timestamp: string;     // ISO string
-    note?: string;         // e.g. "Changed text from..." for description changes
-}
-
-export type ActivityLog = {
-    id: string;
-    label: string;
-    timestamp: string;
+    entity_type: "task" | "comment" | "workspace";
+    entity_id: string;
+    action_type: string;
+    old_value: Record<string, any> | null;
+    new_value: Record<string, any> | null;
+    created_at: string;
+    user: { id: string; email: string; name: string | null } | null;
 };
+
+
 
 export type AssigneeUser = {
     id: string;
@@ -94,7 +92,6 @@ export type Task = {
     dependencies: Dependency[];
     context: ContextItem[];
     subtasks: Subtask[];
-    history: HistoryEntry[];
     comments: Comment[];
     parentTaskId?: string;
 };

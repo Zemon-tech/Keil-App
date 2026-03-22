@@ -34,46 +34,6 @@ export const mockTasks: Task[] = [
             { id: "sub_03", title: "Dependencies + context panel", done: false, assignee: "Aisha" },
             { id: "sub_04", title: "Comments & history tabs", done: false, assignee: "Shivang" },
         ],
-        history: [
-            {
-                id: "h1",
-                field: "Status",
-                from: "Backlog",
-                to: "In Progress",
-                user: "Shivang",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString()
-            },
-            {
-                id: "h2",
-                field: "Priority",
-                from: "Medium",
-                to: "High",
-                user: "Aisha",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
-            },
-            {
-                id: "h3",
-                field: "Subtask",
-                to: "Completed: Two-pane layout",
-                user: "Shivang",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString()
-            },
-            {
-                id: "h4",
-                field: "Due Date",
-                from: "12 Mar",
-                to: "9 Mar",
-                user: "Aisha",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString()
-            },
-            {
-                id: "h5",
-                field: "Created",
-                to: "Task created by Shivang",
-                user: "Shivang",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString()
-            }
-        ],
         comments: [
             {
                 id: "c_01",
@@ -121,15 +81,6 @@ export const mockTasks: Task[] = [
             { id: "sub_11", title: "Decide edge rules", done: false, assignee: "Aisha" },
             { id: "sub_12", title: "Draft minimal visualization", done: false, assignee: "Aisha" },
         ],
-        history: [
-            {
-                id: "h11",
-                field: "Created",
-                to: "Task created by Aisha",
-                user: "Aisha",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
-            }
-        ],
         comments: [],
     },
     {
@@ -159,23 +110,6 @@ export const mockTasks: Task[] = [
             { id: "sub_21", title: "Reproduce on slow network", done: true, assignee: "Rohan" },
             { id: "sub_22", title: "Add retry/backoff", done: false, assignee: "Rohan" },
             { id: "sub_23", title: "Surface toast + CTA", done: false, assignee: "Shivang" },
-        ],
-        history: [
-            {
-                id: "h21",
-                field: "Status",
-                from: "in-progress",
-                to: "in-progress",
-                user: "Rohan",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-            },
-            {
-                id: "h22",
-                field: "Created",
-                to: "Task created by Aisha",
-                user: "Aisha",
-                timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString()
-            }
         ],
         comments: [
             {
