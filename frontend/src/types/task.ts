@@ -95,3 +95,12 @@ export type Task = {
     comments: Comment[];
     parentTaskId?: string;
 };
+
+export type DashboardTaskDTO = {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    due_date: string | null;
+    objective: string | null;
+};
