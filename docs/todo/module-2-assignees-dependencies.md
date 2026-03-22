@@ -107,7 +107,7 @@ data: {
 ### task.controller.ts
 File: `backend/src/controllers/task.controller.ts`
 
-- [ ] Implement `assignUserToTask`
+- [x] Implement `assignUserToTask`
   - Extract `user_id` from `req.body`
   - Extract `task_id` from `req.params.id`
   - Validate both are present and valid UUIDs
@@ -115,13 +115,13 @@ File: `backend/src/controllers/task.controller.ts`
   - Call `taskService.assignUserToTask(taskId, assigneeUserId, req.user.id, workspaceId)`
   - Return 201 on success
 
-- [ ] Implement `removeUserFromTask`
+- [x] Implement `removeUserFromTask`
   - Extract `userId` from `req.params.userId`
   - Extract `task_id` from `req.params.id`
   - Call `taskService.removeUserFromTask(taskId, userId, req.user.id, workspaceId)`
   - Return 200 on success
 
-- [ ] Implement `addDependency`
+- [x] Implement `addDependency`
   - Extract `depends_on_task_id` from `req.body`
   - Extract `task_id` from `req.params.id`
   - Validate both UUIDs present and not equal (no self-dependency)
@@ -129,12 +129,12 @@ File: `backend/src/controllers/task.controller.ts`
   - Service already throws 400 if circular dependency detected — let `catchAsync` propagate it
   - Return 201 on success
 
-- [ ] Implement `removeDependency`
+- [x] Implement `removeDependency`
   - Extract `blockedByTaskId` from `req.params.blockedByTaskId`
   - Call `taskService.removeDependency(taskId, blockedByTaskId, req.user.id, workspaceId)`
   - Return 200 on success
 
-- [ ] Update `getTaskById` to include assignees and dependencies in response
+- [x] Update `getTaskById` to include assignees and dependencies in response
   - Use `taskRepository.findWithAssignees()` and `taskRepository.findWithDependencies()` which already exist
   - Or compose the result from separate repo calls
   - Add `blocked_by_count` to the response (count of incomplete dependencies)
@@ -142,7 +142,7 @@ File: `backend/src/controllers/task.controller.ts`
 ### workspace.controller.ts
 File: `backend/src/controllers/workspace.controller.ts`
 
-- [ ] Implement `getWorkspaceMembers`
+- [x] Implement `getWorkspaceMembers`
   - Extract `id` (workspaceId) from `req.params.id`
   - Verify the requesting user belongs to this workspace
   - Call `workspaceService.getWorkspaceMembers(workspaceId)`
@@ -233,16 +233,16 @@ File: `frontend/src/types/task.ts`
 
 ## Acceptance Criteria
 
-- [ ] A user can be assigned to a task and the assignment persists after page refresh
-- [ ] A user can be removed from a task
-- [ ] Only workspace members appear in the assignee picker
-- [ ] A dependency can be added to a task
-- [ ] A dependency can be removed from a task
-- [ ] Attempting to add a circular dependency shows an error message — task does not update
-- [ ] A task with all dependencies marked `done` can be marked `done`
-- [ ] A task with at least one incomplete dependency cannot be marked `done` (backend blocks it with 400)
-- [ ] The "blocked" visual indicator in the task list and detail view is derived from `blocked_by_count > 0`, not a stored status
-- [ ] The "Blocked" filter in the task list works as a derived filter (not a backend status filter)
+- [x] A user can be assigned to a task and the assignment persists after page refresh
+- [x] A user can be removed from a task
+- [x] Only workspace members appear in the assignee picker
+- [x] A dependency can be added to a task
+- [x] A dependency can be removed from a task
+- [x] Attempting to add a circular dependency shows an error message — task does not update
+- [x] A task with all dependencies marked `done` can be marked `done`
+- [x] A task with at least one incomplete dependency cannot be marked `done` (backend blocks it with 400)
+- [x] The "blocked" visual indicator in the task list and detail view is derived from `blocked_by_count > 0`, not a stored status
+- [x] The "Blocked" filter in the task list works as a derived filter (not a backend status filter)
 
 ---
 

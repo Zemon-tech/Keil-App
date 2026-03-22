@@ -104,8 +104,11 @@ export abstract class BaseRepository<T> {
    * Create a new record
    */
   async create(data: Partial<T>, client?: PoolClient): Promise<T> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
+    const validData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+    const keys = Object.keys(validData);
+    const values = Object.values(validData);
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
     const columns = keys.join(', ');
 
@@ -129,8 +132,11 @@ export abstract class BaseRepository<T> {
     data: Partial<T>,
     client?: PoolClient
   ): Promise<T | null> {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
+    const validData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined)
+    );
+    const keys = Object.keys(validData);
+    const values = Object.values(validData);
     
     if (keys.length === 0) {
       return this.findById(id, client);

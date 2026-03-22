@@ -162,19 +162,19 @@ Both developers must agree on and freeze these shapes before writing code.
 
 ## Acceptance Criteria
 
-- [ ] A task can be created via the UI and appears in the list after refresh without a page reload
-- [ ] Task list reflects real database data — not `mockTasks`
-- [ ] Selecting a task shows its real detail from the backend
-- [ ] A task's title and description can be edited and the change persists after page refresh
-- [ ] A task can be deleted and disappears from the list
-- [ ] Status can be changed inline; the updated status persists
-- [ ] Attempting to set status to `done` on a task with incomplete dependencies returns a visible error (this will be fully testable once Module 2 is done, but the error handling path must exist)
-- [ ] Filters (`status`, `priority`) pass through to the backend and the list reflects filtered results
-- [ ] Pagination works — more tasks can be loaded
-- [ ] Parent task can be created with `parent_task_id` pointing to another task
-- [ ] Loading state is shown while tasks are fetching
-- [ ] Empty state is shown when no tasks exist
-- [ ] No reference to `mockTasks` remains in production code paths
+- [x] A task can be created via the UI and appears in the list after refresh without a page reload
+- [x] Task list reflects real database data — not `mockTasks`
+- [x] Selecting a task shows its real detail from the backend
+- [x] A task's title and description can be edited and the change persists after page refresh
+- [x] A task can be deleted and disappears from the list
+- [x] Status can be changed inline; the updated status persists
+- [x] Attempting to set status to `done` on a task with incomplete dependencies returns a visible error (this will be fully testable once Module 2 is done, but the error handling path must exist)
+- [x] Filters (`status`, `priority`) pass through to the backend and the list reflects filtered results
+- [x] Pagination works — more tasks can be loaded
+- [x] Parent task can be created with `parent_task_id` pointing to another task
+- [x] Loading state is shown while tasks are fetching
+- [x] Empty state is shown when no tasks exist
+- [x] No reference to `mockTasks` remains in production code paths
 
 ---
 

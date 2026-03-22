@@ -2,9 +2,10 @@ import {
   taskRepository,
   taskAssigneeRepository,
   taskDependencyRepository,
-  activityRepository
+  activityRepository,
+  commentRepository
 } from '../repositories';
-import { Task } from '../types/entities';
+import { Task, User } from '../types/entities';
 import { TaskStatus, TaskPriority, LogEntityType, LogActionType } from '../types/enums';
 import { TaskQueryOptions } from '../types/repository';
 import { ApiError } from '../utils/ApiError';
@@ -15,6 +16,21 @@ import { ApiError } from '../utils/ApiError';
  */
 
 // DTOs (Data Transfer Objects) for API responses
+export interface AssigneeDTO {
+  id: string;
+  email: string;
+  name: string | null;
+  assigned_at?: string;
+}
+
+export interface DependencyDTO {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date: string | null;
+}
+
 export interface TaskDTO {
   id: string;
   workspace_id: string;
@@ -30,6 +46,9 @@ export interface TaskDTO {
   created_by: string;
   created_at: string;
   updated_at: string;
+  assignees?: AssigneeDTO[];
+  dependencies?: DependencyDTO[];
+  blocked_by_count?: number;
 }
 
 export interface CreateTaskData {
@@ -48,19 +67,19 @@ export interface CreateTaskData {
 
 export interface UpdateTaskData {
   title?: string;
-  description?: string;
-  objective?: string;
-  success_criteria?: string;
+  description?: string | null;
+  objective?: string | null;
+  success_criteria?: string | null;
   status?: TaskStatus;
   priority?: TaskPriority;
-  start_date?: Date;
-  due_date?: Date;
+  start_date?: Date | null;
+  due_date?: Date | null;
 }
 
 /**
  * Convert Task entity to DTO
  */
-const taskToDTO = (task: Task): TaskDTO => {
+const taskToDTO = (task: Task & { assignees?: User[] }): TaskDTO => {
   return {
     id: task.id,
     workspace_id: task.workspace_id,
@@ -75,7 +94,8 @@ const taskToDTO = (task: Task): TaskDTO => {
     due_date: task.due_date ? task.due_date.toISOString() : null,
     created_by: task.created_by,
     created_at: task.created_at.toISOString(),
-    updated_at: task.updated_at.toISOString()
+    updated_at: task.updated_at.toISOString(),
+    assignees: task.assignees
   };
 };
 
@@ -121,11 +141,37 @@ export const getTasksByWorkspace = async (
 };
 
 /**
- * Get task by ID
+ * Get task by ID including assignees, dependencies, and blocked_by_count
  */
 export const getTaskById = async (taskId: string): Promise<TaskDTO | null> => {
-  const task = await taskRepository.findById(taskId);
-  return task ? taskToDTO(task) : null;
+  // Fetch task with assignees
+  const task = await taskRepository.findWithAssignees(taskId);
+  if (!task) return null;
+
+  // Fetch task with dependency details
+  const taskWithDeps = await taskRepository.findWithDependencies(taskId);
+  const rawDependencies: any[] = taskWithDeps?.dependencies ?? [];
+
+  // Shape each dependency into DependencyDTO
+  const dependencies: DependencyDTO[] = rawDependencies.map((dep: any) => ({
+    id: dep.id,
+    title: dep.title,
+    status: dep.status,
+    priority: dep.priority,
+    due_date: dep.due_date ? new Date(dep.due_date).toISOString() : null,
+  }));
+
+  // blocked_by_count = number of dependencies where status is NOT 'done'
+  const blocked_by_count = dependencies.filter(
+    (dep) => dep.status !== TaskStatus.DONE
+  ).length;
+
+  return {
+    ...taskToDTO(task),
+    assignees: task.assignees as unknown as AssigneeDTO[],
+    dependencies,
+    blocked_by_count,
+  };
 };
 
 /**
@@ -156,8 +202,7 @@ export const updateTask = async (
     }
 
     // Log changes
-    const changes: Record<string, any> = {};
-    if (data.title && data.title !== oldTask.title) {
+    if (data.title !== undefined && data.title !== oldTask.title) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -169,7 +214,43 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.status && data.status !== oldTask.status) {
+    if (data.description !== undefined && data.description !== oldTask.description) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.DESCRIPTION_UPDATED,
+        old_value: { description: oldTask.description },
+        new_value: { description: data.description }
+      }, client);
+    }
+
+    if (data.objective !== undefined && data.objective !== oldTask.objective) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.OBJECTIVE_UPDATED,
+        old_value: { objective: oldTask.objective },
+        new_value: { objective: data.objective }
+      }, client);
+    }
+
+    if (data.success_criteria !== undefined && data.success_criteria !== oldTask.success_criteria) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.SUCCESS_CRITERIA_UPDATED,
+        old_value: { success_criteria: oldTask.success_criteria },
+        new_value: { success_criteria: data.success_criteria }
+      }, client);
+    }
+
+    if (data.status !== undefined && data.status !== oldTask.status) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -181,7 +262,7 @@ export const updateTask = async (
       }, client);
     }
 
-    if (data.priority && data.priority !== oldTask.priority) {
+    if (data.priority !== undefined && data.priority !== oldTask.priority) {
       await activityRepository.log({
         workspace_id: workspaceId,
         user_id: userId,
@@ -190,6 +271,34 @@ export const updateTask = async (
         action_type: LogActionType.PRIORITY_CHANGED,
         old_value: { priority: oldTask.priority },
         new_value: { priority: data.priority }
+      }, client);
+    }
+
+    const oldStart = oldTask.start_date ? new Date(oldTask.start_date).getTime() : null;
+    const newStart = data.start_date ? data.start_date.getTime() : null;
+    if (data.start_date !== undefined && newStart !== oldStart) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.START_DATE_CHANGED,
+        old_value: { start_date: oldTask.start_date },
+        new_value: { start_date: data.start_date }
+      }, client);
+    }
+
+    const oldDue = oldTask.due_date ? new Date(oldTask.due_date).getTime() : null;
+    const newDue = data.due_date ? data.due_date.getTime() : null;
+    if (data.due_date !== undefined && newDue !== oldDue) {
+      await activityRepository.log({
+        workspace_id: workspaceId,
+        user_id: userId,
+        entity_type: LogEntityType.TASK,
+        entity_id: taskId,
+        action_type: LogActionType.DUE_DATE_CHANGED,
+        old_value: { due_date: oldTask.due_date },
+        new_value: { due_date: data.due_date }
       }, client);
     }
 
@@ -213,8 +322,9 @@ export const deleteTask = async (
       throw new ApiError(404, 'Task not found');
     }
 
-    // Soft delete task (cascades handled by DB)
+    // Soft delete task and its associations (comments)
     await taskRepository.softDelete(taskId, client);
+    await commentRepository.softDeleteByTaskId(taskId, client);
 
     // Log deletion
     await activityRepository.log({

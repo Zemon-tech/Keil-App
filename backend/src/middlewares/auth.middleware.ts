@@ -62,6 +62,16 @@ export const protect = async (
         // Attach user to request object
         (req as any).user = result.rows[0];
 
+        // Step 0: Fetch and attach workspaceId for Module 1 Tasks
+        const workspaceResult = await pool.query(
+            'SELECT workspace_id FROM public.workspace_members WHERE user_id = $1 LIMIT 1',
+            [supabaseUser.id]
+        );
+
+        if (workspaceResult.rows.length > 0) {
+            (req as any).workspaceId = workspaceResult.rows[0].workspace_id;
+        }
+
         next();
     } catch (err) {
         console.error(`❌ [auth]: Middleware Error: ${(err as Error).message}`);

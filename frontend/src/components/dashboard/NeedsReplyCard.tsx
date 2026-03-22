@@ -1,3 +1,4 @@
+// TODO: Wire in future module
 import { Card } from "@/components/ui/card";
 import { MessageCircle } from "lucide-react";
 

@@ -69,7 +69,7 @@ const memberToDTO = (member: WorkspaceMember & { user: User }): WorkspaceMemberD
       id: member.user.id,
       email: member.user.email,
       name: member.user.name,
-      created_at: member.user.created_at.toISOString()
+      created_at: new Date(member.user.created_at).toISOString()
     }
   };
 };

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { protect } from "../middlewares/auth.middleware";
 import {
     createWorkspace,
     getWorkspace,
@@ -9,6 +10,9 @@ import {
 } from "../controllers/workspace.controller";
 
 const router = Router();
+
+// Secure all routes
+router.use(protect);
 
 router.post("/", createWorkspace);
 router.get("/:id", getWorkspace);
