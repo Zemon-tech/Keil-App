@@ -1,7 +1,7 @@
-import { activityRepository } from '../repositories';
-import { ActivityLog, User } from '../types/entities';
-import { LogEntityType } from '../types/enums';
-import { ActivityQueryOptions } from '../types/repository';
+import { activityRepository } from "../repositories";
+import { ActivityLog, User } from "../types/entities";
+import { LogEntityType } from "../types/enums";
+import { ActivityQueryOptions } from "../types/repository";
 
 /**
  * Activity Service - Business logic layer using repositories
@@ -30,7 +30,27 @@ export interface ActivityLogDTO {
 /**
  * Convert ActivityLog entity to DTO
  */
-const activityLogToDTO = (log: ActivityLog & { user: User | null }): ActivityLogDTO => {
+const toISOStringSafe = (
+  value: Date | string | null | undefined,
+  fieldName: string,
+): string => {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  throw new Error(`Invalid ${fieldName} value in activity log`);
+};
+
+const activityLogToDTO = (
+  log: ActivityLog & { user: User | null },
+): ActivityLogDTO => {
   return {
     id: log.id,
     workspace_id: log.workspace_id,
@@ -40,13 +60,15 @@ const activityLogToDTO = (log: ActivityLog & { user: User | null }): ActivityLog
     action_type: log.action_type,
     old_value: log.old_value,
     new_value: log.new_value,
-    created_at: log.created_at.toISOString(),
-    user: log.user ? {
-      id: log.user.id,
-      email: log.user.email,
-      name: log.user.name,
-      created_at: log.user.created_at.toISOString()
-    } : null
+    created_at: toISOStringSafe(log.created_at, "created_at"),
+    user: log.user
+      ? {
+          id: log.user.id,
+          email: log.user.email,
+          name: log.user.name,
+          created_at: toISOStringSafe(log.user.created_at, "user.created_at"),
+        }
+      : null,
   };
 };
 
@@ -55,7 +77,7 @@ const activityLogToDTO = (log: ActivityLog & { user: User | null }): ActivityLog
  */
 export const getWorkspaceActivity = async (
   workspaceId: string,
-  options: ActivityQueryOptions = {}
+  options: ActivityQueryOptions = {},
 ): Promise<ActivityLogDTO[]> => {
   const logs = await activityRepository.findByWorkspace(workspaceId, options);
   return logs.map(activityLogToDTO);
@@ -65,10 +87,26 @@ export const getWorkspaceActivity = async (
  * Get activity logs for a specific entity
  */
 export const getEntityActivity = async (
+  workspaceId: string,
   entityType: LogEntityType,
-  entityId: string
+  entityId: string,
 ): Promise<ActivityLogDTO[]> => {
-  const logs = await activityRepository.findByEntity(entityType, entityId);
+  const logs = await activityRepository.findByEntity(
+    workspaceId,
+    entityType,
+    entityId,
+  );
+  return logs.map(activityLogToDTO);
+};
+
+/**
+ * Get the full task timeline, including related comment activity.
+ */
+export const getTaskActivity = async (
+  workspaceId: string,
+  taskId: string,
+): Promise<ActivityLogDTO[]> => {
+  const logs = await activityRepository.findTaskHistory(workspaceId, taskId);
   return logs.map(activityLogToDTO);
 };
 
@@ -77,7 +115,7 @@ export const getEntityActivity = async (
  */
 export const getUserActivity = async (
   userId: string,
-  workspaceId: string
+  workspaceId: string,
 ): Promise<ActivityLogDTO[]> => {
   const logs = await activityRepository.findByUser(userId, workspaceId);
   return logs.map(activityLogToDTO);
@@ -88,7 +126,7 @@ export const getUserActivity = async (
  */
 export const getRecentActivity = async (
   workspaceId: string,
-  limit: number = 50
+  limit: number = 50,
 ): Promise<ActivityLogDTO[]> => {
   const logs = await activityRepository.findRecent(workspaceId, limit);
   return logs.map(activityLogToDTO);
@@ -101,10 +139,10 @@ export const getRecentActivity = async (
 export const getActivityFeed = async (
   workspaceId: string,
   limit: number = 20,
-  offset: number = 0
+  offset: number = 0,
 ): Promise<ActivityLogDTO[]> => {
   const logs = await activityRepository.findByWorkspace(workspaceId, {
-    pagination: { limit, offset }
+    pagination: { limit, offset },
   });
   return logs.map(activityLogToDTO);
 };

@@ -207,9 +207,9 @@ entity_id    uuid     optional — filter to a specific entity's history
 
 ## Acceptance Criteria
 
-- [ ] After creating a task in the UI, a `task_created` entry appears in the task's history tab
-- [ ] After changing a task status, a `status_changed` entry appears showing the old and new status values
-- [ ] After adding an assignee (Module 2), an `assignment_added` entry appears in task history
+- [x] After creating a task in the UI, a `task_created` entry appears in the task's history tab
+- [x] After changing a task status, a `status_changed` entry appears showing the old and new status values
+- [x] After adding an assignee (Module 2), an `assignment_added` entry appears in task history
 - [ ] After adding a comment (Module 3), a `comment_created` entry appears in task history
 - [ ] History entries show the correct user name and a relative timestamp
 - [ ] History tab shows a loading state while fetching
