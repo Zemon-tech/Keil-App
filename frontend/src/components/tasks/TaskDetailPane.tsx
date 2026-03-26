@@ -14,8 +14,11 @@ import {
   Search,
   X,
   Loader2,
+  MessageSquare,
+  Undo2,
+  Download,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, isToday, isYesterday, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
 // ShadCN components — all properly imported
@@ -374,6 +377,107 @@ const TaskDetailHeader = ({
   );
 };
 
+// ─── Bulleted List Editor ─────────────────────────────────────────────────────
+
+const BulletListEditor = ({
+  title,
+  value,
+  onSave,
+  placeholder,
+}: {
+  title: string;
+  value: string;
+  onSave: (val: string) => void;
+  placeholder: string;
+}) => {
+  const points = value ? value.split("\n").filter(Boolean) : [];
+  const [newPoint, setNewPoint] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  const handleAdd = () => {
+    if (newPoint.trim()) {
+      onSave([...points, newPoint.trim()].join("\n"));
+      setNewPoint("");
+      setIsAdding(false);
+    }
+  };
+
+  const handleDelete = (index: number) => {
+    const newPoints = points.filter((_, i) => i !== index);
+    onSave(newPoints.join("\n"));
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Title & Add Button header */}
+      <div className="flex items-center justify-between mb-3 shrink-0">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          {title}
+        </span>
+        {!isAdding && (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-1 text-[10px] uppercase font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </button>
+        )}
+      </div>
+
+      <ScrollArea className="flex-1 min-h-0 max-h-[160px] pr-2">
+        {points.length > 0 ? (
+          <ul className="space-y-1.5">
+            {points.map((pt, i) => (
+              <li key={i} className="group flex items-start gap-2.5 text-sm text-foreground">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
+                <span className="flex-1 leading-snug">{pt}</span>
+                <button
+                  onClick={() => handleDelete(i)}
+                  className="mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs italic text-muted-foreground">{placeholder}</p>
+        )}
+      </ScrollArea>
+
+      {isAdding && (
+        <div className="pt-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <Input
+              autoFocus
+              value={newPoint}
+              onChange={(e) => setNewPoint(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+                if (e.key === "Escape") {
+                  setIsAdding(false);
+                  setNewPoint("");
+                }
+              }}
+              onBlur={() => {
+                // If clicked outside and it's empty, close input. Otherwise keep it or save it.
+                if (newPoint.trim()) handleAdd();
+                else setIsAdding(false);
+              }}
+              placeholder="Type a point and press Enter..."
+              className="h-8 text-xs"
+            />
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0" onClick={() => setIsAdding(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Tab: Overview ────────────────────────────────────────────────────────────
 
 const OverviewTab = ({
@@ -434,26 +538,20 @@ const OverviewTab = ({
 
           {/* Objective + Success Criteria */}
           <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 rounded-md overflow-hidden border border-border/40">
-            <div className="bg-background p-3">
-              <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Objective
-              </span>
-              <EditableTextarea
+            <div className="bg-background p-4 min-h-[120px]">
+              <BulletListEditor
+                title="Objective"
                 value={task.objective ?? ""}
                 onSave={(objective) => onUpdateField?.({ objective })}
-                placeholder="No objective set"
-                minRows={2}
+                placeholder="No objective points set"
               />
             </div>
-            <div className="bg-background p-3">
-              <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Success Criteria
-              </span>
-              <EditableTextarea
+            <div className="bg-background p-4 min-h-[120px]">
+              <BulletListEditor
+                title="Success Criteria"
                 value={task.success_criteria ?? ""}
                 onSave={(success_criteria) => onUpdateField?.({ success_criteria })}
-                placeholder="No criteria set"
-                minRows={2}
+                placeholder="No criteria points set"
               />
             </div>
           </div>
@@ -732,43 +830,52 @@ const CommentNode = ({ comment, taskId }: { comment: Comment; taskId: string }) 
   };
 
   return (
-    <div className="py-3">
-      {/* Author and Time */}
-      <div className="mb-1.5 flex items-center gap-2">
-        <Avatar className="h-6 w-6 shrink-0 border border-border/50">
-          <AvatarFallback className="text-[10px] font-semibold bg-accent">
-            {authorName.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <span className="text-xs font-semibold">{authorName}</span>
-        <span className="text-[11px] text-muted-foreground">{formatRelTime(comment.created_at)}</span>
-      </div>
+    <div className="group relative flex items-start gap-4 px-4 py-1.5 hover:bg-black/5 dark:hover:bg-accent/40 transition-colors -mx-4 rounded-md">
+      {/* Author Avatar */}
+      <Avatar className="h-10 w-10 shrink-0 rounded-full cursor-pointer hover:opacity-80 transition-opacity mt-0.5">
+        <AvatarFallback className="text-[15px] font-semibold bg-indigo-500 text-white">
+          {authorName.charAt(0).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
 
-      {/* Content */}
-      <div className="pl-8">
-        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+      {/* Content Column */}
+      <div className="flex-1 min-w-0 flex flex-col pt-0.5">
+        {/* Author Name & Time */}
+        <div className="flex items-baseline gap-2 leading-none mb-1">
+          <span className="text-[15px] font-medium text-foreground hover:underline cursor-pointer">
+            {authorName}
+          </span>
+          <span className="text-xs text-muted-foreground font-medium">
+            {formatRelTime(comment.created_at)}
+          </span>
+        </div>
+
+        {/* Message Content */}
+        <p className="text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap">
           {comment.content}
         </p>
 
-        {/* Action Row */}
-        <div className="mt-1.5 flex items-center gap-3">
+        {/* Floating Action Menu */}
+        <div className="absolute right-4 -top-3 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border shadow-sm rounded-md flex items-center overflow-hidden z-10">
           <button
             onClick={() => setIsReplying(!isReplying)}
-            className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center justify-center"
+            title="Reply"
           >
-            Reply
+            <span className="text-xs font-semibold px-2">Reply</span>
           </button>
+          
           {user?.id === comment.user_id && (
             <button
               onClick={handleDelete}
               disabled={deleteComment.isPending}
-              className="group flex items-center text-[11px] font-medium text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
-              title="Delete comment"
+              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center justify-center disabled:opacity-50"
+              title="Delete message"
             >
               {deleteComment.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Trash2 className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Trash2 className="h-4 w-4" />
               )}
             </button>
           )}
@@ -776,18 +883,18 @@ const CommentNode = ({ comment, taskId }: { comment: Comment; taskId: string }) 
 
         {/* Reply Box Toggle */}
         {isReplying && (
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-2 max-w-2xl bg-muted/50 p-1 rounded-md border border-border/40 focus-within:border-border/80">
             <Input
               autoFocus
               placeholder="Write a reply..."
               value={replyInput}
               onChange={(e) => setReplyInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleReplySubmit()}
-              className="h-8 flex-1 text-xs"
+              className="h-8 flex-1 text-sm bg-transparent border-none shadow-none focus-visible:ring-0"
             />
             <Button
               size="sm"
-              className="h-8 shrink-0 px-3 text-xs"
+              className="h-7 shrink-0 px-3 text-xs rounded"
               onClick={handleReplySubmit}
               disabled={createComment.isPending || !replyInput.trim()}
             >
@@ -798,7 +905,7 @@ const CommentNode = ({ comment, taskId }: { comment: Comment; taskId: string }) 
 
         {/* Nested Replies tree */}
         {(comment.replies?.length ?? 0) > 0 && (
-          <div className="mt-3 space-y-1 border-l-2 border-border/40 pl-3 md:pl-4">
+          <div className="mt-2 space-y-0 relative border-l-2 border-muted pl-4 ml-2">
             {comment.replies.map((reply) => (
               <CommentNode key={reply.id} comment={reply} taskId={taskId} />
             ))}
@@ -829,47 +936,52 @@ const ActivityTab = ({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-background">
       <ScrollArea className="flex-1">
-        <div className="mx-auto w-full max-w-2xl px-5 py-4">
+        <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto">
           {isPending ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex justify-center py-8 my-auto">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (comments ?? []).length > 0 ? (
-            <div className="space-y-0">
-              {(comments ?? []).map((comment, i) => (
-                <div key={comment.id}>
-                  {i > 0 && <Separator className="my-1" />}
-                  <CommentNode comment={comment} taskId={task.id} />
-                </div>
+            <div className="space-y-0.5 mt-auto">
+              {(comments ?? []).map((comment) => (
+                <CommentNode key={comment.id} comment={comment} taskId={task.id} />
               ))}
             </div>
           ) : (
-            <p className="py-4 text-xs italic text-muted-foreground">
-              No comments yet. Start the conversation!
-            </p>
+            <div className="flex flex-col items-center justify-center my-auto py-12 text-center">
+              <div className="h-16 w-16 bg-accent rounded-full mb-4 flex items-center justify-center">
+                <MessageSquare className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="font-semibold text-lg text-foreground">Welcome to the conversation</h3>
+              <p className="mt-1 text-sm text-muted-foreground">This is the start of the activity history for this task.</p>
+            </div>
           )}
         </div>
       </ScrollArea>
 
-      {/* Sticky comment input */}
-      <div className="shrink-0 border-t border-border px-5 py-3">
-        <div className="mx-auto flex w-full max-w-2xl items-center gap-2">
+      {/* Sticky comment input - Discord Style */}
+      <div className="shrink-0 px-6 pb-6 pt-2">
+        <div className="flex items-center gap-3 w-full max-w-5xl mx-auto bg-muted/60 dark:bg-muted/40 rounded-xl px-4 py-2 border border-border/30 focus-within:ring-1 focus-within:ring-muted-foreground/30 transition-all">
+          <button className="flex items-center justify-center h-6 w-6 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/40 text-muted-foreground transition-colors shrink-0">
+            <Plus className="h-4 w-4" />
+          </button>
           <Input
             placeholder="Add a new comment..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            className="h-9 text-sm focus-visible:ring-1"
+            className="h-9 text-[15px] border-none shadow-none bg-transparent focus-visible:ring-0 p-0 text-foreground placeholder:text-muted-foreground/70"
           />
           <Button
             size="sm"
-            className="h-9 shrink-0 px-4 text-sm"
+            variant="ghost"
+            className="h-8 shrink-0 px-3 text-sm hover:bg-accent/50 text-muted-foreground hover:text-foreground font-semibold rounded"
             onClick={handleSend}
             disabled={createComment.isPending || !input.trim()}
           >
-            {createComment.isPending ? <Loader2 className="mx-1 h-4 w-4 animate-spin" /> : "Send"}
+            {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
           </Button>
         </div>
       </div>
@@ -1001,7 +1113,28 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
 
 // ─── Tab: History ─────────────────────────────────────────────────────────────
 
-/** Maps a raw action_type string to a human-readable description. */
+/** Maps a raw action_type string to a human-readable action past-tense description. */
+function getActionDescOnly(entry: ActivityLogEntry): string {
+  switch (entry.action_type) {
+    case "task_created": return "created task";
+    case "status_changed": return "changed status";
+    case "priority_changed": return "changed priority";
+    case "assignment_added": return "assigned task";
+    case "assignment_removed": return "removed assignee";
+    case "due_date_changed": return "updated due date";
+    case "dependency_added": return "added dependency";
+    case "dependency_removed": return "removed dependency";
+    case "comment_created": return "added comment";
+    case "comment_deleted": return "deleted comment";
+    case "objective_updated": return "updated objective";
+    case "success_criteria_updated": return "updated success criteria";
+    case "title_updated": return "updated title";
+    case "description_updated": return "updated description";
+    default: return `performed ${entry.action_type}`;
+  }
+}
+
+/** Legacy overall label for fallback */
 function formatActionLabel(entry: ActivityLogEntry): string {
   switch (entry.action_type) {
     case "task_created": return "Task created";
@@ -1018,72 +1151,326 @@ function formatActionLabel(entry: ActivityLogEntry): string {
     case "success_criteria_updated": return "Success criteria updated";
     case "title_updated": return "Title updated";
     case "description_updated": return "Description updated";
-    default: return entry.action_type; // raw fallback for unknown types
+    default: return entry.action_type;
   }
 }
 
 const HistoryTab = ({ task }: { task: TaskDTO }) => {
   const { data: entries, isPending } = useTaskActivity(task.id);
+  const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredEntries = (entries ?? []).filter((entry) => {
+    if (filter === "status" && entry.action_type !== "status_changed") return false;
+    if (filter === "fields" && !["title_updated", "description_updated", "due_date_changed", "objective_updated", "success_criteria_updated", "priority_changed"].includes(entry.action_type)) return false;
+    if (filter === "people" && !["assignment_added", "assignment_removed"].includes(entry.action_type)) return false;
+
+    if (searchQuery) {
+      const searchStr = `${entry.user?.name} ${entry.user?.email} ${formatActionLabel(entry)}`.toLowerCase();
+      if (!searchStr.includes(searchQuery.toLowerCase())) return false;
+    }
+
+    return true;
+  });
+
+  // Group by relative day
+  const groupedEntries = filteredEntries.reduce((acc, entry) => {
+    const d = new Date(entry.created_at);
+    let groupPrefix = "Date";
+    if (isToday(d)) groupPrefix = "Today";
+    else if (isYesterday(d)) groupPrefix = "Yesterday";
+    else groupPrefix = format(d, "MMM d, yyyy");
+
+    const groupKey = (isToday(d) || isYesterday(d)) ? `${groupPrefix} · ${format(d, "MMM d, yyyy")}` : groupPrefix;
+    if (!acc[groupKey]) acc[groupKey] = [];
+    acc[groupKey].push(entry);
+    return acc;
+  }, {} as Record<string, typeof filteredEntries>);
+
+  // Summary Metrics
+  const totalChanges = (entries ?? []).length;
+  const fieldEdits = (entries ?? []).filter(e => ["title_updated", "description_updated", "due_date_changed", "objective_updated", "success_criteria_updated", "priority_changed"].includes(e.action_type)).length;
+  const statusChangesCount = (entries ?? []).filter(e => e.action_type === "status_changed").length;
+  const taskAge = differenceInDays(new Date(), new Date(task.created_at));
+
+  // Most active users
+  const userCounts = (entries ?? []).reduce((acc, entry) => {
+    const u = entry.user;
+    if (!u) return acc;
+    const name = u.name || u.email;
+    if (!acc[name]) acc[name] = { count: 0, initials: name.charAt(0).toUpperCase() };
+    acc[name].count++;
+    return acc;
+  }, {} as Record<string, { count: number; initials: string; }>);
+  const mostActive = Object.entries(userCounts).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+
+  // Field change log summary
+  const fieldLog = {
+    dueDate: (entries ?? []).filter(e => e.action_type === "due_date_changed").length,
+    priority: (entries ?? []).filter(e => e.action_type === "priority_changed").length,
+    assignees: (entries ?? []).filter(e => ["assignment_added", "assignment_removed"].includes(e.action_type)).length,
+  };
 
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-2xl p-5">
-
-        {isPending ? (
-          /* Loading state */
-          <div className="flex justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-
-        ) : (entries ?? []).length > 0 ? (
-          /* Populated state */
-          <div>
-            {(entries ?? []).map((entry, i) => {
-              const actor = entry.user?.name ?? entry.user?.email ?? "Unknown user";
+    <div className="flex h-full flex-col md:flex-row md:divide-x md:divide-border/40 w-full min-w-0 bg-background text-foreground">
+      {/* ── LEFT: Main History List ── */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Filter Bar */}
+        <div className="px-6 py-4 border-b border-border/40 shrink-0 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {["All changes", "Status", "Fields", "People"].map((f) => {
+              const fKey = f.split(" ")[0].toLowerCase();
+              const isActive = filter === fKey || (f === "All changes" && filter === "all");
               return (
-                <div key={entry.id}>
-                  {i > 0 && <Separator />}
-                  <div className="flex items-start gap-3 py-3">
-
-                    {/* Timeline dot */}
-                    <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
-
-                    {/* Action + actor */}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm leading-snug text-foreground">
-                        {formatActionLabel(entry)}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        by {actor}
-                      </p>
-                    </div>
-
-                    {/* Relative timestamp */}
-                    <div className="shrink-0 text-right">
-                      <p className="text-[10px] text-muted-foreground">
-                        {formatRelTime(entry.created_at)}
-                      </p>
-                    </div>
-
-                  </div>
-                </div>
+                <button
+                  key={f}
+                  onClick={() => setFilter(fKey)}
+                  className={cn(
+                    "px-4 py-1.5 text-[13px] font-semibold rounded-md border transition-colors whitespace-nowrap",
+                    isActive 
+                      ? "bg-muted border-border text-foreground" 
+                      : "bg-transparent border-border/50 hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {f}
+                </button>
               );
             })}
           </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search history"
+                className="h-9 pl-9 text-sm w-[200px] bg-muted/40 border-border/60 hover:bg-muted/60 transition-colors"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            {/* Download/Export Button Placehoder */}
+            <div className="h-9 w-9 flex items-center justify-center rounded-md border border-border/60 bg-transparent hover:bg-muted/50 cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+              <Download className="h-4 w-4" />
+            </div>
+          </div>
+        </div>
 
-        ) : (
-          /* Empty state */
-          <p className="py-10 text-center text-xs italic text-muted-foreground">
-            No history yet
-          </p>
-        )}
+        {/* History List Component */}
+        <ScrollArea className="flex-1 min-w-0 bg-accent/20">
+          <div className="p-8 max-w-4xl mx-auto w-full">
+            {isPending ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : Object.keys(groupedEntries).length > 0 ? (
+              <div className="space-y-8">
+                {Object.entries(groupedEntries).map(([dateLabel, groupEntries]) => (
+                  <div key={dateLabel}>
+                    {/* Date separator */}
+                    <div className="flex items-center gap-4 mb-5">
+                      <div className="flex-1 h-px bg-border/60" />
+                      <span className="text-xs font-medium text-muted-foreground px-2">
+                        {dateLabel}
+                      </span>
+                      <div className="flex-1 h-px bg-border/60" />
+                    </div>
 
+                    {/* Group entries */}
+                    <div className="relative space-y-0 text-foreground">
+                      {groupEntries.map((entry, idx) => {
+                        const actor = entry.user?.name ?? entry.user?.email ?? "System";
+                        const isLast = idx === groupEntries.length - 1;
+                        
+                        // Action Detail Component Parsing
+                        let detailUi = null;
+                        if (entry.action_type === "status_changed") {
+                          detailUi = (
+                            <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-background border border-border/50 rounded-full w-fit text-xs font-mono shadow-sm">
+                              <span className="opacity-50 line-through">{entry.old_value?.status || "None"}</span>
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-foreground">{entry.new_value?.status}</span>
+                            </div>
+                          );
+                        } else if (entry.action_type === "priority_changed") {
+                           detailUi = (
+                            <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-background border border-border/50 rounded-full w-fit text-xs font-mono shadow-sm">
+                              <span className="opacity-50 line-through">{entry.old_value?.priority || "None"}</span>
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-foreground">{entry.new_value?.priority}</span>
+                            </div>
+                          );
+                        } else if (entry.action_type === "description_updated") {
+                           detailUi = (
+                             <div className="mt-2 text-[14px] text-muted-foreground max-w-xl line-clamp-2 leading-relaxed">
+                               {entry.new_value?.description || "Description removed"}
+                             </div>
+                           );
+                        } else if (entry.action_type === "assignment_added") {
+                          detailUi = (
+                            <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-background border border-border/50 rounded-full w-fit text-xs font-medium shadow-sm">
+                              <span className="text-indigo-400">Assigned</span>
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-foreground shrink-0">{entry.new_value?.assignment || "New User"}</span>
+                            </div>
+                          );
+                        }
+
+                        const initials = actor.charAt(0).toUpperCase();
+                        // Generate consistent static hue based on string to match ui diversity
+                        const colorCode = ["bg-indigo-500", "bg-emerald-500", "bg-blue-500", "bg-rose-500", "bg-amber-500"][actor.length % 5];
+
+                        return (
+                          <div key={entry.id} className="relative flex items-start gap-4 pb-8 group">
+                            {/* Vertical line connecting nodes */}
+                            {!isLast && (
+                              <div className="absolute left-[17px] top-[36px] bottom-0 w-[2px] bg-border/40" />
+                            )}
+
+                            {/* Node Avatar Icon */}
+                            <Avatar className="h-9 w-9 shrink-0 border border-border/20 relative z-10 shadow-sm mt-0.5">
+                              <AvatarFallback className={cn("text-xs font-semibold text-white", colorCode)}>
+                                {initials}
+                              </AvatarFallback>
+                            </Avatar>
+
+                            {/* Node Content */}
+                            <div className="flex-1 min-w-0 pt-1.5 px-2">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <div className="text-[15px] leading-snug">
+                                  <span className="font-semibold text-foreground mr-2">{actor}</span>
+                                  <span className="text-muted-foreground/80 font-medium">{getActionDescOnly(entry)}</span>
+                                </div>
+                                <span className="text-[12px] text-muted-foreground shrink-0 whitespace-nowrap hidden sm:block">
+                                  {format(new Date(entry.created_at), "hh:mm a")}
+                                </span>
+                              </div>
+                              
+                              {detailUi}
+
+                              {/* Undo Button (Appear on Hover like in Reference) */}
+                              <div className="mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button className="text-[13px] font-semibold px-4 py-1.5 rounded bg-background border border-border/60 text-foreground hover:bg-muted transition-colors flex items-center gap-2 shadow-sm">
+                                  <Undo2 className="w-3.5 h-3.5" /> Revert
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-medium text-foreground">No matching history found.</p>
+                <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or search.</p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
       </div>
-    </ScrollArea>
+
+      {/* ── RIGHT: Sidebar Summary ── */}
+      <ScrollArea className="w-full shrink-0 md:w-[280px] lg:w-[320px] bg-background">
+        <div className="space-y-10 p-8">
+          
+          {/* Summary Section */}
+          <section>
+            <h4 className="text-[11px] font-bold tracking-widest text-muted-foreground mb-4 opacity-80 uppercase">Summary</h4>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Total changes</span>
+                <span className="font-mono text-foreground">{totalChanges}</span>
+              </div>
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Field edits</span>
+                <span className="font-mono text-foreground">{fieldEdits}</span>
+              </div>
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Status changes</span>
+                <span className="font-mono text-foreground">{statusChangesCount}</span>
+              </div>
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Revertable</span>
+                <span className="font-mono text-indigo-400 font-medium">0</span>
+              </div>
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Age</span>
+                <span className="text-foreground">{taskAge > 0 ? `${taskAge} days` : 'Today'}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Most Active Section */}
+          <section>
+            <h4 className="text-[11px] font-bold tracking-widest text-muted-foreground mb-4 opacity-80 uppercase">Most Active</h4>
+            <div className="space-y-5">
+              {mostActive.length > 0 ? mostActive.map(([name, data]) => {
+                const colorCode = ["bg-indigo-500", "bg-emerald-500", "bg-blue-500", "bg-rose-500", "bg-amber-500"][name.length % 5];
+                return(
+                <div key={name} className="flex items-center gap-3.5">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className={cn("text-[10px] font-semibold text-white shadow-sm", colorCode)}>
+                      {data.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-foreground leading-none mb-1 truncate">{name}</p>
+                    <p className="text-[12px] font-medium text-muted-foreground leading-none">{data.count} changes</p>
+                  </div>
+                </div>
+              )}) : (
+                <p className="text-[13px] italic text-muted-foreground">No activity yet</p>
+              )}
+            </div>
+          </section>
+
+          {/* Field Change Log */}
+          <section>
+            <h4 className="text-[11px] font-bold tracking-widest text-muted-foreground mb-4 opacity-80 uppercase">Field Change Log</h4>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Due date</span>
+                <span className="text-foreground">{fieldLog.dueDate}x changed</span>
+              </div>
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Priority</span>
+                <span className="text-foreground">{fieldLog.priority}x changed</span>
+              </div>
+              <div className="flex justify-between items-center text-[14px]">
+                <span className="text-muted-foreground font-medium">Assignees</span>
+                <span className="text-foreground">{fieldLog.assignees}x changed</span>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </ScrollArea>
+    </div>
   );
 };
 
 // ─── Root Component ───────────────────────────────────────────────────────────
+
+const TAB_HEADERS = {
+  overview: {
+    title: "Overview",
+    description: "View your task details, nested subtasks, and relevant context links.",
+  },
+  activity: {
+    title: "Activity",
+    description: "Connect with your team and track the conversation around this task.",
+  },
+  dependencies: {
+    title: "Dependencies",
+    description: "Manage task blockers and upstream items required to complete this task.",
+  },
+  history: {
+    title: "History",
+    description: "A complete audit log of changes made to this task.",
+  },
+} as const;
 
 export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
@@ -1148,97 +1535,61 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="flex min-h-0 flex-1 flex-col p-4 w-full"
+        className="flex min-h-0 flex-1 flex-col w-full"
       >
-        <TabsList className="grid w-full lg:w-[450px] grid-cols-4 mb-4">
-          {(
-            [
-              { value: "overview", label: "Overview" },
-              { value: "activity", label: "Activity" },
-              {
-                value: "dependencies",
-                label: "Dependencies",
-                count: (displayTask.dependencies ?? []).length,
-              },
-              { value: "history", label: "History" },
-            ] as const
-          ).map((tab) => (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className="text-sm font-medium"
-            >
-              {tab.label}
-              {"count" in tab && tab.count > 0 && (
-                <span className="ml-1.5 rounded bg-muted-foreground/20 px-1 font-mono text-[10px]">
-                  {tab.count}
-                </span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="py-5 px-6 border-b border-border/40 shrink-0 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-lg leading-none tracking-tight">
+              {TAB_HEADERS[activeTab as keyof typeof TAB_HEADERS]?.title}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1.5">
+              {TAB_HEADERS[activeTab as keyof typeof TAB_HEADERS]?.description}
+            </p>
+          </div>
+          <TabsList className="grid w-full xl:w-[450px] grid-cols-4">
+            {(
+              [
+                { value: "overview", label: "Overview" },
+                { value: "activity", label: "Activity" },
+                {
+                  value: "dependencies",
+                  label: "Dependencies",
+                  count: (displayTask.dependencies ?? []).length,
+                },
+                { value: "history", label: "History" },
+              ] as const
+            ).map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="text-sm font-medium"
+              >
+                {tab.label}
+                {"count" in tab && tab.count > 0 && (
+                  <span className="ml-1.5 rounded bg-muted-foreground/20 px-1 font-mono text-[10px]">
+                    {tab.count}
+                  </span>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         {/* Tab content */}
         <TabsContent value="overview" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="py-5 px-6 border-b border-border/40 shrink-0">
-              <h3 className="font-semibold text-lg leading-none tracking-tight">Overview</h3>
-              <p className="text-sm text-muted-foreground mt-1.5">
-                View your task details, nested subtasks, and relevant context links.
-              </p>
-            </div>
-            <div className="p-0 flex flex-1 min-h-0">
-              <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} onUpdateField={handleUpdateField} />
-            </div>
-          </div>
+          <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} onUpdateField={handleUpdateField} />
         </TabsContent>
 
         <TabsContent value="activity" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="py-5 px-6 border-b border-border/40 shrink-0">
-              <h3 className="font-semibold text-lg leading-none tracking-tight">Activity</h3>
-              <p className="text-sm text-muted-foreground mt-1.5">
-                Connect with your team and track the conversation around this task.
-              </p>
-            </div>
-            <div className="p-0 flex flex-1 min-h-0">
-              <div className="flex-1 min-h-0 w-full">
-                <ActivityTab task={displayTask} />
-              </div>
-            </div>
-          </div>
+          <ActivityTab task={displayTask} />
         </TabsContent>
 
         <TabsContent value="dependencies" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="py-5 px-6 border-b border-border/40 shrink-0">
-              <h3 className="font-semibold text-lg leading-none tracking-tight">Dependencies</h3>
-              <p className="text-sm text-muted-foreground mt-1.5">
-                Manage task blockers and upstream items required to complete this task.
-              </p>
-            </div>
-            <div className="p-0 flex flex-1 min-h-0">
-              <div className="flex-1 min-h-0 w-full">
-                <DependenciesTab task={displayTask} />
-              </div>
-            </div>
-          </div>
+          <DependenciesTab task={displayTask} />
         </TabsContent>
 
         <TabsContent value="history" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="py-5 px-6 border-b border-border/40 shrink-0">
-              <h3 className="font-semibold text-lg leading-none tracking-tight">History</h3>
-              <p className="text-sm text-muted-foreground mt-1.5">
-                A complete audit log of changes made to this task.
-              </p>
-            </div>
-            <div className="p-0 flex flex-1 min-h-0">
-              <div className="flex-1 min-h-0 w-full">
-                <HistoryTab task={displayTask} />
-              </div>
-            </div>
-          </div>
+          <HistoryTab task={displayTask} />
         </TabsContent>
       </Tabs>
 
