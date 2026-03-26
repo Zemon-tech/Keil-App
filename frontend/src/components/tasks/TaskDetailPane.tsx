@@ -34,7 +34,6 @@ import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import {
@@ -64,15 +63,15 @@ import { EditableText, EditableTextarea } from "@/components/ui/editable-text";
 
 import type { Task, TaskPriority, TaskStatus, Dependency } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
-import { 
-  useChangeTaskStatus, 
-  useTask, 
-  useUpdateTask, 
+import {
+  useChangeTaskStatus,
+  useTask,
+  useUpdateTask,
   useDeleteTask,
-  useAssignUser, 
-  useRemoveAssignee, 
-  useAddDependency, 
-  useRemoveDependency 
+  useAssignUser,
+  useRemoveAssignee,
+  useAddDependency,
+  useRemoveDependency
 } from "@/hooks/api/useTasks";
 import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
 import { useTaskComments, useCreateComment, useDeleteComment } from "@/hooks/api/useComments";
@@ -211,7 +210,7 @@ const PriorityBadge = ({
 };
 
 /** Stacked avatar chips with tooltip for each assignee */
-const AssigneesChip = ({ assignees }: { assignees: {id: string, name: string | null, email: string}[] }) => (
+const AssigneesChip = ({ assignees }: { assignees: { id: string, name: string | null, email: string }[] }) => (
   <TooltipProvider delayDuration={300}>
     <div className="flex items-center -space-x-1.5">
       {assignees.slice(0, 3).map((a) => (
@@ -270,20 +269,24 @@ const TaskDetailHeader = ({
 
       {/* Breadcrumb + Actions row */}
       <div className="flex items-center justify-between mb-2">
-        <Breadcrumb>
-          <BreadcrumbList className="text-[11px]">
-            <BreadcrumbItem>
-              <span className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+        <Breadcrumb className="flex-1 min-w-0 pr-4">
+          <BreadcrumbList className="text-sm items-center flex-nowrap shrink-0">
+            <BreadcrumbItem className="hidden sm:block">
+              <span className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-colors">
                 Task
               </span>
             </BreadcrumbItem>
-            <BreadcrumbSeparator>
-              <ChevronRight className="h-3 w-3" />
+            <BreadcrumbSeparator className="hidden sm:block">
+              <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
-            <BreadcrumbItem>
-              <BreadcrumbPage className="font-medium text-foreground">
-                {task.id.slice(0, 8)}
-              </BreadcrumbPage>
+            <BreadcrumbItem className="flex-1 min-w-0">
+              <EditableText
+                value={task.title}
+                onSave={(title) => onUpdateField?.({ title })}
+                placeholder="Untitled task"
+                className="text-lg font-semibold text-foreground truncate"
+                inputClassName="text-lg font-semibold text-foreground truncate"
+              />
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -319,16 +322,7 @@ const TaskDetailHeader = ({
         </div>
       </div>
 
-      {/* Title — editable */}
-      <div className="mb-2.5">
-        <EditableText
-          value={task.title}
-          onSave={(title) => onUpdateField?.({ title })}
-          placeholder="Untitled task"
-          className="text-xl font-semibold leading-snug tracking-tight"
-          inputClassName="text-xl font-semibold leading-snug tracking-tight"
-        />
-      </div>
+      {/* Action buttons area (status/labels below will follow) */}
 
       {/* Chips row */}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -401,7 +395,7 @@ const OverviewTab = ({
   const handleAssignUser = (userId: string) => {
     assignUser.mutate({ id: task.id, userId });
   };
-  
+
   const handleRemoveAssignee = (userId: string) => {
     removeAssignee.mutate({ id: task.id, userId });
   };
@@ -419,12 +413,11 @@ const OverviewTab = ({
   };
 
   return (
-    /* Responsive: single column on mobile, two-col sidebar on xl+ */
-    <div className="flex h-full flex-col xl:flex-row xl:divide-x xl:divide-border">
+    <div className="flex h-full flex-col md:flex-row md:divide-x md:divide-border w-full min-w-0">
 
       {/* ── LEFT: Main content ── */}
-      <ScrollArea className="flex-1">
-        <div className="space-y-6 p-5">
+      <ScrollArea className="flex-1 min-w-0">
+        <div className="space-y-6 p-5 pr-6 w-full">
 
           {/* Description */}
           <div>
@@ -548,10 +541,9 @@ const OverviewTab = ({
         </div>
       </ScrollArea>
 
-      {/* ── RIGHT: Sidebar ── 
-          Hidden below xl, shown as a separate pane on wide screens */}
-      <ScrollArea className="w-full shrink-0 xl:w-[220px]">
-        <div className="space-y-5 p-4">
+      {/* ── RIGHT: Sidebar ── */}
+      <ScrollArea className="w-full shrink-0 md:w-[280px] lg:w-[300px]">
+        <div className="space-y-5 p-5 pl-6">
 
           {/* Assignees */}
           <div>
@@ -580,7 +572,7 @@ const OverviewTab = ({
                   </div>
                 );
               })}
-              
+
               <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
@@ -724,11 +716,11 @@ const CommentNode = ({ comment, taskId }: { comment: Comment; taskId: string }) 
     if (!replyInput.trim()) return;
     createComment.mutate(
       { taskId, content: replyInput.trim(), parent_comment_id: comment.id },
-      { 
-        onSuccess: () => { 
-          setReplyInput(""); 
-          setIsReplying(false); 
-        } 
+      {
+        onSuccess: () => {
+          setReplyInput("");
+          setIsReplying(false);
+        }
       }
     );
   };
@@ -871,9 +863,9 @@ const ActivityTab = ({
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
             className="h-9 text-sm focus-visible:ring-1"
           />
-          <Button 
-            size="sm" 
-            className="h-9 shrink-0 px-4 text-sm" 
+          <Button
+            size="sm"
+            className="h-9 shrink-0 px-4 text-sm"
             onClick={handleSend}
             disabled={createComment.isPending || !input.trim()}
           >
@@ -972,9 +964,9 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
               Blocked By
             </span>
           </div>
-          
+
           <form className="mb-3 flex items-center gap-2" onSubmit={handleAddDependency}>
-            <Input 
+            <Input
               placeholder="Paste Task ID to add dependency..."
               value={dependencyInput}
               onChange={(e) => setDependencyInput(e.target.value)}
@@ -988,10 +980,10 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
           <div className="space-y-1.5">
             {blockedByTasks.length > 0 ? (
               blockedByTasks.map((dep) => (
-                <DependencyRow 
-                  key={dep.id} 
-                  dep={dep} 
-                  onRemove={() => handleRemoveDependency(dep.id)} 
+                <DependencyRow
+                  key={dep.id}
+                  dep={dep}
+                  onRemove={() => handleRemoveDependency(dep.id)}
                 />
               ))
             ) : (
@@ -1012,21 +1004,21 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
 /** Maps a raw action_type string to a human-readable description. */
 function formatActionLabel(entry: ActivityLogEntry): string {
   switch (entry.action_type) {
-    case "task_created":             return "Task created";
-    case "status_changed":           return `Status changed from "${entry.old_value?.status}" to "${entry.new_value?.status}"`;
-    case "priority_changed":         return `Priority changed from "${entry.old_value?.priority}" to "${entry.new_value?.priority}"`;
-    case "assignment_added":         return "Assigned to a user";
-    case "assignment_removed":       return "Unassigned a user";
-    case "due_date_changed":         return "Due date updated";
-    case "dependency_added":         return "Dependency added";
-    case "dependency_removed":       return "Dependency removed";
-    case "comment_created":          return "Comment added";
-    case "comment_deleted":          return "Comment deleted";
-    case "objective_updated":        return "Objective updated";
+    case "task_created": return "Task created";
+    case "status_changed": return `Status changed from "${entry.old_value?.status}" to "${entry.new_value?.status}"`;
+    case "priority_changed": return `Priority changed from "${entry.old_value?.priority}" to "${entry.new_value?.priority}"`;
+    case "assignment_added": return "Assigned to a user";
+    case "assignment_removed": return "Unassigned a user";
+    case "due_date_changed": return "Due date updated";
+    case "dependency_added": return "Dependency added";
+    case "dependency_removed": return "Dependency removed";
+    case "comment_created": return "Comment added";
+    case "comment_deleted": return "Comment deleted";
+    case "objective_updated": return "Objective updated";
     case "success_criteria_updated": return "Success criteria updated";
-    case "title_updated":            return "Title updated";
-    case "description_updated":      return "Description updated";
-    default:                         return entry.action_type; // raw fallback for unknown types
+    case "title_updated": return "Title updated";
+    case "description_updated": return "Description updated";
+    default: return entry.action_type; // raw fallback for unknown types
   }
 }
 
@@ -1156,13 +1148,9 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 flex-1 flex-col p-4 w-full"
       >
-        {/* Tab bar — never scrolls, underline style */}
-        <TabsList
-          className="h-9 w-full shrink-0 justify-start gap-0 rounded-none border-b
-                     border-border bg-transparent px-4"
-        >
+        <TabsList className="grid w-full lg:w-[450px] grid-cols-4 mb-4">
           {(
             [
               { value: "overview", label: "Overview" },
@@ -1178,19 +1166,11 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className={cn(
-                // Reset ShadCN defaults that cause the box/card look
-                "relative h-9 rounded-none border-b-2 border-transparent bg-transparent",
-                "px-3 text-xs text-muted-foreground shadow-none transition-none",
-                // Active state: underline + foreground text, no background
-                "data-[state=active]:border-foreground data-[state=active]:bg-transparent",
-                "data-[state=active]:text-foreground data-[state=active]:shadow-none",
-                "hover:text-foreground"
-              )}
+              className="text-sm font-medium"
             >
               {tab.label}
               {"count" in tab && tab.count > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                <span className="ml-1.5 rounded bg-muted-foreground/20 px-1 font-mono text-[10px]">
                   {tab.count}
                 </span>
               )}
@@ -1198,21 +1178,67 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
           ))}
         </TabsList>
 
-        {/* Tab content — each fills remaining height and scrolls independently */}
-        <TabsContent value="overview" className="m-0 min-h-0 flex-1">
-          <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} onUpdateField={handleUpdateField} />
+        {/* Tab content */}
+        <TabsContent value="overview" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="py-5 px-6 border-b border-border/40 shrink-0">
+              <h3 className="font-semibold text-lg leading-none tracking-tight">Overview</h3>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                View your task details, nested subtasks, and relevant context links.
+              </p>
+            </div>
+            <div className="p-0 flex flex-1 min-h-0">
+              <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} onUpdateField={handleUpdateField} />
+            </div>
+          </div>
         </TabsContent>
 
-        <TabsContent value="activity" className="m-0 min-h-0 flex-1">
-          <ActivityTab task={displayTask} />
+        <TabsContent value="activity" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="py-5 px-6 border-b border-border/40 shrink-0">
+              <h3 className="font-semibold text-lg leading-none tracking-tight">Activity</h3>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                Connect with your team and track the conversation around this task.
+              </p>
+            </div>
+            <div className="p-0 flex flex-1 min-h-0">
+              <div className="flex-1 min-h-0 w-full">
+                <ActivityTab task={displayTask} />
+              </div>
+            </div>
+          </div>
         </TabsContent>
 
-        <TabsContent value="dependencies" className="m-0 min-h-0 flex-1">
-          <DependenciesTab task={displayTask} />
+        <TabsContent value="dependencies" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="py-5 px-6 border-b border-border/40 shrink-0">
+              <h3 className="font-semibold text-lg leading-none tracking-tight">Dependencies</h3>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                Manage task blockers and upstream items required to complete this task.
+              </p>
+            </div>
+            <div className="p-0 flex flex-1 min-h-0">
+              <div className="flex-1 min-h-0 w-full">
+                <DependenciesTab task={displayTask} />
+              </div>
+            </div>
+          </div>
         </TabsContent>
 
-        <TabsContent value="history" className="m-0 min-h-0 flex-1">
-          <HistoryTab task={displayTask} />
+        <TabsContent value="history" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="py-5 px-6 border-b border-border/40 shrink-0">
+              <h3 className="font-semibold text-lg leading-none tracking-tight">History</h3>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                A complete audit log of changes made to this task.
+              </p>
+            </div>
+            <div className="p-0 flex flex-1 min-h-0">
+              <div className="flex-1 min-h-0 w-full">
+                <HistoryTab task={displayTask} />
+              </div>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 

@@ -391,24 +391,31 @@ export function TaskListPane({
                   isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
                 )}
               >
-                {/* Drag handle */}
-                {isDraggable && (
-                  <div className="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity">
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                )}
-
-                {/* Multi-select checkbox */}
+                {/* Selection & Drag actions */}
                 <div
                   className={cn(
-                    "shrink-0 transition-opacity",
+                    "flex items-center overflow-hidden transition-all duration-200 shrink-0",
                     !isChecked && !isMultiSelecting
-                      ? "opacity-0 group-hover:opacity-100"
-                      : "opacity-100"
+                      ? "w-0 opacity-0 group-hover:w-[36px] group-hover:opacity-100"
+                      : "w-[36px] opacity-100"
                   )}
-                  onClick={(e) => toggleSelection(e, t.id)}
                 >
-                  <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                  {/* Drag handle */}
+                  {isDraggable ? (
+                    <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
+                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="w-[22px] shrink-0" />
+                  )}
+
+                  {/* Multi-select checkbox */}
+                  <div
+                    className="shrink-0"
+                    onClick={(e) => toggleSelection(e, t.id)}
+                  >
+                    <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                  </div>
                 </div>
 
                 {/* Status dot — click opens popover */}
