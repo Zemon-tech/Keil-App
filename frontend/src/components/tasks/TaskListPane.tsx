@@ -4,17 +4,7 @@ import { Search, Plus, GripVertical, Flag, Zap, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -29,7 +19,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { Task, TaskStatus } from "@/types/task";
-import { useCreateTask, type TaskDTO, type CreateTaskInput, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
+import { type TaskDTO, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
+import { CreateTaskDialog } from "./CreateTaskDialog";
 
 type Props = {
   query: string;
@@ -104,18 +95,9 @@ export function TaskListPane({
   onLoadMore,
   isLoadingMore = false,
 }: Props) {
-  const createTask = useCreateTask();
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(!!query);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newObjective, setNewObjective] = useState("");
-  const [newSuccessCriteria, setNewSuccessCriteria] = useState("");
-  const [newDueDateISO, setNewDueDateISO] = useState("");
-  const [newStatus, setNewStatus] = useState<TaskStatus>("backlog");
-  const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
-  const [newParentTaskId, setNewParentTaskId] = useState<string>("");
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Keyboard shortcut: press C to open create dialog
@@ -172,44 +154,7 @@ export function TaskListPane({
     };
   }, [tasks]);
 
-  // Date helpers — convert ISO string to yyyy-mm-dd for <input type="date">
-  const toDateInputValue = (iso: string) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
-  };
-
-  function resetCreateForm() {
-    setNewTitle("");
-    setNewDescription("");
-    setNewObjective("");
-    setNewSuccessCriteria("");
-    setNewDueDateISO("");
-    setNewStatus("backlog");
-    setNewPriority("medium");
-    setNewParentTaskId("");
-  }
-
-  async function handleCreateSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const title = newTitle.trim();
-    if (!title) return;
-
-    const input: CreateTaskInput = {
-      title,
-      status: newStatus,
-      priority: newPriority,
-    };
-    if (newDescription.trim()) input.description = newDescription.trim();
-    if (newObjective.trim()) input.objective = newObjective.trim();
-    if (newSuccessCriteria.trim()) input.success_criteria = newSuccessCriteria.trim();
-    if (newDueDateISO) input.due_date = new Date(newDueDateISO).toISOString();
-    if (newParentTaskId && newParentTaskId !== "none") input.parent_task_id = newParentTaskId;
-
-    const result = await createTask.mutateAsync(input);
-    onTaskCreated(result.id);
-    resetCreateForm();
-  }
+  const isMultiSelecting = selectedTaskIds.size > 0;
 
   const toggleSelection = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -226,7 +171,7 @@ export function TaskListPane({
     setSelectedTaskIds(new Set());
   };
 
-  const isMultiSelecting = selectedTaskIds.size > 0;
+
 
   return (
     <div className="h-full min-h-0 flex flex-col w-full relative overflow-hidden">
@@ -545,211 +490,12 @@ export function TaskListPane({
       )}
 
       {/* ── Create task dialog ────────────────────────────────── */}
-      <Dialog
-        open={createDialogOpen}
-        onOpenChange={(open) => {
-          onCreateDialogOpenChange(open);
-          if (!open) resetCreateForm();
-        }}
-      >
-        <DialogContent className="max-w-2xl p-0 gap-0">
-          <form onSubmit={handleCreateSubmit}>
-            {/* Modal header */}
-            <div className="px-5 pt-5 pb-4 border-b border-border/60">
-              <DialogHeader>
-                <DialogTitle className="text-base">Create task</DialogTitle>
-                <DialogDescription className="text-xs mt-0.5">
-                  Capture the objective, criteria, owner, and dates.
-                </DialogDescription>
-              </DialogHeader>
-            </div>
-
-            <Tabs defaultValue="basics" className="w-full">
-              <div className="px-5 pt-3">
-                <TabsList className="h-8 text-xs w-full grid grid-cols-3">
-                  <TabsTrigger value="basics" className="text-xs">
-                    Basics
-                  </TabsTrigger>
-                  <TabsTrigger value="strategy" className="text-xs">
-                    Strategy
-                  </TabsTrigger>
-                  <TabsTrigger value="schedule" className="text-xs">
-                    Schedule
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <div className="px-5 pt-3 pb-4 min-h-[220px]">
-                {/* ── Basics tab ── */}
-                <TabsContent value="basics" className="mt-0 space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Title
-                    </Label>
-                    <Input
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="e.g. Draft dependency graph UI"
-                      className="h-8 text-xs"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Description{" "}
-                      <span className="opacity-50">(optional)</span>
-                    </Label>
-                    <Textarea
-                      value={newDescription}
-                      onChange={(e) => setNewDescription(e.target.value)}
-                      placeholder="Optional context to help scanning in the list."
-                      className="text-xs min-h-[70px] resize-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Status
-                      </Label>
-                      <Select
-                        value={newStatus}
-                        onValueChange={(v) => setNewStatus(v as TaskStatus)}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s} className="text-xs">
-                              {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Priority
-                      </Label>
-                      <Select
-                        value={newPriority}
-                        onValueChange={(v) =>
-                          setNewPriority(v as Task["priority"])
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["low", "medium", "high", "urgent"].map((p) => (
-                            <SelectItem key={p} value={p} className="text-xs">
-                              {p}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Parent task (optional) */}
-                  {(allTasks ?? tasks).length > 0 && (
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Parent task{" "}
-                        <span className="opacity-50">(optional)</span>
-                      </Label>
-                      <Select
-                        value={newParentTaskId}
-                        onValueChange={setNewParentTaskId}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="None (top-level task)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none" className="text-xs">
-                            None (top-level)
-                          </SelectItem>
-                          {(allTasks ?? tasks).map((t) => (
-                            <SelectItem key={t.id} value={t.id} className="text-xs">
-                              {t.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </TabsContent>
-
-                {/* ── Strategy tab ── */}
-                <TabsContent value="strategy" className="mt-0 space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Objective
-                    </Label>
-                    <Textarea
-                      value={newObjective}
-                      onChange={(e) => setNewObjective(e.target.value)}
-                      placeholder="What are we trying to achieve?"
-                      className="text-xs min-h-[90px] resize-none"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Success criteria
-                    </Label>
-                    <Textarea
-                      value={newSuccessCriteria}
-                      onChange={(e) => setNewSuccessCriteria(e.target.value)}
-                      placeholder="How do we know it is done?"
-                      className="text-xs min-h-[90px] resize-none"
-                      required
-                    />
-                  </div>
-                </TabsContent>
-
-                {/* ── Schedule tab ── */}
-                <TabsContent value="schedule" className="mt-0 space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Due date
-                    </Label>
-                    <Input
-                      type="date"
-                      value={toDateInputValue(newDueDateISO)}
-                      onChange={(e) =>
-                        setNewDueDateISO(
-                          e.target.value
-                            ? new Date(e.target.value).toISOString()
-                            : ""
-                        )
-                      }
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                </TabsContent>
-              </div>
-            </Tabs>
-
-            {/* Modal footer */}
-            <div className="px-5 py-3 border-t border-border/60 flex justify-end gap-2 bg-muted/20">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onCreateDialogOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={createTask.isPending}>
-                {createTask.isPending ? "Creating…" : "Create task"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <CreateTaskDialog 
+        open={createDialogOpen} 
+        onOpenChange={onCreateDialogOpenChange} 
+        onTaskCreated={onTaskCreated} 
+        allTasks={allTasks ?? tasks}
+      />
     </div>
   );
 }

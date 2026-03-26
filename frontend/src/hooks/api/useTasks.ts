@@ -22,13 +22,13 @@ export interface TaskDTO {
   created_at: string;
   updated_at: string;
   assignees?: Array<{ id: string; name: string | null; email: string }>;
+  story_points?: number;
+  time_estimate?: number;
   // frontend-side extras from Task type (optional when fetching list)
   projectId?: string;
   projectTitle?: string;
   owner?: string;
   labels?: string[];
-  storyPoints?: number;
-  timeEstimateMinutes?: number;
   dueDateISO?: string;
   plannedStartISO?: string;
   plannedEndISO?: string;
@@ -37,7 +37,6 @@ export interface TaskDTO {
   context?: Task["context"];
   history?: Task["history"];
   comments?: Task["comments"];
-
 }
 
 export type SortBy = "due_date" | "priority" | "created_at";
@@ -67,6 +66,9 @@ export interface CreateTaskInput {
   start_date?: string;
   due_date?: string;
   parent_task_id?: string;
+  story_points?: number;
+  time_estimate?: number;
+  assignee_ids?: string[];
 }
 
 export interface UpdateTaskInput {
@@ -77,6 +79,8 @@ export interface UpdateTaskInput {
   priority?: TaskPriority;
   start_date?: string;
   due_date?: string;
+  story_points?: number;
+  time_estimate?: number;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────

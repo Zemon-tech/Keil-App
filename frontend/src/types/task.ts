@@ -93,6 +93,7 @@ export type Task = {
     context: ContextItem[];
     subtasks: Subtask[];
     comments: Comment[];
+    history?: ActivityLogEntry[];
     parentTaskId?: string;
 };
 

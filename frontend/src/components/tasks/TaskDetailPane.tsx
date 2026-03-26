@@ -340,9 +340,9 @@ const TaskDetailHeader = ({
           </Badge>
         )}
 
-        {task.storyPoints != null && (
+        {task.story_points != null && (
           <Badge variant="outline" className="h-5 px-1.5 font-mono text-[11px]">
-            {task.storyPoints}p
+            {task.story_points}p
           </Badge>
         )}
 
@@ -762,13 +762,13 @@ const OverviewTab = ({
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Story points</span>
-                <span className="font-mono font-medium">{task.storyPoints ?? "—"}</span>
+                <span className="font-mono font-medium">{task.story_points ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Time estimate</span>
                 <span className="font-mono font-medium">
-                  {task.timeEstimateMinutes
-                    ? `${Math.floor(task.timeEstimateMinutes / 60)}h ${task.timeEstimateMinutes % 60}m`
+                  {task.time_estimate
+                    ? `${Math.floor(task.time_estimate / 60)}h ${task.time_estimate % 60}m`
                     : "—"}
                 </span>
               </div>
@@ -936,8 +936,8 @@ const ActivityTab = ({
   };
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <ScrollArea className="flex-1">
+    <div className="flex flex-1 min-h-0 flex-col bg-background h-full">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto">
           {isPending ? (
             <div className="flex justify-center py-8 my-auto">
@@ -1212,9 +1212,9 @@ const HistoryTab = ({ task }: { task: TaskDTO }) => {
   };
 
   return (
-    <div className="flex h-full flex-col md:flex-row md:divide-x md:divide-border/40 w-full min-w-0 bg-background text-foreground">
+    <div className="flex h-full flex-1 min-h-0 flex-col md:flex-row md:divide-x md:divide-border/40 w-full min-w-0 bg-background text-foreground overflow-hidden">
       {/* ── LEFT: Main History List ── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-h-0 min-w-0">
         {/* Top Filter Bar */}
         <div className="px-6 py-4 border-b border-border/40 shrink-0 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
@@ -1255,7 +1255,7 @@ const HistoryTab = ({ task }: { task: TaskDTO }) => {
         </div>
 
         {/* History List Component */}
-        <ScrollArea className="flex-1 min-w-0 bg-accent/20">
+        <ScrollArea className="flex-1 min-w-0 min-h-0 bg-accent/20">
           <div className="p-8 max-w-4xl mx-auto w-full">
             {isPending ? (
               <div className="flex justify-center py-10">
@@ -1372,7 +1372,7 @@ const HistoryTab = ({ task }: { task: TaskDTO }) => {
       </div>
 
       {/* ── RIGHT: Sidebar Summary ── */}
-      <ScrollArea className="w-full shrink-0 md:w-[280px] lg:w-[320px] bg-background">
+      <ScrollArea className="w-full h-full shrink-0 md:w-[280px] lg:w-[320px] bg-background border-l border-border/40">
         <div className="space-y-10 p-8">
           
           {/* Summary Section */}
@@ -1522,7 +1522,7 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
 
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col bg-background overflow-hidden overscroll-none">
 
       {/* Zone 1: Compact header — never scrolls */}
       <TaskDetailHeader
@@ -1580,15 +1580,15 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
           <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} onUpdateField={handleUpdateField} />
         </TabsContent>
 
-        <TabsContent value="activity" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
+        <TabsContent value="activity" className="m-0 flex-1 min-h-0 flex flex-col focus-visible:outline-none h-full overflow-hidden">
           <ActivityTab task={displayTask} />
         </TabsContent>
 
-        <TabsContent value="dependencies" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
+        <TabsContent value="dependencies" className="m-0 flex-1 min-h-0 flex flex-col focus-visible:outline-none h-full overflow-hidden">
           <DependenciesTab task={displayTask} />
         </TabsContent>
 
-        <TabsContent value="history" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
+        <TabsContent value="history" className="m-0 flex-1 min-h-0 flex flex-col focus-visible:outline-none h-full overflow-hidden">
           <HistoryTab task={displayTask} />
         </TabsContent>
       </Tabs>
