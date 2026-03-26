@@ -262,9 +262,6 @@ export function TaskListPane({
           ) : (
             <>
               <div className="min-w-0">
-                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground leading-none mb-0.5">
-                  Work Queue
-                </div>
                 <div className="text-sm font-semibold leading-tight truncate">
                   Pick a task to focus
                 </div>
