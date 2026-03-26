@@ -3,12 +3,20 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { TaskTimelinePane } from "@/components/tasks/TaskTimelinePane";
 import type { CalendarBlock, Task } from "@/types/task";
-
 import { mockTasks } from "@/data/mockTasks";
+
+// Minimum pixel widths for each calendar view
+const MIN_WIDTHS = {
+  timeGridWeek: 750,  // 7 days + time column fully visible
+  timeGridDay: 450,   // Single day + time column comfortable
+  dayGridMonth: 650,  // All dates visible without wrap
+  listWeek: 400,      // List items readable
+} as const;
 
 const mockCalendarBlocks: CalendarBlock[] = [
   {
@@ -59,6 +67,29 @@ export function SchedulePage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>(mockTasks);
   const [activeTab, setActiveTab] = useState<"schedule" | "timeline">("schedule");
+  const [calendarView, setCalendarView] = useState<string>("timeGridWeek");
+
+  // Handle task scheduling updates
+  const handleTaskSchedule = (taskId: string, startISO: string, endISO: string) => {
+    console.log("📅 Scheduling task:", { taskId, startISO, endISO });
+    
+    setTasks((prevTasks) =>
+      prevTasks.map((task) =>
+        task.id === taskId
+          ? { ...task, plannedStartISO: startISO, plannedEndISO: endISO }
+          : task
+      )
+    );
+    
+    console.log("✅ Task scheduled successfully");
+  };
+
+  // Calculate minimum pixel width for calendar based on view
+  const calendarMinPixels = useMemo(() => {
+    const minPixels = MIN_WIDTHS[calendarView as keyof typeof MIN_WIDTHS] || MIN_WIDTHS.timeGridWeek;
+    console.log('📊 Calendar Min Pixels:', minPixels, 'for view:', calendarView);
+    return `${minPixels}px`;
+  }, [calendarView]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -87,10 +118,11 @@ export function SchedulePage() {
   );
 
   return (
-    <div className="h-[100dvh] w-full bg-background text-foreground overflow-hidden overscroll-none">
+    <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
+      <Toaster />
       <main className={containerClassName}>
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-          <ResizablePanel defaultSize={25} minSize="25%" className="bg-card">
+          <ResizablePanel defaultSize={30} minSize={20} className="bg-card">
             <TaskListPane
               query={query}
               onQueryChange={setQuery}
@@ -112,9 +144,18 @@ export function SchedulePage() {
             />
           </ResizablePanel>
 
-          <ResizablePanel defaultSize={75} minSize={30} className="bg-background">
+          <ResizableHandle withHandle className="bg-border/60" />
+
+          <ResizablePanel 
+            defaultSize={70} 
+            minSize={calendarMinPixels}
+            className="bg-background"
+            onResize={(size) => {
+              console.log('📏 Calendar panel resized to:', size);
+            }}
+          >
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
-              <div className="shrink-0 border-b border-border/60 bg-gradient-to-b from-card/50 to-background px-4 pt-3">
+              <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-4 pt-3">
                 <TabsList className="rounded-xl">
                   <TabsTrigger value="schedule">Schedule</TabsTrigger>
                   <TabsTrigger value="timeline">Timeline</TabsTrigger>
@@ -123,7 +164,16 @@ export function SchedulePage() {
 
               <div className="flex-1 min-h-0">
                 <TabsContent value="schedule" className="h-full mt-0 focus-visible:outline-none">
-                  <TaskSchedulePane tasks={tasks} blocks={mockCalendarBlocks} selectedTask={selectedTask} />
+                  <TaskSchedulePane 
+                    tasks={tasks} 
+                    blocks={mockCalendarBlocks} 
+                    selectedTask={selectedTask}
+                    onViewChange={(view) => {
+                      console.log('📅 Calendar view changed to:', view);
+                      setCalendarView(view);
+                    }}
+                    onTaskSchedule={handleTaskSchedule}
+                  />
                 </TabsContent>
 
                 <TabsContent value="timeline" className="h-full mt-0 focus-visible:outline-none">

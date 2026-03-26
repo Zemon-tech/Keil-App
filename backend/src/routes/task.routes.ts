@@ -1,23 +1,24 @@
 import { Router } from "express";
+import { protect } from "../middlewares/auth.middleware";
 import {
-    createTask,
-    getTasks,
-    getTaskById,
-    updateTask,
-    deleteTask,
-    changeTaskStatus,
-    assignUserToTask,
-    removeUserFromTask,
-    addDependency,
-    removeDependency
+  createTask,
+  getTasks,
+  getTaskById,
+  updateTask,
+  deleteTask,
+  changeTaskStatus,
+  assignUserToTask,
+  removeUserFromTask,
+  addDependency,
+  removeDependency,
 } from "../controllers/task.controller";
 
-import {
-    getTaskComments,
-    addComment
-} from "../controllers/comment.controller";
+import { getTaskComments, addComment } from "../controllers/comment.controller";
 
 const router = Router();
+
+// All task endpoints require authenticated user context (req.user, req.workspaceId)
+router.use(protect);
 
 // Base Task Routes
 router.post("/", createTask);

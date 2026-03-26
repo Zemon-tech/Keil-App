@@ -7,10 +7,13 @@ import { NextEventCard } from "./dashboard/NextEventCard";
 import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
 import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
 import { UpNextCard } from "./dashboard/UpNextCard";
+import { useDashboard } from "@/hooks/api/useDashboard";
+import { AlertCircle } from "lucide-react";
 
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
+  const { data, isLoading, isError } = useDashboard();
 
   useEffect(() => {
     setMounted(true);
@@ -37,13 +40,20 @@ export function Dashboard() {
         {/* Hero: greeting + input area */}
         <HeroSection />
 
+        {isError && (
+          <div className="w-full max-w-4xl mt-4 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
+            <AlertCircle className="w-4 h-4" />
+            <span>Failed to load dashboard data. Please try again.</span>
+          </div>
+        )}
+
         {/* Widgets grid */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl mt-10 opacity-90 hover:opacity-100 transition-opacity">
-          <CurrentFocusCard />
+          <CurrentFocusCard task={data?.immediate?.[0] ?? null} isLoading={isLoading} />
           <NextEventCard />
-          <ImmediateBlockersCard />
+          <ImmediateBlockersCard tasks={data?.immediate ?? []} isLoading={isLoading} />
           <NeedsReplyCard />
-          <UpNextCard />
+          <UpNextCard tasks={data?.today ?? []} isLoading={isLoading} />
         </section>
       </main>
     </div>

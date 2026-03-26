@@ -1,5 +1,5 @@
-export type TaskStatus = "Backlog" | "In Progress" | "Blocked" | "Done";
-export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
+export type TaskStatus = "backlog" | "todo" | "in-progress" | "done";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export type CalendarBlockType =
     | "meeting"
@@ -27,9 +27,10 @@ export type Subtask = {
 
 export type Dependency = {
     id: string;
-    taskId: string;
     title: string;
     status: TaskStatus;
+    priority: TaskPriority;
+    due_date: string | null;
 };
 
 export type ContextItem = {
@@ -41,25 +42,33 @@ export type ContextItem = {
 
 export type Comment = {
     id: string;
-    author: string;
-    body: string;
-    timestamp: string;
+    task_id: string;
+    user_id: string;
+    content: string;
+    parent_comment_id: string | null;
+    created_at: string;
+    user: { id: string; email: string; name: string | null };
+    replies: Comment[];
 };
 
-export interface HistoryEntry {
+// ─── Real backend shape — used by Module 4 Activity Feed ─────────────────────
+export type ActivityLogEntry = {
     id: string;
-    field: string;         // "Status", "Priority", "Assignee", "Subtask", "Due Date"
-    from?: string;
-    to: string;
-    user: string;
-    timestamp: string;     // ISO string
-    note?: string;         // e.g. "Changed text from..." for description changes
-}
+    entity_type: "task" | "comment" | "workspace";
+    entity_id: string;
+    action_type: string;
+    old_value: Record<string, any> | null;
+    new_value: Record<string, any> | null;
+    created_at: string;
+    user: { id: string; email: string; name: string | null } | null;
+};
 
-export type ActivityLog = {
+
+
+export type AssigneeUser = {
     id: string;
-    label: string;
-    timestamp: string;
+    email: string;
+    name: string | null;
 };
 
 export type Task = {
@@ -69,11 +78,11 @@ export type Task = {
     title: string;
     description?: string;
     objective: string;
-    successCriteria: string;
+    success_criteria: string;
     status: TaskStatus;
     priority: TaskPriority;
     owner: string;
-    assignees: string[];
+    assignees: AssigneeUser[];
     labels: string[];
     dueDateISO: string;
     plannedStartISO?: string;
@@ -83,7 +92,15 @@ export type Task = {
     dependencies: Dependency[];
     context: ContextItem[];
     subtasks: Subtask[];
-    history: HistoryEntry[];
     comments: Comment[];
     parentTaskId?: string;
+};
+
+export type DashboardTaskDTO = {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    due_date: string | null;
+    objective: string | null;
 };
