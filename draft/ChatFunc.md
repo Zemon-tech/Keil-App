@@ -135,15 +135,15 @@ If Admin creates a channel, the server emits this to the personal `user:<userId>
 - [ ] Install `socket.io` alongside Express. Implement a Middleware that extracts the Supabase JWT, restricts connection if invalid, and identifies `req.user.id`.
 
 ### Database & Migrations (`004_chat_schema.sql`)
-- [ ] Create `channels`, `channel_members`, and `messages` tables.
-- [ ] **Mandatory Security:** Include `ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;` for all three tables to block direct DB access.
+- [ ] Create `channels`, `channel_members`, and `messages` tables. **Ensure the `channels` table includes a `workspace_id` column** referencing the `workspaces` table.
+- [ ] **Mandatory Security:** Include `ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;` for all three tables. **You must also write explicit `CREATE POLICY` statements** (e.g., allowing `SELECT` and `INSERT` only if the user's `id` exists in the `channel_members` for that channel and matches the `workspace_id`).
 - [ ] Add trigger to update `channels.last_message_at` exactly when a new message is inserted.
 
 ### Controllers & Services
 - [ ] Implement the REST routes, returning consistent `{ "success": boolean, "error": {...} }` shapes.
 
 ### Validation Rules
-- [ ] `target_user_id` and `member_ids`: Must be valid UUIDs belonging specifically to the user's current workspace. Block cross-workspace chat requests entirely.
+- [ ] `target_user_id` and `member_ids`: Must be valid UUIDs belonging specifically to the user's current workspace. You must use `req.workspaceId` (provided by the `protect` middleware) to scope all database queries and restrict channel creation. Scope all `GET` routes strictly to `req.workspaceId`.
 - [ ] `name` (Group channels): Required, non-empty text, max 50 characters.
 - [ ] `limit`: Must be a positive integer, clamp to a maximum of 100 to prevent database flooding.
 - [ ] `createDirectChannel`: Check if a 1:1 already exists. If yes return it. If no, create it and add both to `channel_members`.
@@ -173,12 +173,13 @@ If Admin creates a channel, the server emits this to the personal `user:<userId>
 
 ### Socket & Cache Strategy Setup (`src/hooks/api/useChat.ts`)
 - [ ] Set up a global singleton Socket connection when the user logs in. 
-- [ ] **Teardown Fix:** Provide a logout function or unmount `useEffect` that explicitly calls `socket.disconnect()` to prevent zombie connections.
+- [ ] **Teardown Fix:** Explicitly call `socket.disconnect()` inside your global AuthProvider's sign out/logout function to prevent zombie connections. Do not rely on an unmount `useEffect` as it can be prone to race conditions if not done exactly right.
 - [ ] Add `useChatChannels()` query hook. **Query Key:** `["chat", "channels", workspaceId]`.
 - [ ] Add `useChatMessages(channelId)` query hook. **Query Key:** `["chat", "messages", channelId]`.
-- [ ] Add `useReadChannel()` mutation hook. On success, invalidate `["chat", "channels"]` to clear the unread count dot.
+- [ ] Add `useReadChannel()` mutation hook. On success, invalidate `["chat", "channels", workspaceId]` to clear the unread count dot.
 - [ ] **Strict Cache Rule:** When `socket.on('receive_message')` fires, you MUST update the state using `queryClient.setQueryData(['chat', 'messages', channelId], ...)` to append the real-time message to the cache. Do not fork data into local React `useState`.
-- [ ] Listen for `socket.on('channel_added')` to instantly invalidate/refetch the `["chat", "channels"]` query list.
+- [ ] **Sidebar Unread Rule:** When `socket.on('receive_message')` fires, if the user is *not* currently viewing that channel, you must also update the `["chat", "channels", workspaceId]` cache directly to increment `unread_count`, bump `last_message_at`, and optionally re-sort the list.
+- [ ] Listen for `socket.on('channel_added')` to instantly invalidate/refetch the `["chat", "channels", workspaceId]` query list.
 - [ ] **"Tunnel Drop" Fix:** Listen for `socket.on('connect')` (fires on load & reconnect). When it fires, manually invalidate the `["chat", "messages", activeChannelId]` query cache to fetch any messages missed while offline.
 
 ### Wire UI Components
