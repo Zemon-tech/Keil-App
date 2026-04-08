@@ -46,6 +46,24 @@ export class WorkspaceRepository extends BaseRepository<Workspace> {
   }
 
   /**
+   * Find ALL workspaces by user ID (member or owner)
+   */
+  async findAllByUserId(userId: string, client?: PoolClient): Promise<Workspace[]> {
+    const query = `
+      SELECT w.*
+      FROM ${this.tableName} w
+      INNER JOIN workspace_members wm ON w.id = wm.workspace_id
+      WHERE wm.user_id = $1
+      AND w.deleted_at IS NULL
+    `;
+
+    const executor = client || this.pool;
+    const result = await executor.query(query, [userId]);
+
+    return result.rows as Workspace[];
+  }
+
+  /**
    * Get workspace members with user details
    */
   async getMembers(

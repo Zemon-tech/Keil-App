@@ -79,11 +79,6 @@ const memberToDTO = (member: WorkspaceMember & { user: User }): WorkspaceMemberD
  * Note: The database trigger automatically adds the owner as a member
  */
 export const createWorkspace = async (data: CreateWorkspaceData): Promise<WorkspaceDTO> => {
-  // Check if user already owns a workspace (1 workspace per user rule)
-  const existingWorkspace = await workspaceRepository.findByOwnerId(data.owner_id);
-  if (existingWorkspace) {
-    throw new ApiError(400, 'User already owns a workspace. Each user can only own one workspace.');
-  }
 
   const workspace = await workspaceRepository.executeInTransaction(async (client) => {
     // Create workspace (trigger will auto-add owner as member)
@@ -115,11 +110,19 @@ export const getWorkspaceById = async (workspaceId: string): Promise<WorkspaceDT
 };
 
 /**
- * Get user's workspace
+ * Get user's workspace (First one fallback)
  */
 export const getUserWorkspace = async (userId: string): Promise<WorkspaceDTO | null> => {
   const workspace = await workspaceRepository.findByUserId(userId);
   return workspace ? workspaceToDTO(workspace) : null;
+};
+
+/**
+ * Get ALL user workspaces
+ */
+export const getUserWorkspaces = async (userId: string): Promise<WorkspaceDTO[]> => {
+  const workspaces = await workspaceRepository.findAllByUserId(userId);
+  return workspaces.map(workspaceToDTO);
 };
 
 /**
@@ -209,11 +212,6 @@ export const addWorkspaceMember = async (
   role: MemberRole,
   addedByUserId: string
 ): Promise<WorkspaceMemberDTO> => {
-  // Check if user is already in a workspace (1 workspace per user rule)
-  const existingWorkspace = await workspaceRepository.findByUserId(userId);
-  if (existingWorkspace) {
-    throw new ApiError(400, 'User is already a member of a workspace. Each user can only belong to one workspace.');
-  }
 
   const member = await workspaceRepository.executeInTransaction(async (client) => {
     const newMember = await workspaceRepository.addMember(workspaceId, userId, role, client);
