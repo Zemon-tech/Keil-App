@@ -1,5 +1,5 @@
-import React, { createContext, useContext } from "react";
-import { useMe } from "@/hooks/api/useMe";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { useWorkspaces, type Workspace } from "@/hooks/api/useWorkspace";
 
 // ─── Context Shape ────────────────────────────────────────────────────────────
 
@@ -7,7 +7,9 @@ interface WorkspaceContextType {
   workspaceId: string | null;
   workspaceName: string | null;
   workspaceRole: "owner" | "admin" | "member" | null;
+  workspaces: Workspace[];
   isLoading: boolean;
+  setActiveWorkspace: (id: string) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
@@ -26,13 +28,31 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { data, isLoading } = useMe();
+  const { data: workspaces, isLoading } = useWorkspaces();
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
+    return localStorage.getItem("keil_active_workspace");
+  });
+
+  // Fallback to the first available workspace if none is strictly set or invalid
+  const targetWorkspace = workspaces?.find(w => w.id === activeWorkspaceId) || workspaces?.[0] || null;
+
+  useEffect(() => {
+    if (targetWorkspace) {
+      setActiveWorkspaceId(targetWorkspace.id);
+      localStorage.setItem("keil_active_workspace", targetWorkspace.id);
+    }
+  }, [targetWorkspace?.id]);
 
   const value: WorkspaceContextType = {
-    workspaceId: data?.workspace?.id ?? null,
-    workspaceName: data?.workspace?.name ?? null,
-    workspaceRole: data?.workspace?.role ?? null,
+    workspaceId: targetWorkspace?.id ?? null,
+    workspaceName: targetWorkspace?.name ?? null,
+    workspaceRole: targetWorkspace?.role ?? null,
+    workspaces: workspaces || [],
     isLoading,
+    setActiveWorkspace: (id: string) => {
+      setActiveWorkspaceId(id);
+      localStorage.setItem("keil_active_workspace", id);
+    }
   };
 
   return (

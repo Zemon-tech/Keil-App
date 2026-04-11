@@ -6,23 +6,14 @@
 -- =============================================================================
 
 -- =============================================================================
--- SECTION 1: ENUMS
--- =============================================================================
-
-CREATE TYPE channel_type AS ENUM (
-    'direct',
-    'group'
-);
-
--- =============================================================================
--- SECTION 2: CHANNELS
+-- SECTION 1: CHANNELS
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.channels (
     id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id    UUID            NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
-    name            VARCHAR(255),
-    type            channel_type    NOT NULL,
+    name            VARCHAR(50),
+    type            VARCHAR(20)     NOT NULL CHECK (type IN ('direct', 'group')),
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     last_message_at TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
@@ -32,26 +23,26 @@ COMMENT ON TABLE public.channels IS 'Stores direct and group chat channels per w
 CREATE INDEX IF NOT EXISTS idx_channels_workspace_id ON public.channels(workspace_id);
 
 -- =============================================================================
--- SECTION 3: CHANNEL MEMBERS
+-- SECTION 2: CHANNEL MEMBERS
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.channel_members (
     channel_id      UUID            NOT NULL REFERENCES public.channels(id) ON DELETE CASCADE,
     user_id         UUID            NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    role            VARCHAR(20)     NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
     joined_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     last_read_at    TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
 
-    -- Prevent duplicate channel memberships
     CONSTRAINT channel_members_pkey PRIMARY KEY (channel_id, user_id)
 );
 
-COMMENT ON TABLE public.channel_members IS 'Tracks user membership within chat channels and their unread message state.';
+COMMENT ON TABLE public.channel_members IS 'Tracks user membership, role, and unread state within chat channels.';
 
 CREATE INDEX IF NOT EXISTS idx_channel_members_user_id ON public.channel_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_channel_members_channel_id ON public.channel_members(channel_id);
 
 -- =============================================================================
--- SECTION 4: MESSAGES
+-- SECTION 3: MESSAGES
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.messages (
@@ -69,14 +60,14 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON public.messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at DESC);
 
 -- =============================================================================
--- SECTION 5: ROW LEVEL SECURITY (RLS)
+-- SECTION 4: ROW LEVEL SECURITY (RLS)
 -- =============================================================================
 
 ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.channel_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
--- Channels Policies
+-- Channels: users can only see channels they are a member of
 CREATE POLICY "Users can view channels they belong to"
     ON public.channels
     FOR SELECT
@@ -88,7 +79,7 @@ CREATE POLICY "Users can view channels they belong to"
         )
     );
 
--- Channel Members Policies
+-- Channel Members: users can only see members of channels they belong to
 CREATE POLICY "Users can view members of their channels"
     ON public.channel_members
     FOR SELECT
@@ -100,7 +91,7 @@ CREATE POLICY "Users can view members of their channels"
         )
     );
 
--- Messages Policies
+-- Messages: users can only read messages in channels they belong to
 CREATE POLICY "Users can view messages of their channels"
     ON public.messages
     FOR SELECT
@@ -112,6 +103,7 @@ CREATE POLICY "Users can view messages of their channels"
         )
     );
 
+-- Messages: users can only insert messages into channels they belong to
 CREATE POLICY "Users can send messages to their channels"
     ON public.messages
     FOR INSERT
@@ -125,7 +117,7 @@ CREATE POLICY "Users can send messages to their channels"
     );
 
 -- =============================================================================
--- SECTION 6: TRIGGERS
+-- SECTION 5: TRIGGERS
 -- =============================================================================
 
 -- Auto-update channels.last_message_at when a new message is inserted
@@ -141,7 +133,8 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER chat_set_last_message_at
+DROP TRIGGER IF EXISTS trg_update_channel_last_message_at ON public.messages;
+CREATE TRIGGER trg_update_channel_last_message_at
     AFTER INSERT ON public.messages
     FOR EACH ROW
     EXECUTE FUNCTION public.update_channel_last_message_at();

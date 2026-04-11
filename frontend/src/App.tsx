@@ -8,6 +8,7 @@ import { TasksPage } from "./components/TasksPage";
 import { SchedulePage } from "./components/SchedulePage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
+import { InvitePage } from "./components/workspace/InvitePage";
 
 /**
  * Main application component.
@@ -58,6 +59,7 @@ function App() {
             </Layout>
           }
         />
+        <Route path="/invite/:token" element={<InvitePage />} />
         {/* Add more protected routes here */}
       </Route>
 

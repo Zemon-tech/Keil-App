@@ -35,6 +35,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useWorkspaceMembers, useCreateInviteLink } from "@/hooks/api/useWorkspace";
+import { Loader2, Copy, Users } from "lucide-react";
 
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type SettingsTab =
@@ -47,6 +50,7 @@ type SettingsTab =
     | "notifications"
     | "connectors"
     | "api"
+    | "members"
     | "enterprise";
 
 interface SettingsNavItem {
@@ -66,6 +70,7 @@ const settingsNavItems: SettingsNavItem[] = [
     { id: "notifications", label: "Notifications", icon: Bell, group: "account" },
     { id: "connectors", label: "Connectors", icon: Plug, group: "account" },
     { id: "api", label: "API", icon: Code2, group: "workspace" },
+    { id: "members", label: "Members", icon: Users, group: "workspace" },
     { id: "enterprise", label: "Enterprise", icon: Building2, group: "workspace" },
 ];
 
@@ -652,6 +657,86 @@ function EnterpriseTab() {
     );
 }
 
+function MembersTab() {
+    const { workspaceId, workspaceRole } = useWorkspace();
+    const { data: members = [] } = useWorkspaceMembers(workspaceId || undefined);
+    const createInvite = useCreateInviteLink();
+    const [inviteLink, setInviteLink] = useState("");
+
+    const handleCreateInvite = () => {
+        if (!workspaceId) return;
+        createInvite.mutate(workspaceId, {
+            onSuccess: (data) => setInviteLink(data.inviteLink),
+            onError: (err: any) => alert(err?.response?.data?.error?.message || "Failed to create invite link")
+        });
+    };
+
+    const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
+
+    return (
+        <div className="space-y-8">
+            <div>
+                <h2 className="text-lg font-semibold text-foreground">Workspace Members</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage who has access to your workspace.</p>
+            </div>
+
+            <Separator />
+
+            {/* Invite Links Section */}
+            {isAdmin && (
+                <div className="p-4 flex flex-col gap-3 rounded-xl border border-border bg-card">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-foreground">Invite Team Members</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Generate a secure invite link to bring your team aboard</p>
+                        </div>
+                        <Button variant="outline" size="sm" className="text-xs rounded-lg" onClick={handleCreateInvite} disabled={createInvite.isPending}>
+                            {createInvite.isPending && <Loader2 className="w-3 h-3 animate-spin mr-2" />}
+                            Generate Link
+                        </Button>
+                    </div>
+                    {inviteLink && (
+                        <div className="mt-2 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                            <Input value={inviteLink} readOnly className="font-mono text-xs rounded-lg bg-muted/50" />
+                            <Button variant="secondary" size="icon" className="shrink-0" onClick={() => navigator.clipboard.writeText(inviteLink)}>
+                                <Copy className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {!isAdmin && (
+                <div className="p-4 rounded-xl border border-border bg-muted/30">
+                    <p className="text-xs text-muted-foreground text-center">Only Workspace Admins and Owners can invite new members.</p>
+                </div>
+            )}
+
+            <Separator />
+
+            <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground mb-4">Current Members ({members.length})</p>
+                {members.map(member => (
+                    <div key={member.id} className="flex items-center justify-between p-2 hover:bg-muted/30 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-primary/10 text-xs">{(member.user.name || member.user.email).charAt(0).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-medium">{member.user.name || "Unknown"}</span>
+                                <span className="text-xs text-muted-foreground">{member.user.email}</span>
+                            </div>
+                        </div>
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground px-2 py-1 bg-muted rounded-md pointer-events-none">
+                            {member.role}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 // ─── Tab Content Map ─────────────────────────────────────────────────
 const tabContent: Record<SettingsTab, React.FC> = {
     account: AccountTab,
@@ -663,6 +748,7 @@ const tabContent: Record<SettingsTab, React.FC> = {
     notifications: NotificationsTab,
     connectors: ConnectorsTab,
     api: ApiTab,
+    members: MembersTab,
     enterprise: EnterpriseTab,
 };
 

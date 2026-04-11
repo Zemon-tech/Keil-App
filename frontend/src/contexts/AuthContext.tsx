@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import api from "@/lib/api";
+import { connectSocket, disconnectSocket } from "@/lib/socket";
 
 /**
  * Type definition for the Authentication Context.
@@ -54,6 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
                 // Sync with backend in background (non-blocking)
                 if (session) {
+                    connectSocket(session.access_token); // Start socket on login/page refresh
                     api.get('users/me').catch(err => console.error("Auth sync failed:", err));
                 }
             }
@@ -65,7 +67,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }, []);
 
     const signOut = async () => {
-        await supabase.auth.signOut();
+        disconnectSocket();            // MUST be called BEFORE signOut — JWT is still valid here
+        await supabase.auth.signOut(); // then clear the Supabase session
     };
 
     const value = {

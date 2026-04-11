@@ -278,6 +278,35 @@ Before marking a merge conflict as resolved:
 - [ ] Tested that combined features make sense together
 - [ ] Added comments for complex integration logic
 
+## Backend Same-Feature Dual-Implementation Conflicts
+
+When both branches independently implemented the same backend feature (controllers, services, routes, migrations), the conflict is **architectural**, not textual. Different rules apply:
+
+### Step 1: Build a Dependency Map First
+Before asking any questions, trace inter-file dependencies:
+- Does `socket.ts` call `chatService.saveMessage()`? That method may only exist in one branch's service.
+- Does the controller import `io` from `../index`? That's a circular dependency risk.
+- Does the schema have a `role` column? Controller endpoints for member management only work if it exists.
+
+**Read conflict-free files too.** Files that merged cleanly (no conflict markers) are easy to skip, but if other files import from them, verify their exports match what the importing files expect. Example: `socket.ts` had no conflict and was already staged, but `io` wasn't exported — caught only by running `getDiagnostics` after writing the controller.
+
+### Step 2: Identify Fork Points (Not Line Differences)
+The questions that matter for backend conflicts:
+| Fork Point | Why It Matters |
+|---|---|
+| Where does socket/infra logic live? | Determines circular import risk |
+| Which schema columns exist? | Other code may depend on columns only one branch added |
+| Which service interface does infra use? | Socket layer may call methods that only exist in one version |
+| UUID generation strategy | `uuid_generate_v4()` requires DB extension; `gen_random_uuid()` is built-in |
+
+### Step 3: Resolve in Dependency Order
+Schema/migration → service → controller → routes → index/entry point
+
+Never resolve `index.ts` before knowing the socket architecture decision — the file looks completely different depending on the answer.
+
+### Step 4: Extra Features Need Explicit Approval
+If the incoming branch added endpoints or events not in the original spec (e.g., `typing_start`/`typing_end`, `addChannelMembers`), surface them explicitly. Don't silently include them.
+
 ## Related Documentation
 - See `docs/tasks/lessons.md` for detailed examples of merge conflict mistakes and solutions
 - React component structure best practices

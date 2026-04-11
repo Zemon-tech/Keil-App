@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   LayoutDashboard,
   Users,
@@ -39,21 +40,21 @@ import {
   MessageSquare,
   CheckSquare,
   CalendarDays,
+  ChevronsUpDown,
+  Check,
+  Plus
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { useChatStore } from "@/store/useChatStore";
+import { CreateWorkspaceDialog } from "./workspace/CreateWorkspaceDialog";
 
 const navigationItems = [
   {
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
-  },
-  {
-    title: "Chat",
-    url: "/chat",
-    icon: MessageSquare,
   },
   {
     title: "Tasks",
@@ -91,6 +92,8 @@ export function AppSidebar() {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const { openChat } = useChatStore();
   const userInitials = user?.user_metadata?.full_name
     ?.split(" ")
     .map((n: string) => n[0])
@@ -105,38 +108,66 @@ export function AppSidebar() {
   const userEmail = user?.email || "";
 
   const { state } = useSidebar();
+  const { workspaces, workspaceId, workspaceName, setActiveWorkspace } = useWorkspace();
 
   const isCollapsed = state === "collapsed";
 
   return (
     <>
       <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6">
+        <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6 border-b border-border/50">
           <SidebarMenu>
             <SidebarMenuItem>
-              {isCollapsed ? (
-                <div className="relative group/trigger flex items-center justify-center h-8 w-8 mx-auto transition-all duration-300">
-                  <img
-                    src={logoSrc}
-                    alt="Keil HQ"
-                    className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90"
-                  />
-                  <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2">
-                  <Link to="/" className="flex items-center gap-2.5 group">
-                    <div className="flex size-8 items-center justify-center rounded-xl transition-transform group-hover:scale-105 active:scale-95">
-                      <img src={logoSrc} alt="Logo" className="size-6" />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  {isCollapsed ? (
+                    <div className="relative group/trigger flex items-center justify-center h-8 w-8 mx-auto transition-all duration-300 cursor-pointer">
+                      <img
+                        src={logoSrc}
+                        alt="Keil HQ"
+                        className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90"
+                      />
+                      <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold tracking-tight text-foreground">KeilHQ</span>
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mt-0.5">Assistant</span>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2 rounded-lg hover:bg-sidebar-accent cursor-pointer group">
+                      <div className="flex items-center gap-2.5 py-1.5">
+                        <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 transition-transform group-hover:scale-105 active:scale-95 text-primary font-bold">
+                          {workspaceName ? workspaceName.charAt(0).toUpperCase() : <img src={logoSrc} alt="Logo" className="size-5" />}
+                        </div>
+                        <div className="flex flex-col text-left">
+                          <span className="text-sm font-bold tracking-tight text-foreground truncate max-w-[120px]">{workspaceName || "KeilHQ"}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mt-0.5">Workspace</span>
+                        </div>
+                      </div>
+                      <ChevronsUpDown className="size-4 text-muted-foreground group-hover:text-foreground shrink-0" />
                     </div>
-                  </Link>
-                  <SidebarTrigger className="size-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground border-none shadow-none" />
-                </div>
-              )}
+                  )}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 rounded-lg pointer-events-auto shadow-lg border border-border bg-popover text-popover-foreground z-50">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Workspaces</DropdownMenuLabel>
+                  {workspaces.map((ws) => (
+                    <DropdownMenuItem 
+                      key={ws.id} 
+                      onClick={() => setActiveWorkspace(ws.id)}
+                      className="flex items-center justify-between cursor-pointer rounded-md p-2 m-1 focus:bg-accent"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
+                          {ws.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm font-medium">{ws.name}</span>
+                      </div>
+                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator className="mx-1" />
+                  <DropdownMenuItem className="flex items-center gap-2 cursor-pointer p-2 m-1 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => setCreateWorkspaceOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                    <span className="text-sm">Create Workspace</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -160,6 +191,18 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
+
+                {/* ── Chat button — opens global drawer, not a page link ── */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={openChat}
+                    tooltip="Chat"
+                  >
+                    <MessageSquare />
+                    <span>Chat</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -239,7 +282,7 @@ export function AppSidebar() {
         <SidebarRail />
       </Sidebar>
 
-      {/* Settings Dialog */}
+      <CreateWorkspaceDialog open={createWorkspaceOpen} onOpenChange={setCreateWorkspaceOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
