@@ -38,7 +38,7 @@ export const getUserWorkspaces = catchAsync(async (req: Request, res: Response) 
 });
 
 export const getWorkspace = catchAsync(async (req: Request, res: Response) => {
-    const workspaceId = req.params.id;
+    const workspaceId = req.params.id as string;
     const workspace = await workspaceService.getWorkspaceById(workspaceId);
     if (!workspace) throw new ApiError(404, "Workspace not found");
     res.status(200).json(new ApiResponse(200, workspace, "Workspace retrieved successfully"));
@@ -76,7 +76,7 @@ export const removeWorkspaceMember = catchAsync(async (req: Request, res: Respon
 });
 
 export const createInviteLink = catchAsync(async (req: Request, res: Response) => {
-    const workspaceId = req.params.id;
+    const workspaceId = req.params.id as string;
     const userId = (req as any).user?.id;
     
     if (!workspaceId) throw new ApiError(400, "Workspace ID is required");

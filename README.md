@@ -1,4 +1,4 @@
-# ClarityOS — Operating System for Human Clarity
+# KeilHQ — Operating System for Human Clarity
 
 <p align="center">
   <picture>

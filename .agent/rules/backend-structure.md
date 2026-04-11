@@ -50,6 +50,24 @@ The `package.json` contains several NPM scripts for development and production:
 *   **`npm start`**: Runs the compiled JavaScript application in production mode directly from the `dist/index.js` entry point.
 *   **`npm run dev`**: Starts the application in development mode using `nodemon` and `ts-node` to automatically restart the server upon any file changes within `src/index.ts`.
 
+## Express 5 TypeScript Gotchas
+
+### `req.params` is typed as `string | string[]`
+Express 5 changed the type of `req.params[key]` from `string` to `string | string[]`. Any service or utility that expects a plain `string` will produce a TS2345 compile error.
+
+**Always cast route params explicitly:**
+```typescript
+// ❌ Breaks in Express 5 — TS2345
+const workspaceId = req.params.id;
+await someService.doThing(workspaceId); // error: string | string[]
+
+// ✅ Correct
+const workspaceId = req.params.id as string;
+await someService.doThing(workspaceId);
+```
+
+Apply `as string` to **every** `req.params` access in controllers. When writing a new controller or reviewing an existing one, check all `req.params` usages — not just the ones that are currently failing. A param used only in a string interpolation won't error at compile time but will silently produce `[object Array]` at runtime if it ever receives an array value.
+
 ## Technologies Used & Versions
 
 *   **Runtime**: Node.js (`@types/node` v25.3.0)
