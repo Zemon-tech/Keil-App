@@ -2,7 +2,7 @@
 
 -- 1. Create channels table
 CREATE TABLE IF NOT EXISTS channels (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     type VARCHAR(20) NOT NULL CHECK (type IN ('direct', 'group')),
     name VARCHAR(50), -- Nullable for standard direct messages
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS channels (
 
 -- 2. Create channel_members table
 CREATE TABLE IF NOT EXISTS channel_members (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role VARCHAR(20) DEFAULT 'member' CHECK (role IN ('admin', 'member')),
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS channel_members (
 
 -- 3. Create messages table
 CREATE TABLE IF NOT EXISTS messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
     sender_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     content TEXT NOT NULL,

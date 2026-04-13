@@ -6,6 +6,8 @@ import { chatService } from "./services/chat.service";
 
 let io: SocketIOServer;
 
+export const getIO = () => io;
+
 export const initSocket = (server: HttpServer) => {
     io = new SocketIOServer(server, {
         cors: {
@@ -63,9 +65,9 @@ export const initSocket = (server: HttpServer) => {
                 const { channel_id, content } = payload;
                 if (!channel_id || !content) return;
 
-                // Verify user is in channel
-                const check = await pool.query('SELECT 1 FROM channel_members WHERE channel_id = $1 AND user_id = $2', [channel_id, user.id]);
-                if (check.rowCount === 0) return; // Not authorized
+                // Verify user access via privacy rules
+                const hasAccess = await chatService.checkChannelAccess(user.id, channel_id);
+                if (!hasAccess) return; // Not authorized
 
                 // Save message
                 const message = await chatService.saveMessage(channel_id, user.id, content);
@@ -109,7 +111,13 @@ export const initSocket = (server: HttpServer) => {
 // Export fn to manually trigger channel_added event
 export const broadcastNewChannel = (memberIds: string[], channel: any) => {
     if (!io) return;
-    memberIds.forEach(id => {
-        io.to(`user:${id}`).emit("channel_added", channel);
+    memberIds.forEach(async (id) => {
+        try {
+            const sockets = await io.in(`user:${id}`).fetchSockets();
+            sockets.forEach(s => s.join(`channel:${channel.id}`));
+            io.to(`user:${id}`).emit("channel_added", channel);
+        } catch (error) {
+            console.error(`Socket broadcast error for user ${id}:`, error);
+        }
     });
 };

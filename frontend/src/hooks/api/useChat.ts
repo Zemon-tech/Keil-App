@@ -21,6 +21,7 @@ export interface Channel {
   id: string;
   type: "direct" | "group"; // "direct" = 1:1 DM, "group" = group chat
   name: string | null;       // null for DMs, has a value for groups
+  privacy: "public" | "private" | "secret"; // channel visibility
   unread_count: number;      // how many messages this user hasn't read yet
   last_message_at: string | null; // ISO date string, used for sorting
   members: ChatMember[];     // for DMs: the OTHER person. for groups: everyone.
@@ -29,9 +30,17 @@ export interface Channel {
 export interface ChatMessage {
   id: string;
   channel_id: string;
-  sender: ChatMember;   // who sent it
-  content: string;      // the message text
-  created_at: string;   // ISO date string
+  sender: ChatMember;
+  content: string;
+  created_at: string;
+  parent_id?: string;
+  is_pinned?: boolean;
+  pinned_at?: string;
+  task_id?: string;
+  is_edited?: boolean;
+  is_deleted?: boolean;
+  reactions?: Record<string, string[]>;
+  threadCount?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,12 +129,9 @@ export function useReadChannel() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useSendMessage() {
-  // Returns a plain function (not a mutation) since there's nothing to await
-  return (channelId: string, content: string) => {
+  return (channelId: string, content: string, parentId?: string) => {
     const socket = getSocket();
-    socket?.emit("send_message", { channel_id: channelId, content });
-    // That's it. The server broadcasts it back. Your own message arrives
-    // via receive_message just like everyone else's.
+    socket?.emit("send_message", { channel_id: channelId, content, parent_id: parentId });
   };
 }
 
@@ -167,7 +173,11 @@ export function useCreateGroup() {
   const { workspaceId } = useWorkspace();
 
   return useMutation({
-    mutationFn: async (payload: { name: string; member_ids: string[] }) => {
+    mutationFn: async (payload: {
+      name: string;
+      member_ids: string[];
+      privacy?: "public" | "private" | "secret";
+    }) => {
       const res = await api.post<{ data: { channel: Channel } }>(
         "v1/chat/channels/group",
         payload
@@ -247,11 +257,29 @@ export function useChatSocketListeners(activeChannelId: string | null) {
       useChatStore.getState().removeTypingUser(message.channel_id, message.sender.id);
       const isViewingThisChannel = message.channel_id === activeChannelId;
 
-      // ALWAYS add the message to the message cache for that channel
-      queryClient.setQueryData<ChatMessage[]>(
-        chatKeys.messages(message.channel_id),
-        (prev = []) => [...prev, message] // append to the end
-      );
+      if (message.parent_id) {
+        // This is a thread reply. Update the thread messages if loaded.
+        const threadKey = [...chatKeys.messages(message.channel_id), message.parent_id, "thread"];
+        const threadExists = queryClient.getQueryData<ChatMessage[]>(threadKey);
+        if (threadExists) {
+          queryClient.setQueryData<ChatMessage[]>(threadKey, (prev = []) => [...prev, message]);
+        }
+        
+        // Also increment threadCount on the parent message in the main list
+        queryClient.setQueryData<ChatMessage[]>(chatKeys.messages(message.channel_id), (prev = []) =>
+          prev.map(m => m.id === message.parent_id ? { ...m, threadCount: (m.threadCount || 0) + 1 } : m)
+        );
+        return; // Don't append thread replies to the main channel loop below
+      }
+
+      // ONLY add the message to the message cache if the history is already loaded
+      const historyExists = queryClient.getQueryData<ChatMessage[]>(chatKeys.messages(message.channel_id));
+      if (historyExists) {
+        queryClient.setQueryData<ChatMessage[]>(
+          chatKeys.messages(message.channel_id),
+          (prev = []) => [...prev, message] // append to the end
+        );
+      }
 
       // If the user is NOT currently viewing this channel → show a red dot
       if (!isViewingThisChannel && workspaceId) {
@@ -322,6 +350,36 @@ export function useChatSocketListeners(activeChannelId: string | null) {
       useChatStore.getState().removeTypingUser(data.channel_id, data.user_id);
     };
 
+    const handleMessageEdited = (data: { channel_id: string, message: ChatMessage }) => {
+      queryClient.setQueryData<ChatMessage[]>(chatKeys.messages(data.channel_id), (prev = []) =>
+        prev.map(m => m.id === data.message.id ? { ...m, content: data.message.content, is_edited: data.message.is_edited } : m)
+      );
+    };
+
+    const handleMessageDeleted = (data: { channel_id: string, message_id: string }) => {
+      queryClient.setQueryData<ChatMessage[]>(chatKeys.messages(data.channel_id), (prev = []) =>
+        prev.map(m => m.id === data.message_id ? { ...m, is_deleted: true, content: 'This message was deleted.' } : m)
+      );
+    };
+
+    const handleMessagePinned = (data: { channel_id: string, message: ChatMessage }) => {
+      queryClient.setQueryData<ChatMessage[]>(chatKeys.messages(data.channel_id), (prev = []) =>
+        prev.map(m => m.id === data.message.id ? { ...m, is_pinned: data.message.is_pinned } : m)
+      );
+    };
+
+    const handleMessageReaction = (data: { channel_id: string, message_id: string, reactions: Record<string, string[]> }) => {
+      queryClient.setQueryData<ChatMessage[]>(chatKeys.messages(data.channel_id), (prev = []) =>
+        prev.map(m => m.id === data.message_id ? { ...m, reactions: data.reactions } : m)
+      );
+    };
+    
+    const handleMessageTaskCreated = (data: { channel_id: string, message_id: string, task_id: string }) => {
+      queryClient.setQueryData<ChatMessage[]>(chatKeys.messages(data.channel_id), (prev = []) =>
+        prev.map(m => m.id === data.message_id ? { ...m, task_id: data.task_id } : m)
+      );
+    };
+
     // Register all listeners
     socket.on("receive_message", handleReceiveMessage);
     socket.on("channel_added", handleChannelAdded);
@@ -330,6 +388,11 @@ export function useChatSocketListeners(activeChannelId: string | null) {
     socket.on("user_stopped_typing", handleUserStoppedTyping);
     socket.on("channel_updated", handleChannelUpdated);
     socket.on("channel_removed", handleChannelRemoved);
+    socket.on("message_edited", handleMessageEdited);
+    socket.on("message_deleted", handleMessageDeleted);
+    socket.on("message_pinned", handleMessagePinned);
+    socket.on("message_reaction", handleMessageReaction);
+    socket.on("message_task_created", handleMessageTaskCreated);
 
     // Cleanup when component unmounts or activeChannelId changes
     return () => {
@@ -340,6 +403,65 @@ export function useChatSocketListeners(activeChannelId: string | null) {
       socket.off("user_stopped_typing", handleUserStoppedTyping);
       socket.off("channel_updated", handleChannelUpdated);
       socket.off("channel_removed", handleChannelRemoved);
+      socket.off("message_edited", handleMessageEdited);
+      socket.off("message_deleted", handleMessageDeleted);
+      socket.off("message_pinned", handleMessagePinned);
+      socket.off("message_reaction", handleMessageReaction);
+      socket.off("message_task_created", handleMessageTaskCreated);
     };
   }, [activeChannelId, workspaceId, queryClient]);
 }
+
+export function useEditMessage() {
+  return useMutation({
+    mutationFn: async (playload: { channelId: string; messageId: string; content: string }) => {
+      await api.patch(`v1/chat/channels/${playload.channelId}/messages/${playload.messageId}`, { content: playload.content });
+    }
+  });
+}
+
+export function useDeleteMessage() {
+  return useMutation({
+    mutationFn: async (playload: { channelId: string; messageId: string }) => {
+      await api.delete(`v1/chat/channels/${playload.channelId}/messages/${playload.messageId}`);
+    }
+  });
+}
+
+export function usePinMessage() {
+  return useMutation({
+    mutationFn: async (playload: { channelId: string; messageId: string; is_pinned: boolean }) => {
+      await api.post(`v1/chat/channels/${playload.channelId}/messages/${playload.messageId}/pin`, { is_pinned: playload.is_pinned });
+    }
+  });
+}
+
+export function useReactMessage() {
+  return useMutation({
+    mutationFn: async (playload: { channelId: string; messageId: string; emoji: string }) => {
+      await api.post(`v1/chat/channels/${playload.channelId}/messages/${playload.messageId}/react`, { emoji: playload.emoji });
+    }
+  });
+}
+
+export function useTaskFromMessage() {
+  return useMutation({
+    mutationFn: async (playload: { channelId: string; messageId: string }) => {
+      await api.post(`v1/chat/channels/${playload.channelId}/messages/${playload.messageId}/task`);
+    }
+  });
+}
+
+export function useThreadMessages(channelId: string | null, parentId: string | null) {
+  return useQuery<ChatMessage[]>({
+    queryKey: [...chatKeys.messages(channelId ?? ""), parentId, "thread"],
+    queryFn: async () => {
+      const res = await api.get<{ data: { messages: ChatMessage[] } }>(
+        `v1/chat/channels/${channelId}/messages/${parentId}/thread`
+      );
+      return res.data.data.messages;
+    },
+    enabled: !!channelId && !!parentId,
+  });
+}
+
