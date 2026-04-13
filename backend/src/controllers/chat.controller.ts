@@ -30,7 +30,6 @@ export const createDirectChannel = asyncHandler(async (req: any, res: Response) 
     let channelId = await chatService.findDirectChannel(userId, target_user_id, workspaceId);
 
     if (!channelId) {
-        // Create new
         channelId = await chatService.createChannel(workspaceId, 'direct', null, [userId, target_user_id]);
         const channel = await chatService.getChannelById(channelId, userId);
         broadcastNewChannel([userId, target_user_id], channel);
@@ -63,13 +62,11 @@ export const createGroupChannel = asyncHandler(async (req: any, res: Response) =
         return res.status(400).json({ success: false, error: { message: `privacy must be one of: ${validPrivacy.join(', ')}` } });
     }
 
-    // Verify user is a member of the workspace (any role can create a channel)
     const memberCheck = await pool.query('SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2', [workspaceId, userId]);
     if (memberCheck.rowCount === 0) {
         return res.status(403).json({ success: false, error: { message: "You must be a member of this workspace to create a channel" } });
     }
 
-    // Ensure creator is in the members list
     const allMembers = new Set([...member_ids, userId]);
 
     const channelId = await chatService.createChannel(
@@ -107,7 +104,6 @@ export const getChannelMessages = asyncHandler(async (req: any, res: Response) =
     const { limit, before_id } = req.query;
     const userId = req.user.id;
 
-    // Use our checkChannelAccess
     const hasAccess = await chatService.checkChannelAccess(userId, id);
     if (!hasAccess) {
         return res.status(403).json({ success: false, error: { message: "403 Forbidden" } });
@@ -144,7 +140,6 @@ export const addChannelMembers = asyncHandler(async (req: any, res: Response) =>
         return res.status(400).json({ success: false, error: { message: "member_ids must be a non-empty array" } });
     }
 
-    // Verify creator is admin of this group
     const roleCheck = await pool.query('SELECT role, type FROM channel_members cm JOIN channels c ON c.id = cm.channel_id WHERE cm.channel_id = $1 AND cm.user_id = $2', [id, userId]);
     const row = roleCheck.rows[0];
     if (!row || row.type !== 'group') {
@@ -157,10 +152,8 @@ export const addChannelMembers = asyncHandler(async (req: any, res: Response) =>
     await chatService.addMembers(id, member_ids);
     const channel = await chatService.getChannelById(id, userId);
 
-    // Notify newly added members to refresh their channel list
     broadcastNewChannel(member_ids, channel);
-    
-    // Notify existing members to refresh their member lists
+
     const io = getIO();
     if (io) io.to(`channel:${id}`).emit("channel_updated", { channel_id: id });
 
@@ -174,7 +167,6 @@ export const removeChannelMember = asyncHandler(async (req: any, res: Response) 
     const { id, userId: targetUserId } = req.params;
     const userId = req.user.id;
 
-    // Verify creator is admin of this group, or the user is leaving voluntarily
     if (targetUserId !== userId) {
         const roleCheck = await pool.query('SELECT role, type FROM channel_members cm JOIN channels c ON c.id = cm.channel_id WHERE cm.channel_id = $1 AND cm.user_id = $2', [id, userId]);
         const row = roleCheck.rows[0];
@@ -188,15 +180,13 @@ export const removeChannelMember = asyncHandler(async (req: any, res: Response) 
 
     await chatService.removeMember(id, targetUserId);
 
-    // Force the removed user to refresh and lose the channel
     const io = getIO();
     if (io) {
         io.to(`user:${targetUserId}`).emit("channel_removed", { channel_id: id });
-        
-        // Notify existing members to refresh their member lists
         io.to(`channel:${id}`).emit("channel_updated", { channel_id: id });
     }
 
+    res.status(200).json({ success: true, message: "Member removed" });
 });
 
 export const editMessage = asyncHandler(async (req: any, res: Response) => {
@@ -229,10 +219,9 @@ export const deleteMessage = asyncHandler(async (req: any, res: Response) => {
 export const pinMessage = asyncHandler(async (req: any, res: Response) => {
     const { id, messageId } = req.params;
     const { is_pinned } = req.body;
-    
-    // Assuming any member can pin
+
     const pinned = await chatService.pinMessage(messageId, is_pinned);
-    
+
     getIO()?.to(`channel:${id}`).emit("message_pinned", { channel_id: id, message: pinned });
 
     res.status(200).json({ success: true, data: { message: pinned } });
@@ -246,7 +235,7 @@ export const toggleReaction = asyncHandler(async (req: any, res: Response) => {
     if (!emoji) return res.status(400).json({ success: false, error: { message: "Emoji is required" } });
 
     const updated = await chatService.toggleReaction(messageId, emoji, userId);
-    
+
     getIO()?.to(`channel:${id}`).emit("message_reaction", { channel_id: id, message_id: messageId, reactions: updated.reactions });
 
     res.status(200).json({ success: true, data: { reactions: updated.reactions } });
@@ -264,7 +253,7 @@ export const createTaskFromMessage = asyncHandler(async (req: any, res: Response
     const workspaceId = req.workspaceId;
 
     const updated = await chatService.createTaskFromMessage(messageId, workspaceId, userId);
-    
+
     getIO()?.to(`channel:${id}`).emit("message_task_created", { channel_id: id, message_id: messageId, task_id: updated.task_id });
 
     res.status(200).json({ success: true, data: { task_id: updated.task_id } });
@@ -294,4 +283,3 @@ export const checkChannelAccessMiddleware = asyncHandler(async (req: any, res: R
     }
     next();
 });
-

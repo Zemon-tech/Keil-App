@@ -9,7 +9,6 @@ const port = config.port;
 // Start the server
 const startServer = async () => {
     try {
-
         // Test PostgreSQL connection
         await pool.query('SELECT NOW()');
 

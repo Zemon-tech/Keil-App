@@ -50,9 +50,6 @@ USING (
     )
 );
 
--- Note: We generally don't allow frontend INSERT on channels, it scales via the backend server with its service role.
--- But if needed for backend service role operations, service_role bypasses RLS natively.
-
 -- 6. Channel Members Policies
 -- A user can see members of any channel they belong to
 CREATE POLICY "Users can view members of their channels"
@@ -67,7 +64,7 @@ USING (
 
 -- 7. Messages Policies
 -- A user can see messages if they belong to the channel
-CREATE POLICY "Users can view messages in their channels"
+CREATE POLICY "Messages are viewable by channel members"
 ON messages
 FOR SELECT
 USING (
@@ -78,7 +75,7 @@ USING (
 );
 
 -- A user can insert a message if they belong to the channel and are the sender
-CREATE POLICY "Users can insert messages in their channels"
+CREATE POLICY "Messages are insertable by channel members"
 ON messages
 FOR INSERT
 WITH CHECK (
