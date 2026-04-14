@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
 import { Button } from "@/components/ui/button";
@@ -110,8 +109,8 @@ export function TasksPage() {
   return (
     <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
       <main className={containerClassName}>
-        <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-          <ResizablePanel defaultSize={20} minSize="25%" className="bg-card">
+        <div className="flex h-full w-full">
+          <div className="w-[300px] shrink-0 bg-card border-r border-border h-full">
             <TaskListPane
               query={query}
               onQueryChange={setQuery}
@@ -138,9 +137,9 @@ export function TasksPage() {
               onLoadMore={handleLoadMore}
               isLoadingMore={isFetching && limit > PAGE_SIZE}
             />
-          </ResizablePanel>
+          </div>
 
-          <ResizablePanel defaultSize={70} minSize="50%" className="bg-background">
+          <div className="flex-1 min-w-0 bg-background h-full">
             {selected ? (
               <TaskDetailPane
                 task={selected}
@@ -177,8 +176,8 @@ export function TasksPage() {
                 </div>
               </div>
             )}
-          </ResizablePanel>
-        </ResizablePanelGroup>
+          </div>
+        </div>
       </main>
     </div>
   );

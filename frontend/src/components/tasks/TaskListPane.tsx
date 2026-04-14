@@ -1,20 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Draggable } from "@fullcalendar/interaction";
-import { Search, Plus, GripVertical, Flag, Zap, ArrowUpDown } from "lucide-react";
+import { Search, Plus, GripVertical, Flag, Zap, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -29,7 +19,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { Task, TaskStatus } from "@/types/task";
-import { useCreateTask, type TaskDTO, type CreateTaskInput, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
+import { type TaskDTO, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
+import { CreateTaskDialog } from "./CreateTaskDialog";
 
 type Props = {
   query: string;
@@ -104,17 +95,9 @@ export function TaskListPane({
   onLoadMore,
   isLoadingMore = false,
 }: Props) {
-  const createTask = useCreateTask();
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newObjective, setNewObjective] = useState("");
-  const [newSuccessCriteria, setNewSuccessCriteria] = useState("");
-  const [newDueDateISO, setNewDueDateISO] = useState("");
-  const [newStatus, setNewStatus] = useState<TaskStatus>("backlog");
-  const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
-  const [newParentTaskId, setNewParentTaskId] = useState<string>("");
+  const [isSearchOpen, setIsSearchOpen] = useState(!!query);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Keyboard shortcut: press C to open create dialog
@@ -149,9 +132,9 @@ export function TaskListPane({
         const taskId = eventEl.getAttribute("data-task-id");
         const taskTitle = eventEl.getAttribute("data-task-title");
         const taskStatus = eventEl.getAttribute("data-task-status");
-        
+
         console.log("🎯 Dragging task:", { taskId, taskTitle, taskStatus });
-        
+
         return {
           id: taskId,
           title: taskTitle,
@@ -171,44 +154,7 @@ export function TaskListPane({
     };
   }, [tasks]);
 
-  // Date helpers — convert ISO string to yyyy-mm-dd for <input type="date">
-  const toDateInputValue = (iso: string) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
-  };
-
-  function resetCreateForm() {
-    setNewTitle("");
-    setNewDescription("");
-    setNewObjective("");
-    setNewSuccessCriteria("");
-    setNewDueDateISO("");
-    setNewStatus("backlog");
-    setNewPriority("medium");
-    setNewParentTaskId("");
-  }
-
-  async function handleCreateSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const title = newTitle.trim();
-    if (!title) return;
-
-    const input: CreateTaskInput = {
-      title,
-      status: newStatus,
-      priority: newPriority,
-    };
-    if (newDescription.trim()) input.description = newDescription.trim();
-    if (newObjective.trim()) input.objective = newObjective.trim();
-    if (newSuccessCriteria.trim()) input.success_criteria = newSuccessCriteria.trim();
-    if (newDueDateISO) input.due_date = new Date(newDueDateISO).toISOString();
-    if (newParentTaskId && newParentTaskId !== "none") input.parent_task_id = newParentTaskId;
-
-    const result = await createTask.mutateAsync(input);
-    onTaskCreated(result.id);
-    resetCreateForm();
-  }
+  const isMultiSelecting = selectedTaskIds.size > 0;
 
   const toggleSelection = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -225,73 +171,94 @@ export function TaskListPane({
     setSelectedTaskIds(new Set());
   };
 
-  const isMultiSelecting = selectedTaskIds.size > 0;
+
 
   return (
     <div className="h-full min-h-0 flex flex-col w-full relative overflow-hidden">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="px-3 pt-3 pb-2 border-b border-border/60 shrink-0">
         {/* Title row */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground leading-none mb-0.5">
-              Work Queue
-            </div>
-            <div className="text-sm font-semibold leading-tight truncate">
-              Pick a task to focus
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 shrink-0 rounded-md"
-            onClick={() => onCreateDialogOpenChange(true)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-
-        {/* Search */}
-        <div className="relative mb-2">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Search tasks, projects…"
-            className="pl-8 h-8 text-xs rounded-md"
-          />
-        </div>
-
-        {/* Filter chips — single scrollable row, never wraps */}
-        <div className="flex gap-1 overflow-x-auto scrollbar-none pb-0.5">
-          {FILTER_OPTIONS.map(({ value, label }) => {
-            const active = statusFilter === value;
-            return (
-              <button
-                key={value}
-                onClick={() => onStatusFilterChange(value)}
-                className={cn(
-                  "shrink-0 h-6 px-2.5 rounded text-[11px] font-medium transition-colors whitespace-nowrap",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
+        <div className="flex items-center justify-between gap-2 min-h-[28px]">
+          {isSearchOpen ? (
+            <div className="relative flex-1 animate-in fade-in slide-in-from-right-2 duration-200">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                autoFocus
+                value={query}
+                onChange={(e) => onQueryChange(e.target.value)}
+                placeholder="Search tasks, projects…"
+                className="pl-8 pr-8 h-8 text-xs rounded-md w-full"
+                onBlur={(e) => {
+                  if (!e.target.value) setIsSearchOpen(false);
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
+                onClick={() => {
+                  onQueryChange("");
+                  setIsSearchOpen(false);
+                }}
               >
-                {label}
-              </button>
-            );
-          })}
+                <X className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold leading-tight truncate">
+                  Pick a task to focus
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 shrink-0 rounded-md"
+                  onClick={() => setIsSearchOpen(true)}
+                >
+                  <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 shrink-0 rounded-md"
+                  onClick={() => onCreateDialogOpenChange(true)}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Sort row */}
-        <div className="flex items-center gap-1.5 mt-1.5">
-          <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />
+        {/* Filters & Sort row */}
+        <div className="flex items-center gap-1.5 mt-2.5 pb-0.5">
+          {/* Status Filter Dropdown */}
+          <Select
+            value={statusFilter}
+            onValueChange={onStatusFilterChange}
+          >
+            <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
+              <SelectValue placeholder="Filter" />
+            </SelectTrigger>
+            <SelectContent>
+              {FILTER_OPTIONS.map(({ value, label }) => (
+                <SelectItem key={value} value={value} className="text-xs">
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Sort By Dropdown */}
           <Select
             value={sortBy}
             onValueChange={(v) => onSortChange(v as SortBy, sortOrder)}
           >
-            <SelectTrigger className="h-6 text-[11px] flex-1 rounded border-border/60 bg-muted/40 px-2">
-              <SelectValue />
+            <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
+              <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
               {SORT_OPTIONS.map(({ value, label }) => (
@@ -301,13 +268,20 @@ export function TaskListPane({
               ))}
             </SelectContent>
           </Select>
-          <button
-            onClick={() => onSortChange(sortBy, sortOrder === "asc" ? "desc" : "asc")}
-            className="shrink-0 h-6 px-2 rounded text-[11px] font-medium bg-muted/40 border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            title={sortOrder === "asc" ? "Ascending" : "Descending"}
+
+          {/* Sort Order Dropdown */}
+          <Select
+            value={sortOrder}
+            onValueChange={(v) => onSortChange(sortBy, v as SortOrder)}
           >
-            {sortOrder === "asc" ? "↑ Asc" : "↓ Desc"}
-          </button>
+            <SelectTrigger className="h-7 w-[72px] shrink-0 text-[11px] rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc" className="text-xs">Desc</SelectItem>
+              <SelectItem value="asc" className="text-xs">Asc</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -362,24 +336,31 @@ export function TaskListPane({
                   isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
                 )}
               >
-                {/* Drag handle */}
-                {isDraggable && (
-                  <div className="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity">
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                )}
-
-                {/* Multi-select checkbox */}
+                {/* Selection & Drag actions */}
                 <div
                   className={cn(
-                    "shrink-0 transition-opacity",
+                    "flex items-center overflow-hidden transition-all duration-200 shrink-0",
                     !isChecked && !isMultiSelecting
-                      ? "opacity-0 group-hover:opacity-100"
-                      : "opacity-100"
+                      ? "w-0 opacity-0 group-hover:w-[36px] group-hover:opacity-100"
+                      : "w-[36px] opacity-100"
                   )}
-                  onClick={(e) => toggleSelection(e, t.id)}
                 >
-                  <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                  {/* Drag handle */}
+                  {isDraggable ? (
+                    <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
+                      <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="w-[22px] shrink-0" />
+                  )}
+
+                  {/* Multi-select checkbox */}
+                  <div
+                    className="shrink-0"
+                    onClick={(e) => toggleSelection(e, t.id)}
+                  >
+                    <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                  </div>
                 </div>
 
                 {/* Status dot — click opens popover */}
@@ -434,9 +415,9 @@ export function TaskListPane({
                   <span className="tabular-nums">
                     {displayDate
                       ? new Date(displayDate).toLocaleDateString(
-                          undefined,
-                          { month: "short", day: "numeric" }
-                        )
+                        undefined,
+                        { month: "short", day: "numeric" }
+                      )
                       : "—"}
                   </span>
                 </div>
@@ -509,211 +490,12 @@ export function TaskListPane({
       )}
 
       {/* ── Create task dialog ────────────────────────────────── */}
-      <Dialog
-        open={createDialogOpen}
-        onOpenChange={(open) => {
-          onCreateDialogOpenChange(open);
-          if (!open) resetCreateForm();
-        }}
-      >
-        <DialogContent className="max-w-2xl p-0 gap-0">
-          <form onSubmit={handleCreateSubmit}>
-            {/* Modal header */}
-            <div className="px-5 pt-5 pb-4 border-b border-border/60">
-              <DialogHeader>
-                <DialogTitle className="text-base">Create task</DialogTitle>
-                <DialogDescription className="text-xs mt-0.5">
-                  Capture the objective, criteria, owner, and dates.
-                </DialogDescription>
-              </DialogHeader>
-            </div>
-
-            <Tabs defaultValue="basics" className="w-full">
-              <div className="px-5 pt-3">
-                <TabsList className="h-8 text-xs w-full grid grid-cols-3">
-                  <TabsTrigger value="basics" className="text-xs">
-                    Basics
-                  </TabsTrigger>
-                  <TabsTrigger value="strategy" className="text-xs">
-                    Strategy
-                  </TabsTrigger>
-                  <TabsTrigger value="schedule" className="text-xs">
-                    Schedule
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <div className="px-5 pt-3 pb-4 min-h-[220px]">
-                {/* ── Basics tab ── */}
-                <TabsContent value="basics" className="mt-0 space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Title
-                    </Label>
-                    <Input
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="e.g. Draft dependency graph UI"
-                      className="h-8 text-xs"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Description{" "}
-                      <span className="opacity-50">(optional)</span>
-                    </Label>
-                    <Textarea
-                      value={newDescription}
-                      onChange={(e) => setNewDescription(e.target.value)}
-                      placeholder="Optional context to help scanning in the list."
-                      className="text-xs min-h-[70px] resize-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Status
-                      </Label>
-                      <Select
-                        value={newStatus}
-                        onValueChange={(v) => setNewStatus(v as TaskStatus)}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s} className="text-xs">
-                              {s}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Priority
-                      </Label>
-                      <Select
-                        value={newPriority}
-                        onValueChange={(v) =>
-                          setNewPriority(v as Task["priority"])
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                           {["low", "medium", "high", "urgent"].map((p) => (
-                            <SelectItem key={p} value={p} className="text-xs">
-                              {p}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Parent task (optional) */}
-                  {(allTasks ?? tasks).length > 0 && (
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Parent task{" "}
-                        <span className="opacity-50">(optional)</span>
-                      </Label>
-                      <Select
-                        value={newParentTaskId}
-                        onValueChange={setNewParentTaskId}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="None (top-level task)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none" className="text-xs">
-                            None (top-level)
-                          </SelectItem>
-                          {(allTasks ?? tasks).map((t) => (
-                            <SelectItem key={t.id} value={t.id} className="text-xs">
-                              {t.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </TabsContent>
-
-                {/* ── Strategy tab ── */}
-                <TabsContent value="strategy" className="mt-0 space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Objective
-                    </Label>
-                    <Textarea
-                      value={newObjective}
-                      onChange={(e) => setNewObjective(e.target.value)}
-                      placeholder="What are we trying to achieve?"
-                      className="text-xs min-h-[90px] resize-none"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Success criteria
-                    </Label>
-                    <Textarea
-                      value={newSuccessCriteria}
-                      onChange={(e) => setNewSuccessCriteria(e.target.value)}
-                      placeholder="How do we know it is done?"
-                      className="text-xs min-h-[90px] resize-none"
-                      required
-                    />
-                  </div>
-                </TabsContent>
-
-                {/* ── Schedule tab ── */}
-                <TabsContent value="schedule" className="mt-0 space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Due date
-                    </Label>
-                    <Input
-                      type="date"
-                      value={toDateInputValue(newDueDateISO)}
-                      onChange={(e) =>
-                        setNewDueDateISO(
-                          e.target.value
-                            ? new Date(e.target.value).toISOString()
-                            : ""
-                        )
-                      }
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                </TabsContent>
-              </div>
-            </Tabs>
-
-            {/* Modal footer */}
-            <div className="px-5 py-3 border-t border-border/60 flex justify-end gap-2 bg-muted/20">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onCreateDialogOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={createTask.isPending}>
-                {createTask.isPending ? "Creating…" : "Create task"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <CreateTaskDialog 
+        open={createDialogOpen} 
+        onOpenChange={onCreateDialogOpenChange} 
+        onTaskCreated={onTaskCreated} 
+        allTasks={allTasks ?? tasks}
+      />
     </div>
   );
 }
