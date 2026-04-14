@@ -104,3 +104,35 @@ export type DashboardTaskDTO = {
     due_date: string | null;
     objective: string | null;
 };
+
+// Returned by GET /api/v1/schedule/calendar
+export type ScheduleBlockDTO = {
+  id: string;
+  task_id: string;
+  task_title: string;
+  task_status: TaskStatus;
+  scheduled_start: string; // ISO
+  scheduled_end: string;   // ISO
+};
+
+// Returned by GET /api/v1/schedule/gantt
+export type GanttTaskDTO = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  start_date: string; // ISO — never null (backend defaults null start_date to today in response)
+  due_date: string;   // ISO — never null (backend excludes tasks with null due_date)
+  parent_task_id: string | null;
+  dependencies: string[]; // array of task UUIDs this task depends on
+};
+
+// Returned by GET /api/v1/schedule/unscheduled
+export type UnscheduledTaskDTO = {
+  id: string;
+  title: string;
+  start_date: string | null;
+  due_date: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+};
+
