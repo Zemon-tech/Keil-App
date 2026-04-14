@@ -27,11 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   LayoutDashboard,
-  Users,
   Settings,
-  FileText,
-  BarChart3,
-  Bell,
   LogOut,
   ChevronUp,
   User,
@@ -58,26 +54,6 @@ const navigationItems = [
     title: "Tasks",
     url: "/tasks",
     icon: CheckSquare,
-  },
-  {
-    title: "Users",
-    url: "/users",
-    icon: Users,
-  },
-  {
-    title: "Reports",
-    url: "/reports",
-    icon: FileText,
-  },
-  {
-    title: "Analytics",
-    url: "/analytics",
-    icon: BarChart3,
-  },
-  {
-    title: "Notifications",
-    url: "/notifications",
-    icon: Bell,
   },
 ];
 
