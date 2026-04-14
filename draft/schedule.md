@@ -1,4 +1,4 @@
-﻿# Module 7 — Schedule & Gantt
+# Module 7 — Schedule & Gantt
 
 ## Prerequisites
 - Phase 0 (Foundation) must be complete — `workspaceId` must be available globally and `req.workspaceId` must be attached by auth middleware
@@ -376,15 +376,15 @@ LIMIT $limit OFFSET $offset;
 
 ### Task 1 — Migration
 
-- [ ] Create `backend/src/migrations/005_schedule_schema.sql` with the exact SQL from the API Contract section above
-- [ ] Do NOT add `NOT NULL` to `tasks.start_date` or `tasks.due_date` — they remain nullable
+- [x] Create `backend/src/migrations/005_schedule_schema.sql` with the exact SQL from the API Contract section above
+- [x] Do NOT add `NOT NULL` to `tasks.start_date` or `tasks.due_date` — they remain nullable
 
 ### Task 2 — Shared Validators
 
-- [ ] Create `backend/src/utils/validateTaskDates.ts`
-- [ ] Export `validateTaskHasDates(start, due)` — see Shared Validation Layer section for full implementation
-- [ ] Export `validateTimeblockRange(scheduledStart, scheduledEnd)` — see Shared Validation Layer section for full implementation
-- [ ] Do NOT merge these into one function — they have different error messages and call sites
+- [x] Create `backend/src/utils/validateTaskDates.ts`
+- [x] Export `validateTaskHasDates(start, due)` — see Shared Validation Layer section for full implementation
+- [x] Export `validateTimeblockRange(scheduledStart, scheduledEnd)` — see Shared Validation Layer section for full implementation
+- [x] Do NOT merge these into one function — they have different error messages and call sites
 
 ### Task 3 — Repository
 
@@ -399,32 +399,32 @@ File: `backend/src/repositories/schedule.repository.ts`
 > Branch: `feature/schedule-be`
 
 ### Setup & Migrations
-- [ ] Create `backend/src/migrations/005_schedule_schema.sql` — `task_schedules` table as defined in the API Contract above. Do NOT add `NOT NULL` to `tasks.start_date` or `tasks.due_date`. Migration number is `005` because `004` is taken by `004_chat_schema.sql`.
-- [ ] Create `backend/src/utils/validateTaskDates.ts` — two separate exported functions: `validateTaskHasDates` and `validateTimeblockRange` exactly as defined in the Shared Validation Layer section above.
+- [x] Create `backend/src/migrations/005_schedule_schema.sql` — `task_schedules` table as defined in the API Contract above. Do NOT add `NOT NULL` to `tasks.start_date` or `tasks.due_date`. Migration number is `005` because `004` is taken by `004_chat_schema.sql`.
+- [x] Create `backend/src/utils/validateTaskDates.ts` — two separate exported functions: `validateTaskHasDates` and `validateTimeblockRange` exactly as defined in the Shared Validation Layer section above.
 
 ### Repository — `backend/src/repositories/schedule.repository.ts`
-- [ ] Create the file extending `BaseRepository` (same pattern as `task.repository.ts`).
-- [ ] `upsertTimeblock(taskId, userId, workspaceId, start, end, client?)` — `INSERT INTO task_schedules ... ON CONFLICT (task_id, user_id) DO UPDATE SET scheduled_start = EXCLUDED.scheduled_start, scheduled_end = EXCLUDED.scheduled_end`.
-- [ ] `deleteTimeblock(taskId, userId, workspaceId, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2 AND workspace_id = $3`.
-- [ ] `deleteTimeblocksByUser(taskId, userId, client?)` — used by `task.service.ts` for ghost block cleanup on unassign. `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2`.
-- [ ] `shiftTimeblocks(taskId, deltaMs, client?)` — `UPDATE task_schedules SET scheduled_start = scheduled_start + ($deltaMs || ' milliseconds')::interval, scheduled_end = scheduled_end + ($deltaMs || ' milliseconds')::interval WHERE task_id = $1`.
-- [ ] `purgeOutOfBoundsTimeblocks(taskId, newStart, newEnd, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND (scheduled_start < $2 OR scheduled_end > $3)`.
-- [ ] `getCalendarBlocks(userId, workspaceId, startRange, endRange)` — join `task_schedules` with `tasks`, filter by workspace + user + date overlap + `tasks.deleted_at IS NULL`. Return `ScheduleBlockDTO` shape.
-- [ ] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — LEFT JOIN query with `ILIKE` search and `COUNT(*) OVER()` window function for total count.
-- [ ] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — join `tasks` with `task_dependencies`. Exclude `due_date IS NULL`. Return `start_date` as `COALESCE(start_date, CURRENT_DATE)` in the SELECT — do NOT update the DB row.
-- [ ] **Do NOT export from `repositories/index.ts`** — import directly by path everywhere to avoid circular dependencies.
+- [x] Create the file extending `BaseRepository` (same pattern as `task.repository.ts`).
+- [x] `upsertTimeblock(taskId, userId, workspaceId, start, end, client?)` — `INSERT INTO task_schedules ... ON CONFLICT (task_id, user_id) DO UPDATE SET scheduled_start = EXCLUDED.scheduled_start, scheduled_end = EXCLUDED.scheduled_end`.
+- [x] `deleteTimeblock(taskId, userId, workspaceId, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2 AND workspace_id = $3`.
+- [x] `deleteTimeblocksByUser(taskId, userId, client?)` — used by `task.service.ts` for ghost block cleanup on unassign. `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2`.
+- [x] `shiftTimeblocks(taskId, deltaMs, client?)` — `UPDATE task_schedules SET scheduled_start = scheduled_start + ($deltaMs || ' milliseconds')::interval, scheduled_end = scheduled_end + ($deltaMs || ' milliseconds')::interval WHERE task_id = $1`.
+- [x] `purgeOutOfBoundsTimeblocks(taskId, newStart, newEnd, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND (scheduled_start < $2 OR scheduled_end > $3)`.
+- [x] `getCalendarBlocks(userId, workspaceId, startRange, endRange)` — join `task_schedules` with `tasks`, filter by workspace + user + date overlap + `tasks.deleted_at IS NULL`. Return `ScheduleBlockDTO` shape.
+- [x] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — LEFT JOIN query with `ILIKE` search and `COUNT(*) OVER()` window function for total count.
+- [x] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — join `tasks` with `task_dependencies`. Exclude `due_date IS NULL`. Return `start_date` as `COALESCE(start_date, CURRENT_DATE)` in the SELECT — do NOT update the DB row.
+- [x] **Do NOT export from `repositories/index.ts`** — import directly by path everywhere to avoid circular dependencies.
 
 ### Service — `backend/src/services/schedule.service.ts`
-- [ ] Import `ScheduleRepository` directly: `import { ScheduleRepository } from '../repositories/schedule.repository'`. Instantiate at the top: `const scheduleRepository = new ScheduleRepository()`. Do NOT use `repositories/index.ts`.
-- [ ] Also import `taskRepository` from `repositories/index.ts` (already exported there) — needed for task fetches and status updates inside transactions.
-- [ ] `getCalendarTasks(userId, workspaceId, startRange, endRange, targetUserId?)`:
+- [x] Import `ScheduleRepository` directly: `import { ScheduleRepository } from '../repositories/schedule.repository'`. Instantiate at the top: `const scheduleRepository = new ScheduleRepository()`. Do NOT use `repositories/index.ts`.
+- [x] Also import `taskRepository` from `repositories/index.ts` (already exported there) — needed for task fetches and status updates inside transactions.
+- [x] `getCalendarTasks(userId, workspaceId, startRange, endRange, targetUserId?)`:
   - If `targetUserId` provided, verify it's in `workspace_members` with `workspaceId` using `workspaceRepository.isMember(workspaceId, targetUserId)`. Throw `403` if not.
   - Call `scheduleRepository.getCalendarBlocks(targetUserId ?? userId, workspaceId, startRange, endRange)`.
-- [ ] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — call repository, return `{ data, pagination }`.
-- [ ] `updateTaskTimeblock(taskId, userId, workspaceId, scheduledStart, scheduledEnd)` — full validation chain in one transaction (see API Contract step-by-step logic for endpoint 4).
-- [ ] `deleteTaskTimeblock(taskId, userId, workspaceId)` — call `scheduleRepository.deleteTimeblock`.
-- [ ] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — call repository.
-- [ ] `updateTaskDeadline(taskId, userId, workspaceId, newStartDate, newDueDate)`:
+- [x] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — call repository, return `{ data, pagination }`.
+- [x] `updateTaskTimeblock(taskId, userId, workspaceId, scheduledStart, scheduledEnd)` — full validation chain in one transaction (see API Contract step-by-step logic for endpoint 4).
+- [x] `deleteTaskTimeblock(taskId, userId, workspaceId)` — call `scheduleRepository.deleteTimeblock`.
+- [x] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — call repository.
+- [x] `updateTaskDeadline(taskId, userId, workspaceId, newStartDate, newDueDate)`:
   - Verify admin/owner role via `workspaceRepository.getMembers` or a direct query.
   - Fetch task. If `status === 'done'`, return early with `{ updated_task: task, cascaded_task_ids: [] }`.
   - Compute `start_delta` and `end_delta`.
@@ -435,29 +435,29 @@ File: `backend/src/repositories/schedule.repository.ts`
   - Return `{ updated_task, cascaded_task_ids }`.
 
 ### Controller — `backend/src/controllers/schedule.controller.ts`
-- [ ] All controllers must use `catchAsync` wrapper — no manual try/catch.
-- [ ] All controllers must return `new ApiResponse(statusCode, data, message)`.
-- [ ] `getCalendarTasks`: Extract `start_range`, `end_range`, `user_id` from `req.query`. Validate `start_range` and `end_range` are present and parseable — throw `400` if not. Call service.
-- [ ] `getUnscheduledTasks`: Extract `limit` (default 50, max 100), `offset` (default 0), `search` from `req.query`. Call service.
-- [ ] `updateTaskTimeblock`: Extract `taskId` from `req.params`, `scheduled_start` and `scheduled_end` from `req.body`. Call service.
-- [ ] `deleteTaskTimeblock`: Extract `taskId` from `req.params`. Call service.
-- [ ] `getGanttTasks`: Extract `scope` and `project_id` from `req.query`. Validate `scope` is `"workspace"` or `"user"` — throw `400` if not. Call service.
-- [ ] `updateTaskDeadline`: Extract `id` from `req.params`, `start_date` and `due_date` from `req.body`. Call service.
+- [x] All controllers must use `catchAsync` wrapper — no manual try/catch.
+- [x] All controllers must return `new ApiResponse(statusCode, data, message)`.
+- [x] `getCalendarTasks`: Extract `start_range`, `end_range`, `user_id` from `req.query`. Validate `start_range` and `end_range` are present and parseable — throw `400` if not. Call service.
+- [x] `getUnscheduledTasks`: Extract `limit` (default 50, max 100), `offset` (default 0), `search` from `req.query`. Call service.
+- [x] `updateTaskTimeblock`: Extract `taskId` from `req.params`, `scheduled_start` and `scheduled_end` from `req.body`. Call service.
+- [x] `deleteTaskTimeblock`: Extract `taskId` from `req.params`. Call service.
+- [x] `getGanttTasks`: Extract `scope` and `project_id` from `req.query`. Validate `scope` is `"workspace"` or `"user"` — throw `400` if not. Call service.
+- [x] `updateTaskDeadline`: Extract `id` from `req.params`, `start_date` and `due_date` from `req.body`. Call service.
 
 ### Routes — `backend/src/routes/schedule.routes.ts`
-- [ ] Create the file. Apply `protect` middleware to all routes.
-- [ ] `GET  /calendar` → `getCalendarTasks`
-- [ ] `GET  /unscheduled` → `getUnscheduledTasks`
-- [ ] `PUT  /tasks/:taskId/timeblock` → `updateTaskTimeblock`
-- [ ] `DELETE /tasks/:taskId/timeblock` → `deleteTaskTimeblock`
-- [ ] `GET  /gantt` → `getGanttTasks`
-- [ ] `PATCH /tasks/:id/deadline` → `updateTaskDeadline`
-- [ ] Register in `backend/src/routes/v1.routes.ts`: add `router.use("/schedule", scheduleRoutes)` — this is the only change to `v1.routes.ts`.
+- [x] Create the file. Apply `protect` middleware to all routes.
+- [x] `GET  /calendar` → `getCalendarTasks`
+- [x] `GET  /unscheduled` → `getUnscheduledTasks`
+- [x] `PUT  /tasks/:taskId/timeblock` → `updateTaskTimeblock`
+- [x] `DELETE /tasks/:taskId/timeblock` → `deleteTaskTimeblock`
+- [x] `GET  /gantt` → `getGanttTasks`
+- [x] `PATCH /tasks/:id/deadline` → `updateTaskDeadline`
+- [x] Register in `backend/src/routes/v1.routes.ts`: add `router.use("/schedule", scheduleRoutes)` — this is the only change to `v1.routes.ts`.
 
 ### Core Task Hook Fix — `backend/src/services/task.service.ts`
-- [ ] At the top of the file, add: `import { ScheduleRepository } from '../repositories/schedule.repository'` and `const scheduleRepository = new ScheduleRepository()`. Do NOT import via `repositories/index.ts`.
-- [ ] Inside the existing `removeUserFromTask` function, inside the existing `executeInTransaction` callback, after `taskAssigneeRepository.unassign(taskId, assigneeUserId, client)`, add one line: `await scheduleRepository.deleteTimeblocksByUser(taskId, assigneeUserId, client)`.
-- [ ] This is the **only** change to `task.service.ts`. All other existing logic stays untouched.
+- [x] At the top of the file, add: `import { ScheduleRepository } from '../repositories/schedule.repository'` and `const scheduleRepository = new ScheduleRepository()`. Do NOT import via `repositories/index.ts`.
+- [x] Inside the existing `removeUserFromTask` function, inside the existing `executeInTransaction` callback, after `taskAssigneeRepository.unassign(taskId, assigneeUserId, client)`, add one line: `await scheduleRepository.deleteTimeblocksByUser(taskId, assigneeUserId, client)`.
+- [x] This is the **only** change to `task.service.ts`. All other existing logic stays untouched.
 
 ---
 
@@ -607,8 +607,8 @@ New component — does not exist yet.
 
 ## Acceptance Criteria
 
-- [ ] Migration `005_schedule_schema.sql` runs cleanly after `004_chat_schema.sql` with no conflicts.
-- [ ] `validateTaskHasDates` and `validateTimeblockRange` are two separate functions in `validateTaskDates.ts`.
+- [x] Migration `005_schedule_schema.sql` runs cleanly after `004_chat_schema.sql` with no conflicts.
+- [x] `validateTaskHasDates` and `validateTimeblockRange` are two separate functions in `validateTaskDates.ts`.
 - [ ] Scheduling a task with no `due_date` returns `400` with a user-facing message asking them to set a due date.
 - [ ] Scheduling a task with no `start_date` automatically defaults it to today and proceeds.
 - [ ] `GET /schedule/calendar` requires `start_range` and `end_range`; returns `400` if either is missing.
@@ -638,30 +638,30 @@ New component — does not exist yet.
 > Branch: `feature/schedule-be`
 
 ### Setup & Migrations
-- [ ] Create `backend/src/migrations/005_schedule_schema.sql` — `task_schedules` table as defined above. Do NOT add `NOT NULL` to `tasks.start_date` or `tasks.due_date`. Migration number is `005` because `004` is taken by `004_chat_schema.sql`.
-- [ ] Create `backend/src/utils/validateTaskDates.ts` — two separate exported functions: `validateTaskHasDates` and `validateTimeblockRange` exactly as defined in the Shared Validation Layer section above.
+- [x] Create `backend/src/migrations/005_schedule_schema.sql` — `task_schedules` table as defined above. Do NOT add `NOT NULL` to `tasks.start_date` or `tasks.due_date`. Migration number is `005` because `004` is taken by `004_chat_schema.sql`.
+- [x] Create `backend/src/utils/validateTaskDates.ts` — two separate exported functions: `validateTaskHasDates` and `validateTimeblockRange` exactly as defined in the Shared Validation Layer section above.
 
 ### Repository — `backend/src/repositories/schedule.repository.ts`
-- [ ] Create the file extending `BaseRepository` (same pattern as `task.repository.ts`).
-- [ ] `upsertTimeblock(taskId, userId, workspaceId, start, end, client?)` — `INSERT INTO task_schedules ... ON CONFLICT (task_id, user_id) DO UPDATE SET scheduled_start = EXCLUDED.scheduled_start, scheduled_end = EXCLUDED.scheduled_end`.
-- [ ] `deleteTimeblock(taskId, userId, workspaceId, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2 AND workspace_id = $3`.
-- [ ] `deleteTimeblocksByUser(taskId, userId, client?)` — used by `task.service.ts` for ghost block cleanup. `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2`.
-- [ ] `shiftTimeblocks(taskId, deltaMs, client?)` — shifts `scheduled_start` and `scheduled_end` for all users of a task by delta milliseconds using PostgreSQL interval arithmetic.
-- [ ] `purgeOutOfBoundsTimeblocks(taskId, newStart, newEnd, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND (scheduled_start < $2 OR scheduled_end > $3)`.
-- [ ] `getCalendarBlocks(userId, workspaceId, startRange, endRange)` — join `task_schedules` with `tasks`, filter by workspace + user + date overlap + `tasks.deleted_at IS NULL`. Return `ScheduleBlockDTO` shape.
-- [ ] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — LEFT JOIN query with `ILIKE` search and `COUNT(*) OVER()` window function for total count.
-- [ ] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — join `tasks` with `task_dependencies`. Exclude `due_date IS NULL`. Return `start_date` as `COALESCE(start_date, CURRENT_DATE)` in the SELECT — do NOT update the DB row.
-- [ ] **Do NOT export from `repositories/index.ts`** — import directly by path everywhere to avoid circular dependencies.
+- [x] Create the file extending `BaseRepository` (same pattern as `task.repository.ts`).
+- [x] `upsertTimeblock(taskId, userId, workspaceId, start, end, client?)` — `INSERT INTO task_schedules ... ON CONFLICT (task_id, user_id) DO UPDATE SET scheduled_start = EXCLUDED.scheduled_start, scheduled_end = EXCLUDED.scheduled_end`.
+- [x] `deleteTimeblock(taskId, userId, workspaceId, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2 AND workspace_id = $3`.
+- [x] `deleteTimeblocksByUser(taskId, userId, client?)` — used by `task.service.ts` for ghost block cleanup. `DELETE FROM task_schedules WHERE task_id = $1 AND user_id = $2`.
+- [x] `shiftTimeblocks(taskId, deltaMs, client?)` — shifts `scheduled_start` and `scheduled_end` for all users of a task by delta milliseconds using PostgreSQL interval arithmetic.
+- [x] `purgeOutOfBoundsTimeblocks(taskId, newStart, newEnd, client?)` — `DELETE FROM task_schedules WHERE task_id = $1 AND (scheduled_start < $2 OR scheduled_end > $3)`.
+- [x] `getCalendarBlocks(userId, workspaceId, startRange, endRange)` — join `task_schedules` with `tasks`, filter by workspace + user + date overlap + `tasks.deleted_at IS NULL`. Return `ScheduleBlockDTO` shape.
+- [x] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — LEFT JOIN query with `ILIKE` search and `COUNT(*) OVER()` window function for total count.
+- [x] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — join `tasks` with `task_dependencies`. Exclude `due_date IS NULL`. Return `start_date` as `COALESCE(start_date, CURRENT_DATE)` in the SELECT — do NOT update the DB row.
+- [x] **Do NOT export from `repositories/index.ts`** — import directly by path everywhere to avoid circular dependencies.
 
 ### Service — `backend/src/services/schedule.service.ts`
-- [ ] Import `ScheduleRepository` directly: `import { ScheduleRepository } from '../repositories/schedule.repository'`. Instantiate at top: `const scheduleRepository = new ScheduleRepository()`. Do NOT use `repositories/index.ts`.
-- [ ] Also import `taskRepository` from `repositories/index.ts` (already exported there) — needed for task fetches and status updates inside transactions.
-- [ ] `getCalendarTasks(userId, workspaceId, startRange, endRange, targetUserId?)` — if `targetUserId` provided, verify it's in `workspace_members` with `workspaceId` using `workspaceRepository.isMember`. Throw `403` if not. Call `scheduleRepository.getCalendarBlocks`.
-- [ ] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — call repository, return `{ data, pagination }`.
-- [ ] `updateTaskTimeblock(taskId, userId, workspaceId, scheduledStart, scheduledEnd)` — full validation chain in one transaction per API Contract endpoint 4 logic.
-- [ ] `deleteTaskTimeblock(taskId, userId, workspaceId)` — call `scheduleRepository.deleteTimeblock`.
-- [ ] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — call repository.
-- [ ] `updateTaskDeadline(taskId, userId, workspaceId, newStartDate, newDueDate)`:
+- [x] Import `ScheduleRepository` directly: `import { ScheduleRepository } from '../repositories/schedule.repository'`. Instantiate at top: `const scheduleRepository = new ScheduleRepository()`. Do NOT use `repositories/index.ts`.
+- [x] Also import `taskRepository` from `repositories/index.ts` (already exported there) — needed for task fetches and status updates inside transactions.
+- [x] `getCalendarTasks(userId, workspaceId, startRange, endRange, targetUserId?)` — if `targetUserId` provided, verify it's in `workspace_members` with `workspaceId` using `workspaceRepository.isMember`. Throw `403` if not. Call `scheduleRepository.getCalendarBlocks`.
+- [x] `getUnscheduledTasks(userId, workspaceId, limit, offset, search?)` — call repository, return `{ data, pagination }`.
+- [x] `updateTaskTimeblock(taskId, userId, workspaceId, scheduledStart, scheduledEnd)` — full validation chain in one transaction per API Contract endpoint 4 logic.
+- [x] `deleteTaskTimeblock(taskId, userId, workspaceId)` — call `scheduleRepository.deleteTimeblock`.
+- [x] `getGanttTasks(workspaceId, scope, userId?, projectId?)` — call repository.
+- [x] `updateTaskDeadline(taskId, userId, workspaceId, newStartDate, newDueDate)`:
   - Verify admin/owner role via `workspace_members` query.
   - Fetch task. If `status === 'done'`, return early with `{ updated_task: task, cascaded_task_ids: [] }`.
   - Compute `start_delta` and `end_delta`.
@@ -672,29 +672,29 @@ New component — does not exist yet.
   - Return `{ updated_task, cascaded_task_ids }`.
 
 ### Controller — `backend/src/controllers/schedule.controller.ts`
-- [ ] All controllers must use `catchAsync` wrapper — no manual try/catch.
-- [ ] All controllers must return `new ApiResponse(statusCode, data, message)`.
-- [ ] `getCalendarTasks` — extract `start_range`, `end_range`, `user_id` from `req.query`. Validate `start_range` and `end_range` are present and parseable — throw `400` if not. Call service.
-- [ ] `getUnscheduledTasks` — extract `limit` (default 50, max 100), `offset` (default 0), `search` from `req.query`. Call service.
-- [ ] `updateTaskTimeblock` — extract `taskId` from `req.params`, `scheduled_start` and `scheduled_end` from `req.body`. Call service.
-- [ ] `deleteTaskTimeblock` — extract `taskId` from `req.params`. Call service.
-- [ ] `getGanttTasks` — extract `scope` and `project_id` from `req.query`. Validate `scope` is `"workspace"` or `"user"` — throw `400` if not. Call service.
-- [ ] `updateTaskDeadline` — extract `id` from `req.params`, `start_date` and `due_date` from `req.body`. Call service.
+- [x] All controllers must use `catchAsync` wrapper — no manual try/catch.
+- [x] All controllers must return `new ApiResponse(statusCode, data, message)`.
+- [x] `getCalendarTasks` — extract `start_range`, `end_range`, `user_id` from `req.query`. Validate `start_range` and `end_range` are present and parseable — throw `400` if not. Call service.
+- [x] `getUnscheduledTasks` — extract `limit` (default 50, max 100), `offset` (default 0), `search` from `req.query`. Call service.
+- [x] `updateTaskTimeblock` — extract `taskId` from `req.params`, `scheduled_start` and `scheduled_end` from `req.body`. Call service.
+- [x] `deleteTaskTimeblock` — extract `taskId` from `req.params`. Call service.
+- [x] `getGanttTasks` — extract `scope` and `project_id` from `req.query`. Validate `scope` is `"workspace"` or `"user"` — throw `400` if not. Call service.
+- [x] `updateTaskDeadline` — extract `id` from `req.params`, `start_date` and `due_date` from `req.body`. Call service.
 
 ### Routes — `backend/src/routes/schedule.routes.ts`
-- [ ] Create the file. Apply `protect` middleware to all routes.
-- [ ] `GET    /calendar`              → `getCalendarTasks`
-- [ ] `GET    /unscheduled`           → `getUnscheduledTasks`
-- [ ] `PUT    /tasks/:taskId/timeblock` → `updateTaskTimeblock`
-- [ ] `DELETE /tasks/:taskId/timeblock` → `deleteTaskTimeblock`
-- [ ] `GET    /gantt`                 → `getGanttTasks`
-- [ ] `PATCH  /tasks/:id/deadline`   → `updateTaskDeadline`
-- [ ] Register in `backend/src/routes/v1.routes.ts`: add `router.use("/schedule", scheduleRoutes)` — this is the only change to `v1.routes.ts`.
+- [x] Create the file. Apply `protect` middleware to all routes.
+- [x] `GET    /calendar`              → `getCalendarTasks`
+- [x] `GET    /unscheduled`           → `getUnscheduledTasks`
+- [x] `PUT    /tasks/:taskId/timeblock` → `updateTaskTimeblock`
+- [x] `DELETE /tasks/:taskId/timeblock` → `deleteTaskTimeblock`
+- [x] `GET    /gantt`                 → `getGanttTasks`
+- [x] `PATCH  /tasks/:id/deadline`   → `updateTaskDeadline`
+- [x] Register in `backend/src/routes/v1.routes.ts`: add `router.use("/schedule", scheduleRoutes)` — this is the only change to `v1.routes.ts`.
 
 ### Core Task Hook Fix — `backend/src/services/task.service.ts`
-- [ ] At the top of the file add: `import { ScheduleRepository } from '../repositories/schedule.repository'` and `const scheduleRepository = new ScheduleRepository()`. Do NOT import via `repositories/index.ts`.
-- [ ] Inside the existing `removeUserFromTask` function, inside the existing `executeInTransaction` callback, after `taskAssigneeRepository.unassign(taskId, assigneeUserId, client)`, add one line: `await scheduleRepository.deleteTimeblocksByUser(taskId, assigneeUserId, client)`.
-- [ ] This is the **only** change to `task.service.ts`. All other existing logic stays untouched.
+- [x] At the top of the file add: `import { ScheduleRepository } from '../repositories/schedule.repository'` and `const scheduleRepository = new ScheduleRepository()`. Do NOT import via `repositories/index.ts`.
+- [x] Inside the existing `removeUserFromTask` function, inside the existing `executeInTransaction` callback, after `taskAssigneeRepository.unassign(taskId, assigneeUserId, client)`, add one line: `await scheduleRepository.deleteTimeblocksByUser(taskId, assigneeUserId, client)`.
+- [x] This is the **only** change to `task.service.ts`. All other existing logic stays untouched.
 
 ---
 

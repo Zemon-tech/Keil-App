@@ -5,10 +5,13 @@ import {
   activityRepository,
   commentRepository
 } from '../repositories';
+import { ScheduleRepository } from '../repositories/schedule.repository';
 import { Task, User } from '../types/entities';
 import { TaskStatus, TaskPriority, LogEntityType, LogActionType } from '../types/enums';
 import { TaskQueryOptions } from '../types/repository';
 import { ApiError } from '../utils/ApiError';
+
+const scheduleRepository = new ScheduleRepository();
 
 /**
  * Task Service - Business logic layer using repositories
@@ -420,6 +423,7 @@ export const removeUserFromTask = async (
 ): Promise<void> => {
   await taskRepository.executeInTransaction(async (client) => {
     await taskAssigneeRepository.unassign(taskId, assigneeUserId, client);
+    await scheduleRepository.deleteTimeblocksByUser(taskId, assigneeUserId, client);
 
     // Log removal
     await activityRepository.log({
