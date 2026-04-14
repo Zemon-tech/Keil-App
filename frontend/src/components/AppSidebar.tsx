@@ -40,7 +40,6 @@ import {
   MessageSquare,
   CheckSquare,
   CalendarDays,
-  ChevronsUpDown,
   Check,
   Plus
 } from "lucide-react";
@@ -108,7 +107,7 @@ export function AppSidebar() {
   const userEmail = user?.email || "";
 
   const { state } = useSidebar();
-  const { workspaces, workspaceId, workspaceName, setActiveWorkspace } = useWorkspace();
+  const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
 
   const isCollapsed = state === "collapsed";
 
@@ -118,56 +117,28 @@ export function AppSidebar() {
         <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6 border-b border-border/50">
           <SidebarMenu>
             <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  {isCollapsed ? (
-                    <div className="relative group/trigger flex items-center justify-center h-8 w-8 mx-auto transition-all duration-300 cursor-pointer">
-                      <img
-                        src={logoSrc}
-                        alt="Keil HQ"
-                        className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90"
-                      />
-                      <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
+              {isCollapsed ? (
+                <div className="relative group/trigger flex items-center justify-center h-8 w-8 mx-auto transition-all duration-300">
+                  <img
+                    src={logoSrc}
+                    alt="Keil HQ"
+                    className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90"
+                  />
+                  <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2 rounded-lg">
+                  <div className="flex items-center gap-2.5 py-1.5">
+                    <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold">
+                      <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2 rounded-lg hover:bg-sidebar-accent cursor-pointer group">
-                      <div className="flex items-center gap-2.5 py-1.5">
-                        <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 transition-transform group-hover:scale-105 active:scale-95 text-primary font-bold">
-                          {workspaceName ? workspaceName.charAt(0).toUpperCase() : <img src={logoSrc} alt="Logo" className="size-5" />}
-                        </div>
-                        <div className="flex flex-col text-left">
-                          <span className="text-sm font-bold tracking-tight text-foreground truncate max-w-[120px]">{workspaceName || "KeilHQ"}</span>
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mt-0.5">Workspace</span>
-                        </div>
-                      </div>
-                      <ChevronsUpDown className="size-4 text-muted-foreground group-hover:text-foreground shrink-0" />
+                    <div className="flex flex-col text-left">
+                      <span className="text-sm font-bold tracking-tight text-foreground truncate max-w-[160px]">KeilHQ</span>
                     </div>
-                  )}
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 rounded-lg pointer-events-auto shadow-lg border border-border bg-popover text-popover-foreground z-50">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">Workspaces</DropdownMenuLabel>
-                  {workspaces.map((ws) => (
-                    <DropdownMenuItem 
-                      key={ws.id} 
-                      onClick={() => setActiveWorkspace(ws.id)}
-                      className="flex items-center justify-between cursor-pointer rounded-md p-2 m-1 focus:bg-accent"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
-                          {ws.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium">{ws.name}</span>
-                      </div>
-                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary" />}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator className="mx-1" />
-                  <DropdownMenuItem className="flex items-center gap-2 cursor-pointer p-2 m-1 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground" onClick={() => setCreateWorkspaceOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    <span className="text-sm">Create Workspace</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </div>
+                  <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-sidebar-accent" />
+                </div>
+              )}
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -246,6 +217,30 @@ export function AppSidebar() {
                       </div>
                     </div>
                   </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">Workspaces</DropdownMenuLabel>
+                  {workspaces.map((ws) => (
+                    <DropdownMenuItem
+                      key={ws.id}
+                      onClick={() => setActiveWorkspace(ws.id)}
+                      className="flex items-center justify-between cursor-pointer rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
+                          {ws.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm font-medium">{ws.name}</span>
+                      </div>
+                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuItem
+                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
+                    onSelect={() => setCreateWorkspaceOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                    Create workspace
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
                     <User className="h-4 w-4 text-muted-foreground" />
