@@ -134,5 +134,6 @@ export type UnscheduledTaskDTO = {
   due_date: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  parent_task_id?: string | null;
 };
 

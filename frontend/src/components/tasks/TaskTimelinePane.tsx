@@ -16,6 +16,8 @@ import type { Task } from "@/types/task";
 type Props = {
   tasks: Task[];
   selectedTask: Task | null;
+  onDeadlineChange?: (taskId: string, newStart: string, newEnd: string) => void;
+  isReadOnly?: boolean;
 };
 
 type GanttViewMode = "Day" | "Week" | "Month" | "Year";
@@ -58,7 +60,7 @@ function toGanttTask(t: Task, selectedTaskId: string | null) {
 
 import "./calendar-styles.css";
 
-export function TaskTimelinePane({ tasks, selectedTask }: Props) {
+export function TaskTimelinePane({ tasks, selectedTask, onDeadlineChange, isReadOnly }: Props) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const ganttRef = useRef<any>(null);
@@ -94,6 +96,10 @@ export function TaskTimelinePane({ tasks, selectedTask }: Props) {
           column_width: viewMode === "Day" ? 60 : viewMode === "Week" ? 140 : 120,
           view_mode_select: false,
           today_button: false,
+          readonly: isReadOnly ?? false,
+          on_date_change: (task: any, start: Date, end: Date) => {
+            onDeadlineChange?.(task.id, start.toISOString(), end.toISOString());
+          },
           custom_popup_html: (task: any) => {
             const source = tasks.find((t) => t.id === task.id);
             const subtitle = source ? `${source.projectTitle} • ${source.owner}` : "";
@@ -116,7 +122,7 @@ export function TaskTimelinePane({ tasks, selectedTask }: Props) {
       if (containerRef.current) containerRef.current.innerHTML = "";
       ganttRef.current = null;
     };
-  }, [ganttTasks, tasks, viewMode]);
+  }, [ganttTasks, tasks, viewMode, onDeadlineChange, isReadOnly]);
 
   // Re-init on container resize so height stays correct
   useEffect(() => {

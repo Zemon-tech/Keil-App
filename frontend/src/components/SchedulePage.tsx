@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { startOfToday, endOfToday } from "date-fns";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -7,8 +8,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { TaskTimelinePane } from "@/components/tasks/TaskTimelinePane";
-import type { CalendarBlock, Task } from "@/types/task";
-import { mockTasks } from "@/data/mockTasks";
+import { ScheduleTaskModal } from "@/components/schedule/ScheduleTaskModal";
+import { useTasks, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
+import { useCalendarTasks, useGanttTasks, useUpdateTaskTimeblock, useUpdateTaskDeadline } from "@/hooks/api/useSchedule";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import type { CalendarBlock, CalendarBlockType, Task, TaskStatus, TaskPriority } from "@/types/task";
 
 // Minimum pixel widths for each calendar view
 const MIN_WIDTHS = {
@@ -18,99 +22,119 @@ const MIN_WIDTHS = {
   listWeek: 400,      // List items readable
 } as const;
 
-const mockCalendarBlocks: CalendarBlock[] = [
-  {
-    id: "blk_01",
-    type: "meeting",
-    title: "Client sync",
-    startISO: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
-    endISO: new Date(Date.now() + 1000 * 60 * 90).toISOString(),
-    notes: "Agenda: gantt + calendar + task slot semantics",
-  },
-  {
-    id: "blk_02",
-    type: "focus_block",
-    title: "Deep work: Task UI",
-    startISO: new Date(Date.now() + 1000 * 60 * 120).toISOString(),
-    endISO: new Date(Date.now() + 1000 * 60 * 240).toISOString(),
-  },
-  {
-    id: "blk_03",
-    type: "task_slot",
-    title: "Work on: Define Task Module UI",
-    taskId: "tsk_01",
-    startISO: new Date(Date.now() + 1000 * 60 * 300).toISOString(),
-    endISO: new Date(Date.now() + 1000 * 60 * 360).toISOString(),
-  },
-  {
-    id: "blk_04",
-    type: "deadline_marker",
-    title: "Due: Stabilize auth refresh flow",
-    taskId: "tsk_03",
-    startISO: new Date(Date.now() + 1000 * 60 * 60 * 10).toISOString(),
-  },
-  {
-    id: "blk_05",
-    type: "reminder",
-    title: "Send update to Aisha",
-    startISO: new Date(Date.now() + 1000 * 60 * 60 * 3).toISOString(),
-  },
-];
-
 export function SchedulePage() {
   const { state } = useSidebar();
+  const { workspaceId, workspaceRole } = useWorkspace();
   const isCollapsed = state === "collapsed";
 
+  // ── Task list state ──
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+  const [sortBy, setSortBy] = useState<SortBy>("created_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [activeTab, setActiveTab] = useState<"schedule" | "timeline">("schedule");
   const [calendarView, setCalendarView] = useState<string>("timeGridWeek");
 
-  // Handle task scheduling updates
-  const handleTaskSchedule = (taskId: string, startISO: string, endISO: string) => {
-    console.log("📅 Scheduling task:", { taskId, startISO, endISO });
-    
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === taskId
-          ? { ...task, plannedStartISO: startISO, plannedEndISO: endISO }
-          : task
-      )
-    );
-    
-    console.log("✅ Task scheduled successfully");
+  // ── Calendar range state ──
+  const [calStart, setCalStart] = useState(startOfToday().toISOString());
+  const [calEnd, setCalEnd] = useState(endOfToday().toISOString());
+
+  // ── ScheduleTaskModal state ──
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalDefaultStart, setModalDefaultStart] = useState("");
+  const [modalDefaultEnd, setModalDefaultEnd] = useState("");
+
+  // ── Real API hooks ──
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks({
+    query,
+    status: statusFilter === "All" ? undefined : (statusFilter as TaskStatus),
+    sort_by: sortBy,
+    sort_order: sortOrder,
+  });
+
+  const { data: calendarBlocks } = useCalendarTasks({
+    start_range: calStart,
+    end_range: calEnd,
+  });
+
+  const { data: ganttTasks } = useGanttTasks({ scope: "workspace" });
+
+  const updateTimeblock = useUpdateTaskTimeblock();
+  const updateDeadline = useUpdateTaskDeadline();
+
+  // ── Convert ScheduleBlockDTO[] → CalendarBlock[] for TaskSchedulePane ──
+  const calendarBlockItems: CalendarBlock[] = useMemo(() => {
+    if (!calendarBlocks) return [];
+    return calendarBlocks.map((b) => ({
+      id: b.id,
+      type: "task_slot" as CalendarBlockType,
+      title: b.task_title,
+      taskId: b.task_id,
+      startISO: b.scheduled_start,
+      endISO: b.scheduled_end,
+    }));
+  }, [calendarBlocks]);
+
+  // ── Convert GanttTaskDTO[] → Task[] for TaskTimelinePane ──
+  const ganttTaskItems: Task[] = useMemo(() => {
+    if (!ganttTasks) return [];
+    return ganttTasks.map((g) => ({
+      id: g.id,
+      title: g.title,
+      status: g.status as TaskStatus,
+      priority: "medium" as TaskPriority,
+      projectId: "",
+      projectTitle: "",
+      owner: "",
+      objective: "",
+      success_criteria: "",
+      labels: [],
+      plannedStartISO: g.start_date,
+      plannedEndISO: g.due_date,
+      dueDateISO: g.due_date,
+      dependencies: g.dependencies.map((id) => ({ id, title: "", status: "backlog" as TaskStatus, priority: "medium" as TaskPriority, due_date: g.due_date })),
+      subtasks: [],
+      context: [],
+      comments: [],
+      activity: [],
+      assignees: [],
+    }));
+  }, [ganttTasks]);
+
+  // ── Handlers ──
+  const handleTaskSchedule = async (taskId: string, startISO: string, endISO: string) => {
+    await updateTimeblock.mutateAsync({ taskId, scheduled_start: startISO, scheduled_end: endISO });
   };
 
-  // Calculate minimum pixel width for calendar based on view
+  const handleDeadlineChange = (taskId: string, newStart: string, newEnd: string) => {
+    updateDeadline.mutate({ id: taskId, start_date: newStart, due_date: newEnd });
+  };
+
+  const handleSlotSelect = (start: string, end: string) => {
+    setModalDefaultStart(start);
+    setModalDefaultEnd(end);
+    setModalOpen(true);
+  };
+
+  const handleSortChange = (by: SortBy, order: SortOrder) => {
+    setSortBy(by);
+    setSortOrder(order);
+  };
+
+  // ── Derived ──
   const calendarMinPixels = useMemo(() => {
     const minPixels = MIN_WIDTHS[calendarView as keyof typeof MIN_WIDTHS] || MIN_WIDTHS.timeGridWeek;
-    console.log('📊 Calendar Min Pixels:', minPixels, 'for view:', calendarView);
     return `${minPixels}px`;
   }, [calendarView]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return tasks.filter((t) => {
-      if (statusFilter === "Mine" && t.owner !== "Shivang") return false;
-      if (statusFilter === "In Progress" && t.status !== "In Progress") return false;
-      if (statusFilter === "Blocked" && t.status !== "Blocked") return false;
-      if (statusFilter === "High Priority" && t.priority !== "High" && t.priority !== "Critical") return false;
-      if (!q) return true;
-      return (
-        t.title.toLowerCase().includes(q) ||
-        t.projectTitle.toLowerCase().includes(q) ||
-        (t.objective && t.objective.toLowerCase().includes(q))
-      );
-    });
-  }, [query, statusFilter, tasks]);
 
   const selectedTask = useMemo(
     () => tasks.find((t) => t.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks]
   );
+
+  const isGanttReadOnly = workspaceRole !== "admin" && workspaceRole !== "owner";
 
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",
@@ -128,19 +152,19 @@ export function SchedulePage() {
               onQueryChange={setQuery}
               statusFilter={statusFilter}
               onStatusFilterChange={setStatusFilter}
-              tasks={filtered}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortChange={handleSortChange}
+              tasks={tasks}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
               createDialogOpen={createDialogOpen}
               onCreateDialogOpenChange={setCreateDialogOpen}
-              onCreateTask={(task) => {
-                setTasks((prev) => [task, ...prev]);
-                setSelectedTaskId(task.id);
+              onTaskCreated={(newTaskId: string) => {
+                setSelectedTaskId(newTaskId);
                 setCreateDialogOpen(false);
               }}
-              onUpdateTask={(id, updates) => {
-                setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
-              }}
+              isLoading={tasksLoading}
             />
           </ResizablePanel>
 
@@ -150,9 +174,6 @@ export function SchedulePage() {
             defaultSize={70} 
             minSize={calendarMinPixels}
             className="bg-background"
-            onResize={(size) => {
-              console.log('📏 Calendar panel resized to:', size);
-            }}
           >
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
               <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-4 pt-3">
@@ -165,25 +186,62 @@ export function SchedulePage() {
               <div className="flex-1 min-h-0">
                 <TabsContent value="schedule" className="h-full mt-0 focus-visible:outline-none">
                   <TaskSchedulePane 
-                    tasks={tasks} 
-                    blocks={mockCalendarBlocks} 
-                    selectedTask={selectedTask}
-                    onViewChange={(view) => {
-                      console.log('📅 Calendar view changed to:', view);
-                      setCalendarView(view);
-                    }}
+                    tasks={tasks.map((t) => ({
+                      ...t,
+                      projectTitle: t.projectTitle ?? "",
+                      owner: t.owner ?? "",
+                      plannedStartISO: t.plannedStartISO ?? t.start_date ?? null,
+                      plannedEndISO: t.plannedEndISO ?? t.due_date ?? null,
+                      dueDateISO: t.dueDateISO ?? t.due_date ?? null,
+                      dependencies: (t.dependencies ?? []).map((d) => typeof d === "string" ? { id: d, title: "", status: "backlog" as TaskStatus, priority: "medium" as TaskPriority, due_date: t.due_date ?? "" } : d),
+                      subtasks: t.subtasks ?? [],
+                      context: t.context ?? [],
+                      comments: t.comments ?? [],
+                      assignees: t.assignees ?? [],
+                    })) as Task[]} 
+                    blocks={calendarBlockItems} 
+                    selectedTask={selectedTask ? {
+                      ...selectedTask,
+                      projectTitle: selectedTask.projectTitle ?? "",
+                      owner: selectedTask.owner ?? "",
+                      plannedStartISO: selectedTask.plannedStartISO ?? selectedTask.start_date ?? null,
+                      plannedEndISO: selectedTask.plannedEndISO ?? selectedTask.due_date ?? null,
+                      dueDateISO: selectedTask.dueDateISO ?? selectedTask.due_date ?? null,
+                      dependencies: (selectedTask.dependencies ?? []).map((d) => typeof d === "string" ? { id: d, title: "", status: "backlog" as TaskStatus, priority: "medium" as TaskPriority, due_date: selectedTask.due_date ?? "" } : d),
+                      subtasks: selectedTask.subtasks ?? [],
+                      context: selectedTask.context ?? [],
+                      comments: selectedTask.comments ?? [],
+                      assignees: selectedTask.assignees ?? [],
+                    } as Task : null}
+                    onViewChange={setCalendarView}
                     onTaskSchedule={handleTaskSchedule}
+                    onSlotSelect={handleSlotSelect}
                   />
                 </TabsContent>
 
                 <TabsContent value="timeline" className="h-full mt-0 focus-visible:outline-none">
-                  <TaskTimelinePane tasks={tasks} selectedTask={selectedTask} />
+                  <TaskTimelinePane 
+                    tasks={ganttTaskItems} 
+                    selectedTask={null}
+                    onDeadlineChange={handleDeadlineChange}
+                    isReadOnly={isGanttReadOnly}
+                  />
                 </TabsContent>
               </div>
             </Tabs>
           </ResizablePanel>
         </ResizablePanelGroup>
       </main>
+
+      <ScheduleTaskModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        defaultStart={modalDefaultStart}
+        defaultEnd={modalDefaultEnd}
+        onScheduled={() => {
+          setModalOpen(false);
+        }}
+      />
     </div>
   );
 }

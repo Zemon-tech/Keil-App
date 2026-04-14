@@ -694,6 +694,8 @@ html,
     fill: oklch(0.22 0.06 165) !important;
     stroke: oklch(0.45 0.15 165) !important;
     stroke-width: 1 !important;
+    opacity: 0.4;
+    pointer-events: none;
 }
 
 .task-gantt-root .gantt .bar-wrapper.is-done .bar-progress {

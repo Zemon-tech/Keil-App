@@ -29,7 +29,8 @@ type Props = {
   blocks: CalendarBlock[];
   selectedTask: Task | null;
   onViewChange?: (view: string) => void;
-  onTaskSchedule?: (taskId: string, startISO: string, endISO: string) => void;
+  onTaskSchedule?: (taskId: string, startISO: string, endISO: string) => Promise<void> | void;
+  onSlotSelect?: (start: string, end: string) => void;
 };
 
 type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
@@ -178,7 +179,7 @@ function renderEventContent(arg: EventContentArg) {
 
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
+export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule, onSlotSelect }: Props) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>("");
 
   // Check for scheduling conflicts
@@ -201,7 +202,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   };
 
   // Handle external task drop
-  const handleEventReceive = (info: EventReceiveArg) => {
+  const handleEventReceive = async (info: EventReceiveArg) => {
     try {
       const taskId = info.event.extendedProps.taskId;
       const taskStatus = info.event.extendedProps.taskStatus;
@@ -254,18 +255,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         const startISO = startDate.toISOString();
         const endISO = endDate.toISOString();
         
-        console.log("✅ Scheduling task:", {
-          taskId,
-          startISO,
-          endISO,
-          duration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
-        });
-        
-        onTaskSchedule(taskId, startISO, endISO);
-        
-        toast.success("Task scheduled", {
-          description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
-        });
+        try {
+          await onTaskSchedule(taskId, startISO, endISO);
+          toast.success("Task scheduled", {
+            description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
+          });
+        } catch (err: any) {
+          const message = err?.response?.data?.message || "Failed to schedule task";
+          toast.error(message);
+          info.revert();
+        }
       }
     } catch (error) {
       console.error("❌ Error in handleEventReceive:", error);
@@ -275,7 +274,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   };
 
   // Handle event resize (duration change)
-  const handleEventResize = (info: EventResizeDoneArg) => {
+  const handleEventResize = async (info: EventResizeDoneArg) => {
     try {
       const taskId = info.event.extendedProps.taskId;
       const startDate = info.event.start;
@@ -303,8 +302,14 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       }
 
       if (onTaskSchedule) {
-        onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
-        toast.success("Task duration updated");
+        try {
+          await onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+          toast.success("Task duration updated");
+        } catch (err: any) {
+          const message = err?.response?.data?.message || "Failed to resize task";
+          toast.error(message);
+          info.revert();
+        }
       }
     } catch (error) {
       console.error("❌ Error in handleEventResize:", error);
@@ -386,8 +391,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             eventClick={(arg) => {
               setSelectedBlockId(String(arg.event.id));
             }}
-            select={() => {
+            select={(info) => {
               setSelectedBlockId("");
+              onSlotSelect?.(info.startStr, info.endStr);
             }}
             datesSet={(dateInfo) => {
               const view = dateInfo.view.type as CalendarView;
@@ -398,7 +404,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             eventResizeStart={() => {
               console.log("📏 Started resizing event");
             }}
-            eventDrop={(info) => {
+            eventDrop={async (info) => {
               // Handle moving existing scheduled tasks
               const taskId = info.event.extendedProps.taskId;
               const startDate = info.event.start;
@@ -425,8 +431,14 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               }
               
               if (onTaskSchedule) {
-                onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
-                toast.success("Task rescheduled");
+                try {
+                  await onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+                  toast.success("Task rescheduled");
+                } catch (err: any) {
+                  const message = err?.response?.data?.message || "Failed to reschedule task";
+                  toast.error(message);
+                  info.revert();
+                }
               }
             }}
           />

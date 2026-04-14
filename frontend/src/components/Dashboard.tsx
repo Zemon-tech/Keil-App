@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { startOfToday, endOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { HeroSection } from "./dashboard/HeroSection";
@@ -8,12 +9,22 @@ import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
 import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
 import { UpNextCard } from "./dashboard/UpNextCard";
 import { useDashboard } from "@/hooks/api/useDashboard";
+import { useCalendarTasks } from "@/hooks/api/useSchedule";
 import { AlertCircle } from "lucide-react";
 
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
   const { data, isLoading, isError } = useDashboard();
+
+  // Fetch today's calendar events for NextEventCard
+  const todayStart = useMemo(() => startOfToday().toISOString(), []);
+  const todayEnd = useMemo(() => endOfToday().toISOString(), []);
+  const { data: calendarData, isLoading: calendarLoading } = useCalendarTasks({
+    start_range: todayStart,
+    end_range: todayEnd,
+  });
+  const nextEvent = calendarData?.[0] ?? null;
 
   useEffect(() => {
     setMounted(true);
@@ -50,7 +61,7 @@ export function Dashboard() {
         {/* Widgets grid */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl mt-10 opacity-90 hover:opacity-100 transition-opacity">
           <CurrentFocusCard task={data?.immediate?.[0] ?? null} isLoading={isLoading} />
-          <NextEventCard />
+          <NextEventCard block={nextEvent} isLoading={calendarLoading} />
           <ImmediateBlockersCard tasks={data?.immediate ?? []} isLoading={isLoading} />
           <NeedsReplyCard />
           <UpNextCard tasks={data?.today ?? []} isLoading={isLoading} />
