@@ -16,7 +16,7 @@ import { useUnscheduledTasks, useUpdateTaskTimeblock } from "@/hooks/api/useSche
 import { useTask } from "@/hooks/api/useTasks";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Calendar, AlertCircle } from "lucide-react";
-import { UnscheduledTaskDTO } from "@/types/task";
+import type { UnscheduledTaskDTO } from "@/types/task";
 import { cn } from "@/lib/utils";
 
 interface Props {
