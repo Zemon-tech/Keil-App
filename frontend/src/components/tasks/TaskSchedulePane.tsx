@@ -215,8 +215,8 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         end: endDate,
       });
 
-      // Validation 1: Check if task is "Done"
-      if (taskStatus === "Done") {
+      // Validation 1: Check if task is done
+      if (taskStatus === "done") {
         console.error("❌ Cannot schedule completed tasks");
         toast.error("Cannot schedule completed tasks", {
           description: "This task is already marked as done.",
@@ -336,7 +336,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           taskStatus: t.status,
           isScheduledTask: true,
         },
-        editable: t.status !== "Done", // Only allow editing non-done tasks
+        editable: t.status !== "done", // Only allow editing non-done tasks
       } satisfies EventInput));
     
     return [...blockEvents, ...taskEvents];

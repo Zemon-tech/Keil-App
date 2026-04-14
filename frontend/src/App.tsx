@@ -5,7 +5,6 @@ import { AuthPage } from "./components/auth/AuthPage";
 import { Dashboard } from "./components/Dashboard";
 import { ChatPage } from "./components/ChatPage";
 import { TasksPage } from "./components/TasksPage";
-import { SchedulePage } from "./components/SchedulePage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
 import { InvitePage } from "./components/workspace/InvitePage";
@@ -54,9 +53,7 @@ function App() {
         <Route
           path="/schedule"
           element={
-            <Layout>
-              <SchedulePage />
-            </Layout>
+            <Navigate to="/tasks" replace />
           }
         />
         <Route path="/invite/:token" element={<InvitePage />} />

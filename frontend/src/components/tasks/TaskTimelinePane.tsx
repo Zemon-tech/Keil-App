@@ -41,8 +41,8 @@ function toGanttTask(t: Task, selectedTaskId: string | null) {
   }
 
   const statusClasses = [];
-  if (t.status === "Blocked") statusClasses.push("is-blocked");
-  if (t.status === "Done") statusClasses.push("is-done");
+  if (t.status === "backlog") statusClasses.push("is-blocked");
+  if (t.status === "done") statusClasses.push("is-done");
   if (t.id === selectedTaskId) statusClasses.push("selected-task");
 
   return {
@@ -50,7 +50,7 @@ function toGanttTask(t: Task, selectedTaskId: string | null) {
     name: t.title,
     start: format(start, "yyyy-MM-dd"),
     end: format(end, "yyyy-MM-dd"),
-    progress: t.status === "Done" ? 100 : t.status === "In Progress" ? 55 : t.status === "Blocked" ? 15 : 0,
+    progress: t.status === "done" ? 100 : t.status === "in-progress" ? 55 : t.status === "backlog" ? 15 : 0,
     dependencies: t.dependencies.map((d) => d.id).join(","),
     custom_class: statusClasses.join(" "),
   };

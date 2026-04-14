@@ -39,7 +39,6 @@ import {
   HelpCircle,
   MessageSquare,
   CheckSquare,
-  CalendarDays,
   Check,
   Plus
 } from "lucide-react";
@@ -59,11 +58,6 @@ const navigationItems = [
     title: "Tasks",
     url: "/tasks",
     icon: CheckSquare,
-  },
-  {
-    title: "Schedule",
-    url: "/schedule",
-    icon: CalendarDays,
   },
   {
     title: "Users",

@@ -3,9 +3,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
-import { Button } from "@/components/ui/button";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { FileText } from "lucide-react";
+import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 
 import type { TaskStatus, TaskPriority } from "../types/task";
@@ -151,30 +149,11 @@ export function TasksPage() {
                 }}
               />
             ) : (
-              <div className="h-full bg-background">
-                <div className="h-full p-6">
-                  <Empty className="h-full">
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <FileText />
-                      </EmptyMedia>
-                      <EmptyTitle>No task selected</EmptyTitle>
-                      <EmptyDescription>
-                        Select a task from the list, or create a new one to get started.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                    <EmptyContent>
-                      <Button
-                        variant="outline"
-                        className="rounded-xl"
-                        onClick={() => setCreateDialogOpen(true)}
-                      >
-                        Create task
-                      </Button>
-                    </EmptyContent>
-                  </Empty>
-                </div>
-              </div>
+              <TaskSchedulePane
+                tasks={taskList as any}
+                blocks={[] as any}
+                selectedTask={null as any}
+              />
             )}
           </div>
         </div>
