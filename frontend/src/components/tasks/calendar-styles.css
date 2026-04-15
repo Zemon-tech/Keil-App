@@ -508,13 +508,35 @@ html,
 }
 
 .fc-timegrid-now-indicator-line {
-    border-top-width: 1px;
+    border-top-width: 2px !important;
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 8px var(--primary);
 }
 
 .fc-timegrid-now-indicator-arrow {
-    border-width: 5px 0 5px 6px;
-    border-top-color: transparent;
-    border-bottom-color: transparent;
+    border-width: 6px 0 6px 8px !important;
+    border-top-color: transparent !important;
+    border-bottom-color: transparent !important;
+    border-left-color: var(--primary) !important;
+    margin-top: -5px !important;
+}
+
+/* Today highlight in Month view */
+.fc-day-today {
+    background-color: oklch(var(--primary-lch) / 0.04) !important;
+}
+
+.fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: 999px;
+    padding: 2px 10px;
+    margin: 4px;
+    font-weight: 700;
+}
+
+.fc-daygrid-day-number {
+    transition: all 0.2s ease;
 }
 
 /* Event Styling */

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -180,6 +180,7 @@ import "./calendar-styles.css";
 
 export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>("");
+  const calendarRef = useRef<FullCalendar>(null);
 
   // Check for scheduling conflicts
   const checkConflicts = (taskId: string, startDate: Date, endDate: Date): { hasConflict: boolean; conflictingTasks: Task[] } => {
@@ -353,15 +354,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     return new Date();
   }, [selectedTask?.plannedStartISO]);
 
-  const headerRight = "timeGridDay,timeGridWeek,dayGridMonth,listWeek";
+  const headerRight = "";
 
   return (
     <div className="h-full min-h-0 flex flex-col">
       <div className="flex-1 min-h-0">
         <div className="h-full">
           <FullCalendar
+            ref={calendarRef}
             plugins={[timeGridPlugin, dayGridPlugin, listPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
+            initialView="dayGridMonth"
             initialDate={initialDate}
             height="100%"
             nowIndicator
@@ -369,6 +371,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             selectable
             droppable
             weekends
+            navLinks={true}
             dayHeaderFormat={{ weekday: "short", day: "numeric", omitCommas: true }}
             slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
             headerToolbar={{
@@ -385,6 +388,12 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             }}
             eventClick={(arg) => {
               setSelectedBlockId(String(arg.event.id));
+            }}
+            dateClick={(arg) => {
+              const calendarApi = calendarRef.current?.getApi();
+              if (calendarApi) {
+                calendarApi.changeView("timeGridDay", arg.date);
+              }
             }}
             select={() => {
               setSelectedBlockId("");
