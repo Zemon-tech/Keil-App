@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -181,6 +181,23 @@ import "./calendar-styles.css";
 export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>("");
   const calendarRef = useRef<FullCalendar>(null);
+
+  // Fix: Force calendar update on container resize to handle aspect ratio changes
+  useEffect(() => {
+    const calendarApi = calendarRef.current?.getApi();
+    if (!calendarApi) return;
+
+    // Use ResizeObserver on the calendar's parent to detect any layout changes
+    const container = calendarApi.el.parentElement;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      calendarApi.updateSize();
+    });
+
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // Check for scheduling conflicts
   const checkConflicts = (taskId: string, startDate: Date, endDate: Date): { hasConflict: boolean; conflictingTasks: Task[] } => {
@@ -372,7 +389,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             droppable
             weekends
             navLinks={true}
-            dayHeaderFormat={{ weekday: "short", day: "numeric", omitCommas: true }}
+            dayHeaderFormat={{ weekday: "short" }}
             slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
             headerToolbar={{
               left: "prev,next today",
