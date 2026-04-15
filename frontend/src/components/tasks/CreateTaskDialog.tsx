@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge"; // ← ShadCN component (already in your codebase)
 import type { Task, TaskStatus } from "@/types/task";
-import { useCreateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
+import { useCreateTask, useUpdateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
 
 // Simple type for assignees (replace with your real UserDTO if you have one)
 type SimpleAssigneeOption = {
@@ -36,7 +36,12 @@ interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   onTaskCreated: (newTaskId: string) => void;
   allTasks?: TaskDTO[];
-  allUsers?: SimpleAssigneeOption[]; // ← NEW: pass your workspace users here
+  allUsers?: SimpleAssigneeOption[]; // ← pass your workspace users here
+  // Edit mode props
+  mode?: "create" | "edit";
+  taskId?: string;
+  initialValues?: Partial<TaskDTO>;
+  onTaskUpdated?: (taskId: string) => void;
 }
 
 export function CreateTaskDialog({
@@ -45,8 +50,13 @@ export function CreateTaskDialog({
   onTaskCreated,
   allTasks = [],
   allUsers = [],
+  mode = "create",
+  taskId,
+  initialValues,
+  onTaskUpdated,
 }: CreateTaskDialogProps) {
   const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
 
   // ── Form State ─────────────────────────────────────────────────────────────
   const [newTitle, setNewTitle] = useState("");
@@ -82,6 +92,50 @@ export function CreateTaskDialog({
     setNewTimeEstimate("");
     setNewParentTaskId("");
   };
+
+  // Pre-fill form when opening in edit mode
+  useEffect(() => {
+    if (open && mode === "edit" && initialValues) {
+      setNewTitle(initialValues.title ?? "");
+      setNewDescription(initialValues.description ?? "");
+
+      // Parse objective bullets — strip leading "• " if present
+      const objBullets = (initialValues.objective ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((b) => b.replace(/^•\s*/, "").trim());
+      setNewObjectiveBullets(objBullets.length > 0 ? objBullets : [""]);
+
+      // Parse success criteria bullets
+      const scBullets = (initialValues.success_criteria ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((b) => b.replace(/^•\s*/, "").trim());
+      setNewSuccessCriteriaBullets(scBullets.length > 0 ? scBullets : [""]);
+
+      setNewStartDateISO(
+        (initialValues as any).start_date ?? (initialValues as any).plannedStartISO ?? ""
+      );
+      setNewDueDateISO(
+        (initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? ""
+      );
+      setNewStatus((initialValues.status as TaskStatus) ?? "todo");
+      setNewPriority((initialValues.priority as any) ?? "medium");
+      setNewStoryPoints(
+        initialValues.story_points != null ? String(initialValues.story_points) : ""
+      );
+      setNewTimeEstimate(
+        (initialValues as any).time_estimate != null
+          ? String((initialValues as any).time_estimate)
+          : ""
+      );
+      setNewAssigneeIds(
+        ((initialValues as any).assignees ?? []).map((a: any) => a.id)
+      );
+      setNewParentTaskId((initialValues as any).parent_task_id ?? "");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const toDateInputValue = (iso: string) => {
     if (!iso) return "";
@@ -131,7 +185,7 @@ export function CreateTaskDialog({
     e.preventDefault();
     if (!isFormValid) return;
 
-    // Format bullet lists exactly like your final UI (with • bullets)
+    // Format bullet lists with • prefix
     const objectiveFormatted = newObjectiveBullets
       .filter((b) => b.trim())
       .map((b) => `• ${b.trim()}`)
@@ -153,17 +207,32 @@ export function CreateTaskDialog({
       due_date: newDueDateISO || undefined,
       story_points: newStoryPoints ? parseInt(newStoryPoints, 10) : undefined,
       time_estimate: newTimeEstimate ? parseInt(newTimeEstimate, 10) : undefined,
-      assignee_ids: newAssigneeIds.length > 0 ? newAssigneeIds : undefined, // ← new
+      assignee_ids: newAssigneeIds.length > 0 ? newAssigneeIds : undefined,
       parent_task_id: newParentTaskId === "none" || !newParentTaskId ? undefined : newParentTaskId,
     };
 
-    createTask.mutate(input, {
-      onSuccess: (data) => {
-        onOpenChange(false);
-        resetCreateForm();
-        if (data?.id) onTaskCreated(data.id);
-      },
-    });
+    if (mode === "edit" && taskId) {
+      // ── Edit mode: update existing task ──
+      updateTask.mutate(
+        { id: taskId, updates: input },
+        {
+          onSuccess: () => {
+            onOpenChange(false);
+            resetCreateForm();
+            onTaskUpdated?.(taskId);
+          },
+        }
+      );
+    } else {
+      // ── Create mode ──
+      createTask.mutate(input, {
+        onSuccess: (data) => {
+          onOpenChange(false);
+          resetCreateForm();
+          if (data?.id) onTaskCreated(data.id);
+        },
+      });
+    }
   }
 
   return (
@@ -179,7 +248,9 @@ export function CreateTaskDialog({
           {/* Header */}
           <div className="px-5 pt-5 pb-4 border-b border-border/60">
             <DialogHeader>
-              <DialogTitle className="text-base">Create new task</DialogTitle>
+              <DialogTitle className="text-base">
+                {mode === "edit" ? "Edit task" : "Create new task"}
+              </DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
                 Every task must have a clear <strong>Objective</strong> and <strong>Success Criteria</strong>.
               </DialogDescription>
@@ -456,9 +527,11 @@ export function CreateTaskDialog({
             <Button
               type="submit"
               size="sm"
-              disabled={createTask.isPending || !isFormValid}
+              disabled={(mode === "edit" ? updateTask.isPending : createTask.isPending) || !isFormValid}
             >
-              {createTask.isPending ? "Creating…" : "Create task"}
+              {mode === "edit"
+                ? updateTask.isPending ? "Saving…" : "Save changes"
+                : createTask.isPending ? "Creating…" : "Create task"}
             </Button>
           </div>
         </form>

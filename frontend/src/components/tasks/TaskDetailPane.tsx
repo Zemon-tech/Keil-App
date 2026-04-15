@@ -17,6 +17,8 @@ import {
   MessageSquare,
   Undo2,
   Download,
+  PanelRightClose,
+  Pencil,
 } from "lucide-react";
 import { format, formatDistanceToNow, isToday, isYesterday, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -50,6 +52,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -63,6 +66,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EditableText, EditableTextarea } from "@/components/ui/editable-text";
+import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 
 import type { Task, TaskPriority, TaskStatus, Dependency } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
@@ -89,6 +93,8 @@ type Props = {
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
   /** Called when the user deletes the displayed task */
   onTaskDeleted?: (id: string) => void;
+  /** Called when the user wants to close the detail pane */
+  onClose?: () => void;
 };
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
@@ -247,10 +253,14 @@ const TaskDetailHeader = ({
   task,
   onUpdateField,
   onDelete,
+  onClose,
+  onEditTask,
 }: {
   task: TaskDTO;
   onUpdateField?: (updates: UpdateTaskInput) => void;
   onDelete?: () => void;
+  onClose?: () => void;
+  onEditTask?: () => void;
 }) => {
   const changeStatus = useChangeTaskStatus();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -305,6 +315,19 @@ const TaskDetailHeader = ({
             {task.status === "done" ? "Done ✓" : "Mark done"}
           </Button>
 
+          {/* Close detail pane button */}
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              onClick={onClose}
+              title="Close detail pane"
+            >
+              <PanelRightClose className="h-3.5 w-3.5" />
+            </Button>
+          )}
+
           {/* Actions dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -313,6 +336,11 @@ const TaskDetailHeader = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => onEditTask?.()}>
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                Edit task
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
@@ -1472,8 +1500,9 @@ const TAB_HEADERS = {
   },
 } as const;
 
-export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
+export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Fetch fresh server data whenever a task is selected
   const { data: freshTask } = useTask(task?.id ?? "");
@@ -1529,6 +1558,19 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted }: Props) {
         task={displayTask}
         onUpdateField={handleUpdateField}
         onDelete={handleDelete}
+        onClose={onClose}
+        onEditTask={() => setEditDialogOpen(true)}
+      />
+
+      {/* Edit task dialog */}
+      <CreateTaskDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        mode="edit"
+        taskId={displayTask.id}
+        initialValues={displayTask}
+        onTaskCreated={() => {}}
+        onTaskUpdated={() => setEditDialogOpen(false)}
       />
 
       {/* Zone 2 + 3: Tab bar + content */}

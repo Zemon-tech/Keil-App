@@ -147,6 +147,7 @@ export function TasksPage() {
                 onTaskDeleted={() => {
                   setSelectedTaskId("");
                 }}
+                onClose={() => setSelectedTaskId("")}
               />
             ) : (
               <TaskSchedulePane
