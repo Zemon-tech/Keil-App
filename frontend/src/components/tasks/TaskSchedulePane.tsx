@@ -180,6 +180,8 @@ import "./calendar-styles.css";
 
 export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>("");
+  const [currentViewType, setCurrentViewType] = useState<CalendarView>("dayGridMonth");
+  const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const calendarRef = useRef<FullCalendar>(null);
 
   // Fix: Force calendar update on container resize to handle aspect ratio changes
@@ -198,6 +200,21 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     resizeObserver.observe(container);
     return () => resizeObserver.disconnect();
   }, []);
+
+  // Imperatively update the FullCalendar toolbar title with a custom formatted date
+  useEffect(() => {
+    const titleEl = calendarRef.current?.getApi()?.el?.querySelector('.fc-toolbar-title');
+    if (!titleEl) return;
+    if (currentViewType === 'dayGridMonth') {
+      titleEl.textContent = format(currentViewDate, 'MMMM yyyy');
+    } else if (currentViewType === 'timeGridDay') {
+      titleEl.textContent = format(currentViewDate, 'do MMMM yyyy');
+    } else if (currentViewType === 'timeGridWeek') {
+      titleEl.textContent = format(currentViewDate, "'Week of' do MMMM yyyy");
+    } else if (currentViewType === 'listWeek') {
+      titleEl.textContent = format(currentViewDate, "'Week of' do MMMM yyyy");
+    }
+  }, [currentViewType, currentViewDate]);
 
   // Check for scheduling conflicts
   const checkConflicts = (taskId: string, startDate: Date, endDate: Date): { hasConflict: boolean; conflictingTasks: Task[] } => {
@@ -396,6 +413,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               center: "title",
               right: headerRight
             }}
+
             events={eventInputs as EventInput[]}
             eventContent={renderEventContent}
             eventClassNames={(arg) => {
@@ -418,6 +436,8 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             datesSet={(dateInfo) => {
               const view = dateInfo.view.type as CalendarView;
               onViewChange?.(view);
+              setCurrentViewType(view);
+              setCurrentViewDate(dateInfo.view.currentStart);
             }}
             eventReceive={handleEventReceive}
             eventResize={handleEventResize}

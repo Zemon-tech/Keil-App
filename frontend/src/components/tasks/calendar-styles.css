@@ -484,7 +484,7 @@ html,
 }
 
 .fc-col-header-cell {
-    padding: 12px 0 !important;
+    padding: 16px 0 !important;
     background-color: transparent !important;
 }
 
@@ -537,6 +537,21 @@ html,
 
 .fc-daygrid-day-number {
     transition: all 0.2s ease;
+    padding: 2px 8px !important;
+    margin: 8px !important;
+}
+
+.fc-daygrid-day-frame {
+    padding: 4px !important;
+}
+
+.fc-daygrid-event-harness {
+    margin: 1px 6px !important;
+}
+
+/* Hide day strip in day view */
+.fc-timeGridDay-view .fc-col-header {
+    display: none !important;
 }
 
 /* Event Styling */
