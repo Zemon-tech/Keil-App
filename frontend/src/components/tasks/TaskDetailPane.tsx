@@ -282,39 +282,7 @@ const TaskDetailHeader = ({
 
       {/* Breadcrumb + Actions row */}
       <div className="flex items-center justify-between mb-2">
-        <Breadcrumb className="flex-1 min-w-0 pr-4">
-          <BreadcrumbList className="text-sm items-center flex-nowrap shrink-0">
-            <BreadcrumbItem className="hidden sm:block">
-              <span className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Task
-              </span>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator className="hidden sm:block">
-              <ChevronRight className="h-4 w-4" />
-            </BreadcrumbSeparator>
-            <BreadcrumbItem className="flex-1 min-w-0">
-              <EditableText
-                value={task.title}
-                onSave={(title) => onUpdateField?.({ title })}
-                placeholder="Untitled task"
-                className="text-lg font-semibold text-foreground truncate"
-                inputClassName="text-lg font-semibold text-foreground truncate"
-              />
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-
-        <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            variant={task.status === "done" ? "secondary" : "default"}
-            className="h-6 px-3 text-xs"
-            onClick={handleMarkDone}
-            disabled={task.status === "done" || changeStatus.isPending}
-          >
-            {task.status === "done" ? "Done ✓" : "Mark done"}
-          </Button>
-
+        <div className="flex items-center gap-2 flex-1 min-w-0 pr-4">
           {/* Close detail pane button */}
           {onClose && (
             <Button
@@ -327,6 +295,40 @@ const TaskDetailHeader = ({
               <PanelRightClose className="h-3.5 w-3.5" />
             </Button>
           )}
+
+          <Breadcrumb className="flex-1 min-w-0">
+            <BreadcrumbList className="text-sm items-center flex-nowrap shrink-0">
+              <BreadcrumbItem className="hidden sm:block">
+                <span className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  Task
+                </span>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden sm:block">
+                <ChevronRight className="h-4 w-4" />
+              </BreadcrumbSeparator>
+              <BreadcrumbItem className="flex-1 min-w-0">
+                <EditableText
+                  value={task.title}
+                  onSave={(title) => onUpdateField?.({ title })}
+                  placeholder="Untitled task"
+                  className="text-sm font-medium text-foreground truncate"
+                  inputClassName="text-sm font-medium text-foreground truncate"
+                />
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant={task.status === "done" ? "secondary" : "default"}
+            className="h-6 px-3 text-xs"
+            onClick={handleMarkDone}
+            disabled={task.status === "done" || changeStatus.isPending}
+          >
+            {task.status === "done" ? "Done ✓" : "Mark done"}
+          </Button>
 
           {/* Actions dropdown */}
           <DropdownMenu>

@@ -193,14 +193,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const calendarRef = useRef<FullCalendar>(null);
 
-  const currentViewLabel = useMemo(() => {
-    if (currentViewType === "timeGridDay") return "Today";
-    if (currentViewType === "timeGridWeek") return "Week";
-    if (currentViewType === "dayGridMonth") return "Month";
-    if (currentViewType === "listWeek") return "Week";
-    return "View";
-  }, [currentViewType]);
-
   const headerTitle = useMemo(() => {
     if (currentViewType === "dayGridMonth") return format(currentViewDate, "EEE, do MMMM yyyy");
     if (currentViewType === "timeGridWeek") return format(currentViewDate, "EEE, do MMMM yyyy");
@@ -431,7 +423,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   const setView = (view: CalendarView) => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
-    calendarApi.changeView(view);
+    calendarApi.changeView(view, new Date());
   };
 
   return (
@@ -458,46 +450,39 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               <ChevronRight className="h-4 w-4" />
             </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 px-2.5 text-xs"
-              onClick={goToday}
-            >
-              Today
-            </Button>
+            <div className="inline-flex">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs rounded-r-none border-r-0"
+                onClick={goToday}
+              >
+                Today
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 rounded-l-none"
+                    aria-label="Change calendar view"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="rounded-xl">
+                  <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setView("timeGridWeek")}>Week</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setView("dayGridMonth")}>Month</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
 
           <div className="min-w-0 flex-1 text-center">
             <div className="truncate text-sm font-semibold">{headerTitle}</div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-2.5 text-xs"
-                >
-                  {currentViewLabel}
-                  <ChevronDown className="h-4 w-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-xl">
-                <DropdownMenuItem onClick={() => setView("timeGridDay")}>
-                  Today
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setView("timeGridWeek")}>
-                  Week
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setView("dayGridMonth")}>
-                  Month
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </div>
