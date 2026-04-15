@@ -123,8 +123,13 @@ export class ScheduleRepository extends BaseRepository<any> {
     `;
     const executor = this.pool;
     // $3 is endRange, $4 is startRange according to the documentation: "ts.scheduled_start < $end_range AND ts.scheduled_end > $start_range"
-    const result = await executor.query(query, [workspaceId, userId, endRange, startRange]);
-    return result.rows as ScheduleBlockDTO[];
+    try {
+      const result = await executor.query(query, [workspaceId, userId, endRange, startRange]);
+      return result.rows as ScheduleBlockDTO[];
+    } catch (err: any) {
+      console.error('❌ [ScheduleRepository] getCalendarBlocks SQL Error:', err.message);
+      throw err;
+    }
   }
 
   async getUnscheduledTasks(
@@ -138,11 +143,10 @@ export class ScheduleRepository extends BaseRepository<any> {
       SELECT t.id, t.title, t.start_date, t.due_date, t.status, t.priority,
              COUNT(*) OVER() AS total_count
       FROM tasks t
-      INNER JOIN task_assignees ta ON t.id = ta.task_id
       LEFT JOIN ${this.tableName} ts ON t.id = ts.task_id AND ts.user_id = $1
-      WHERE ta.user_id = $1
-        AND t.workspace_id = $2
+      WHERE t.workspace_id = $2
         AND t.deleted_at IS NULL
+        AND t.status != 'done'
         AND ts.id IS NULL
     `;
     
@@ -159,23 +163,28 @@ export class ScheduleRepository extends BaseRepository<any> {
     params.push(limit, offset);
 
     const executor = this.pool;
-    const result = await executor.query(query, params);
+    try {
+      const result = await executor.query(query, params);
 
-    const data = result.rows.map(r => ({
-      id: r.id,
-      title: r.title,
-      start_date: r.start_date,
-      due_date: r.due_date,
-      status: r.status,
-      priority: r.priority
-    })) as UnscheduledTaskDTO[];
+      const data = result.rows.map(r => ({
+        id: r.id,
+        title: r.title,
+        start_date: r.start_date,
+        due_date: r.due_date,
+        status: r.status,
+        priority: r.priority
+      })) as UnscheduledTaskDTO[];
 
-    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
+      const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
 
-    return {
-      data,
-      pagination: { limit, offset, total }
-    };
+      return {
+        data,
+        pagination: { limit, offset, total }
+      };
+    } catch (err: any) {
+      console.error('❌ [ScheduleRepository] getUnscheduledTasks SQL Error:', err.message);
+      throw err;
+    }
   }
 
   async getGanttTasks(workspaceId: string, scope: 'workspace' | 'user', userId?: string, projectId?: string): Promise<GanttTaskDTO[]> {

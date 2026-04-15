@@ -14,12 +14,23 @@ import {
   Focus,
   Link2,
   Timer,
+  Trash2,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import type { CalendarBlock, CalendarBlockType, Task } from "@/types/task";
@@ -29,8 +40,10 @@ type Props = {
   blocks: CalendarBlock[];
   selectedTask: Task | null;
   onViewChange?: (view: string) => void;
+  onRangeChange?: (start: string, end: string) => void;
   onTaskSchedule?: (taskId: string, startISO: string, endISO: string) => Promise<void> | void;
   onSlotSelect?: (start: string, end: string) => void;
+  onDeleteBlock?: (taskId: string) => Promise<void> | void;
 };
 
 type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
@@ -115,32 +128,12 @@ function makeEventInput(block: CalendarBlock, task?: Task): EventInput {
 
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
-  const isScheduledTask = arg.event.extendedProps.isScheduledTask;
-  
-  // Handle scheduled tasks (no type metadata)
-  if (isScheduledTask) {
-    return (
-      <div className="h-full w-full p-2 overflow-hidden">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
-                Scheduled Task
-              </span>
-            </div>
-          </div>
-          <Timer className="h-3.5 w-3.5 opacity-40" />
-        </div>
-      </div>
-    );
-  }
-  
-  // Handle calendar blocks with type metadata
+
+  // All scheduled blocks (task_slot type) use the violet styling
   if (!type || !typeMeta[type]) {
     return <div className="p-2 text-xs">{arg.event.title}</div>;
   }
-  
+
   const meta = typeMeta[type];
   const Icon = meta.icon;
   const isBg = arg.event.display === "background";
@@ -158,7 +151,7 @@ function renderEventContent(arg: EventContentArg) {
 
   return (
     <div className={cn(
-      "h-full w-full p-2 border-l-4 overflow-hidden",
+      "h-full w-full p-2 border-l-4 overflow-hidden rounded-md",
       meta.bg,
       meta.border.replace("border-", "border-l-")
     )}>
@@ -179,8 +172,20 @@ function renderEventContent(arg: EventContentArg) {
 
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule, onSlotSelect }: Props) {
-  const [selectedBlockId, setSelectedBlockId] = useState<string>("");
+/** State for the event detail popover */
+type SelectedEventInfo = {
+  taskId: string;
+  blockId: string;
+  title: string;
+  startISO: string;
+  endISO: string;
+  type: CalendarBlockType | null;
+};
+
+export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onRangeChange, onTaskSchedule, onSlotSelect, onDeleteBlock }: Props) {
+  const [selectedEvent, setSelectedEvent] = useState<SelectedEventInfo | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Check for scheduling conflicts
   const checkConflicts = (taskId: string, startDate: Date, endDate: Date): { hasConflict: boolean; conflictingTasks: Task[] } => {
@@ -208,17 +213,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       const taskStatus = info.event.extendedProps.taskStatus;
       const startDate = info.event.start;
       const endDate = info.event.end;
-      
-      console.log("🎯 Task dropped on calendar:", {
-        taskId,
-        taskStatus,
-        start: startDate,
-        end: endDate,
-      });
 
       // Validation 1: Check if task is "Done"
       if (taskStatus === "Done") {
-        console.error("❌ Cannot schedule completed tasks");
         toast.error("Cannot schedule completed tasks", {
           description: "This task is already marked as done.",
         });
@@ -228,7 +225,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
       // Validation 2: Check if scheduled in the past
       if (startDate && isPast(startDate)) {
-        console.error("❌ Cannot schedule tasks in the past");
         toast.error("Cannot schedule in the past", {
           description: "Please select a future time slot.",
         });
@@ -241,12 +237,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
         
         if (hasConflict) {
-          console.warn("⚠️ Scheduling conflict detected:", conflictingTasks.map(t => t.title));
           toast.warning("Scheduling conflict detected", {
             description: `This time overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
             duration: 5000,
           });
-          // Allow scheduling but warn the user
         }
       }
 
@@ -267,7 +261,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         }
       }
     } catch (error) {
-      console.error("❌ Error in handleEventReceive:", error);
+      console.error("Error in handleEventReceive:", error);
       toast.error("Failed to schedule task");
       info.revert();
     }
@@ -280,21 +274,12 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       const startDate = info.event.start;
       const endDate = info.event.end;
       
-      if (!taskId || !startDate || !endDate) {
-        console.warn("⚠️ Missing required data for resize");
-        return;
-      }
-
-      console.log("📏 Task duration resized:", {
-        taskId,
-        newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
-      });
+      if (!taskId || !startDate || !endDate) return;
 
       // Check for conflicts after resize
       const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
       
       if (hasConflict) {
-        console.warn("⚠️ Resize caused conflict:", conflictingTasks.map(t => t.title));
         toast.warning("Scheduling conflict detected", {
           description: `New duration overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
           duration: 5000,
@@ -312,46 +297,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         }
       }
     } catch (error) {
-      console.error("❌ Error in handleEventResize:", error);
+      console.error("Error in handleEventResize:", error);
       toast.error("Failed to resize task");
     }
   };
 
+  // ── Build events from calendar blocks ONLY (no duplicate task events) ──
   const eventInputs = useMemo(() => {
     const byTaskId = new Map(tasks.map((t) => [t.id, t] as const));
-    
-    // Add calendar blocks
-    const blockEvents = blocks.map((b) => makeEventInput(b, b.taskId ? byTaskId.get(b.taskId) : undefined));
-    
-    // Add scheduled tasks as events
-    const taskEvents = tasks
-      .filter((t) => t.plannedStartISO && t.plannedEndISO)
-      .map((t) => ({
-        id: `task-${t.id}`,
-        title: t.title,
-        start: t.plannedStartISO,
-        end: t.plannedEndISO,
-        backgroundColor: "#8b5cf6",
-        borderColor: "#7c3aed",
-        textColor: "#ffffff",
-        extendedProps: {
-          taskId: t.id,
-          taskTitle: t.title,
-          projectTitle: t.projectTitle,
-          taskStatus: t.status,
-          isScheduledTask: true,
-        },
-        editable: t.status !== "Done", // Only allow editing non-done tasks
-      } satisfies EventInput));
-    
-    return [...blockEvents, ...taskEvents];
+    return blocks.map((b) => makeEventInput(b, b.taskId ? byTaskId.get(b.taskId) : undefined));
   }, [blocks, tasks]);
-
-  const selectedBlock = useMemo(() => blocks.find((b) => b.id === selectedBlockId) ?? null, [blocks, selectedBlockId]);
-  const selectedBlockTask = useMemo(() => {
-    if (!selectedBlock?.taskId) return null;
-    return tasks.find((t) => t.id === selectedBlock.taskId) ?? null;
-  }, [selectedBlock?.taskId, tasks]);
 
   const initialDate = useMemo(() => {
     if (selectedTask?.plannedStartISO) return parseISO(selectedTask.plannedStartISO);
@@ -359,6 +314,25 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   }, [selectedTask?.plannedStartISO]);
 
   const headerRight = "timeGridDay,timeGridWeek,dayGridMonth,listWeek";
+
+  // ── Handle delete ──
+  const handleDeleteSchedule = async () => {
+    if (!selectedEvent || !onDeleteBlock) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteBlock(selectedEvent.taskId);
+      toast.success("Schedule removed", {
+        description: `"${selectedEvent.title}" has been unscheduled.`,
+      });
+      setSelectedEvent(null);
+      setDeleteConfirmOpen(false);
+    } catch (err: any) {
+      const message = err?.response?.data?.message || "Failed to remove schedule";
+      toast.error(message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="h-full min-h-0 flex flex-col">
@@ -389,40 +363,43 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               return [`fc-type-${type}`, "task-event"];
             }}
             eventClick={(arg) => {
-              setSelectedBlockId(String(arg.event.id));
+              const taskId = arg.event.extendedProps.taskId;
+              const type = arg.event.extendedProps.type as CalendarBlockType | null;
+              if (taskId) {
+                setSelectedEvent({
+                  taskId,
+                  blockId: String(arg.event.id),
+                  title: arg.event.title,
+                  startISO: arg.event.start?.toISOString() ?? "",
+                  endISO: arg.event.end?.toISOString() ?? "",
+                  type,
+                });
+              }
             }}
             select={(info) => {
-              setSelectedBlockId("");
+              setSelectedEvent(null);
               onSlotSelect?.(info.startStr, info.endStr);
             }}
             datesSet={(dateInfo) => {
               const view = dateInfo.view.type as CalendarView;
               onViewChange?.(view);
+              onRangeChange?.(dateInfo.start.toISOString(), dateInfo.end.toISOString());
             }}
             eventReceive={handleEventReceive}
             eventResize={handleEventResize}
-            eventResizeStart={() => {
-              console.log("📏 Started resizing event");
-            }}
             eventDrop={async (info) => {
-              // Handle moving existing scheduled tasks
               const taskId = info.event.extendedProps.taskId;
               const startDate = info.event.start;
               const endDate = info.event.end;
               
               if (!taskId || !startDate || !endDate) return;
               
-              console.log("🔄 Task moved:", { taskId, newStart: startDate, newEnd: endDate });
-              
-              // Check if moved to past
               if (isPast(startDate)) {
-                console.error("❌ Cannot move task to the past");
                 toast.error("Cannot schedule in the past");
                 info.revert();
                 return;
               }
               
-              // Check for conflicts
               const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
               if (hasConflict) {
                 toast.warning("Scheduling conflict", {
@@ -445,61 +422,69 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         </div>
       </div>
 
-      <Drawer open={Boolean(selectedBlock)} onOpenChange={(open) => !open && setSelectedBlockId("")}
-      >
-        <DrawerContent className="h-[75vh] rounded-t-2xl">
-          <DrawerHeader className="border-b border-border/60">
-            <DrawerTitle className="text-base">{selectedBlock?.title ?? "Block"}</DrawerTitle>
-            <DrawerDescription>
-              {selectedBlock ? typeMeta[selectedBlock.type].label : ""}
-            </DrawerDescription>
-          </DrawerHeader>
-
-          <div className="p-4 space-y-3 overflow-auto">
-            {selectedBlock ? (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-[11px] border", typeMeta[selectedBlock.type].pill)}>
-                    {typeMeta[selectedBlock.type].label}
+      {/* ── Event Detail Popover ── */}
+      {selectedEvent && (
+        <div className="shrink-0 border-t border-border/60 bg-card/80 backdrop-blur-sm px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                {selectedEvent.type && typeMeta[selectedEvent.type] && (
+                  <Badge variant="outline" className={cn("rounded-full px-2 py-0.5 text-[10px] border", typeMeta[selectedEvent.type]?.pill)}>
+                    {typeMeta[selectedEvent.type]?.label}
                   </Badge>
-                  <Badge variant="outline" className="rounded-full px-2.5 py-1 text-[11px]">
-                    {format(parseISO(selectedBlock.startISO), "EEE, MMM dd • p")}
-                    {selectedBlock.endISO ? ` – ${format(parseISO(selectedBlock.endISO), "p")}` : ""}
-                  </Badge>
-                </div>
-
-                {selectedBlockTask ? (
-                  <div className="rounded-xl border border-border/60 bg-card/40 p-3">
-                    <div className="text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground">Linked task</div>
-                    <div className="mt-2 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{selectedBlockTask.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1 truncate">{selectedBlockTask.projectTitle}</div>
-                      </div>
-                      <Button size="sm" variant="outline" className="rounded-xl">
-                        <Link2 className="h-4 w-4 mr-2" />
-                        Open
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedBlock.notes ? (
-                  <>
-                    <Separator className="bg-border/60" />
-                    <div className="text-sm text-foreground/90 leading-relaxed">{selectedBlock.notes}</div>
-                  </>
-                ) : null}
-
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <Button variant="outline" className="rounded-xl">Edit</Button>
-                  <Button className="rounded-xl">Convert to task slot</Button>
-                </div>
-              </>
-            ) : null}
+                )}
+                <span className="text-sm font-semibold truncate">{selectedEvent.title}</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {selectedEvent.startISO && format(new Date(selectedEvent.startISO), "EEE, MMM dd • h:mm a")}
+                {selectedEvent.endISO && ` – ${format(new Date(selectedEvent.endISO), "h:mm a")}`}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="destructive"
+                size="sm"
+                className="rounded-xl h-8 px-3 text-xs"
+                onClick={() => setDeleteConfirmOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Remove
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                onClick={() => setSelectedEvent(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </DrawerContent>
-      </Drawer>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Dialog ── */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove schedule?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unschedule <strong>"{selectedEvent?.title}"</strong> from the calendar.
+              The task itself will not be deleted — it will move back to the unscheduled queue.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl" disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteSchedule}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Removing…" : "Remove schedule"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

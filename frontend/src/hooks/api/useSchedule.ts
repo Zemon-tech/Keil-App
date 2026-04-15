@@ -39,10 +39,10 @@ export function useUnscheduledTasks({ limit = 50, offset = 0, search }: { limit?
   return useQuery<{ data: UnscheduledTaskDTO[], pagination: { limit: number, offset: number, total: number } }>({
     queryKey: scheduleKeys.unscheduled(workspaceId ?? "", { limit, offset, search }),
     queryFn: async () => {
-      const res = await api.get<{ data: UnscheduledTaskDTO[], pagination: any }>("v1/schedule/unscheduled", {
+      const res = await api.get<{ data: { data: UnscheduledTaskDTO[], pagination: any } }>("v1/schedule/unscheduled", {
         params: { limit, offset, search },
       });
-      return res.data;
+      return res.data.data;
     },
     enabled: !!workspaceId,
   });

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { startOfToday, endOfToday } from "date-fns";
+import { subDays, addDays } from "date-fns";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -10,7 +10,7 @@ import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { TaskTimelinePane } from "@/components/tasks/TaskTimelinePane";
 import { ScheduleTaskModal } from "@/components/schedule/ScheduleTaskModal";
 import { useTasks, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
-import { useCalendarTasks, useGanttTasks, useUpdateTaskTimeblock, useUpdateTaskDeadline } from "@/hooks/api/useSchedule";
+import { useCalendarTasks, useGanttTasks, useUpdateTaskTimeblock, useUpdateTaskDeadline, useDeleteTaskTimeblock } from "@/hooks/api/useSchedule";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import type { CalendarBlock, CalendarBlockType, Task, TaskStatus, TaskPriority } from "@/types/task";
 
@@ -38,8 +38,9 @@ export function SchedulePage() {
   const [calendarView, setCalendarView] = useState<string>("timeGridWeek");
 
   // ── Calendar range state ──
-  const [calStart, setCalStart] = useState(startOfToday().toISOString());
-  const [calEnd, setCalEnd] = useState(endOfToday().toISOString());
+  // Initialize with a wide range so FullCalendar week view has data on first render
+  const [calStart, setCalStart] = useState(subDays(new Date(), 7).toISOString());
+  const [calEnd, setCalEnd] = useState(addDays(new Date(), 30).toISOString());
 
   // ── ScheduleTaskModal state ──
   const [modalOpen, setModalOpen] = useState(false);
@@ -63,6 +64,7 @@ export function SchedulePage() {
 
   const updateTimeblock = useUpdateTaskTimeblock();
   const updateDeadline = useUpdateTaskDeadline();
+  const deleteTimeblock = useDeleteTaskTimeblock();
 
   // ── Convert ScheduleBlockDTO[] → CalendarBlock[] for TaskSchedulePane ──
   const calendarBlockItems: CalendarBlock[] = useMemo(() => {
@@ -172,7 +174,7 @@ export function SchedulePage() {
 
           <ResizablePanel 
             defaultSize={70} 
-            minSize={calendarMinPixels}
+            minSize={30}
             className="bg-background"
           >
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
@@ -214,8 +216,15 @@ export function SchedulePage() {
                       assignees: selectedTask.assignees ?? [],
                     } as Task : null}
                     onViewChange={setCalendarView}
+                    onRangeChange={(start, end) => {
+                      setCalStart(start);
+                      setCalEnd(end);
+                    }}
                     onTaskSchedule={handleTaskSchedule}
                     onSlotSelect={handleSlotSelect}
+                    onDeleteBlock={async (taskId) => {
+                      await deleteTimeblock.mutateAsync(taskId);
+                    }}
                   />
                 </TabsContent>
 

@@ -175,8 +175,9 @@ export function useCreateTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
-    onError: () => {
-      toast.error("Failed to create task. Please try again.");
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || "Failed to create task. Please try again.";
+      toast.error(message);
     },
   });
 }

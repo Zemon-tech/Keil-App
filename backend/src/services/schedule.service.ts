@@ -50,17 +50,29 @@ export const updateTaskTimeblock = async (
       throw new ApiError(404, 'Task not found');
     }
 
+    // Auto-set start_date if missing
     if (!task.start_date) {
       task.start_date = new Date();
       await taskRepository.update(task.id, { start_date: task.start_date }, client);
     }
 
+    // Auto-set due_date if missing — default to end of the scheduled day
+    if (!task.due_date) {
+      const scheduledEndDate = new Date(scheduledEnd);
+      // Set due_date to end of that day (23:59:59)
+      const endOfDay = new Date(scheduledEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      task.due_date = endOfDay;
+      await taskRepository.update(task.id, { due_date: task.due_date }, client);
+    }
+
     validateTaskHasDates(task.start_date, task.due_date);
 
+    // Auto-assign user to task if not already assigned
     const assignees = await taskAssigneeRepository.findByTask(taskId, client);
     const isAssigned = assignees.some((a: any) => a.user_id === userId);
     if (!isAssigned) {
-      throw new ApiError(403, 'You are not assigned to this task');
+      await taskAssigneeRepository.assign(taskId, userId, client);
     }
 
     validateTimeblockRange(scheduledStart, scheduledEnd);
@@ -70,8 +82,14 @@ export const updateTaskTimeblock = async (
     const taskStart = new Date(task.start_date!).getTime();
     const taskDue = new Date(task.due_date!).getTime();
 
-    if (blockStart < taskStart || blockEnd > taskDue) {
-      throw new ApiError(400, 'Timeblock bounds must fall entirely within the task start_date and due_date');
+    // Expand task bounds if the timeblock falls outside them
+    if (blockStart < taskStart) {
+      await taskRepository.update(task.id, { start_date: new Date(scheduledStart) }, client);
+    }
+    if (blockEnd > taskDue) {
+      const newDue = new Date(scheduledEnd);
+      newDue.setHours(23, 59, 59, 999);
+      await taskRepository.update(task.id, { due_date: newDue }, client);
     }
 
     if (task.parent_task_id) {

@@ -74,7 +74,6 @@ export const protect = async (
 
         next();
     } catch (err) {
-        console.error(`❌ [auth]: Middleware Error: ${(err as Error).message}`);
         res.status(500).json({
             success: false,
             message: "Internal Server Error during authentication",

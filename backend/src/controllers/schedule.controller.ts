@@ -25,15 +25,20 @@ export const getCalendarTasks = catchAsync(async (req: Request, res: Response) =
 
   const targetUserId = user_id ? (user_id as string) : undefined;
 
-  const data = await scheduleService.getCalendarTasks(
-    userId,
-    workspaceId,
-    startRangeStr,
-    endRangeStr,
-    targetUserId
-  );
+  try {
+    const data = await scheduleService.getCalendarTasks(
+      userId,
+      workspaceId,
+      startRangeStr,
+      endRangeStr,
+      targetUserId
+    );
 
-  res.status(200).json(new ApiResponse(200, data, 'Calendar tasks retrieved successfully'));
+    res.status(200).json(new ApiResponse(200, data, 'Calendar tasks retrieved successfully'));
+  } catch (err: any) {
+    console.error('❌ [ScheduleController] getCalendarTasks Error:', err.message, err.stack);
+    throw err;
+  }
 });
 
 /**
@@ -52,15 +57,19 @@ export const getUnscheduledTasks = catchAsync(async (req: Request, res: Response
 
   const search = req.query.search ? (req.query.search as string) : undefined;
 
-  const data = await scheduleService.getUnscheduledTasks(
-    userId,
-    workspaceId,
-    limit,
-    offset,
-    search
-  );
-
-  res.status(200).json(new ApiResponse(200, data, 'Unscheduled tasks retrieved successfully'));
+  try {
+    const data = await scheduleService.getUnscheduledTasks(
+      userId,
+      workspaceId,
+      limit,
+      offset,
+      search
+    );
+    res.status(200).json(new ApiResponse(200, data, 'Unscheduled tasks retrieved successfully'));
+  } catch (err: any) {
+    console.error('❌ [ScheduleController] getUnscheduledTasks Error:', err.message, err.stack);
+    throw err;
+  }
 });
 
 /**
@@ -110,9 +119,13 @@ export const getGanttTasks = catchAsync(async (req: Request, res: Response) => {
 
   const projectId = project_id ? (project_id as string) : undefined;
 
-  const data = await scheduleService.getGanttTasks(workspaceId, scope, userId, projectId);
-
-  res.status(200).json(new ApiResponse(200, data, 'Gantt tasks retrieved successfully'));
+  try {
+    const data = await scheduleService.getGanttTasks(workspaceId, scope, userId, projectId);
+    res.status(200).json(new ApiResponse(200, data, 'Gantt tasks retrieved successfully'));
+  } catch (err: any) {
+    console.error('❌ [ScheduleController] getGanttTasks Error:', err.message, err.stack);
+    throw err;
+  }
 });
 
 /**
