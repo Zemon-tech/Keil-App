@@ -10,6 +10,9 @@ import { addMinutes, format, parseISO, isPast } from "date-fns";
 import {
   Bell,
   CalendarClock,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Flag,
   Focus,
   Link2,
@@ -20,6 +23,12 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import type { CalendarBlock, CalendarBlockType, Task } from "@/types/task";
@@ -184,13 +193,28 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const calendarRef = useRef<FullCalendar>(null);
 
+  const currentViewLabel = useMemo(() => {
+    if (currentViewType === "timeGridDay") return "Today";
+    if (currentViewType === "timeGridWeek") return "Week";
+    if (currentViewType === "dayGridMonth") return "Month";
+    if (currentViewType === "listWeek") return "Week";
+    return "View";
+  }, [currentViewType]);
+
+  const headerTitle = useMemo(() => {
+    if (currentViewType === "dayGridMonth") return format(currentViewDate, "EEE, do MMMM yyyy");
+    if (currentViewType === "timeGridWeek") return format(currentViewDate, "EEE, do MMMM yyyy");
+    if (currentViewType === "listWeek") return format(currentViewDate, "EEE, do MMMM yyyy");
+    return format(currentViewDate, "EEE, do MMMM yyyy");
+  }, [currentViewDate, currentViewType]);
+
   // Fix: Force calendar update on container resize to handle aspect ratio changes
   useEffect(() => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
 
     // Use ResizeObserver on the calendar's parent to detect any layout changes
-    const container = calendarApi.el.parentElement;
+    const container = (calendarRef.current as any)?.el?.parentElement as HTMLElement | undefined;
     if (!container) return;
 
     const resizeObserver = new ResizeObserver(() => {
@@ -203,7 +227,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
   // Imperatively update the FullCalendar toolbar title with a custom formatted date
   useEffect(() => {
-    const titleEl = calendarRef.current?.getApi()?.el?.querySelector('.fc-toolbar-title');
+    const titleEl = (calendarRef.current as any)?.el?.querySelector?.('.fc-toolbar-title') as HTMLElement | null;
     if (!titleEl) return;
     if (currentViewType === 'dayGridMonth') {
       titleEl.textContent = format(currentViewDate, 'MMMM yyyy');
@@ -388,10 +412,96 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     return new Date();
   }, [selectedTask?.plannedStartISO]);
 
-  const headerRight = "";
+  const goPrev = () => {
+    const calendarApi = calendarRef.current?.getApi();
+    calendarApi?.prev();
+  };
+
+  const goNext = () => {
+    const calendarApi = calendarRef.current?.getApi();
+    calendarApi?.next();
+  };
+
+  const goToday = () => {
+    const calendarApi = calendarRef.current?.getApi();
+    calendarApi?.today();
+    calendarApi?.changeView("timeGridDay", new Date());
+  };
+
+  const setView = (view: CalendarView) => {
+    const calendarApi = calendarRef.current?.getApi();
+    if (!calendarApi) return;
+    calendarApi.changeView(view);
+  };
 
   return (
     <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2"
+              onClick={goPrev}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2"
+              onClick={goNext}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2.5 text-xs"
+              onClick={goToday}
+            >
+              Today
+            </Button>
+          </div>
+
+          <div className="min-w-0 flex-1 text-center">
+            <div className="truncate text-sm font-semibold">{headerTitle}</div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2.5 text-xs"
+                >
+                  {currentViewLabel}
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl">
+                <DropdownMenuItem onClick={() => setView("timeGridDay")}>
+                  Today
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setView("timeGridWeek")}>
+                  Week
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setView("dayGridMonth")}>
+                  Month
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
       <div className="flex-1 min-h-0">
         <div className="h-full">
           <FullCalendar
@@ -408,11 +518,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             navLinks={true}
             dayHeaderFormat={{ weekday: "short" }}
             slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
-            headerToolbar={{
-              left: "prev,next today",
-              center: "title",
-              right: headerRight
-            }}
+            headerToolbar={false}
 
             events={eventInputs as EventInput[]}
             eventContent={renderEventContent}
