@@ -17,8 +17,6 @@ import {
   Focus,
   Link2,
   Timer,
-  X,
-  Circle,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -41,7 +39,6 @@ type Props = {
   selectedTask: Task | null;
   onViewChange?: (view: string) => void;
   onTaskSchedule?: (taskId: string, startISO: string, endISO: string) => void;
-  onSelectTask?: (taskId: string) => void;
 };
 
 type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
@@ -90,6 +87,9 @@ function makeEventInput(block: CalendarBlock, task?: Task): EventInput {
     title: block.title,
     start: block.startISO,
     end: block.endISO,
+    backgroundColor: "#5ba66d",
+    borderColor: "transparent",
+    textColor: "#111827",
     extendedProps: {
       type: block.type,
       taskId: block.taskId,
@@ -127,12 +127,31 @@ function makeEventInput(block: CalendarBlock, task?: Task): EventInput {
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
   const isScheduledTask = arg.event.extendedProps.isScheduledTask;
+  const isMonthView = arg.view.type === "dayGridMonth";
   
+  if (isMonthView) {
+    return (
+      <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5" style={{ color: arg.textColor || "inherit" }}>
+        {arg.event.title}
+      </div>
+    );
+  }
+
   // Handle scheduled tasks (no type metadata)
   if (isScheduledTask) {
     return (
-      <div className="fc-scheduled-pill">
-        <span className="fc-scheduled-pill-text">{arg.event.title}</span>
+      <div className="h-full w-full p-2 overflow-hidden">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
+                Scheduled Task
+              </span>
+            </div>
+          </div>
+          <Timer className="h-3.5 w-3.5 opacity-40" />
+        </div>
       </div>
     );
   }
@@ -180,18 +199,11 @@ function renderEventContent(arg: EventContentArg) {
 
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule, onSelectTask }: Props) {
+export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>("");
   const [currentViewType, setCurrentViewType] = useState<CalendarView>("dayGridMonth");
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const calendarRef = useRef<FullCalendar>(null);
-  
-  // More-link popover state
-  const [moreLinkPopover, setMoreLinkPopover] = useState<{
-    date: string;
-    tasks: Task[];
-    pos: { top: number; left: number };
-  } | null>(null);
 
   // Set initial scroll time to current time (Google Calendar style)
   const scrollTime = useMemo(() => format(new Date(), "HH:mm:ss"), []);
@@ -381,9 +393,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         title: t.title,
         start: t.plannedStartISO,
         end: t.plannedEndISO,
-        backgroundColor: "#8b5cf6",
-        borderColor: "#7c3aed",
-        textColor: "#ffffff",
+        backgroundColor: "#5ba66d",
+        borderColor: "transparent",
+        textColor: "#111827",
         extendedProps: {
           taskId: t.id,
           taskTitle: t.title,
@@ -520,42 +532,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             scrollTime={scrollTime}
             scrollTimeReset={false}
             headerToolbar={false}
+            dayMaxEvents={2}
+            moreLinkContent={(args) => `${args.num} more`}
 
             events={eventInputs as EventInput[]}
             eventContent={renderEventContent}
-            dayMaxEvents={4}
-            moreLinkClick={(arg) => {
-              // Collect all scheduled tasks for this date
-              const clickedDate = arg.date;
-              const dayStart = new Date(clickedDate);
-              dayStart.setHours(0, 0, 0, 0);
-              const dayEnd = new Date(clickedDate);
-              dayEnd.setHours(23, 59, 59, 999);
-
-              const dayTasks = tasks.filter((t) => {
-                if (!t.plannedStartISO) return false;
-                const start = new Date(t.plannedStartISO);
-                return start >= dayStart && start <= dayEnd;
-              });
-
-              // Get click position
-              const el = arg.jsEvent?.target as HTMLElement;
-              const rect = el?.closest('.fc-daygrid-day')?.getBoundingClientRect() ||
-                           el?.getBoundingClientRect() ||
-                           { top: 0, left: 0, width: 0, height: 0 };
-
-              setMoreLinkPopover({
-                date: format(clickedDate, "EEEE, MMMM d"),
-                tasks: dayTasks,
-                pos: {
-                  top: rect.top + window.scrollY,
-                  left: rect.left + window.scrollX,
-                },
-              });
-              return "stop"; // prevent default navigation
-            }}
             eventClassNames={(arg) => {
               const type = arg.event.extendedProps.type as CalendarBlockType;
+              if (arg.event.extendedProps.isScheduledTask) {
+                return ["task-event", "scheduled-task"];
+              }
               if (!type) return ["task-event"];
               return [`fc-type-${type}`, "task-event"];
             }}
@@ -672,70 +658,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           </div>
         </DrawerContent>
       </Drawer>
-
-      {/* ── More Tasks Popover ──────────────────────────────────── */}
-      {moreLinkPopover && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setMoreLinkPopover(null)}
-          />
-          {/* Popover card */}
-          <div
-            className="fixed z-50 w-[220px] bg-popover border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-            style={{
-              top: Math.min(moreLinkPopover.pos.top + 8, window.innerHeight - 320),
-              left: Math.min(moreLinkPopover.pos.left, window.innerWidth - 240),
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-border/60">
-              <span className="text-xs font-semibold text-foreground">{moreLinkPopover.date}</span>
-              <button
-                onClick={() => setMoreLinkPopover(null)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Task list */}
-            <div className="py-1 max-h-[260px] overflow-y-auto">
-              {moreLinkPopover.tasks.length === 0 ? (
-                <div className="px-3 py-3 text-xs text-muted-foreground text-center">No tasks</div>
-              ) : (
-                moreLinkPopover.tasks.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      onSelectTask?.(t.id);
-                      setMoreLinkPopover(null);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent/60 transition-colors text-left group"
-                  >
-                    {/* Status dot */}
-                    <div className={cn(
-                      "w-2 h-2 rounded-full shrink-0 mt-0.5",
-                      t.status === "done" ? "bg-green-500" :
-                      t.status === "in-progress" ? "bg-blue-500" :
-                      t.status === "todo" ? "bg-violet-500" : "bg-zinc-500"
-                    )} />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[12px] font-medium truncate leading-tight">{t.title}</div>
-                      {t.plannedStartISO && (
-                        <div className="text-[10px] text-muted-foreground mt-0.5">
-                          {format(parseISO(t.plannedStartISO), "h:mm a")}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
