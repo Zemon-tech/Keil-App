@@ -542,7 +542,8 @@ html,
 }
 
 .fc-daygrid-day-frame {
-    padding: 4px !important;
+    padding: 0px 2px !important;
+    min-height: unset !important;
 }
 
 .fc-daygrid-event-harness {
@@ -601,17 +602,72 @@ html,
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-/* Scheduled task events */
-.fc-event.scheduled-task {
-    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+
+/* Scheduled task pillscompact by default */
+.fc-scheduled-pill {
+    display: flex;
+    align-items: center;
+    background: transparent;
+    padding: 2px 6px;
+    height: 100%;
+    width: 100%;
+    min-height: 18px;
+}
+
+.fc-scheduled-pill-text {
+    font-size: 10px;
+    font-weight: 600;
+    color: #0a0a0a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1;
+}
+
+/* Compact event harness — no extra margins stacking up */
+.fc-daygrid-event-harness {
+    margin: 1px 3px !important;
+}
+
+.fc-daygrid-event {
     border: none !important;
-    border-radius: 6px !important;
-    padding: 4px 8px !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* More link — clean text */
+.fc-daygrid-more-link {
+    background: transparent !important;
+    padding: 1px 6px !important;
+    text-decoration: none !important;
+    outline: none !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    color: var(--muted-foreground) !important;
+    display: block;
+}
+
+.fc-daygrid-more-link:hover {
+    background: transparent !important;
+    color: var(--foreground) !important;
+}
+
+.fc-event.scheduled-task {
+    background: #519468 !important;
+    border: none !important;
+    border-radius: 5px !important;
+    padding: 0 !important;
+    color: #0a0a0a !important;
+    margin: 1px 0 !important;
 }
 
 .fc-event.scheduled-task .fc-event-title {
     font-weight: 600 !important;
-    font-size: 0.75rem !important;
+    font-size: 10px !important;
+    color: #0a0a0a !important;
+    line-height: 18px !important;
+    padding: 0 6px !important;
 }
 
 /* ─────────────────────────────────────────────────────────── */
