@@ -560,6 +560,61 @@ html,
     border-radius: 4px;
 }
 
+/* "More" links popover overrides */
+.fc-theme-standard .fc-popover {
+    background-color: var(--card, oklch(0.12 0 0)) !important;
+    border: 1px solid var(--border, oklch(1 0 0 / 10%)) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.4) !important;
+    z-index: 1000 !important;
+    overflow: hidden !important;
+    transform: translateX(-15%) !important;
+}
+
+.fc-theme-standard .fc-popover-header {
+    background-color: transparent !important;
+    padding: 10px 12px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    border-bottom: 1px solid var(--border, oklch(1 0 0 / 10%)) !important;
+}
+
+.fc-theme-standard .fc-popover-title {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+}
+
+.fc-theme-standard .fc-popover-close {
+    opacity: 0.6 !important;
+    transition: opacity 0.2s !important;
+    background: transparent !important;
+    cursor: pointer !important;
+    padding: 4px !important;
+    border-radius: 6px !important;
+}
+
+.fc-theme-standard .fc-popover-close:hover {
+    opacity: 1 !important;
+    background-color: oklch(1 0 0 / 5%) !important;
+}
+
+.fc-theme-standard .fc-popover-body {
+    padding: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    background-color: var(--card, oklch(0.12 0 0)) !important;
+    max-height: 350px !important;
+    overflow-y: auto !important;
+}
+
+/* Ensure task lines spacing within popover */
+.fc-theme-standard .fc-popover-body .fc-daygrid-event-harness {
+    margin: 2px 0 !important;
+}
+
 .fc-daygrid-day-frame {
     padding: 4px !important;
 }
