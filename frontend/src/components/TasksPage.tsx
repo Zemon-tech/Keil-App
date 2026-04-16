@@ -7,7 +7,18 @@ import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 
 import type { TaskStatus, TaskPriority } from "../types/task";
-import { useTasks, useUpdateTask, type TaskFilters, type SortBy, type SortOrder } from "../hooks/api/useTasks";
+import {
+  useTasks,
+  useTask,
+  useUpdateTask,
+  useDeleteTask,
+  useAssignUser,
+  useRemoveAssignee,
+  type TaskFilters,
+  type SortBy,
+  type SortOrder,
+} from "../hooks/api/useTasks";
+import { useWorkspaceMembers } from "../hooks/api/useWorkspace";
 
 const PAGE_SIZE = 20;
 
@@ -23,6 +34,10 @@ export function TasksPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  // ── Subtask navigation stack ──
+  // Tracks the parent task when user navigates into a subtask
+  const [parentTaskStack, setParentTaskStack] = useState<Array<{ id: string; title: string }>>([]);
 
   // ── Pagination: just increase the limit to fetch more ──
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -73,8 +88,19 @@ export function TasksPage() {
     setLimit(PAGE_SIZE);
   }, []);
 
-  // ── Update mutation (wired to onUpdateTask callbacks) ──
+  // ── Mutations (wired to callbacks) ──
   const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+  const assignUser = useAssignUser();
+  const removeAssignee = useRemoveAssignee();
+
+  // ── Fetch workspace members for bulk assign ──
+  const { data: members } = useWorkspaceMembers(tasks?.[0]?.workspace_id);
+  const workspaceMembers = members?.map((m) => ({
+    id: m.user.id,
+    name: m.user.name,
+    email: m.user.email,
+  })) ?? [];
 
   // ── Client-side text filter on top of server results ──
   const filtered = useMemo(() => {
@@ -99,6 +125,29 @@ export function TasksPage() {
     [selectedTaskId, filtered]
   );
 
+  // Fetch full task data for the selected task (handles subtask detail too)
+  const { data: selectedTaskDetail } = useTask(selectedTaskId);
+
+  // The parentTask for breadcrumb (top of the navigation stack)
+  const parentTask = parentTaskStack.length > 0
+    ? parentTaskStack[parentTaskStack.length - 1]
+    : null;
+
+  // Navigate into a subtask (push current task onto parent stack)
+  const handleNavigateToSubtask = useCallback((subtaskId: string) => {
+    const currentTask = selectedTaskDetail || selected;
+    if (currentTask) {
+      setParentTaskStack((prev) => [...prev, { id: currentTask.id, title: currentTask.title }]);
+    }
+    setSelectedTaskId(subtaskId);
+  }, [selected, selectedTaskDetail]);
+
+  // Navigate back to parent task (pop the stack)
+  const handleNavigateToParent = useCallback((parentId: string) => {
+    setParentTaskStack((prev) => prev.slice(0, -1));
+    setSelectedTaskId(parentId);
+  }, []);
+
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",
     isCollapsed ? "" : ""
@@ -120,7 +169,21 @@ export function TasksPage() {
               tasks={filtered}
               allTasks={taskList}
               selectedTaskId={selectedTaskId}
-              onSelectTask={setSelectedTaskId}
+              onSelectTask={(id) => {
+                // When selecting from list, check if it's a subtask to set the parent stack
+                const selectedTask = taskList.find(t => t.id === id);
+                if (selectedTask?.parent_task_id) {
+                  const parent = taskList.find(t => t.id === selectedTask.parent_task_id);
+                  if (parent) {
+                    setParentTaskStack([{ id: parent.id, title: parent.title }]);
+                  } else {
+                    setParentTaskStack([]);
+                  }
+                } else {
+                  setParentTaskStack([]);
+                }
+                setSelectedTaskId(id);
+              }}
               createDialogOpen={createDialogOpen}
               onCreateDialogOpenChange={setCreateDialogOpen}
               isLoading={isLoading}
@@ -131,6 +194,20 @@ export function TasksPage() {
               onUpdateTask={(id, updates) => {
                 updateTask.mutate({ id, updates });
               }}
+              onDeleteTask={(id) => {
+                deleteTask.mutate(id);
+                // Clear selection if deleted task was selected
+                if (id === selectedTaskId) {
+                  setSelectedTaskId("");
+                }
+              }}
+              onAssignUser={(taskId, userId) => {
+                assignUser.mutate({ id: taskId, userId });
+              }}
+              onRemoveAssignee={(taskId, userId) => {
+                removeAssignee.mutate({ id: taskId, userId });
+              }}
+              workspaceMembers={workspaceMembers}
               hasMore={hasMore}
               onLoadMore={handleLoadMore}
               isLoadingMore={isFetching && limit > PAGE_SIZE}
@@ -138,16 +215,23 @@ export function TasksPage() {
           </div>
 
           <div className="flex-1 min-w-0 bg-background h-full">
-            {selected ? (
+            {selected || selectedTaskDetail ? (
               <TaskDetailPane
-                task={selected}
+                task={(selectedTaskDetail || selected)!}
                 onUpdateTask={(id, updates) => {
                   updateTask.mutate({ id, updates });
                 }}
                 onTaskDeleted={() => {
                   setSelectedTaskId("");
+                  setParentTaskStack([]);
                 }}
-                onClose={() => setSelectedTaskId("")}
+                onClose={() => {
+                  setSelectedTaskId("");
+                  setParentTaskStack([]);
+                }}
+                onNavigateToSubtask={handleNavigateToSubtask}
+                onNavigateToParent={handleNavigateToParent}
+                parentTask={parentTask}
               />
             ) : (
               <TaskSchedulePane
@@ -162,4 +246,3 @@ export function TasksPage() {
     </div>
   );
 }
-

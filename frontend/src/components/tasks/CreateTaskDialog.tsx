@@ -42,6 +42,9 @@ interface CreateTaskDialogProps {
   taskId?: string;
   initialValues?: Partial<TaskDTO>;
   onTaskUpdated?: (taskId: string) => void;
+  /** When set, forces "Create subtask" mode — parent_task_id is pre-filled and locked */
+  parentTaskId?: string;
+  parentTaskTitle?: string;
 }
 
 export function CreateTaskDialog({
@@ -54,6 +57,8 @@ export function CreateTaskDialog({
   taskId,
   initialValues,
   onTaskUpdated,
+  parentTaskId,
+  parentTaskTitle,
 }: CreateTaskDialogProps) {
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
@@ -90,7 +95,7 @@ export function CreateTaskDialog({
     setNewAssigneeIds([]);
     setNewStoryPoints("");
     setNewTimeEstimate("");
-    setNewParentTaskId("");
+    setNewParentTaskId(parentTaskId ?? "");
   };
 
   // Pre-fill form when opening in edit mode
@@ -133,6 +138,9 @@ export function CreateTaskDialog({
         ((initialValues as any).assignees ?? []).map((a: any) => a.id)
       );
       setNewParentTaskId((initialValues as any).parent_task_id ?? "");
+    } else if (open && parentTaskId) {
+      // Subtask mode: pre-fill parent
+      setNewParentTaskId(parentTaskId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -249,10 +257,14 @@ export function CreateTaskDialog({
           <div className="px-5 pt-5 pb-4 border-b border-border/60">
             <DialogHeader>
               <DialogTitle className="text-base">
-                {mode === "edit" ? "Edit task" : "Create new task"}
+                {mode === "edit" ? "Edit task" : parentTaskId ? "Create subtask" : "Create new task"}
               </DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
-                Every task must have a clear <strong>Objective</strong> and <strong>Success Criteria</strong>.
+                {parentTaskId ? (
+                  <>Creating a subtask inside <strong>{parentTaskTitle || "parent task"}</strong>.</>
+                ) : (
+                  <>Every task must have a clear <strong>Objective</strong> and <strong>Success Criteria</strong>.</>
+                )}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -366,8 +378,8 @@ export function CreateTaskDialog({
                   </Select>
                 </div>
 
-                {/* Parent task (unchanged) */}
-                {allTasks.length > 0 && (
+                {/* Parent task (hidden when in subtask mode) */}
+                {!parentTaskId && allTasks.length > 0 && (
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Parent task <span className="opacity-50">(optional)</span></Label>
                     <Select value={newParentTaskId} onValueChange={setNewParentTaskId}>
@@ -376,7 +388,7 @@ export function CreateTaskDialog({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none" className="text-sm">None (top-level)</SelectItem>
-                        {allTasks.map((t) => (
+                        {allTasks.filter(t => !t.parent_task_id).map((t) => (
                           <SelectItem key={t.id} value={t.id} className="text-sm">
                             {t.title}
                           </SelectItem>
@@ -531,7 +543,7 @@ export function CreateTaskDialog({
             >
               {mode === "edit"
                 ? updateTask.isPending ? "Saving…" : "Save changes"
-                : createTask.isPending ? "Creating…" : "Create task"}
+                : createTask.isPending ? "Creating…" : parentTaskId ? "Create subtask" : "Create task"}
             </Button>
           </div>
         </form>

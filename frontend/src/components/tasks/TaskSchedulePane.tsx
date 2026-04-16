@@ -193,11 +193,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const calendarRef = useRef<FullCalendar>(null);
 
+  // Set initial scroll time to current time (Google Calendar style)
+  const scrollTime = useMemo(() => format(new Date(), "HH:mm:ss"), []);
+
   const headerTitle = useMemo(() => {
-    if (currentViewType === "dayGridMonth") return format(currentViewDate, "EEE, do MMMM yyyy");
-    if (currentViewType === "timeGridWeek") return format(currentViewDate, "EEE, do MMMM yyyy");
-    if (currentViewType === "listWeek") return format(currentViewDate, "EEE, do MMMM yyyy");
-    return format(currentViewDate, "EEE, do MMMM yyyy");
+    if (currentViewType === "dayGridMonth") return format(currentViewDate, "MMMM yyyy");
+    if (currentViewType === "timeGridWeek") return format(currentViewDate, "MMMM yyyy");
+    if (currentViewType === "timeGridDay") return format(currentViewDate, "EEEE, do MMMM yyyy");
+    if (currentViewType === "listWeek") return format(currentViewDate, "MMMM yyyy");
+    return format(currentViewDate, "MMMM yyyy");
   }, [currentViewDate, currentViewType]);
 
   // Fix: Force calendar update on container resize to handle aspect ratio changes
@@ -501,8 +505,20 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             droppable
             weekends
             navLinks={true}
-            dayHeaderFormat={{ weekday: "short" }}
             slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
+            views={{
+              dayGridMonth: {
+                dayHeaderFormat: { weekday: "short" },
+              },
+              timeGridWeek: {
+                dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
+              },
+              timeGridDay: {
+                dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
+              },
+            }}
+            scrollTime={scrollTime}
+            scrollTimeReset={false}
             headerToolbar={false}
 
             events={eventInputs as EventInput[]}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Draggable } from "@fullcalendar/interaction";
-import { Search, Plus, GripVertical, Flag, Zap, X } from "lucide-react";
+import { Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,26 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { Task, TaskStatus } from "@/types/task";
-import { type TaskDTO, type SortBy, type SortOrder } from "@/hooks/api/useTasks";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { Task, TaskStatus, TaskPriority } from "@/types/task";
+import { type TaskDTO, type SortBy, type SortOrder, useSubtasks } from "@/hooks/api/useTasks";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 
 type Props = {
@@ -41,11 +59,16 @@ type Props = {
   /** Called with the new task's id after a successful create */
   onTaskCreated: (newTaskId: string) => void;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onDeleteTask?: (id: string) => void;
+  onAssignUser?: (taskId: string, userId: string) => void;
+  onRemoveAssignee?: (taskId: string, userId: string) => void;
   isLoading?: boolean;
   /** Pagination props */
   hasMore?: boolean;
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
+  /** Workspace members for bulk assign */
+  workspaceMembers?: Array<{ id: string; name: string | null; email: string }>;
 };
 
 const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
@@ -74,6 +97,102 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: "priority", label: "Priority" },
 ];
 
+/** Inline component to fetch & render subtasks when expanded */
+function SubtaskList({
+  parentTaskId,
+  selectedTaskId,
+  onSelectTask,
+  onUpdateTask,
+}: {
+  parentTaskId: string;
+  selectedTaskId: string;
+  onSelectTask: (id: string) => void;
+  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+}) {
+  const { data: subtasks = [], isLoading } = useSubtasks(parentTaskId);
+
+  if (isLoading) {
+    return (
+      <div className="pl-6 space-y-px">
+        {[1, 2].map((i) => (
+          <div key={i} className="flex items-center gap-2 px-2 py-1 animate-pulse">
+            <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/20" />
+            <div className="h-2.5 rounded bg-muted-foreground/12 flex-1" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (subtasks.length === 0) return null;
+
+  return (
+    <div className="pl-4 border-l border-border/40 ml-5 space-y-px">
+      {subtasks.map((sub) => {
+        const active = sub.id === selectedTaskId;
+        const isDone = sub.status === "done";
+        const displayDate = sub.due_date || (sub as any).dueDateISO;
+        const isHighPriority = sub.priority === "high" || sub.priority === "urgent";
+
+        return (
+          <div
+            key={sub.id}
+            onClick={() => onSelectTask(sub.id)}
+            className={cn(
+              "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+              active ? "bg-accent" : "hover:bg-accent/50",
+              isDone && "opacity-50"
+            )}
+          >
+            {/* Status dot */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
+                    statusColorMap[sub.status as TaskStatus] || "bg-zinc-500"
+                  )}
+                />
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
+                {STATUS_OPTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateTask?.(sub.id, { status: s });
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors"
+                  >
+                    <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", statusColorMap[s])} />
+                    {s}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+
+            {/* Title */}
+            <span className="text-[13px] font-medium truncate flex-1 leading-snug min-w-0">
+              {sub.title}
+            </span>
+
+            {/* Right meta */}
+            <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground">
+              {isHighPriority && <Flag className="w-2.5 h-2.5 text-orange-400 shrink-0" />}
+              <span className="tabular-nums">
+                {displayDate
+                  ? new Date(displayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+                  : ""}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TaskListPane({
   query,
   onQueryChange,
@@ -90,15 +209,30 @@ export function TaskListPane({
   onCreateDialogOpenChange,
   onTaskCreated,
   onUpdateTask,
+  onDeleteTask,
+  onAssignUser,
+  onRemoveAssignee,
   isLoading = false,
   hasMore = false,
   onLoadMore,
   isLoadingMore = false,
+  workspaceMembers = [],
 }: Props) {
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(!!query);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+
+  // Toggle subtask expansion for a task
+  const toggleExpanded = (e: React.MouseEvent, taskId: string) => {
+    e.stopPropagation();
+    const next = new Set(expandedTasks);
+    if (next.has(taskId)) next.delete(taskId);
+    else next.add(taskId);
+    setExpandedTasks(next);
+  };
 
   // Keyboard shortcut: press C to open create dialog
   useEffect(() => {
@@ -119,8 +253,8 @@ export function TaskListPane({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onCreateDialogOpenChange]);
 
-  // No grouping needed — tasks are flat from the API
-  const taskList = tasks;
+  // Filter to only top-level tasks (hide subtasks from main list)
+  const taskList = tasks.filter(t => !t.parent_task_id);
 
   // Initialize FullCalendar Draggable for task cards
   useEffect(() => {
@@ -171,7 +305,54 @@ export function TaskListPane({
     setSelectedTaskIds(new Set());
   };
 
+  const handleBulkPriorityChange = (priority: TaskPriority) => {
+    if (onUpdateTask) {
+      selectedTaskIds.forEach((id) => onUpdateTask(id, { priority }));
+    }
+    setSelectedTaskIds(new Set());
+  };
 
+  const handleBulkDueDateChange = (dueDate: string) => {
+    if (onUpdateTask) {
+      selectedTaskIds.forEach((id) => onUpdateTask(id, { dueDateISO: dueDate }));
+    }
+    setSelectedTaskIds(new Set());
+  };
+
+  const handleBulkAssign = (userId: string) => {
+    if (onAssignUser) {
+      selectedTaskIds.forEach((taskId) => onAssignUser(taskId, userId));
+    }
+    setSelectedTaskIds(new Set());
+  };
+
+  const handleBulkUnassign = () => {
+    // Get first selected task to check assignees
+    const firstTaskId = Array.from(selectedTaskIds)[0];
+    const firstTask = tasks.find((t) => t.id === firstTaskId);
+    if (firstTask?.assignees && onRemoveAssignee) {
+      // Remove all assignees from each selected task
+      selectedTaskIds.forEach((taskId) => {
+        const task = tasks.find((t) => t.id === taskId);
+        task?.assignees?.forEach((assignee) => {
+          onRemoveAssignee(taskId, assignee.id);
+        });
+      });
+    }
+    setSelectedTaskIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (onDeleteTask) {
+      selectedTaskIds.forEach((id) => onDeleteTask(id));
+    }
+    setDeleteDialogOpen(false);
+    setSelectedTaskIds(new Set());
+  };
+
+  const confirmDelete = () => {
+    setDeleteDialogOpen(true);
+  };
 
   return (
     <div className="h-full min-h-0 flex flex-col w-full relative overflow-hidden">
@@ -319,23 +500,40 @@ export function TaskListPane({
             // Use backend date field, falling back to dueDateISO for compat
             const displayDate = t.due_date || t.dueDateISO;
             const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
+            const hasSubtasks = (t.subtask_count ?? 0) > 0;
+            const isExpanded = expandedTasks.has(t.id);
 
             return (
-              <div
-                key={t.id}
-                onClick={() => !isMultiSelecting && onSelectTask(t.id)}
-                data-task-id={t.id}
-                data-task-title={t.title}
-                data-task-status={t.status}
-                className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
-                  active && !isMultiSelecting
-                    ? "bg-accent"
-                    : "hover:bg-accent/50",
-                  isDone && "opacity-50",
-                  isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
-                )}
-              >
+              <div key={t.id}>
+                <div
+                  onClick={() => !isMultiSelecting && onSelectTask(t.id)}
+                  data-task-id={t.id}
+                  data-task-title={t.title}
+                  data-task-status={t.status}
+                  className={cn(
+                    "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+                    active && !isMultiSelecting
+                      ? "bg-accent"
+                      : "hover:bg-accent/50",
+                    isDone && "opacity-50",
+                    isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
+                  )}
+                >
+                  {/* Subtask expand toggle */}
+                  <div className="w-4 shrink-0 flex items-center justify-center">
+                    {hasSubtasks ? (
+                      <button
+                        onClick={(e) => toggleExpanded(e, t.id)}
+                        className="p-0.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
+                        )}
+                      </button>
+                    ) : null}
+                  </div>
                 {/* Selection & Drag actions */}
                 <div
                   className={cn(
@@ -412,16 +610,32 @@ export function TaskListPane({
                   {isHighPriority && (
                     <Flag className="w-3 h-3 text-orange-400 shrink-0" />
                   )}
+                  {hasSubtasks && (
+                    <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                      {t.subtask_count}
+                    </span>
+                  )}
                   <span className="tabular-nums">
                     {displayDate
                       ? new Date(displayDate).toLocaleDateString(
                         undefined,
                         { month: "short", day: "numeric" }
                       )
-                      : "—"}
+                      : "\u2014"}
                   </span>
                 </div>
               </div>
+
+              {/* Expanded subtasks */}
+              {hasSubtasks && isExpanded && (
+                <SubtaskList
+                  parentTaskId={t.id}
+                  selectedTaskId={selectedTaskId}
+                  onSelectTask={onSelectTask}
+                  onUpdateTask={onUpdateTask}
+                />
+              )}
+            </div>
             );
           })}
 
@@ -463,20 +677,166 @@ export function TaskListPane({
             {selectedTaskIds.size} selected
           </span>
 
-          <Select
-            onValueChange={(v) => handleBulkStatusChange(v as TaskStatus)}
-          >
-            <SelectTrigger className="h-7 text-xs rounded-full border-border bg-background w-auto min-w-[110px]">
-              <SelectValue placeholder="Change status" />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs rounded-full border-border bg-background px-3"
+              >
+                Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-48">
+              {/* Status submenu */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="text-xs">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
+                  Change status
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {STATUS_OPTIONS.map((s) => (
+                    <DropdownMenuItem
+                      key={s}
+                      className="text-xs"
+                      onClick={() => handleBulkStatusChange(s)}
+                    >
+                      <div
+                        className={cn(
+                          "w-2 h-2 rounded-full mr-2",
+                          statusColorMap[s]
+                        )}
+                      />
+                      {s}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              {/* Priority submenu */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="text-xs">
+                  <Flag className="w-3 h-3 mr-2" />
+                  Change priority
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {(["low", "medium", "high", "urgent"] as TaskPriority[]).map(
+                    (p) => (
+                      <DropdownMenuItem
+                        key={p}
+                        className="text-xs"
+                        onClick={() => handleBulkPriorityChange(p)}
+                      >
+                        <Flag
+                          className={cn(
+                            "w-3 h-3 mr-2",
+                            p === "high" || p === "urgent"
+                              ? "text-orange-400"
+                              : "text-muted-foreground"
+                          )}
+                        />
+                        {p}
+                      </DropdownMenuItem>
+                    )
+                  )}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              {/* Due date submenu */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="text-xs">
+                  <Calendar className="w-3 h-3 mr-2" />
+                  Set due date
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem
+                    className="text-xs"
+                    onClick={() =>
+                      handleBulkDueDateChange(
+                        new Date().toISOString().split("T")[0]
+                      )
+                    }
+                  >
+                    Today
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-xs"
+                    onClick={() => {
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      handleBulkDueDateChange(
+                        tomorrow.toISOString().split("T")[0]
+                      );
+                    }}
+                  >
+                    Tomorrow
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-xs"
+                    onClick={() => {
+                      const nextWeek = new Date();
+                      nextWeek.setDate(nextWeek.getDate() + 7);
+                      handleBulkDueDateChange(
+                        nextWeek.toISOString().split("T")[0]
+                      );
+                    }}
+                  >
+                    Next week
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-xs"
+                    onClick={() => handleBulkDueDateChange("")}
+                  >
+                    Clear due date
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              {/* Assign submenu */}
+              {workspaceMembers.length > 0 && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="text-xs">
+                    <User className="w-3 h-3 mr-2" />
+                    Assign to
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-48 overflow-y-auto">
+                    {workspaceMembers.map((member) => (
+                      <DropdownMenuItem
+                        key={member.id}
+                        className="text-xs"
+                        onClick={() => handleBulkAssign(member.id)}
+                      >
+                        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center mr-2 text-[10px] font-medium">
+                          {member.name
+                            ? member.name.charAt(0).toUpperCase()
+                            : member.email.charAt(0).toUpperCase()}
+                        </div>
+                        {member.name || member.email}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-xs text-destructive"
+                      onClick={handleBulkUnassign}
+                    >
+                      Unassign all
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+
+              <DropdownMenuSeparator />
+
+              {/* Delete action */}
+              <DropdownMenuItem
+                className="text-xs text-destructive focus:text-destructive"
+                onClick={confirmDelete}
+              >
+                <Trash2 className="w-3 h-3 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button
             size="sm"
@@ -489,11 +849,45 @@ export function TaskListPane({
         </div>
       )}
 
+      {/* ── Delete confirmation dialog ─────────────────────────── */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-5 h-5" />
+              Delete Tasks
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete{" "}
+              <span className="font-semibold">{selectedTaskIds.size}</span>{" "}
+              {selectedTaskIds.size === 1 ? "task" : "tasks"}? This action cannot
+              be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDelete}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Create task dialog ────────────────────────────────── */}
-      <CreateTaskDialog 
-        open={createDialogOpen} 
-        onOpenChange={onCreateDialogOpenChange} 
-        onTaskCreated={onTaskCreated} 
+      <CreateTaskDialog
+        open={createDialogOpen}
+        onOpenChange={onCreateDialogOpenChange}
+        onTaskCreated={onTaskCreated}
         allTasks={allTasks ?? tasks}
       />
     </div>

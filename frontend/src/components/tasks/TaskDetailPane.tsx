@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Calendar,
   ChevronRight,
@@ -19,6 +19,12 @@ import {
   Download,
   PanelRightClose,
   Pencil,
+  Smile,
+  Mic,
+  AtSign,
+  Hash,
+  Paperclip,
+  Send,
 } from "lucide-react";
 import { format, formatDistanceToNow, isToday, isYesterday, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -68,11 +74,13 @@ import {
 import { EditableText, EditableTextarea } from "@/components/ui/editable-text";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 
-import type { Task, TaskPriority, TaskStatus, Dependency } from "@/types/task";
+import type { Task, TaskPriority, TaskStatus, Dependency, ContextItem } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import {
   useChangeTaskStatus,
   useTask,
+  useTasks,
+  useSubtasks,
   useUpdateTask,
   useDeleteTask,
   useAssignUser,
@@ -90,11 +98,17 @@ import { useTaskActivity } from "@/hooks/api/useActivity";
 
 type Props = {
   task: TaskDTO | null;
-  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onUpdateTask?: (id: string, updates: any) => void;
   /** Called when the user deletes the displayed task */
   onTaskDeleted?: (id: string) => void;
   /** Called when the user wants to close the detail pane */
   onClose?: () => void;
+  /** Notion-style subtask navigation: navigate into a subtask */
+  onNavigateToSubtask?: (subtaskId: string) => void;
+  /** Navigate back to parent task */
+  onNavigateToParent?: (parentTaskId: string) => void;
+  /** Parent task info for breadcrumb trail */
+  parentTask?: { id: string; title: string } | null;
 };
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
@@ -135,47 +149,49 @@ const ContextIcon = ({ type, className }: { type: string; className?: string }) 
 // ─── Header Sub-components ────────────────────────────────────────────────────
 
 /** Clickable status badge that opens a popover to change status */
-const StatusBadge = ({
+function StatusBadge({
   status,
   onStatusChange,
 }: {
   status: TaskStatus;
   onStatusChange: (s: TaskStatus) => void;
-}) => (
-  <Popover>
-    <PopoverTrigger asChild>
-      <Badge
-        variant="outline"
-        className="h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors"
-      >
-        <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[status])} />
-        {status}
-      </Badge>
-    </PopoverTrigger>
-    <PopoverContent className="w-40 p-1" align="start">
-      {STATUS_OPTIONS.map((s) => (
-        <button
-          key={s}
-          onClick={() => onStatusChange(s)}
-          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
-                     hover:bg-accent transition-colors text-left"
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Badge
+          variant="outline"
+          className="h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors"
         >
-          <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[s])} />
-          {s}
-        </button>
-      ))}
-    </PopoverContent>
-  </Popover>
-);
+          <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[status])} />
+          {status}
+        </Badge>
+      </PopoverTrigger>
+      <PopoverContent className="w-40 p-1" align="start">
+        {STATUS_OPTIONS.map((s) => (
+          <button
+            key={s}
+            onClick={() => onStatusChange(s)}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
+                       hover:bg-accent transition-colors text-left"
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[s])} />
+            {s}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** Clickable priority badge that opens a popover to change priority */
-const PriorityBadge = ({
+function PriorityBadge({
   priority,
   onPriorityChange,
 }: {
   priority: TaskPriority;
   onPriorityChange?: (p: TaskPriority) => void;
-}) => {
+}) {
   const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.low;
 
   if (!onPriorityChange) {
@@ -216,52 +232,58 @@ const PriorityBadge = ({
       </PopoverContent>
     </Popover>
   );
-};
+}
 
 /** Stacked avatar chips with tooltip for each assignee */
-const AssigneesChip = ({ assignees }: { assignees: { id: string, name: string | null, email: string }[] }) => (
-  <TooltipProvider delayDuration={300}>
-    <div className="flex items-center -space-x-1.5">
-      {assignees.slice(0, 3).map((a) => (
-        <Tooltip key={a.id}>
-          <TooltipTrigger asChild>
-            <Avatar className="h-5 w-5 cursor-default ring-1 ring-background">
-              <AvatarFallback className="text-[9px] font-semibold bg-accent">
-                {(a.name || a.email).charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            {a.name || a.email}
-          </TooltipContent>
-        </Tooltip>
-      ))}
-      {assignees.length > 3 && (
-        <Avatar className="h-5 w-5 ring-1 ring-background">
-          <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
-            +{assignees.length - 3}
-          </AvatarFallback>
-        </Avatar>
-      )}
-    </div>
-  </TooltipProvider>
-);
+function AssigneesChip({ assignees }: { assignees: { id: string, name: string | null, email: string }[] }) {
+  return (
+    <TooltipProvider delayDuration={300}>
+      <div className="flex items-center -space-x-1.5">
+        {assignees.slice(0, 3).map((a) => (
+          <Tooltip key={a.id}>
+            <TooltipTrigger asChild>
+              <Avatar className="h-5 w-5 cursor-default ring-1 ring-background">
+                <AvatarFallback className="text-[9px] font-semibold bg-accent">
+                  {(a.name || a.email).charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              {a.name || a.email}
+            </TooltipContent>
+          </Tooltip>
+        ))}
+        {assignees.length > 3 && (
+          <Avatar className="h-5 w-5 ring-1 ring-background">
+            <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
+              +{assignees.length - 3}
+            </AvatarFallback>
+          </Avatar>
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}
 
 // ─── Zone 1: Header ───────────────────────────────────────────────────────────
 
-const TaskDetailHeader = ({
+function TaskDetailHeader({
   task,
   onUpdateField,
   onDelete,
   onClose,
   onEditTask,
+  parentTask,
+  onNavigateToParent,
 }: {
   task: TaskDTO;
   onUpdateField?: (updates: UpdateTaskInput) => void;
   onDelete?: () => void;
   onClose?: () => void;
   onEditTask?: () => void;
-}) => {
+  parentTask?: { id: string; title: string } | null;
+  onNavigateToParent?: (parentTaskId: string) => void;
+}) {
   const changeStatus = useChangeTaskStatus();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
@@ -299,13 +321,38 @@ const TaskDetailHeader = ({
           <Breadcrumb className="flex-1 min-w-0">
             <BreadcrumbList className="text-sm items-center flex-nowrap shrink-0">
               <BreadcrumbItem className="hidden sm:block">
-                <span className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-colors">
-                  Task
+                <span 
+                  className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={onClose}
+                >
+                  Tasks
                 </span>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden sm:block">
                 <ChevronRight className="h-4 w-4" />
               </BreadcrumbSeparator>
+              {(parentTask || task.parent_task_title) && (
+                <>
+                  <BreadcrumbItem>
+                    <span
+                      className="cursor-pointer font-medium text-muted-foreground hover:text-foreground transition-colors truncate max-w-[120px]"
+                      onClick={() => {
+                        if (parentTask) {
+                          onNavigateToParent?.(parentTask.id);
+                        } else if (task.parent_task_id) {
+                          onNavigateToParent?.(task.parent_task_id);
+                        }
+                      }}
+                      title={parentTask?.title || task.parent_task_title}
+                    >
+                      {parentTask?.title || task.parent_task_title}
+                    </span>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator>
+                    <ChevronRight className="h-4 w-4" />
+                  </BreadcrumbSeparator>
+                </>
+              )}
               <BreadcrumbItem className="flex-1 min-w-0">
                 <EditableText
                   value={task.title}
@@ -405,11 +452,11 @@ const TaskDetailHeader = ({
       </AlertDialog>
     </div>
   );
-};
+}
 
 // ─── Bulleted List Editor ─────────────────────────────────────────────────────
 
-const BulletListEditor = ({
+function BulletListEditor({
   title,
   value,
   onSave,
@@ -419,7 +466,7 @@ const BulletListEditor = ({
   value: string;
   onSave: (val: string) => void;
   placeholder: string;
-}) => {
+}) {
   const points = value ? value.split("\n").filter(Boolean) : [];
   const [newPoint, setNewPoint] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -508,23 +555,309 @@ const BulletListEditor = ({
   );
 };
 
+// ─── Task Context Section ───────────────────────────────────────────────────
+
+type ContextItemType = "note" | "link";
+
+interface TaskContextItem {
+  id: string;
+  type: ContextItemType;
+  title: string;
+  content: string; // For notes: the note text, For links: the URL
+}
+
+function TaskContextSection({
+  task,
+  onUpdateTask,
+}: {
+  task: TaskDTO;
+  onUpdateTask?: (id: string, updates: any) => void;
+}) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [newItemType, setNewItemType] = useState<ContextItemType>("note");
+  const [newItemTitle, setNewItemTitle] = useState("");
+  const [newItemContent, setNewItemContent] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+
+  const contextItems: TaskContextItem[] = (task.context ?? []).map((item: any) => ({
+    id: item.id,
+    type: item.type === "link" || item.url ? "link" : "note",
+    title: item.title,
+    content: item.content || item.url || item.title,
+  }));
+
+  const handleAdd = () => {
+    if (!newItemTitle.trim() || !newItemContent.trim()) return;
+
+    const newItem: any = {
+      id: crypto.randomUUID(),
+      title: newItemTitle.trim(),
+      url: newItemType === "link" ? newItemContent.trim() : "",
+      content: newItemType === "note" ? newItemContent.trim() : "",
+      type: newItemType === "link" ? "link" : "doc", // Map to valid ContextItem types
+    };
+
+    const updatedContext = [...contextItems.map(i => ({
+      id: i.id,
+      title: i.title,
+      url: i.type === "link" ? i.content : "",
+      content: i.type === "note" ? i.content : "",
+      type: i.type === "link" ? "link" : "doc"
+    })), newItem];
+    
+    onUpdateTask?.(task.id, { context: updatedContext });
+
+    setNewItemTitle("");
+    setNewItemContent("");
+    setIsAdding(false);
+  };
+
+  const handleDelete = (id: string) => {
+    const updatedContext = contextItems.filter((item) => item.id !== id);
+    onUpdateTask?.(task.id, { context: updatedContext as any });
+  };
+
+  const handleStartEdit = (item: TaskContextItem) => {
+    setEditingId(item.id);
+    setEditTitle(item.title);
+    setEditContent(item.content);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editTitle.trim() || !editContent.trim() || !editingId) return;
+
+    const updatedContext = contextItems.map((item) =>
+      item.id === editingId
+        ? { ...item, title: editTitle.trim(), content: editContent.trim() }
+        : item
+    ).map(i => ({
+      id: i.id,
+      title: i.title,
+      url: i.type === "link" ? i.content : "",
+      content: i.type === "note" ? i.content : "",
+      type: i.type === "link" ? "link" : "doc"
+    }));
+    
+    onUpdateTask?.(task.id, { context: updatedContext });
+
+    setEditingId(null);
+    setEditTitle("");
+    setEditContent("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditTitle("");
+    setEditContent("");
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          Context
+        </span>
+        {!isAdding && (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-1 text-[10px] uppercase font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </button>
+        )}
+      </div>
+
+      {/* Add New Item Form */}
+      {isAdding && (
+        <div className="mb-3 rounded-md border border-border p-3 bg-muted/30">
+          {/* Type Selector */}
+          <div className="mb-3 flex gap-2">
+            <button
+              onClick={() => setNewItemType("note")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                newItemType === "note"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background border border-border hover:bg-accent"
+              )}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Note
+            </button>
+            <button
+              onClick={() => setNewItemType("link")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                newItemType === "link"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background border border-border hover:bg-accent"
+              )}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              Link
+            </button>
+          </div>
+
+          {/* Title Input */}
+          <Input
+            placeholder={newItemType === "note" ? "Note title..." : "Link title..."}
+            value={newItemTitle}
+            onChange={(e) => setNewItemTitle(e.target.value)}
+            className="mb-2 h-8 text-sm"
+          />
+
+          {/* Content Input */}
+          {newItemType === "note" ? (
+            <textarea
+              placeholder="Write your note here..."
+              value={newItemContent}
+              onChange={(e) => setNewItemContent(e.target.value)}
+              className="w-full min-h-[80px] rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          ) : (
+            <Input
+              placeholder="https://..."
+              value={newItemContent}
+              onChange={(e) => setNewItemContent(e.target.value)}
+              className="h-8 text-sm"
+            />
+          )}
+
+          {/* Actions */}
+          <div className="mt-2 flex justify-end gap-2">
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setIsAdding(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={!newItemTitle.trim() || !newItemContent.trim()}>
+              Add
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Context Items List */}
+      <div className="space-y-2">
+        {contextItems.length > 0 ? (
+          contextItems.map((item) => (
+            <div
+              key={item.id}
+              className="group rounded-md border border-border p-2.5 transition-colors hover:bg-accent/30"
+            >
+              {editingId === item.id ? (
+                // Edit Mode
+                <div className="space-y-2">
+                  <Input
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="h-7 text-sm"
+                    placeholder="Title..."
+                  />
+                  {item.type === "note" ? (
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="w-full min-h-[60px] rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                      placeholder="Content..."
+                    />
+                  ) : (
+                    <Input
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="h-7 text-sm"
+                      placeholder="URL..."
+                    />
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={handleCancelEdit}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="h-6 text-xs" onClick={handleSaveEdit}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                // View Mode
+                <div className="flex items-start gap-2">
+                  <div className="mt-0.5 shrink-0">
+                    {item.type === "note" ? (
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{item.title}</p>
+                    {item.type === "note" ? (
+                      <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{item.content}</p>
+                    ) : (
+                      <a
+                        href={item.content}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-0.5 text-xs text-blue-500 hover:underline truncate block"
+                      >
+                        {item.content}
+                      </a>
+                    )}
+                  </div>
+                  {/* Actions */}
+                  <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                    <button
+                      onClick={() => handleStartEdit(item)}
+                      className="p-1 text-muted-foreground hover:text-foreground rounded"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-1 text-muted-foreground hover:text-destructive rounded"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <p className="text-xs italic text-muted-foreground">No context items</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── Tab: Overview ────────────────────────────────────────────────────────────
 
 const OverviewTab = ({
   task,
   onUpdateTask,
   onUpdateField,
+  onNavigateToSubtask,
 }: {
   task: TaskDTO;
-  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onUpdateTask?: (id: string, updates: any) => void;
   onUpdateField?: (updates: UpdateTaskInput) => void;
+  onNavigateToSubtask?: (subtaskId: string) => void;
 }) => {
   const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [createSubtaskOpen, setCreateSubtaskOpen] = useState(false);
 
   const { data: members } = useWorkspaceMembers(task.workspace_id);
   const assignUser = useAssignUser();
   const removeAssignee = useRemoveAssignee();
+
+  // Fetch real subtasks from API
+  const isTopLevelTask = !task.parent_task_id;
+  const { data: subtasks = [], isLoading: subtasksLoading } = useSubtasks(
+    isTopLevelTask ? task.id : ""
+  );
 
   const handleAssignUser = (userId: string) => {
     assignUser.mutate({ id: task.id, userId });
@@ -533,23 +866,25 @@ const OverviewTab = ({
   const handleRemoveAssignee = (userId: string) => {
     removeAssignee.mutate({ id: task.id, userId });
   };
-  const completedCount = (task.subtasks ?? []).filter((s) => s.done).length;
+
+  // Subtask progress: count how many subtasks are 'done'
+  const completedCount = subtasks.filter((s) => s.status === "done").length;
   const progressPercent =
-    (task.subtasks ?? []).length > 0
-      ? Math.round((completedCount / (task.subtasks ?? []).length) * 100)
+    subtasks.length > 0
+      ? Math.round((completedCount / subtasks.length) * 100)
       : 0;
 
-  const toggleSubtask = (subId: string) => {
-    const updated = (task.subtasks ?? []).map((s) =>
-      s.id === subId ? { ...s, done: !s.done } : s
-    );
-    onUpdateTask?.(task.id, { subtasks: updated });
+  const statusColorMap: Record<string, string> = {
+    "in-progress": "bg-blue-500",
+    done: "bg-emerald-500",
+    backlog: "bg-zinc-500",
+    todo: "bg-violet-500",
   };
 
   return (
     <div className="flex h-full flex-col md:flex-row md:divide-x md:divide-border w-full min-w-0">
 
-      {/* ── LEFT: Main content ── */}
+      {/* \u2500\u2500 LEFT: Main content \u2500\u2500 */}
       <ScrollArea className="flex-1 min-w-0">
         <div className="space-y-6 p-5 pr-6 w-full">
 
@@ -561,7 +896,7 @@ const OverviewTab = ({
             <EditableTextarea
               value={task.description ?? ""}
               onSave={(description) => onUpdateField?.({ description })}
-              placeholder="Add a description…"
+              placeholder="Add a description\u2026"
               minRows={2}
             />
           </div>
@@ -586,85 +921,109 @@ const OverviewTab = ({
             </div>
           </div>
 
-          {/* Subtasks */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Subtasks
-              </span>
-              <span className="font-mono text-[11px] text-muted-foreground">
-                {completedCount}/{(task.subtasks ?? []).length} complete
-              </span>
-            </div>
-
-            {/* ShadCN Progress component */}
-            <Progress value={progressPercent} className="mb-3 h-1" />
-
+          {/* Subtasks — only shown for top-level tasks (single-level nesting) */}
+          {isTopLevelTask && (
             <div>
-              {(task.subtasks ?? []).map((sub) => (
-                <label
-                  key={sub.id}
-                  className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 hover:bg-accent/40"
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Subtasks
+                </span>
+                <span className="font-mono text-[11px] text-muted-foreground">
+                  {completedCount}/{subtasks.length} complete
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <Progress value={progressPercent} className="mb-3 h-1" />
+
+              <div className="space-y-px">
+                {subtasksLoading && (
+                  <div className="space-y-1.5 px-2 py-1">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center gap-2 animate-pulse">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
+                        <div className="h-3 rounded bg-muted-foreground/15 flex-1" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!subtasksLoading && subtasks.map((sub) => {
+                  const isDone = sub.status === "done";
+                  const displayDate = sub.due_date || (sub as any).dueDateISO;
+                  return (
+                    <div
+                      key={sub.id}
+                      onClick={() => onNavigateToSubtask?.(sub.id)}
+                      className="group flex items-center gap-2.5 rounded-md px-2.5 py-2 cursor-pointer hover:bg-accent/50 transition-colors"
+                    >
+                      {/* Status dot */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full shrink-0",
+                          statusColorMap[sub.status] || "bg-zinc-500"
+                        )}
+                      />
+
+                      {/* Title */}
+                      <span
+                        className={cn(
+                          "flex-1 text-sm font-medium truncate",
+                          isDone && "line-through text-muted-foreground"
+                        )}
+                      >
+                        {sub.title}
+                      </span>
+
+                      {/* Priority flag */}
+                      {(sub.priority === "high" || sub.priority === "urgent") && (
+                        <Flag className="w-3 h-3 text-orange-400 shrink-0" />
+                      )}
+
+                      {/* Due date */}
+                      <span className="text-[11px] tabular-nums text-muted-foreground shrink-0">
+                        {displayDate
+                          ? new Date(displayDate).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : ""}
+                      </span>
+
+                      {/* Chevron */}
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </div>
+                  );
+                })}
+
+                {!subtasksLoading && subtasks.length === 0 && (
+                  <p className="px-2 py-1.5 text-xs italic text-muted-foreground">
+                    No subtasks yet
+                  </p>
+                )}
+
+                <button
+                  onClick={() => setCreateSubtaskOpen(true)}
+                  className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <Checkbox
-                    checked={sub.done}
-                    onCheckedChange={() => toggleSubtask(sub.id)}
-                    className="h-3.5 w-3.5 shrink-0"
-                  />
-                  <span className={cn("flex-1 text-sm", sub.done && "line-through text-muted-foreground")}>
-                    {sub.title}
-                  </span>
-                  {sub.assignee && (
-                    <span className="text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                      {sub.assignee}
-                    </span>
-                  )}
-                </label>
-              ))}
+                  <Plus className="h-3.5 w-3.5" />
+                  Add subtask
+                </button>
+              </div>
 
-              {(task.subtasks ?? []).length === 0 && (
-                <p className="px-2 py-1.5 text-xs italic text-muted-foreground">
-                  No subtasks yet
-                </p>
-              )}
-
-              <button className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                <Plus className="h-3.5 w-3.5" />
-                Add subtask
-              </button>
+              {/* Create subtask dialog */}
+              <CreateTaskDialog
+                open={createSubtaskOpen}
+                onOpenChange={setCreateSubtaskOpen}
+                onTaskCreated={() => setCreateSubtaskOpen(false)}
+                parentTaskId={task.id}
+                parentTaskTitle={task.title}
+              />
             </div>
-          </div>
+          )}
 
           {/* Context */}
-          <div>
-            <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Context
-            </span>
-            {(task.context ?? []).length > 0 ? (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {(task.context ?? []).map((item) => (
-                  <a
-                    key={item.id}
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-2 rounded-md border border-border p-2 transition-colors hover:bg-accent/40"
-                  >
-                    <ContextIcon
-                      type={item.type}
-                      className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-medium">{item.title}</p>
-                      <p className="text-[10px] uppercase text-muted-foreground">{item.type}</p>
-                    </div>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs italic text-muted-foreground">No context items</p>
-            )}
-          </div>
+          <TaskContextSection task={task} onUpdateTask={onUpdateTask} />
 
         </div>
       </ScrollArea>
@@ -832,7 +1191,7 @@ const OverviewTab = ({
 
 // ─── Comment Node ─────────────────────────────────────────────────────────────
 
-const CommentNode = ({ comment, taskId }: { comment: Comment; taskId: string }) => {
+function CommentNode({ comment, taskId }: { comment: Comment; taskId: string }) {
   const authorName = comment.user?.name || comment.user?.email || "Unknown";
   const [isReplying, setIsReplying] = useState(false);
   const [replyInput, setReplyInput] = useState("");
@@ -948,14 +1307,20 @@ const CommentNode = ({ comment, taskId }: { comment: Comment; taskId: string }) 
 
 // ─── Tab: Activity ────────────────────────────────────────────────────────────
 
-const ActivityTab = ({
+function ActivityTab({
   task,
 }: {
   task: TaskDTO;
-}) => {
+}) {
   const [input, setInput] = useState("");
   const { data: comments, isPending } = useTaskComments(task.id);
   const createComment = useCreateComment();
+
+  const [activePicker, setActivePicker] = useState<"user" | "task" | null>(null);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const { data: members } = useWorkspaceMembers(task.workspace_id);
+  const { data: allTasks } = useTasks();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
     if (!input.trim()) return;
@@ -965,8 +1330,30 @@ const ActivityTab = ({
     );
   };
 
+  const handleInsertMention = (text: string) => {
+    setInput((prev) => prev + text + " ");
+    setActivePicker(null);
+    setPickerSearch("");
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setInput((prev) => prev + `[Attachment: ${file.name}] `);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const filteredMembers = (members || []).filter(m => 
+    (m.user.name || m.user.email).toLowerCase().includes(pickerSearch.toLowerCase())
+  );
+
+  const filteredTasks = (allTasks || []).filter(t => 
+    t.id !== task.id && t.title.toLowerCase().includes(pickerSearch.toLowerCase())
+  );
+
   return (
-    <div className="flex flex-1 min-h-0 flex-col bg-background h-full">
+    <div className="flex flex-1 min-h-0 flex-col bg-background h-full relative">
       <ScrollArea className="flex-1 min-h-0">
         <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto">
           {isPending ? (
@@ -991,28 +1378,151 @@ const ActivityTab = ({
         </div>
       </ScrollArea>
 
-      {/* Sticky comment input - Discord Style */}
+      {/* Picker overlay above the input */}
+      {activePicker && (
+        <div className="absolute bottom-[80px] left-8 w-72 flex flex-col bg-popover text-popover-foreground rounded-lg border shadow-lg z-50 overflow-hidden">
+          <div className="p-2 border-b flex items-center gap-2 bg-muted/50">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Input 
+              autoFocus
+              placeholder={`Search ${activePicker === 'user' ? 'people' : 'tasks'}...`}
+              value={pickerSearch}
+              onChange={(e) => setPickerSearch(e.target.value)}
+              className="h-7 text-sm border-none shadow-none focus-visible:ring-0 p-0 bg-transparent flex-1"
+            />
+            <button onClick={() => setActivePicker(null)} className="p-1 hover:bg-muted rounded-md text-muted-foreground shrink-0">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <ScrollArea className="max-h-60 overflow-y-auto">
+            {activePicker === 'user' ? (
+              <div className="p-1.5 space-y-0.5">
+                {filteredMembers.length === 0 ? (
+                    <p className="py-4 text-xs text-muted-foreground text-center">No people found</p>
+                ) : (
+                  filteredMembers.map(m => {
+                    const name = m.user.name || m.user.email;
+                    return (
+                      <button 
+                        key={m.id} 
+                        onClick={() => handleInsertMention(`@${name}`)}
+                        className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-[10px] bg-indigo-500/10 text-indigo-500 font-semibold">{name.charAt(0).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm truncate font-medium">{name}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <div className="p-1.5 space-y-0.5">
+                {filteredTasks.length === 0 ? (
+                    <p className="py-4 text-xs text-muted-foreground text-center">No tasks found</p>
+                ) : (
+                  filteredTasks.map(t => (
+                    <button 
+                      key={t.id} 
+                      onClick={() => handleInsertMention(`#${t.title}`)}
+                      className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
+                    >
+                      <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate font-medium flex-1">{t.title}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0 font-mono hidden sm:inline-block">{t.id.slice(0, 8)}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+      )}
+
+      {/* Hidden File Input */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileSelect} 
+        className="hidden" 
+        multiple 
+      />
+
+      {/* Sticky comment input - WhatsApp Style */}
       <div className="shrink-0 px-6 pb-6 pt-2">
-        <div className="flex items-center gap-3 w-full max-w-5xl mx-auto bg-muted/60 dark:bg-muted/40 rounded-xl px-4 py-2 border border-border/30 focus-within:ring-1 focus-within:ring-muted-foreground/30 transition-all">
-          <button className="flex items-center justify-center h-6 w-6 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/40 text-muted-foreground transition-colors shrink-0">
-            <Plus className="h-4 w-4" />
+        <div className="flex items-center gap-2 w-full max-w-5xl mx-auto bg-background rounded-full px-4 py-2.5 border border-border focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all shadow-sm">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 ml-0.5 outline-none">
+                <Plus className="h-[22px] w-[22px] text-foreground/70" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-64 p-2 mb-2 rounded-xl border border-border shadow-md">
+              <DropdownMenuItem onClick={() => setActivePicker('user')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
+                  <AtSign className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Mention someone</span>
+                  <span className="text-xs text-muted-foreground">Notify a team member</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActivePicker('task')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
+                  <Hash className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Mention task</span>
+                  <span className="text-xs text-muted-foreground">Reference a task name</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="mx-2 my-1" />
+              <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
+                  <Paperclip className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Add files</span>
+                  <span className="text-xs text-muted-foreground">Opens file picker dialog</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 outline-none">
+            <Smile className="h-5 w-5 text-foreground/70" />
           </button>
+
           <Input
-            placeholder="Add a new comment..."
+            placeholder="Type a message"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            className="h-9 text-[15px] border-none shadow-none bg-transparent focus-visible:ring-0 p-0 text-foreground placeholder:text-muted-foreground/70"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !activePicker) {
+                handleSend();
+              }
+            }}
+            className="h-9 text-[15px] border-none shadow-none bg-transparent focus-visible:ring-0 px-1 py-0 text-foreground placeholder:text-muted-foreground"
           />
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 shrink-0 px-3 text-sm hover:bg-accent/50 text-muted-foreground hover:text-foreground font-semibold rounded"
-            onClick={handleSend}
-            disabled={createComment.isPending || !input.trim()}
-          >
-            {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
-          </Button>
+
+          <div className="flex shrink-0 pr-1">
+            {input.trim() || createComment.isPending ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 p-0 text-primary hover:bg-primary/10 hover:text-primary font-semibold rounded-full flex items-center justify-center"
+                onClick={handleSend}
+                disabled={createComment.isPending}
+              >
+                {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
+              </Button>
+            ) : (
+              <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 outline-none text-foreground/70">
+                <Mic className="h-[22px] w-[22px]" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1021,7 +1531,7 @@ const ActivityTab = ({
 
 // ─── Tab: Dependencies ────────────────────────────────────────────────────────
 
-const DependencyRow = ({ dep, onRemove }: { dep: Dependency, onRemove?: () => void }) => {
+function DependencyRow({ dep, onRemove }: { dep: Dependency, onRemove?: () => void }) {
   const priorityCfg = PRIORITY_CONFIG[dep.priority as TaskPriority] ?? PRIORITY_CONFIG.low;
 
   return (
@@ -1059,18 +1569,57 @@ const DependencyRow = ({ dep, onRemove }: { dep: Dependency, onRemove?: () => vo
   );
 };
 
-const DependenciesTab = ({ task }: { task: TaskDTO }) => {
-  const [dependencyInput, setDependencyInput] = useState("");
+function DependenciesTab({ task }: { task: TaskDTO }) {
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const addDependency = useAddDependency();
   const removeDependency = useRemoveDependency();
+  const { data: allTasks, isPending: isLoadingTasks } = useTasks();
 
-  const handleAddDependency = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dependencyInput.trim()) return;
-    addDependency.mutate(
-      { id: task.id, dependsOnTaskId: dependencyInput.trim() },
-      { onSuccess: () => setDependencyInput("") }
+  // Get existing dependency IDs
+  const existingDepIds = useMemo(() => {
+    return new Set((task.dependencies ?? []).map((d) => d.id));
+  }, [task.dependencies]);
+
+  // Filter available tasks (exclude current task and existing dependencies)
+  const availableTasks = useMemo(() => {
+    if (!allTasks) return [];
+    return allTasks.filter(
+      (t) => t.id !== task.id && !existingDepIds.has(t.id)
     );
+  }, [allTasks, task.id, existingDepIds]);
+
+  // Filter by search query
+  const filteredTasks = useMemo(() => {
+    if (!searchQuery.trim()) return availableTasks;
+    const query = searchQuery.toLowerCase();
+    return availableTasks.filter((t) => t.title.toLowerCase().includes(query));
+  }, [availableTasks, searchQuery]);
+
+  const handleToggleTask = (taskId: string) => {
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  };
+
+  const handleAddSelected = () => {
+    if (selectedTasks.size === 0) return;
+    // Add all selected tasks as dependencies
+    const promises = Array.from(selectedTasks).map((taskId) =>
+      addDependency.mutateAsync({ id: task.id, dependsOnTaskId: taskId })
+    );
+    Promise.all(promises).then(() => {
+      setSelectedTasks(new Set());
+      setIsPickerOpen(false);
+      setSearchQuery("");
+    });
   };
 
   const handleRemoveDependency = (blockedByTaskId: string) => {
@@ -1107,18 +1656,85 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
             </span>
           </div>
 
-          <form className="mb-3 flex items-center gap-2" onSubmit={handleAddDependency}>
-            <Input
-              placeholder="Paste Task ID to add dependency..."
-              value={dependencyInput}
-              onChange={(e) => setDependencyInput(e.target.value)}
-              className="h-8 text-xs"
-            />
-            <Button size="sm" type="submit" className="h-8 text-xs shrink-0" disabled={addDependency.isPending}>
-              Add
-            </Button>
-          </form>
+          {/* Searchable Task Picker */}
+          <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+            <PopoverTrigger asChild>
+              <button className="mb-3 w-full flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-background hover:bg-accent/50 transition-colors text-left">
+                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm text-muted-foreground flex-1">
+                  Search tasks to add dependency...
+                </span>
+                {selectedTasks.size > 0 && (
+                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    {selectedTasks.size} selected
+                  </Badge>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-2" align="start">
+              {/* Search Input */}
+              <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
+                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Input
+                  placeholder="Search tasks by title..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 text-sm border-none shadow-none focus-visible:ring-0 p-0 flex-1"
+                />
+              </div>
 
+              {/* Task List */}
+              <div className="max-h-60 overflow-y-auto space-y-0.5">
+                {isLoadingTasks ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filteredTasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {searchQuery ? "No tasks found" : "No available tasks"}
+                  </p>
+                ) : (
+                  filteredTasks.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => handleToggleTask(t.id)}
+                      className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent transition-colors text-left"
+                    >
+                      <Checkbox
+                        checked={selectedTasks.has(t.id)}
+                        onCheckedChange={() => handleToggleTask(t.id)}
+                        className="shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{t.title}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{t.id}</p>
+                      </div>
+                      <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_COLOR[t.status])} />
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {/* Add Button */}
+              {selectedTasks.size > 0 && (
+                <div className="border-t border-border pt-2 mt-2">
+                  <Button
+                    size="sm"
+                    className="w-full h-8 text-xs"
+                    onClick={handleAddSelected}
+                    disabled={addDependency.isPending}
+                  >
+                    {addDependency.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                    ) : null}
+                    Add {selectedTasks.size} task{selectedTasks.size !== 1 ? "s" : ""}
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
+          {/* Selected Tasks List */}
           <div className="space-y-1.5">
             {blockedByTasks.length > 0 ? (
               blockedByTasks.map((dep) => (
@@ -1139,7 +1755,7 @@ const DependenciesTab = ({ task }: { task: TaskDTO }) => {
       </div>
     </ScrollArea>
   );
-};
+}
 
 // ─── Tab: History ─────────────────────────────────────────────────────────────
 
@@ -1185,7 +1801,7 @@ function formatActionLabel(entry: ActivityLogEntry): string {
   }
 }
 
-const HistoryTab = ({ task }: { task: TaskDTO }) => {
+function HistoryTab({ task }: { task: TaskDTO }) {
   const { data: entries, isPending } = useTaskActivity(task.id);
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1502,7 +2118,7 @@ const TAB_HEADERS = {
   },
 } as const;
 
-export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose }: Props) {
+export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose, onNavigateToSubtask, onNavigateToParent, parentTask }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
@@ -1515,6 +2131,29 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose }: P
 
   // Use fresh data from server if available, fall back to prop (list data)
   const displayTask = freshTask ?? task;
+
+  // Local state for Context (since it is a frontend-only mock for MVP v0.5)
+  const [mockContext, setMockContext] = useState<ContextItem[]>([]);
+
+  useEffect(() => {
+    if (displayTask) {
+      setMockContext(displayTask.context ?? []);
+    }
+  }, [displayTask?.id]);
+
+  const taskToRender = { ...displayTask, context: mockContext } as TaskDTO;
+
+  const handleUpdateTaskWithMock = (id: string, updates: any) => {
+    if (updates.context) {
+      setMockContext(updates.context);
+    }
+    
+    // Filter out mock-only fields before sending to server
+    const { context: _c, ...serverUpdates } = updates;
+    if (Object.keys(serverUpdates).length > 0) {
+      handleUpdateField(serverUpdates as UpdateTaskInput);
+    }
+  };
 
   // Centralized field-update handler — used by header, overview tab, etc.
   const handleUpdateField = (updates: UpdateTaskInput) => {
@@ -1557,11 +2196,13 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose }: P
 
       {/* Zone 1: Compact header — never scrolls */}
       <TaskDetailHeader
-        task={displayTask}
+        task={taskToRender}
         onUpdateField={handleUpdateField}
         onDelete={handleDelete}
         onClose={onClose}
         onEditTask={() => setEditDialogOpen(true)}
+        parentTask={parentTask}
+        onNavigateToParent={onNavigateToParent}
       />
 
       {/* Edit task dialog */}
@@ -1569,8 +2210,8 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose }: P
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         mode="edit"
-        taskId={displayTask.id}
-        initialValues={displayTask}
+        taskId={taskToRender.id}
+        initialValues={taskToRender}
         onTaskCreated={() => {}}
         onTaskUpdated={() => setEditDialogOpen(false)}
       />
@@ -1598,7 +2239,7 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose }: P
                 {
                   value: "dependencies",
                   label: "Dependencies",
-                  count: (displayTask.dependencies ?? []).length,
+                  count: (taskToRender.dependencies ?? []).length,
                 },
                 { value: "history", label: "History" },
               ] as const
@@ -1621,19 +2262,19 @@ export function TaskDetailPane({ task, onUpdateTask, onTaskDeleted, onClose }: P
 
         {/* Tab content */}
         <TabsContent value="overview" className="m-0 min-h-0 flex-1 flex flex-col focus-visible:outline-none h-full">
-          <OverviewTab task={displayTask} onUpdateTask={onUpdateTask} onUpdateField={handleUpdateField} />
+          <OverviewTab task={taskToRender} onUpdateTask={handleUpdateTaskWithMock} onUpdateField={handleUpdateField} onNavigateToSubtask={onNavigateToSubtask} />
         </TabsContent>
 
         <TabsContent value="activity" className="m-0 flex-1 min-h-0 flex flex-col focus-visible:outline-none h-full overflow-hidden">
-          <ActivityTab task={displayTask} />
+          <ActivityTab task={taskToRender} />
         </TabsContent>
 
         <TabsContent value="dependencies" className="m-0 flex-1 min-h-0 flex flex-col focus-visible:outline-none h-full overflow-hidden">
-          <DependenciesTab task={displayTask} />
+          <DependenciesTab task={taskToRender} />
         </TabsContent>
 
         <TabsContent value="history" className="m-0 flex-1 min-h-0 flex flex-col focus-visible:outline-none h-full overflow-hidden">
-          <HistoryTab task={displayTask} />
+          <HistoryTab task={taskToRender} />
         </TabsContent>
       </Tabs>
 

@@ -11,6 +11,7 @@ import {
   removeUserFromTask,
   addDependency,
   removeDependency,
+  getSubtasks,
 } from "../controllers/task.controller";
 
 import { getTaskComments, addComment } from "../controllers/comment.controller";
@@ -37,6 +38,9 @@ router.delete("/:id/assignees/:userId", removeUserFromTask);
 // Dependencies
 router.post("/:id/dependencies", addDependency);
 router.delete("/:id/dependencies/:blockedByTaskId", removeDependency);
+
+// Subtasks
+router.get("/:id/subtasks", getSubtasks);
 
 // Comments (Nested under tasks for creation and reading)
 router.get("/:id/comments", getTaskComments);

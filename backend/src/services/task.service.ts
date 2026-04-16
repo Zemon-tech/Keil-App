@@ -49,6 +49,8 @@ export interface TaskDTO {
   assignees?: AssigneeDTO[];
   dependencies?: DependencyDTO[];
   blocked_by_count?: number;
+  subtask_count?: number;
+  parent_task_title?: string;
 }
 
 export interface CreateTaskData {
@@ -95,7 +97,8 @@ const taskToDTO = (task: Task & { assignees?: User[] }): TaskDTO => {
     created_by: task.created_by,
     created_at: task.created_at.toISOString(),
     updated_at: task.updated_at.toISOString(),
-    assignees: task.assignees
+    assignees: task.assignees,
+    subtask_count: task.subtask_count ? parseInt(task.subtask_count.toString(), 10) : 0
   };
 };
 
@@ -166,12 +169,35 @@ export const getTaskById = async (taskId: string): Promise<TaskDTO | null> => {
     (dep) => dep.status !== TaskStatus.DONE
   ).length;
 
+  // Fetch subtask count
+  const subtasks = await taskRepository.findSubtasks(taskId);
+  const subtask_count = subtasks.length;
+
+  // Fetch parent title if it's a subtask
+  let parent_task_title: string | undefined;
+  if (task.parent_task_id) {
+    const parent = await taskRepository.findById(task.parent_task_id);
+    if (parent) {
+      parent_task_title = parent.title;
+    }
+  }
+
   return {
     ...taskToDTO(task),
     assignees: task.assignees as unknown as AssigneeDTO[],
     dependencies,
     blocked_by_count,
+    subtask_count,
+    parent_task_title,
   };
+};
+
+/**
+ * Get subtasks of a parent task
+ */
+export const getSubtasks = async (parentTaskId: string): Promise<TaskDTO[]> => {
+  const subtasks = await taskRepository.findSubtasks(parentTaskId);
+  return subtasks.map(taskToDTO);
 };
 
 /**

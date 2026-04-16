@@ -37,6 +37,8 @@ export interface TaskDTO {
   context?: Task["context"];
   history?: Task["history"];
   comments?: Task["comments"];
+  subtask_count?: number;
+  parent_task_title?: string;
 }
 
 export type SortBy = "due_date" | "priority" | "created_at";
@@ -92,6 +94,7 @@ export const taskKeys = {
     [...taskKeys.lists(), filters] as const,
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
+  subtasks: (parentId: string) => [...taskKeys.all, "subtasks", parentId] as const,
 };
 
 // ─── Helper: strip client-only filter fields before sending to backend ────────
@@ -162,6 +165,23 @@ export function useTask(taskId: string) {
   });
 }
 
+// ─── useSubtasks ──────────────────────────────────────────────────────────────
+
+/**
+ * Fetches subtasks of a parent task via GET /api/v1/tasks/:id/subtasks.
+ * Enabled only when parentTaskId is non-empty.
+ */
+export function useSubtasks(parentTaskId: string) {
+  return useQuery<TaskDTO[]>({
+    queryKey: taskKeys.subtasks(parentTaskId),
+    queryFn: async () => {
+      const res = await api.get<{ data: TaskDTO[] }>(`v1/tasks/${parentTaskId}/subtasks`);
+      return res.data.data;
+    },
+    enabled: !!parentTaskId,
+  });
+}
+
 // ─── useCreateTask ────────────────────────────────────────────────────────────
 
 /**
@@ -176,8 +196,13 @@ export function useCreateTask() {
       const res = await api.post<{ data: TaskDTO }>("v1/tasks", input);
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      // If this was a subtask, invalidate the parent's subtask list + detail (subtask_count)
+      if (data.parent_task_id) {
+        queryClient.invalidateQueries({ queryKey: taskKeys.subtasks(data.parent_task_id) });
+        queryClient.invalidateQueries({ queryKey: taskKeys.detail(data.parent_task_id) });
+      }
     },
     onError: () => {
       toast.error("Failed to create task. Please try again.");

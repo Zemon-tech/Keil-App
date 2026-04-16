@@ -17,13 +17,17 @@ export class TaskRepository extends BaseRepository<Task> {
     options: TaskQueryOptions = {},
     client?: PoolClient
   ): Promise<Task[]> {
-    let query = `SELECT * FROM ${this.tableName} WHERE workspace_id = $1`;
+    let query = `
+      SELECT t.*, 
+             (SELECT COUNT(*) FROM tasks s WHERE s.parent_task_id = t.id AND s.deleted_at IS NULL) as subtask_count
+      FROM ${this.tableName} t 
+      WHERE t.workspace_id = $1`;
     const params: any[] = [workspaceId];
     let paramIndex = 2;
 
     // Soft delete filter
     if (!options.includeDeleted) {
-      query += ` AND deleted_at IS NULL`;
+      query += ` AND t.deleted_at IS NULL`;
     }
 
     // Apply filters

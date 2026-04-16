@@ -40,6 +40,7 @@ export interface Task {
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
+  subtask_count?: number | string;
 }
 
 export interface TaskAssignee {

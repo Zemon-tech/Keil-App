@@ -51,6 +51,10 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         if (!parentTask || parentTask.workspace_id !== workspaceId) {
             throw new ApiError(400, "Parent task not found or belongs to a different workspace");
         }
+        // Enforce single-level nesting: parent must be a top-level task
+        if (parentTask.parent_task_id) {
+            throw new ApiError(400, "Subtasks cannot have their own subtasks. Only top-level tasks can be parents.");
+        }
     }
 
     let startDate: Date | null = null;
@@ -348,5 +352,21 @@ export const removeDependency = catchAsync(async (req: Request, res: Response) =
     await taskService.removeDependency(taskId, blockedByTaskId, reqUserId, workspaceId);
 
     res.status(200).json(new ApiResponse(200, null, "Dependency removed"));
+});
+
+// Subtasks
+export const getSubtasks = catchAsync(async (req: Request, res: Response) => {
+    const workspaceId = (req as any).workspaceId as string;
+    const taskId = req.params.id as string;
+
+    if (!workspaceId) throw new ApiError(403, "Workspace not found for user");
+
+    const task = await taskService.getTaskById(taskId);
+    if (!task || task.workspace_id !== workspaceId) {
+        throw new ApiError(404, "Task not found");
+    }
+
+    const subtasks = await taskService.getSubtasks(taskId);
+    res.status(200).json(new ApiResponse(200, subtasks, "Subtasks retrieved successfully"));
 });
 
