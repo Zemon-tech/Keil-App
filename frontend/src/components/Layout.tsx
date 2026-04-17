@@ -15,7 +15,6 @@ import {
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
-import { ChatDrawer } from "./chat/ChatDrawer";
 
 
 
@@ -83,7 +82,6 @@ export function Layout({ children, className }: LayoutProps) {
 
       {/* AI Assistant - Available on all pages except dashboard */}
       {location.pathname !== "/" && location.pathname !== "/dashboard" ? <AiAssistant /> : null}
-      <ChatDrawer />   {/* Fixed overlay — available on every page */}
       <Toaster />
     </SidebarProvider>
   );
