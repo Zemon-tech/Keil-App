@@ -1,6 +1,6 @@
 // src/components/chat/NewChatDialog.tsx
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
 import { useOpenDM, useCreateGroup } from "@/hooks/api/useChat";
 import { useWorkspace } from "@/contexts/WorkspaceContext";

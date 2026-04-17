@@ -23,7 +23,7 @@ export function MessageView({ channelId }: MessageViewProps) {
   const { setActiveChannel, typingUsers } = useChatStore();
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null); // invisible div at the bottom
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-scroll: every time the messages array changes, scroll to the bottom
   useEffect(() => {
@@ -83,7 +83,7 @@ export function MessageView({ channelId }: MessageViewProps) {
         )}
 
         {messages.map((msg) => {
-          const isMine = msg.sender.id === me?.user?.id;
+          const isMine = msg.sender.id === me?.id;
           return (
             <div key={msg.id} className={`flex flex-col gap-1 w-full ${isMine ? "items-end" : "items-start"}`}>
               {/* Sender name */}

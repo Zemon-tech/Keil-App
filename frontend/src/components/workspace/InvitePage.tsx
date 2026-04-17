@@ -25,7 +25,7 @@ export function InvitePage() {
         }
         navigate("/");
       },
-      onError: (err) => {
+      onError: (_err) => {
         // Optional tracking if needed, error is rendered below
       }
     });

@@ -524,7 +524,6 @@ export function TaskListPane({
             const isHighPriority =
               t.priority === "high" || t.priority === "urgent";
             const isDraggable = t.status !== "done";
-            const isSubtask = !!t.parent_task_id;
             // Use backend date field, falling back to dueDateISO for compat
             const displayDate = t.due_date || t.dueDateISO;
             const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;

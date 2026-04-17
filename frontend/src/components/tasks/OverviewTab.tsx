@@ -5,13 +5,11 @@ import {
   Plus,
   Search,
   X,
-  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -28,7 +26,7 @@ import {
 } from "@/hooks/api/useTasks";
 import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
 
-import { STATUS_COLOR, formatDate } from "./task-detail-shared";
+import { formatDate } from "./task-detail-shared";
 import { BulletListEditor } from "./BulletListEditor";
 import { TaskContextSection } from "./TaskContextSection";
 

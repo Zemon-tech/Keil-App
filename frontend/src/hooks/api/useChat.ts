@@ -297,7 +297,7 @@ export function useChatSocketListeners(activeChannelId: string | null) {
     };
 
     // ── EVENT 4: Channel details updated (e.g., member joined/left) ─────────
-    const handleChannelUpdated = (data: { channel_id: string }) => {
+    const handleChannelUpdated = (_data: { channel_id: string }) => {
       if (workspaceId) {
         queryClient.invalidateQueries({ queryKey: chatKeys.channels(workspaceId) });
       }

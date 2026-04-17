@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Settings, UserX, UserPlus, Loader2 } from "lucide-react";
-import { useChatChannels, useAddChannelMembers, useRemoveChannelMember } from "@/hooks/api/useChat";
+import { Settings, UserX, UserPlus } from "lucide-react";
+import { useAddChannelMembers, useRemoveChannelMember } from "@/hooks/api/useChat";
 import type { Channel } from "@/hooks/api/useChat";
 import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
 import { useWorkspace } from "@/contexts/WorkspaceContext";

@@ -63,7 +63,6 @@ const TAB_HEADERS = {
 
 export function TaskDetailPane({
   task,
-  onUpdateTask,
   onTaskDeleted,
   onClose,
   onNavigateToSubtask,
@@ -99,7 +98,7 @@ export function TaskDetailPane({
 
   const taskToRender = { ...displayTask, context: mockContext } as TaskDTO;
 
-  const handleUpdateTaskWithMock = (id: string, updates: any) => {
+  const handleUpdateTaskWithMock = (_id: string, updates: any) => {
     if (updates.context) {
       setMockContext(updates.context);
     }
