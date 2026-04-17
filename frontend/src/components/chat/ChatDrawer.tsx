@@ -5,7 +5,8 @@ import { useChatSocketListeners } from "@/hooks/api/useChat";
 import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
-import { X } from "lucide-react";
+import { X, Maximize2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 
 export function ChatDrawer() {
@@ -13,6 +14,12 @@ export function ChatDrawer() {
   const { isChatOpen, activeChannelId, closeChat } = useChatStore();
   const [width, setWidth] = useState(360);
   const isResizing = useRef(false);
+  const navigate = useNavigate();
+
+  const handleExpandClick = () => {
+    navigate('/chat');
+    closeChat();
+  };
 
   // ⚠️ Mount socket listeners here — once, at the drawer level.
   // They stay active even when you navigate between channel list and messages.
@@ -75,13 +82,22 @@ export function ChatDrawer() {
             <h2 className="font-semibold text-sm">Chat</h2>
             <NewChatDialog />
           </div>
-          <button
-            onClick={closeChat}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Close chat"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleExpandClick}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Open full chat page"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={closeChat}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Close chat"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* ── Body ──

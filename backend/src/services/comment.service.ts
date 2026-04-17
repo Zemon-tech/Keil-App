@@ -29,7 +29,7 @@ export interface CommentDTO {
 }
 
 export interface ThreadedCommentDTO extends CommentDTO {
-  replies: CommentDTO[];
+  replies: ThreadedCommentDTO[];
 }
 
 export interface CreateCommentData {
@@ -67,10 +67,10 @@ const commentToDTO = (comment: Comment & { user: User }): CommentDTO => {
 };
 
 /**
- * Convert threaded comment entity to DTO
+ * Recursively convert a threaded comment entity to DTO (unlimited depth)
  */
 const threadedCommentToDTO = (
-  comment: Comment & { user: User; replies: Array<Comment & { user: User }> }
+  comment: Comment & { user: User; replies: Array<any> }
 ): ThreadedCommentDTO => {
   return {
     id: comment.id,
@@ -85,20 +85,7 @@ const threadedCommentToDTO = (
       name: comment.user.name,
       created_at: toISO(comment.user.created_at)
     },
-    replies: comment.replies.map(reply => ({
-      id: reply.id,
-      task_id: reply.task_id,
-      user_id: reply.user_id,
-      content: reply.content,
-      parent_comment_id: reply.parent_comment_id,
-      created_at: toISO(reply.created_at),
-      user: {
-        id: reply.user.id,
-        email: reply.user.email,
-        name: reply.user.name,
-        created_at: toISO(reply.user.created_at)
-      }
-    }))
+    replies: (comment.replies ?? []).map(threadedCommentToDTO)
   };
 };
 

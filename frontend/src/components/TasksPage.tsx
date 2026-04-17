@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSearchParams } from "react-router-dom";
 
 import type { TaskStatus, TaskPriority } from "../types/task";
 import {
@@ -27,17 +28,36 @@ export function TasksPage() {
   const isCollapsed = state === "collapsed";
   const { user } = useAuth();
 
+  // ── Read ?taskId from URL (e.g. navigated from a task preview dialog) ──
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // ── Filter / search / sort state ──
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [sortBy, setSortBy] = useState<SortBy>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(() => {
+    // Pre-select from URL on first render
+    return searchParams.get("taskId") ?? "";
+  });
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // ── Subtask navigation stack ──
   // Tracks the parent task when user navigates into a subtask
   const [parentTaskStack, setParentTaskStack] = useState<Array<{ id: string; title: string }>>([]);
+
+  // When ?taskId appears in the URL (including when already on this page),
+  // select that task and immediately clean the param so the URL stays tidy.
+  useEffect(() => {
+    const taskIdFromUrl = searchParams.get("taskId");
+    if (taskIdFromUrl) {
+      setSelectedTaskId(taskIdFromUrl);
+      setParentTaskStack([]);
+      setSearchParams({}, { replace: true });
+    }
+  // searchParams identity changes on every navigation — this is intentional
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // ── Pagination: just increase the limit to fetch more ──
   const [limit, setLimit] = useState(PAGE_SIZE);

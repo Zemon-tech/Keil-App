@@ -38,7 +38,7 @@ import {
   Check,
   Plus
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { useChatStore } from "@/store/useChatStore";
@@ -62,7 +62,8 @@ export function AppSidebar() {
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
-  const { openChat } = useChatStore();
+  const { isChatOpen, openChat, closeChat } = useChatStore();
+  const navigate = useNavigate();
   const userInitials = user?.user_metadata?.full_name
     ?.split(" ")
     .map((n: string) => n[0])
@@ -133,10 +134,20 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 ))}
 
-                {/* ── Chat button — opens global drawer, not a page link ── */}
+                {/* ── Chat button — toggles drawer, or closes /chat page if on it ── */}
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={openChat}
+                    onClick={() => {
+                      if (location.pathname === "/chat") {
+                        // On the full chat page — go back to close it
+                        navigate(-1);
+                      } else if (isChatOpen) {
+                        closeChat();
+                      } else {
+                        openChat();
+                      }
+                    }}
+                    isActive={isChatOpen || location.pathname === "/chat"}
                     tooltip="Chat"
                   >
                     <MessageSquare />

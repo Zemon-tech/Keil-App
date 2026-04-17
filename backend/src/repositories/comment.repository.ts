@@ -53,58 +53,56 @@ export class CommentRepository extends BaseRepository<Comment> {
   }
 
   /**
-   * Find comments with nested replies (threaded structure)
+   * Find comments with nested replies (threaded structure, unlimited depth)
+   * Uses a recursive CTE to fetch all descendants, then builds the tree in JS.
    */
   async findThreaded(taskId: string, client?: PoolClient): Promise<Array<Comment & { user: User; replies: Array<Comment & { user: User }> }>> {
+    // Fetch ALL non-deleted comments for the task (flat), then build tree in JS
     const query = `
-      WITH top_level_comments AS (
-        SELECT
-          c.id, c.task_id, c.user_id, c.content, c.parent_comment_id, c.created_at, c.deleted_at,
-          jsonb_build_object(
-            'id', u.id,
-            'email', u.email,
-            'name', u.name,
-            'created_at', u.created_at
-          ) as user
-        FROM ${this.tableName} c
-        INNER JOIN users u ON c.user_id = u.id
-        WHERE c.task_id = $1
-        AND c.parent_comment_id IS NULL
-        AND c.deleted_at IS NULL
-      ),
-      replies AS (
-        SELECT
-          c.id, c.task_id, c.user_id, c.content, c.parent_comment_id, c.created_at, c.deleted_at,
-          jsonb_build_object(
-            'id', u.id,
-            'email', u.email,
-            'name', u.name,
-            'created_at', u.created_at
-          ) as user
-        FROM ${this.tableName} c
-        INNER JOIN users u ON c.user_id = u.id
-        WHERE c.task_id = $1
-        AND c.parent_comment_id IS NOT NULL
-        AND c.deleted_at IS NULL
-      )
       SELECT
-        tlc.id, tlc.task_id, tlc.user_id, tlc.content, tlc.parent_comment_id,
-        tlc.created_at, tlc.deleted_at, tlc.user,
-        COALESCE(
-          json_agg(r.*) FILTER (WHERE r.id IS NOT NULL),
-          '[]'
-        ) as replies
-      FROM top_level_comments tlc
-      LEFT JOIN replies r ON tlc.id = r.parent_comment_id
-      GROUP BY tlc.id, tlc.task_id, tlc.user_id, tlc.content, tlc.parent_comment_id,
-               tlc.created_at, tlc.deleted_at, tlc.user
-      ORDER BY tlc.created_at ASC
+        c.id, c.task_id, c.user_id, c.content, c.parent_comment_id, c.created_at, c.deleted_at,
+        jsonb_build_object(
+          'id', u.id,
+          'email', u.email,
+          'name', u.name,
+          'created_at', u.created_at
+        ) as user
+      FROM ${this.tableName} c
+      INNER JOIN users u ON c.user_id = u.id
+      WHERE c.task_id = $1
+        AND c.deleted_at IS NULL
+      ORDER BY c.created_at ASC
     `;
 
     const executor = client || this.pool;
     const result = await executor.query(query, [taskId]);
+    const rows = result.rows as Array<Comment & { user: User }>;
 
-    return result.rows as Array<Comment & { user: User; replies: Array<Comment & { user: User }> }>;
+    // Build tree: map id → node, then attach children to parents
+    type TreeNode = Comment & { user: User; replies: Array<Comment & { user: User }> };
+    const nodeMap = new Map<string, TreeNode>();
+    const roots: TreeNode[] = [];
+
+    for (const row of rows) {
+      nodeMap.set(row.id, { ...row, replies: [] });
+    }
+
+    for (const row of rows) {
+      const node = nodeMap.get(row.id)!;
+      if (row.parent_comment_id) {
+        const parent = nodeMap.get(row.parent_comment_id);
+        if (parent) {
+          parent.replies.push(node);
+        } else {
+          // Parent was deleted or not found — treat as root
+          roots.push(node);
+        }
+      } else {
+        roots.push(node);
+      }
+    }
+
+    return roots;
   }
 
   /**

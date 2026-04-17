@@ -205,8 +205,12 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const calendarRef = useRef<FullCalendar>(null);
 
-  // Set initial scroll time to current time (Google Calendar style)
-  const scrollTime = useMemo(() => format(new Date(), "HH:mm:ss"), []);
+  // Scroll to 1 hour before current time so the now-indicator sits lower in the viewport
+  const scrollTime = useMemo(() => {
+    const now = new Date();
+    now.setHours(now.getHours() - 1, 0, 0, 0);
+    return format(now, "HH:mm:ss");
+  }, []);
 
   const headerTitle = useMemo(() => {
     if (currentViewType === "dayGridMonth") return format(currentViewDate, "MMMM yyyy");
