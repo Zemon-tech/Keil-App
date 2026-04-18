@@ -17,8 +17,15 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-import { useTask } from "@/hooks/api/useTasks";
+import { useTask, useChangeTaskStatus } from "@/hooks/api/useTasks";
 import { STATUS_COLOR, PRIORITY_CONFIG } from "./task-detail-shared";
 import type { TaskStatus, TaskPriority } from "@/types/task";
 
@@ -51,6 +58,7 @@ export function TaskPreviewDialog({
 }: TaskPreviewDialogProps) {
   const navigate = useNavigate();
   const { data: task, isLoading } = useTask(taskId);
+  const changeTaskStatus = useChangeTaskStatus();
 
   const handleNavigateToTask = () => {
     onOpenChange(false);
@@ -177,7 +185,28 @@ export function TaskPreviewDialog({
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-5 py-3 border-t border-border/60 bg-muted/20 flex justify-end">
+        <div className="px-5 py-3 border-t border-border/60 bg-muted/20 flex justify-between items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-xs">
+                Change Status
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => changeTaskStatus.mutate({ id: taskId, status: "todo" })}>
+                Todo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => changeTaskStatus.mutate({ id: taskId, status: "in-progress" })}>
+                In Progress
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => changeTaskStatus.mutate({ id: taskId, status: "done" })}>
+                Done
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => changeTaskStatus.mutate({ id: taskId, status: "backlog" })}>
+                Backlog
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             onClick={handleNavigateToTask}
             className="flex items-center gap-1.5 text-xs text-primary hover:underline font-medium"

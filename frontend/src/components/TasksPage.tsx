@@ -168,6 +168,17 @@ export function TasksPage() {
     setSelectedTaskId(parentId);
   }, []);
 
+  // Handle task scheduling from calendar
+  const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string) => {
+    updateTask.mutate({
+      id: taskId,
+      updates: {
+        start_date: startISO,
+        due_date: endISO,
+      },
+    });
+  }, [updateTask]);
+
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",
     isCollapsed ? "" : ""
@@ -258,6 +269,7 @@ export function TasksPage() {
                 tasks={taskList as any}
                 blocks={[] as any}
                 selectedTask={null as any}
+                onTaskSchedule={handleTaskSchedule}
               />
             )}
           </div>

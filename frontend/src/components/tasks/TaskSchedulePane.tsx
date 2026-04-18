@@ -15,28 +15,26 @@ import {
   ChevronRight,
   Flag,
   Focus,
-  Link2,
   Timer,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import type { CalendarBlock, CalendarBlockType, Task } from "@/types/task";
+import { TaskPreviewDialog } from "./TaskPreviewDialog";
+import type { CalendarBlock, CalendarBlockType } from "@/types/task";
+import type { TaskDTO } from "@/hooks/api/useTasks";
 
 type Props = {
-  tasks: Task[];
+  tasks: TaskDTO[];
   blocks: CalendarBlock[];
-  selectedTask: Task | null;
+  selectedTask: TaskDTO | null;
   onViewChange?: (view: string) => void;
   onTaskSchedule?: (taskId: string, startISO: string, endISO: string) => void;
 };
@@ -81,7 +79,7 @@ const typeMeta: Record<CalendarBlockType, { label: string; icon: any; pill: stri
   },
 };
 
-function makeEventInput(block: CalendarBlock, task?: Task): EventInput {
+function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
   const base = {
     id: block.id,
     title: block.title,
@@ -124,11 +122,21 @@ function makeEventInput(block: CalendarBlock, task?: Task): EventInput {
   };
 }
 
+function getPriorityColor(priority: TaskDTO["priority"]): string {
+  const colorMap = {
+    urgent: "#ef4444",
+    high: "#f97316",
+    medium: "#eab308",
+    low: "#22c55e",
+  };
+  return colorMap[priority] || "#5ba66d";
+}
+
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
   const isScheduledTask = arg.event.extendedProps.isScheduledTask;
   const isMonthView = arg.view.type === "dayGridMonth";
-  
+
   if (isMonthView) {
     return (
       <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5" style={{ color: arg.textColor || "inherit" }}>
@@ -140,18 +148,8 @@ function renderEventContent(arg: EventContentArg) {
   // Handle scheduled tasks (no type metadata)
   if (isScheduledTask) {
     return (
-      <div className="h-full w-full p-2 overflow-hidden">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
-                Scheduled Task
-              </span>
-            </div>
-          </div>
-          <Timer className="h-3.5 w-3.5 opacity-40" />
-        </div>
+      <div className="h-full w-full p-2 overflow-hidden flex items-center gap-2">
+        <div className="text-[11px] font-bold leading-tight truncate flex-1">{arg.event.title}</div>
       </div>
     );
   }
@@ -200,7 +198,7 @@ function renderEventContent(arg: EventContentArg) {
 import "./calendar-styles.css";
 
 export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
-  const [selectedBlockId, setSelectedBlockId] = useState<string>("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [currentViewType, setCurrentViewType] = useState<CalendarView>("dayGridMonth");
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const calendarRef = useRef<FullCalendar>(null);
@@ -211,6 +209,179 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     now.setHours(now.getHours() - 1, 0, 0, 0);
     return format(now, "HH:mm:ss");
   }, []);
+
+  // Handle external task drop from TaskListPane
+  const handleEventReceive = (info: EventReceiveArg) => {
+    try {
+      const taskId = info.event.extendedProps.taskId;
+      const taskStatus = info.event.extendedProps.taskStatus;
+      const startDate = info.event.start;
+      const endDate = info.event.end;
+      const viewType = info.view.type;
+
+      console.log("🎯 Task dropped on calendar:", {
+        taskId,
+        taskStatus,
+        start: startDate,
+        end: endDate,
+        viewType,
+      });
+
+      // Validation: Check if task is done
+      if (taskStatus === "done") {
+        console.error("❌ Cannot schedule completed tasks");
+        toast.error("Cannot schedule completed tasks", {
+          description: "This task is already marked as done.",
+        });
+        info.revert();
+        return;
+      }
+
+      // Validation: Check if scheduled in the past
+      if (startDate && isPast(startDate)) {
+        console.error("❌ Cannot schedule tasks in the past");
+        toast.error("Cannot schedule in the past", {
+          description: "Please select a future time slot.",
+        });
+        info.revert();
+        return;
+      }
+
+      // Handle month view drop: schedule as all-day event, then switch to day view
+      if (viewType === "dayGridMonth") {
+        if (startDate && onTaskSchedule) {
+          // Set as all-day event (start and end on the same day, allDay will be set by the backend)
+          const allDayStart = new Date(startDate);
+          allDayStart.setHours(0, 0, 0, 0);
+          const allDayEnd = new Date(startDate);
+          allDayEnd.setHours(23, 59, 59, 999);
+
+          const startISO = allDayStart.toISOString();
+          const endISO = allDayEnd.toISOString();
+
+          console.log("✅ Scheduling task as all-day event:", {
+            taskId,
+            startISO,
+            endISO,
+          });
+
+          onTaskSchedule(taskId, startISO, endISO);
+
+          toast.success("Task scheduled", {
+            description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, yyyy")}`,
+          });
+
+          // Auto-switch to day view for that date
+          const calendarApi = calendarRef.current?.getApi();
+          if (calendarApi) {
+            calendarApi.changeView("timeGridDay", startDate);
+          }
+        }
+      } else {
+        // Handle day/week view drop: use the dropped time directly
+        if (startDate && endDate && onTaskSchedule) {
+          const startISO = startDate.toISOString();
+          const endISO = endDate.toISOString();
+
+          console.log("✅ Scheduling task:", {
+            taskId,
+            startISO,
+            endISO,
+            duration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
+          });
+
+          onTaskSchedule(taskId, startISO, endISO);
+
+          toast.success("Task scheduled", {
+            description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error in handleEventReceive:", error);
+      toast.error("Failed to schedule task");
+      info.revert();
+    }
+  };
+
+  // Handle event resize (duration change) - only in day/week views
+  const handleEventResize = (info: EventResizeDoneArg) => {
+    try {
+      const taskId = info.event.extendedProps.taskId;
+      const startDate = info.event.start;
+      const endDate = info.event.end;
+      const viewType = info.view.type;
+
+      // Only allow resize in day/week views
+      if (viewType !== "timeGridDay" && viewType !== "timeGridWeek") {
+        console.warn("⚠️ Resize only allowed in day/week views");
+        info.revert();
+        return;
+      }
+
+      if (!taskId || !startDate || !endDate) {
+        console.warn("⚠️ Missing required data for resize");
+        return;
+      }
+
+      console.log("📏 Task duration resized:", {
+        taskId,
+        newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
+      });
+
+      if (onTaskSchedule) {
+        onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+        toast.success("Task duration updated");
+      }
+    } catch (error) {
+      console.error("❌ Error in handleEventResize:", error);
+      toast.error("Failed to resize task");
+    }
+  };
+
+  // Handle moving existing scheduled tasks
+  const handleEventDrop = (info: any) => {
+    try {
+      const taskId = info.event.extendedProps.taskId;
+      const startDate = info.event.start;
+      const endDate = info.event.end;
+      const viewType = info.view.type;
+
+      if (!taskId || !startDate || !endDate) return;
+
+      console.log("🔄 Task moved:", { taskId, newStart: startDate, newEnd: endDate, viewType });
+
+      // Check if moved to past
+      if (isPast(startDate)) {
+        console.error("❌ Cannot move task to the past");
+        toast.error("Cannot schedule in the past");
+        info.revert();
+        return;
+      }
+
+      // Handle month view move: treat as all-day event
+      if (viewType === "dayGridMonth") {
+        const allDayStart = new Date(startDate);
+        allDayStart.setHours(0, 0, 0, 0);
+        const allDayEnd = new Date(startDate);
+        allDayEnd.setHours(23, 59, 59, 999);
+
+        if (onTaskSchedule) {
+          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString());
+          toast.success("Task rescheduled");
+        }
+      } else {
+        // Handle day/week view move
+        if (onTaskSchedule) {
+          onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+          toast.success("Task rescheduled");
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error in handleEventDrop:", error);
+      toast.error("Failed to reschedule task");
+    }
+  };
 
   const headerTitle = useMemo(() => {
     if (currentViewType === "dayGridMonth") return format(currentViewDate, "MMMM yyyy");
@@ -252,172 +423,59 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     }
   }, [currentViewType, currentViewDate]);
 
-  // Check for scheduling conflicts
-  const checkConflicts = (taskId: string, startDate: Date, endDate: Date): { hasConflict: boolean; conflictingTasks: Task[] } => {
-    const conflictingTasks = tasks.filter((task) => {
-      if (task.id === taskId) return false;
-      if (!task.plannedStartISO || !task.plannedEndISO) return false;
-      
-      const taskStart = parseISO(task.plannedStartISO);
-      const taskEnd = parseISO(task.plannedEndISO);
-      
-      // Check for overlap
-      return (startDate < taskEnd && endDate > taskStart);
-    });
-    
-    return {
-      hasConflict: conflictingTasks.length > 0,
-      conflictingTasks,
-    };
-  };
-
-  // Handle external task drop
-  const handleEventReceive = (info: EventReceiveArg) => {
-    try {
-      const taskId = info.event.extendedProps.taskId;
-      const taskStatus = info.event.extendedProps.taskStatus;
-      const startDate = info.event.start;
-      const endDate = info.event.end;
-      
-      console.log("🎯 Task dropped on calendar:", {
-        taskId,
-        taskStatus,
-        start: startDate,
-        end: endDate,
-      });
-
-      // Validation 1: Check if task is done
-      if (taskStatus === "done") {
-        console.error("❌ Cannot schedule completed tasks");
-        toast.error("Cannot schedule completed tasks", {
-          description: "This task is already marked as done.",
-        });
-        info.revert();
-        return;
-      }
-
-      // Validation 2: Check if scheduled in the past
-      if (startDate && isPast(startDate)) {
-        console.error("❌ Cannot schedule tasks in the past");
-        toast.error("Cannot schedule in the past", {
-          description: "Please select a future time slot.",
-        });
-        info.revert();
-        return;
-      }
-
-      // Validation 3: Check for conflicts
-      if (startDate && endDate) {
-        const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
-        
-        if (hasConflict) {
-          console.warn("⚠️ Scheduling conflict detected:", conflictingTasks.map(t => t.title));
-          toast.warning("Scheduling conflict detected", {
-            description: `This time overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
-            duration: 5000,
-          });
-          // Allow scheduling but warn the user
-        }
-      }
-
-      // Update task with new schedule
-      if (startDate && endDate && onTaskSchedule) {
-        const startISO = startDate.toISOString();
-        const endISO = endDate.toISOString();
-        
-        console.log("✅ Scheduling task:", {
-          taskId,
-          startISO,
-          endISO,
-          duration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
-        });
-        
-        onTaskSchedule(taskId, startISO, endISO);
-        
-        toast.success("Task scheduled", {
-          description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
-        });
-      }
-    } catch (error) {
-      console.error("❌ Error in handleEventReceive:", error);
-      toast.error("Failed to schedule task");
-      info.revert();
-    }
-  };
-
-  // Handle event resize (duration change)
-  const handleEventResize = (info: EventResizeDoneArg) => {
-    try {
-      const taskId = info.event.extendedProps.taskId;
-      const startDate = info.event.start;
-      const endDate = info.event.end;
-      
-      if (!taskId || !startDate || !endDate) {
-        console.warn("⚠️ Missing required data for resize");
-        return;
-      }
-
-      console.log("📏 Task duration resized:", {
-        taskId,
-        newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
-      });
-
-      // Check for conflicts after resize
-      const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
-      
-      if (hasConflict) {
-        console.warn("⚠️ Resize caused conflict:", conflictingTasks.map(t => t.title));
-        toast.warning("Scheduling conflict detected", {
-          description: `New duration overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
-          duration: 5000,
-        });
-      }
-
-      if (onTaskSchedule) {
-        onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
-        toast.success("Task duration updated");
-      }
-    } catch (error) {
-      console.error("❌ Error in handleEventResize:", error);
-      toast.error("Failed to resize task");
-    }
-  };
 
   const eventInputs = useMemo(() => {
     const byTaskId = new Map(tasks.map((t) => [t.id, t] as const));
-    
+
     // Add calendar blocks
     const blockEvents = blocks.map((b) => makeEventInput(b, b.taskId ? byTaskId.get(b.taskId) : undefined));
-    
-    // Add scheduled tasks as events
+
+    // Add scheduled tasks as events with priority colors
+    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
     const taskEvents = tasks
-      .filter((t) => t.plannedStartISO && t.plannedEndISO)
-      .map((t) => ({
-        id: `task-${t.id}`,
-        title: t.title,
-        start: t.plannedStartISO,
-        end: t.plannedEndISO,
-        backgroundColor: "#5ba66d",
-        borderColor: "transparent",
-        textColor: "#111827",
-        extendedProps: {
-          taskId: t.id,
-          taskTitle: t.title,
-          projectTitle: t.projectTitle,
-          taskStatus: t.status,
-          isScheduledTask: true,
-        },
-        editable: t.status !== "done", // Only allow editing non-done tasks
-      } satisfies EventInput));
-    
+      .filter((t) => t.start_date && t.due_date)
+      .sort((a, b) => {
+        const priorityA = priorityOrder[a.priority] ?? 4;
+        const priorityB = priorityOrder[b.priority] ?? 4;
+        return priorityA - priorityB;
+      })
+      .map((t) => {
+        const startDate = new Date(t.start_date!);
+        const endDate = new Date(t.due_date!);
+        // Check if this is an all-day event (spans from 00:00 to 23:59 on the same day)
+        const isAllDay =
+          startDate.getDate() === endDate.getDate() &&
+          startDate.getMonth() === endDate.getMonth() &&
+          startDate.getFullYear() === endDate.getFullYear() &&
+          startDate.getHours() === 0 &&
+          startDate.getMinutes() === 0 &&
+          startDate.getSeconds() === 0 &&
+          endDate.getHours() === 23 &&
+          endDate.getMinutes() === 59;
+
+        return {
+          id: `task-${t.id}`,
+          title: t.title,
+          start: t.start_date!,
+          end: t.due_date!,
+          allDay: isAllDay,
+          backgroundColor: getPriorityColor(t.priority),
+          borderColor: "transparent",
+          classNames: [`task-priority-${t.priority}`],
+          extendedProps: {
+            taskId: t.id,
+            taskTitle: t.title,
+            projectTitle: t.projectTitle,
+            taskStatus: t.status,
+            taskPriority: t.priority,
+            isScheduledTask: true,
+          },
+          editable: t.status !== "done", // Only allow editing non-done tasks
+        } satisfies EventInput;
+      });
+
     return [...blockEvents, ...taskEvents];
   }, [blocks, tasks]);
-
-  const selectedBlock = useMemo(() => blocks.find((b) => b.id === selectedBlockId) ?? null, [blocks, selectedBlockId]);
-  const selectedBlockTask = useMemo(() => {
-    if (!selectedBlock?.taskId) return null;
-    return tasks.find((t) => t.id === selectedBlock.taskId) ?? null;
-  }, [selectedBlock?.taskId, tasks]);
 
   const initialDate = useMemo(() => {
     if (selectedTask?.plannedStartISO) return parseISO(selectedTask.plannedStartISO);
@@ -447,221 +505,147 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   };
 
   return (
-    <div className="h-full min-h-0 flex flex-col">
-      <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 px-2"
-              onClick={goPrev}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 px-2"
-              onClick={goNext}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-
-            <div className="inline-flex">
+    <>
+      <div className="h-full min-h-0 flex flex-col">
+        <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 px-2.5 text-xs rounded-r-none border-r-0"
-                onClick={goToday}
+                className="h-8 px-2"
+                onClick={goPrev}
               >
-                Today
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 rounded-l-none"
-                    aria-label="Change calendar view"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="rounded-xl">
-                  <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setView("timeGridWeek")}>Week</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setView("dayGridMonth")}>Month</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={goNext}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+
+              <div className="inline-flex">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2.5 text-xs rounded-r-none border-r-0"
+                  onClick={goToday}
+                >
+                  Today
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 rounded-l-none"
+                      aria-label="Change calendar view"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="rounded-xl">
+                    <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setView("timeGridWeek")}>Week</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setView("dayGridMonth")}>Month</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            <div className="min-w-0 flex-1 text-center">
+              <div className="truncate text-sm font-semibold">{headerTitle}</div>
             </div>
           </div>
+        </div>
 
-          <div className="min-w-0 flex-1 text-center">
-            <div className="truncate text-sm font-semibold">{headerTitle}</div>
+        <div className="flex-1 min-h-0">
+          <div className="h-full">
+            <FullCalendar
+              ref={calendarRef}
+              plugins={[timeGridPlugin, dayGridPlugin, listPlugin, interactionPlugin]}
+              initialView="dayGridMonth"
+              initialDate={initialDate}
+              height="100%"
+              nowIndicator
+              editable
+              selectable
+              droppable
+              weekends
+              navLinks={true}
+              slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
+              views={{
+                dayGridMonth: {
+                  dayHeaderFormat: { weekday: "short" },
+                },
+                timeGridWeek: {
+                  dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
+                },
+                timeGridDay: {
+                  dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
+                },
+              }}
+              scrollTime={scrollTime}
+              scrollTimeReset={false}
+              headerToolbar={false}
+              dayMaxEvents={2}
+              moreLinkContent={(args) => `${args.num} more`}
+
+              events={eventInputs as EventInput[]}
+              eventOrder={(a: any, b: any) => {
+                const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+                const priorityA = a.extendedProps.taskPriority ? priorityOrder[a.extendedProps.taskPriority as keyof typeof priorityOrder] ?? 4 : 4;
+                const priorityB = b.extendedProps.taskPriority ? priorityOrder[b.extendedProps.taskPriority as keyof typeof priorityOrder] ?? 4 : 4;
+                return priorityA - priorityB;
+              }}
+              eventContent={renderEventContent}
+              eventClassNames={(arg) => {
+                const type = arg.event.extendedProps.type as CalendarBlockType;
+                if (arg.event.extendedProps.isScheduledTask) {
+                  return ["task-event", "scheduled-task"];
+                }
+                if (!type) return ["task-event"];
+                return [`fc-type-${type}`, "task-event"];
+              }}
+              eventClick={(arg) => {
+                const isScheduledTask = arg.event.extendedProps.isScheduledTask;
+                if (isScheduledTask) {
+                  const taskId = arg.event.extendedProps.taskId;
+                  setSelectedTaskId(taskId);
+                }
+              }}
+              dateClick={(arg) => {
+                const calendarApi = calendarRef.current?.getApi();
+                if (calendarApi) {
+                  calendarApi.changeView("timeGridDay", arg.date);
+                }
+              }}
+              datesSet={(dateInfo) => {
+                const view = dateInfo.view.type as CalendarView;
+                setCurrentViewType(view);
+                setCurrentViewDate(dateInfo.view.currentStart);
+                if (onViewChange) onViewChange(view);
+              }}
+              eventReceive={handleEventReceive}
+              eventResize={handleEventResize}
+              eventDrop={handleEventDrop}
+            />
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0">
-        <div className="h-full">
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[timeGridPlugin, dayGridPlugin, listPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            initialDate={initialDate}
-            height="100%"
-            nowIndicator
-            editable
-            selectable
-            droppable
-            weekends
-            navLinks={true}
-            slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
-            views={{
-              dayGridMonth: {
-                dayHeaderFormat: { weekday: "short" },
-              },
-              timeGridWeek: {
-                dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
-              },
-              timeGridDay: {
-                dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
-              },
-            }}
-            scrollTime={scrollTime}
-            scrollTimeReset={false}
-            headerToolbar={false}
-            dayMaxEvents={2}
-            moreLinkContent={(args) => `${args.num} more`}
-
-            events={eventInputs as EventInput[]}
-            eventContent={renderEventContent}
-            eventClassNames={(arg) => {
-              const type = arg.event.extendedProps.type as CalendarBlockType;
-              if (arg.event.extendedProps.isScheduledTask) {
-                return ["task-event", "scheduled-task"];
-              }
-              if (!type) return ["task-event"];
-              return [`fc-type-${type}`, "task-event"];
-            }}
-            eventClick={(arg) => {
-              setSelectedBlockId(String(arg.event.id));
-            }}
-            dateClick={(arg) => {
-              const calendarApi = calendarRef.current?.getApi();
-              if (calendarApi) {
-                calendarApi.changeView("timeGridDay", arg.date);
-              }
-            }}
-            select={() => {
-              setSelectedBlockId("");
-            }}
-            datesSet={(dateInfo) => {
-              const view = dateInfo.view.type as CalendarView;
-              onViewChange?.(view);
-              setCurrentViewType(view);
-              setCurrentViewDate(dateInfo.view.currentStart);
-            }}
-            eventReceive={handleEventReceive}
-            eventResize={handleEventResize}
-            eventResizeStart={() => {
-              console.log("📏 Started resizing event");
-            }}
-            eventDrop={(info) => {
-              // Handle moving existing scheduled tasks
-              const taskId = info.event.extendedProps.taskId;
-              const startDate = info.event.start;
-              const endDate = info.event.end;
-              
-              if (!taskId || !startDate || !endDate) return;
-              
-              console.log("🔄 Task moved:", { taskId, newStart: startDate, newEnd: endDate });
-              
-              // Check if moved to past
-              if (isPast(startDate)) {
-                console.error("❌ Cannot move task to the past");
-                toast.error("Cannot schedule in the past");
-                info.revert();
-                return;
-              }
-              
-              // Check for conflicts
-              const { hasConflict, conflictingTasks } = checkConflicts(taskId, startDate, endDate);
-              if (hasConflict) {
-                toast.warning("Scheduling conflict", {
-                  description: `Overlaps with: ${conflictingTasks.map(t => t.title).join(", ")}`,
-                });
-              }
-              
-              if (onTaskSchedule) {
-                onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
-                toast.success("Task rescheduled");
-              }
-            }}
-          />
-        </div>
-      </div>
-
-      <Drawer open={Boolean(selectedBlock)} onOpenChange={(open) => !open && setSelectedBlockId("")}
-      >
-        <DrawerContent className="h-[75vh] rounded-t-2xl">
-          <DrawerHeader className="border-b border-border/60">
-            <DrawerTitle className="text-base">{selectedBlock?.title ?? "Block"}</DrawerTitle>
-            <DrawerDescription>
-              {selectedBlock ? typeMeta[selectedBlock.type].label : ""}
-            </DrawerDescription>
-          </DrawerHeader>
-
-          <div className="p-4 space-y-3 overflow-auto">
-            {selectedBlock ? (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={cn("rounded-full px-2.5 py-1 text-[11px] border", typeMeta[selectedBlock.type].pill)}>
-                    {typeMeta[selectedBlock.type].label}
-                  </Badge>
-                  <Badge variant="outline" className="rounded-full px-2.5 py-1 text-[11px]">
-                    {format(parseISO(selectedBlock.startISO), "EEE, MMM dd • p")}
-                    {selectedBlock.endISO ? ` – ${format(parseISO(selectedBlock.endISO), "p")}` : ""}
-                  </Badge>
-                </div>
-
-                {selectedBlockTask ? (
-                  <div className="rounded-xl border border-border/60 bg-card/40 p-3">
-                    <div className="text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground">Linked task</div>
-                    <div className="mt-2 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{selectedBlockTask.title}</div>
-                        <div className="text-xs text-muted-foreground mt-1 truncate">{selectedBlockTask.projectTitle}</div>
-                      </div>
-                      <Button size="sm" variant="outline" className="rounded-xl">
-                        <Link2 className="h-4 w-4 mr-2" />
-                        Open
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedBlock.notes ? (
-                  <>
-                    <Separator className="bg-border/60" />
-                    <div className="text-sm text-foreground/90 leading-relaxed">{selectedBlock.notes}</div>
-                  </>
-                ) : null}
-
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <Button variant="outline" className="rounded-xl">Edit</Button>
-                  <Button className="rounded-xl">Convert to task slot</Button>
-                </div>
-              </>
-            ) : null}
-          </div>
-        </DrawerContent>
-      </Drawer>
-    </div>
+      <TaskPreviewDialog
+        taskId={selectedTaskId}
+        open={!!selectedTaskId}
+        onOpenChange={(open) => !open && setSelectedTaskId("")}
+      />
+    </>
   );
 }

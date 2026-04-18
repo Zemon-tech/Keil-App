@@ -630,7 +630,6 @@ html,
 
 /* Event Styling */
 .fc-v-event {
-    background-color: transparent !important;
     border: none !important;
     box-shadow: none !important;
 }
@@ -677,15 +676,22 @@ html,
 
 /* Scheduled task events - TimeGrid view */
 .fc-v-event.scheduled-task {
-    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
     border: none !important;
     border-radius: 6px !important;
-    padding: 4px 8px !important;
+    padding: 2px 8px !important;
+    height: auto !important;
+    min-height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important;
+    max-width: fit-content !important;
 }
 
 .fc-v-event.scheduled-task .fc-event-title {
-    font-weight: 600 !important;
-    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    font-size: 0.8rem !important;
+    white-space: nowrap !important;
+    color: inherit !important;
 }
 
 /* Month view styles for all tasks to look like pills */
@@ -693,13 +699,29 @@ html,
     border-radius: 6px !important;
     border-left-width: 0 !important;
     margin: 1px 4px !important;
-    background-color: #5ba66d !important;
     border: none !important;
-    color: #111827 !important;
+    padding: 2px 6px !important;
+    font-size: 0.75rem !important;
+}
+
+/* Priority color classes */
+.task-priority-urgent {
+    background-color: #ef4444 !important;
+}
+
+.task-priority-high {
+    background-color: #f97316 !important;
+}
+
+.task-priority-medium {
+    background-color: #eab308 !important;
+}
+
+.task-priority-low {
+    background-color: #22c55e !important;
 }
 
 .fc-dayGridMonth-view .fc-h-event {
-    background-color: #5ba66d;
     border: none !important;
 }
 
