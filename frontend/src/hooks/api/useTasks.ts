@@ -79,8 +79,8 @@ export interface UpdateTaskInput {
   objective?: string;
   success_criteria?: string;
   priority?: TaskPriority;
-  start_date?: string;
-  due_date?: string;
+  start_date?: string | null;
+  due_date?: string | null;
   story_points?: number;
   time_estimate?: number;
 }

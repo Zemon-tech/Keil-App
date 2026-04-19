@@ -199,9 +199,101 @@ import "./calendar-styles.css";
 
 export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [dialogPosition, setDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [currentViewType, setCurrentViewType] = useState<CalendarView>("dayGridMonth");
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
+  const [events, setEvents] = useState<EventInput[]>([]);
+  const unscheduledTaskIds = useRef<Set<string>>(new Set());
   const calendarRef = useRef<FullCalendar>(null);
+
+  // Sync local events state with props (tasks and blocks)
+  useEffect(() => {
+    console.log("🔄 Syncing events state with props", { tasks: tasks.length, blocks: blocks.length, unscheduledIds: unscheduledTaskIds.current.size });
+
+    const blockEvents = blocks.map((block) => makeEventInput(block));
+
+    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+    const taskEvents = tasks
+      .filter((t) => t.start_date && t.due_date && t.status !== "done" && !unscheduledTaskIds.current.has(t.id))
+      .sort((a, b) => {
+        const priorityA = priorityOrder[a.priority] ?? 4;
+        const priorityB = priorityOrder[b.priority] ?? 4;
+        return priorityA - priorityB;
+      })
+      .map((t) => {
+        const startDate = new Date(t.start_date!);
+        const endDate = new Date(t.due_date!);
+        // Check if this is an all-day event:
+        // 1. Spans multiple days, OR
+        // 2. Single day with start at 00:00 and end at or near 23:59
+        const spansMultipleDays = startDate.getDate() !== endDate.getDate() ||
+                                   startDate.getMonth() !== endDate.getMonth() ||
+                                   startDate.getFullYear() !== endDate.getFullYear();
+        const isSingleDayAllDay = startDate.getHours() === 0 &&
+                                   startDate.getMinutes() === 0 &&
+                                   endDate.getHours() >= 23;
+        const isAllDay = spansMultipleDays || isSingleDayAllDay;
+
+        console.log("🔍 All-day detection:", {
+          taskId: t.id,
+          startDate: t.start_date,
+          endDate: t.due_date,
+          spansMultipleDays,
+          isSingleDayAllDay,
+          isAllDay,
+        });
+
+        return {
+          id: t.id,
+          title: t.title,
+          start: t.start_date!,
+          end: t.due_date!,
+          allDay: isAllDay,
+          backgroundColor: getPriorityColor(t.priority),
+          borderColor: "transparent",
+          classNames: [`task-priority-${t.priority}`],
+          extendedProps: {
+            taskId: t.id,
+            taskTitle: t.title,
+            projectTitle: t.projectTitle,
+            taskStatus: t.status,
+            taskPriority: t.priority,
+            isScheduledTask: true,
+          },
+          editable: t.status !== "done",
+        } satisfies EventInput;
+      });
+
+    const allEvents = [...blockEvents, ...taskEvents];
+    console.log("✅ Events state updated:", allEvents.length);
+    setEvents(allEvents);
+  }, [tasks, blocks]);
+
+  // Handle unschedule - remove task from local events state
+  const handleTaskUnschedule = (taskId: string) => {
+    console.log("🗑️ Unschedule clicked:", taskId);
+    // Optimistic update: add to unscheduled ref immediately
+    unscheduledTaskIds.current.add(taskId);
+    console.log("📝 Added to unscheduled ref:", taskId, unscheduledTaskIds.current);
+    // Remove from events state
+    setEvents(prev => prev.filter(e => e.id !== taskId));
+    console.log("✅ Event removed from state:", taskId);
+    // Clear from ref after 5 seconds to allow backend to sync
+    setTimeout(() => {
+      unscheduledTaskIds.current.delete(taskId);
+      console.log("🗑️ Cleared from unscheduled ref:", taskId);
+    }, 5000);
+  };
+
+  // Handle status change - remove task from events if status becomes "done"
+  const handleStatusChange = (taskId: string, newStatus: string) => {
+    console.log("📊 Status change:", taskId, newStatus);
+    if (newStatus === "done") {
+      console.log("🗑️ Removing done task from calendar:", taskId);
+      setEvents(prev => prev.filter(e => e.id !== taskId));
+      console.log("✅ Done task removed from state:", taskId);
+    }
+  };
 
   // Scroll to 1 hour before current time so the now-indicator sits lower in the viewport
   const scrollTime = useMemo(() => {
@@ -247,13 +339,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         return;
       }
 
-      // Handle month view drop: schedule as all-day event, then switch to day view
+      // Handle month view drop: allow multi-day scheduling
       if (viewType === "dayGridMonth") {
         if (startDate && onTaskSchedule) {
-          // Set as all-day event (start and end on the same day, allDay will be set by the backend)
+          // Use the actual end date from the drop event to allow multi-day scheduling
+          // If no end date provided, default to single day
           const allDayStart = new Date(startDate);
           allDayStart.setHours(0, 0, 0, 0);
-          const allDayEnd = new Date(startDate);
+
+          const allDayEnd = endDate ? new Date(endDate) : new Date(startDate);
           allDayEnd.setHours(23, 59, 59, 999);
 
           const startISO = allDayStart.toISOString();
@@ -263,12 +357,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             taskId,
             startISO,
             endISO,
+            multiDay: startDate.getDate() !== allDayEnd.getDate(),
           });
 
           onTaskSchedule(taskId, startISO, endISO);
 
+          const isMultiDay = startDate.getDate() !== allDayEnd.getDate();
           toast.success("Task scheduled", {
-            description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, yyyy")}`,
+            description: isMultiDay
+              ? `${info.event.title} scheduled from ${format(startDate, "MMM dd")} to ${format(allDayEnd, "MMM dd")}`
+              : `${info.event.title} scheduled for ${format(startDate, "MMM dd, yyyy")}`,
           });
 
           // Auto-switch to day view for that date
@@ -304,20 +402,13 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     }
   };
 
-  // Handle event resize (duration change) - only in day/week views
+  // Handle event resize (duration change) - allow in all views for multi-day scheduling
   const handleEventResize = (info: EventResizeDoneArg) => {
     try {
       const taskId = info.event.extendedProps.taskId;
       const startDate = info.event.start;
       const endDate = info.event.end;
       const viewType = info.view.type;
-
-      // Only allow resize in day/week views
-      if (viewType !== "timeGridDay" && viewType !== "timeGridWeek") {
-        console.warn("⚠️ Resize only allowed in day/week views");
-        info.revert();
-        return;
-      }
 
       if (!taskId || !startDate || !endDate) {
         console.warn("⚠️ Missing required data for resize");
@@ -326,6 +417,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
       console.log("📏 Task duration resized:", {
         taskId,
+        viewType,
         newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
       });
 
@@ -423,59 +515,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     }
   }, [currentViewType, currentViewDate]);
 
-
-  const eventInputs = useMemo(() => {
-    const byTaskId = new Map(tasks.map((t) => [t.id, t] as const));
-
-    // Add calendar blocks
-    const blockEvents = blocks.map((b) => makeEventInput(b, b.taskId ? byTaskId.get(b.taskId) : undefined));
-
-    // Add scheduled tasks as events with priority colors
-    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-    const taskEvents = tasks
-      .filter((t) => t.start_date && t.due_date)
-      .sort((a, b) => {
-        const priorityA = priorityOrder[a.priority] ?? 4;
-        const priorityB = priorityOrder[b.priority] ?? 4;
-        return priorityA - priorityB;
-      })
-      .map((t) => {
-        const startDate = new Date(t.start_date!);
-        const endDate = new Date(t.due_date!);
-        // Check if this is an all-day event (spans from 00:00 to 23:59 on the same day)
-        const isAllDay =
-          startDate.getDate() === endDate.getDate() &&
-          startDate.getMonth() === endDate.getMonth() &&
-          startDate.getFullYear() === endDate.getFullYear() &&
-          startDate.getHours() === 0 &&
-          startDate.getMinutes() === 0 &&
-          startDate.getSeconds() === 0 &&
-          endDate.getHours() === 23 &&
-          endDate.getMinutes() === 59;
-
-        return {
-          id: `task-${t.id}`,
-          title: t.title,
-          start: t.start_date!,
-          end: t.due_date!,
-          allDay: isAllDay,
-          backgroundColor: getPriorityColor(t.priority),
-          borderColor: "transparent",
-          classNames: [`task-priority-${t.priority}`],
-          extendedProps: {
-            taskId: t.id,
-            taskTitle: t.title,
-            projectTitle: t.projectTitle,
-            taskStatus: t.status,
-            taskPriority: t.priority,
-            isScheduledTask: true,
-          },
-          editable: t.status !== "done", // Only allow editing non-done tasks
-        } satisfies EventInput;
-      });
-
-    return [...blockEvents, ...taskEvents];
-  }, [blocks, tasks]);
 
   const initialDate = useMemo(() => {
     if (selectedTask?.plannedStartISO) return parseISO(selectedTask.plannedStartISO);
@@ -584,6 +623,8 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               views={{
                 dayGridMonth: {
                   dayHeaderFormat: { weekday: "short" },
+                  eventResizableFromStart: true,
+                  durationEditable: true,
                 },
                 timeGridWeek: {
                   dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
@@ -598,7 +639,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               dayMaxEvents={2}
               moreLinkContent={(args) => `${args.num} more`}
 
-              events={eventInputs as EventInput[]}
+              events={events}
               eventOrder={(a: any, b: any) => {
                 const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
                 const priorityA = a.extendedProps.taskPriority ? priorityOrder[a.extendedProps.taskPriority as keyof typeof priorityOrder] ?? 4 : 4;
@@ -618,6 +659,30 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 const isScheduledTask = arg.event.extendedProps.isScheduledTask;
                 if (isScheduledTask) {
                   const taskId = arg.event.extendedProps.taskId;
+                  // Capture mouse position for dialog positioning
+                  const rect = (arg.el as HTMLElement).getBoundingClientRect();
+                  const screenWidth = window.innerWidth;
+                  const screenHeight = window.innerHeight;
+                  const dialogWidth = 400; // approximate width
+                  const dialogHeight = 400; // approximate height
+
+                  // Calculate x position: show on right if there's space, otherwise left
+                  let x = rect.right + 10;
+                  if (x + dialogWidth > screenWidth) {
+                    x = rect.left - dialogWidth - 10;
+                  }
+                  // Ensure x is within bounds
+                  x = Math.max(10, Math.min(x, screenWidth - dialogWidth - 10));
+
+                  // Calculate y position: keep it within vertical bounds
+                  let y = rect.top;
+                  if (y + dialogHeight > screenHeight) {
+                    y = screenHeight - dialogHeight - 10;
+                  }
+                  // Ensure y is within bounds
+                  y = Math.max(10, Math.min(y, screenHeight - dialogHeight - 10));
+
+                  setDialogPosition({ x, y });
                   setSelectedTaskId(taskId);
                 }
               }}
@@ -644,7 +709,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       <TaskPreviewDialog
         taskId={selectedTaskId}
         open={!!selectedTaskId}
-        onOpenChange={(open) => !open && setSelectedTaskId("")}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedTaskId("");
+            setDialogPosition(null);
+          }
+        }}
+        onUnschedule={handleTaskUnschedule}
+        onStatusChange={handleStatusChange}
+        position={dialogPosition}
       />
     </>
   );

@@ -624,9 +624,16 @@ export function TaskListPane({
                   </div>
 
                   {/* Title */}
-                  <span className="text-sm font-medium truncate flex-1 leading-snug min-w-0">
-                    {t.title}
-                  </span>
+                  <div className="flex items-baseline gap-1 flex-1 min-w-0">
+                    <span className="text-sm font-medium truncate leading-snug">
+                      {t.title}
+                    </span>
+                    {displayDate && (
+                      <span className="text-[10px] text-muted-foreground/70 font-medium leading-none">
+                        scheduled
+                      </span>
+                    )}
+                  </div>
 
                   {/* Right meta with hover menu */}
                   <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground min-w-[60px] justify-end relative">
