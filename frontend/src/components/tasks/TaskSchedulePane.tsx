@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useLayoutEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -205,6 +205,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   const [events, setEvents] = useState<EventInput[]>([]);
   const unscheduledTaskIds = useRef<Set<string>>(new Set());
   const calendarRef = useRef<FullCalendar>(null);
+  const calendarContainerRef = useRef<HTMLDivElement>(null);
 
   // Sync local events state with props (tasks and blocks)
   useEffect(() => {
@@ -483,22 +484,54 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     return format(currentViewDate, "MMMM yyyy");
   }, [currentViewDate, currentViewType]);
 
-  // Fix: Force calendar update on container resize to handle aspect ratio changes
-  useEffect(() => {
+  // FullCalendar's month scrollgrid can measure too early inside this flex layout,
+  // which leaves a transient bottom-right gutter until a later reflow corrects it.
+  // Measure against a stable container and force an early size sync.
+  useLayoutEffect(() => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
-
-    // Use ResizeObserver on the calendar's parent to detect any layout changes
-    const container = (calendarRef.current as any)?.el?.parentElement as HTMLElement | undefined;
+    const container = calendarContainerRef.current;
     if (!container) return;
 
-    const resizeObserver = new ResizeObserver(() => {
+    let frameA = 0;
+    let frameB = 0;
+    let timeoutId: number | null = null;
+
+    const syncSize = () => {
       calendarApi.updateSize();
-    });
+    };
+
+    const syncSizeSoon = () => {
+      cancelAnimationFrame(frameA);
+      cancelAnimationFrame(frameB);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+
+      frameA = requestAnimationFrame(() => {
+        syncSize();
+        frameB = requestAnimationFrame(syncSize);
+      });
+
+      timeoutId = window.setTimeout(syncSize, 150);
+    };
+
+    const resizeObserver = new ResizeObserver(syncSizeSoon);
 
     resizeObserver.observe(container);
-    return () => resizeObserver.disconnect();
-  }, []);
+    syncSizeSoon();
+    window.addEventListener("resize", syncSizeSoon);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", syncSizeSoon);
+      cancelAnimationFrame(frameA);
+      cancelAnimationFrame(frameB);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [currentViewType]);
 
   // Imperatively update the FullCalendar toolbar title with a custom formatted date
   useEffect(() => {
@@ -606,7 +639,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         </div>
 
         <div className="flex-1 min-h-0">
-          <div className="h-full">
+          <div ref={calendarContainerRef} className="task-schedule-calendar h-full min-h-0">
             <FullCalendar
               ref={calendarRef}
               plugins={[timeGridPlugin, dayGridPlugin, listPlugin, interactionPlugin]}
