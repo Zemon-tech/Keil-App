@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Bell, X, Maximize2, Check, Trash2 } from "lucide-react";
+import { Bell, X, Maximize2, Check, Trash2, CheckSquare, User, MessageCircle, Settings, ExternalLink, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -63,15 +63,15 @@ interface NotificationDrawerProps {
 const getNotificationIcon = (type: string) => {
     switch (type) {
         case "task":
-            return "📋";
+            return <CheckSquare className="h-4 w-4" />;
         case "mention":
-            return "👤";
+            return <User className="h-4 w-4" />;
         case "chat":
-            return "💬";
+            return <MessageCircle className="h-4 w-4" />;
         case "system":
-            return "⚙️";
+            return <Settings className="h-4 w-4" />;
         default:
-            return "🔔";
+            return <Bell className="h-4 w-4" />;
     }
 };
 
@@ -155,6 +155,12 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                         )}
                     </div>
                     <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label="Mark all as read">
+                            <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" aria-label="Clear all notifications">
+                            <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                         <button
                             onClick={onOpenFullView}
                             className="text-muted-foreground hover:text-foreground"
@@ -174,18 +180,6 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
 
                 {/* ── Body ── */}
                 <div className="flex-1 overflow-hidden flex flex-col">
-                    {/* Quick Actions */}
-                    <div className="px-4 py-2 border-b border-border flex items-center gap-2">
-                        <Button variant="ghost" size="sm" className="text-xs rounded-lg h-7">
-                            <Check className="h-3 w-3 mr-1.5" />
-                            Mark all read
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-xs rounded-lg h-7 text-red-500 hover:text-red-600">
-                            <Trash2 className="h-3 w-3 mr-1.5" />
-                            Clear all
-                        </Button>
-                    </div>
-
                     {/* Notifications List */}
                     <div className="flex-1 overflow-y-auto">
                         {mockNotifications.length === 0 ? (
@@ -206,7 +200,7 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                                         <div className="flex items-start gap-3">
                                             {/* Icon */}
                                             <div className={cn(
-                                                "h-8 w-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0",
+                                                "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0",
                                                 getNotificationColor(notification.type)
                                             )}>
                                                 {getNotificationIcon(notification.type)}
@@ -242,6 +236,18 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                                                                 {notification.user.name.charAt(0).toUpperCase()}
                                                             </AvatarFallback>
                                                         </Avatar>
+                                                    )}
+
+                                                    {/* Category-based Action Button */}
+                                                    {notification.type === 'task' && (
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" aria-label="View task">
+                                                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        </Button>
+                                                    )}
+                                                    {notification.type === 'chat' && (
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" aria-label="View chat">
+                                                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </div>

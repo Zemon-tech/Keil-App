@@ -3,13 +3,14 @@
 import { useState, type ChangeEvent, type ElementType } from "react";
 import {
   ArrowUp,
-  AudioLines,
+  ArrowRight,
   FileText,
   Ghost,
   GlobeIcon,
   Image,
   Plus,
   SearchIcon,
+  Mic
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -278,7 +279,7 @@ function HeroPromptSurface({
             tooltip={{ content: "Voice input", shortcut: "⌘M" }}
             variant="ghost"
           >
-            <AudioLines className="h-4 w-4" />
+            <Mic className="h-4 w-4" />
           </PromptInputButton>
 
           {canSubmit ? (
@@ -294,7 +295,7 @@ function HeroPromptSurface({
               size="icon-sm"
               variant="ghost"
             >
-              <AudioLines className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4" />
             </PromptInputButton>
           )}
         </div>
