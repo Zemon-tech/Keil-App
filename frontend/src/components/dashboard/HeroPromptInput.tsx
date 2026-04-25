@@ -180,8 +180,8 @@ function HeroPromptSurface({
             className={cn(
               "bg-transparent border-none px-0 text-foreground placeholder:text-muted-foreground/55 focus-visible:ring-0 resize-none font-normal transition-all duration-200",
               hasAttachments
-                ? "min-h-[6.5rem] pt-4 pb-3 text-base sm:text-lg"
-                : "min-h-[7.75rem] pt-6 pb-3 text-[1rem] sm:text-[1.05rem]"
+                ? "min-h-[5rem] pt-3 pb-2 text-base sm:text-lg max-h-48 overflow-y-auto"
+                : "min-h-[5rem] pt-3 pb-2 text-[1rem] sm:text-[1.05rem] max-h-48 overflow-y-auto"
             )}
             onChange={valueChanged}
             placeholder="How can I help you today?"
@@ -189,7 +189,7 @@ function HeroPromptSurface({
           />
 
           {text && (
-            <div className="pointer-events-none absolute inset-x-4 bottom-0 h-12 bg-gradient-to-t from-background/90 via-background/50 to-transparent sm:inset-x-5" />
+            <div className="pointer-events-none absolute inset-x-4 bottom-0 h-8 bg-gradient-to-t from-background/90 via-background/50 to-transparent sm:inset-x-5" />
           )}
 
           {showCommandMenu && (
@@ -224,7 +224,7 @@ function HeroPromptSurface({
         </div>
       </PromptInputBody>
 
-      <PromptInputFooter className="border-none px-3 pb-3 pt-0 sm:px-4 sm:pb-4">
+      <PromptInputFooter className="border-none px-3 pb-3 pt-1 sm:px-4 sm:pb-3">
         <PromptInputTools className="flex-wrap gap-2">
           <PromptInputActionMenu>
             <PromptInputActionMenuTrigger
@@ -344,7 +344,7 @@ export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
   };
 
   return (
-    <section className="relative flex w-full max-w-4xl flex-col items-center gap-6 px-4 pt-8 sm:gap-7 sm:pt-10">
+    <section className="relative flex w-full max-w-4xl flex-col items-center gap-6 px-4 pt-12 sm:gap-7 sm:pt-14">
       <div className="fixed top-6 right-6 text-muted-foreground/55 transition-colors hover:text-foreground">
         <Ghost className="h-6 w-6" />
       </div>
@@ -360,7 +360,7 @@ export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
           className={cn(
             "w-full overflow-visible bg-transparent",
             "[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:overflow-visible",
-            "[&_[data-slot=input-group]]:rounded-[2rem] [&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
+            "[&_[data-slot=input-group]]:rounded-[1.25rem] [&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
             "[&_[data-slot=input-group]]:bg-background/88",
             "[&_[data-slot=input-group]]:shadow-[0_26px_70px_-42px_rgba(15,23,42,0.28)] [&_[data-slot=input-group]]:backdrop-blur-xl",
             "transition-all duration-300 dark:shadow-[0_30px_80px_-42px_rgba(0,0,0,0.65)]",
