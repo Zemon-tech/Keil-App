@@ -96,11 +96,6 @@ body.ai-sidebar-open {
   }
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

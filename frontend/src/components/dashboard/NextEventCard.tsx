@@ -5,7 +5,7 @@ import { CalendarDays } from "lucide-react";
 export function NextEventCard() {
   return (
     <Card className="bg-card/90 border border-border/60 rounded-2xl p-4 hover:bg-card/95 transition-colors cursor-pointer">
-      <h3 className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground font-bold mb-1/2">
+      <h3 className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground font-bold mb-1">
         Next Event
       </h3>
       <div className="flex items-start gap-3">

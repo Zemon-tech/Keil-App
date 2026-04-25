@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { Ghost, Plus, AudioLines, GlobeIcon, SearchIcon, FileText, Image } from "lucide-react";
+import { useState, type ChangeEvent, type ElementType } from "react";
+import {
+  ArrowUp,
+  AudioLines,
+  FileText,
+  Ghost,
+  GlobeIcon,
+  Image,
+  Plus,
+  SearchIcon,
+} from "lucide-react";
+
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Attachment,
+  AttachmentInfo,
   AttachmentPreview,
   AttachmentRemove,
   Attachments,
+  getMediaCategory,
 } from "@/components/ai-elements/attachments";
 import {
   PromptInput,
@@ -34,16 +46,9 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
-  PromptInputHoverCard,
-  PromptInputHoverCardContent,
-  PromptInputHoverCardTrigger,
-  PromptInputTabsList,
-  PromptInputTab,
-  PromptInputTabLabel,
-  PromptInputTabBody,
-  PromptInputTabItem,
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
+import { cn } from "@/lib/utils";
 
 const models = [
   { id: "sonnet-4.6", name: "Sonnet 4.6 Extended" },
@@ -51,11 +56,36 @@ const models = [
   { id: "gpt-4o", name: "GPT-4o" },
 ];
 
-const suggestions = [
-  { id: "1", label: "Draft an email", icon: FileText, description: "to my team about the project update" },
-  { id: "2", label: "Explain", icon: SearchIcon, description: "quantum computing in simple terms" },
-  { id: "3", label: "Help me write", icon: FileText, description: "a Python function for data analysis" },
-  { id: "4", label: "Create a", icon: Image, description: "marketing strategy for a new product" },
+const suggestions: {
+  id: string;
+  label: string;
+  icon: ElementType;
+  description: string;
+}[] = [
+  {
+    id: "1",
+    label: "Draft an email",
+    icon: FileText,
+    description: "to my team about the project update",
+  },
+  {
+    id: "2",
+    label: "Explain",
+    icon: SearchIcon,
+    description: "quantum computing in simple terms",
+  },
+  {
+    id: "3",
+    label: "Help me write",
+    icon: FileText,
+    description: "a Python function for data analysis",
+  },
+  {
+    id: "4",
+    label: "Create a",
+    icon: Image,
+    description: "marketing strategy for a new product",
+  },
 ];
 
 const PromptInputAttachmentsDisplay = () => {
@@ -65,21 +95,213 @@ const PromptInputAttachmentsDisplay = () => {
     return null;
   }
 
+  const hasVisualAttachment = attachments.files.some((attachment) => {
+    const category = getMediaCategory(attachment);
+    return category === "image" || category === "video";
+  });
+
+  if (!hasVisualAttachment) {
+    return (
+      <Attachments variant="inline" className="w-full gap-2 px-1">
+        {attachments.files.map((attachment) => (
+          <Attachment
+            key={attachment.id}
+            className="h-10 rounded-full border border-border/60 bg-background/65 pr-2 shadow-sm"
+            data={attachment}
+            onRemove={() => attachments.remove(attachment.id)}
+          >
+            <AttachmentPreview className="rounded-full bg-background/80" />
+            <AttachmentInfo />
+            <AttachmentRemove className="size-6 opacity-100" />
+          </Attachment>
+        ))}
+      </Attachments>
+    );
+  }
+
   return (
-    <Attachments variant="grid" className="px-6 pt-4">
-      {attachments.files.map((attachment) => (
+    <Attachments variant="grid" className="w-full gap-3 px-1">
+      {attachments.files.map((attachment, index) => (
         <Attachment
           key={attachment.id}
+          className={cn(
+            "overflow-hidden border border-border/60 bg-background/65 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.3)]",
+            index === 0
+              ? "size-28 rounded-[1.5rem] sm:size-36"
+              : "size-20 rounded-[1.15rem] sm:size-24"
+          )}
           data={attachment}
           onRemove={() => attachments.remove(attachment.id)}
         >
-          <AttachmentPreview />
-          <AttachmentRemove />
+          <AttachmentPreview className="bg-muted/30" />
+          <AttachmentRemove className="bg-background/90 opacity-100 backdrop-blur-sm hover:bg-background" />
         </Attachment>
       ))}
     </Attachments>
   );
 };
+
+interface HeroPromptSurfaceProps {
+  model: string;
+  onSuggestionClick: (suggestion: (typeof suggestions)[number]) => void;
+  setModel: (value: string) => void;
+  setUseWebSearch: (value: boolean | ((prev: boolean) => boolean)) => void;
+  showCommandMenu: boolean;
+  text: string;
+  useWebSearch: boolean;
+  valueChanged: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+}
+
+function HeroPromptSurface({
+  model,
+  onSuggestionClick,
+  setModel,
+  setUseWebSearch,
+  showCommandMenu,
+  text,
+  useWebSearch,
+  valueChanged,
+}: HeroPromptSurfaceProps) {
+  const attachments = usePromptInputAttachments();
+  const hasAttachments = attachments.files.length > 0;
+  const canSubmit = Boolean(text.trim()) || hasAttachments || useWebSearch;
+
+  return (
+    <>
+      {hasAttachments && (
+        <PromptInputHeader className="px-4 pt-4 pb-0 sm:px-5 sm:pt-5">
+          <PromptInputAttachmentsDisplay />
+        </PromptInputHeader>
+      )}
+
+      <PromptInputBody>
+        <div className="relative w-full px-4 sm:px-5">
+          <PromptInputTextarea
+            className={cn(
+              "bg-transparent border-none px-0 text-foreground placeholder:text-muted-foreground/55 focus-visible:ring-0 resize-none font-normal transition-all duration-200",
+              hasAttachments
+                ? "min-h-[6.5rem] pt-4 pb-3 text-base sm:text-lg"
+                : "min-h-[7.75rem] pt-6 pb-3 text-[1rem] sm:text-[1.05rem]"
+            )}
+            onChange={valueChanged}
+            placeholder="How can I help you today?"
+            value={text}
+          />
+
+          {text && (
+            <div className="pointer-events-none absolute inset-x-4 bottom-0 h-12 bg-gradient-to-t from-background/90 via-background/50 to-transparent sm:inset-x-5" />
+          )}
+
+          {showCommandMenu && (
+            <div className="absolute inset-x-0 top-full z-50 mt-3 px-0">
+              <PromptInputCommand className="overflow-hidden rounded-[1.35rem] border border-border/70 bg-popover/95 p-2 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+                <PromptInputCommandInput className="hidden" placeholder="Search commands..." />
+                <PromptInputCommandList>
+                  <PromptInputCommandEmpty>No commands found.</PromptInputCommandEmpty>
+                  <PromptInputCommandGroup heading="Suggestions">
+                    {suggestions.map((suggestion) => (
+                      <PromptInputCommandItem
+                        key={suggestion.id}
+                        className="flex cursor-pointer items-start gap-3 rounded-xl px-3 py-3"
+                        onSelect={() => onSuggestionClick(suggestion)}
+                      >
+                        <div className="mt-0.5 rounded-full border border-border/60 bg-background/70 p-2">
+                          <suggestion.icon className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{suggestion.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {suggestion.description}
+                          </span>
+                        </div>
+                      </PromptInputCommandItem>
+                    ))}
+                  </PromptInputCommandGroup>
+                </PromptInputCommandList>
+              </PromptInputCommand>
+            </div>
+          )}
+        </div>
+      </PromptInputBody>
+
+      <PromptInputFooter className="border-none px-3 pb-3 pt-0 sm:px-4 sm:pb-4">
+        <PromptInputTools className="flex-wrap gap-2">
+          <PromptInputActionMenu>
+            <PromptInputActionMenuTrigger
+              className="rounded-full border border-border/60 bg-background/60 text-muted-foreground shadow-none transition-colors hover:bg-background hover:text-foreground"
+              size="icon-sm"
+              tooltip={{ content: "Add attachments", shortcut: "⌘U" }}
+              variant="ghost"
+            >
+              <Plus className="h-4 w-4" />
+            </PromptInputActionMenuTrigger>
+            <PromptInputActionMenuContent>
+              <PromptInputActionAddAttachments label="Add photos or files" />
+            </PromptInputActionMenuContent>
+          </PromptInputActionMenu>
+
+          <PromptInputButton
+            className={cn(
+              "rounded-full border px-3 text-[13px] shadow-none transition-all",
+              useWebSearch
+                ? "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15"
+                : "border-border/60 bg-background/60 text-muted-foreground hover:bg-background hover:text-foreground"
+            )}
+            onClick={() => setUseWebSearch((value) => !value)}
+            tooltip={{ content: "Search the web", shortcut: "⌘K" }}
+            variant="ghost"
+          >
+            <GlobeIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Web</span>
+          </PromptInputButton>
+
+          <PromptInputSelect onValueChange={setModel} value={model}>
+            <PromptInputSelectTrigger className="rounded-full border border-border/60 bg-background/60 px-3 text-[13px] font-medium text-muted-foreground shadow-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-0">
+              <PromptInputSelectValue />
+            </PromptInputSelectTrigger>
+            <PromptInputSelectContent>
+              {models.map((item) => (
+                <PromptInputSelectItem key={item.id} value={item.id}>
+                  {item.name}
+                </PromptInputSelectItem>
+              ))}
+            </PromptInputSelectContent>
+          </PromptInputSelect>
+        </PromptInputTools>
+
+        <div className="ml-auto flex items-center gap-2">
+          <div className="hidden h-5 w-px bg-border/60 sm:block" />
+
+          <PromptInputButton
+            className="rounded-full text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground"
+            size="icon-sm"
+            tooltip={{ content: "Voice input", shortcut: "⌘M" }}
+            variant="ghost"
+          >
+            <AudioLines className="h-4 w-4" />
+          </PromptInputButton>
+
+          {canSubmit ? (
+            <PromptInputSubmit
+              className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
+              variant="ghost"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </PromptInputSubmit>
+          ) : (
+            <PromptInputButton
+              className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
+              size="icon-sm"
+              variant="ghost"
+            >
+              <AudioLines className="h-4 w-4" />
+            </PromptInputButton>
+          )}
+        </div>
+      </PromptInputFooter>
+    </>
+  );
+}
 
 interface HeroPromptInputProps {
   onSubmit?: (message: PromptInputMessage) => void;
@@ -87,10 +309,10 @@ interface HeroPromptInputProps {
 
 export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
   const { user } = useAuth();
-  const [text, setText] = useState<string>("");
-  const [model, setModel] = useState<string>(models[0].id);
-  const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
-  const [showCommandMenu, setShowCommandMenu] = useState<boolean>(false);
+  const [text, setText] = useState("");
+  const [model, setModel] = useState(models[0].id);
+  const [useWebSearch, setUseWebSearch] = useState(false);
+  const [showCommandMenu, setShowCommandMenu] = useState(false);
 
   const userName =
     user?.user_metadata?.full_name ||
@@ -98,10 +320,10 @@ export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
     "there";
 
   const handleSubmit = (message: PromptInputMessage) => {
-    const hasText = Boolean(message.text);
+    const hasText = Boolean(message.text?.trim());
     const hasAttachments = Boolean(message.files?.length);
 
-    if (!(hasText || hasAttachments)) {
+    if (!(hasText || hasAttachments || useWebSearch)) {
       return;
     }
 
@@ -110,176 +332,55 @@ export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
     setShowCommandMenu(false);
   };
 
-  const handleSuggestionClick = (suggestion: typeof suggestions[0]) => {
-    setText(`${suggestion.label} ${suggestion.description}`);
-    setShowCommandMenu(false);
-  };
-
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
+  const handleTextChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const value = event.target.value;
     setText(value);
     setShowCommandMenu(value.startsWith("/") && value.length > 0);
   };
 
+  const handleSuggestionClick = (suggestion: (typeof suggestions)[number]) => {
+    setText(`${suggestion.label} ${suggestion.description}`);
+    setShowCommandMenu(false);
+  };
+
   return (
-    <section className="w-full max-w-4xl flex flex-col items-center gap-10 relative px-4 pt-16">
-      {/* Ghost icon - Top right corner of screen */}
-      <div className="fixed top-6 right-6 text-muted-foreground/60 hover:text-foreground transition-colors">
+    <section className="relative flex w-full max-w-4xl flex-col items-center gap-6 px-4 pt-8 sm:gap-7 sm:pt-10">
+      <div className="fixed top-6 right-6 text-muted-foreground/55 transition-colors hover:text-foreground">
         <Ghost className="h-6 w-6" />
       </div>
 
-      {/* Greeting */}
       <div className="flex items-center gap-5 text-center">
-        <h1 className="text-5xl md:text-6xl font-medium tracking-tight font-serif text-foreground">
+        <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl">
           Hey, {userName}
         </h1>
       </div>
 
-      {/* Enhanced Chat input using PromptInput */}
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-[54rem]">
         <PromptInput
-          onSubmit={handleSubmit}
-          className="w-full rounded-2xl border border-border/60 bg-card/90 shadow-lg overflow-hidden"
-          multiple
+          className={cn(
+            "w-full overflow-visible bg-transparent",
+            "[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:overflow-visible",
+            "[&_[data-slot=input-group]]:rounded-[2rem] [&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
+            "[&_[data-slot=input-group]]:bg-background/88",
+            "[&_[data-slot=input-group]]:shadow-[0_26px_70px_-42px_rgba(15,23,42,0.28)] [&_[data-slot=input-group]]:backdrop-blur-xl",
+            "transition-all duration-300 dark:shadow-[0_30px_80px_-42px_rgba(0,0,0,0.65)]",
+            "[&_[data-slot=input-group]]:before:pointer-events-none [&_[data-slot=input-group]]:before:absolute [&_[data-slot=input-group]]:before:inset-x-6 [&_[data-slot=input-group]]:before:top-0 [&_[data-slot=input-group]]:before:h-px [&_[data-slot=input-group]]:before:bg-white/10 [&_[data-slot=input-group]]:before:content-['']"
+          )}
           globalDrop
+          multiple
+          onSubmit={handleSubmit}
         >
-          <PromptInputHeader>
-            <PromptInputAttachmentsDisplay />
-          </PromptInputHeader>
-          
-          <PromptInputBody className="relative">
-            <PromptInputTextarea
-              placeholder="How can I help you today?"
-              className="min-h-[88px] bg-transparent border-none px-6 pt-5 pb-4 text-[15px] sm:text-base text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 resize-none font-normal"
-              value={text}
-              onChange={handleTextChange}
-            />
-            
-            {/* Command Menu for suggestions */}
-            {showCommandMenu && (
-              <div className="absolute top-full left-0 right-0 mt-2 z-50">
-                <PromptInputCommand className="rounded-lg border shadow-md bg-popover">
-                  <PromptInputCommandInput 
-                    placeholder="Search commands..." 
-                    className="hidden"
-                  />
-                  <PromptInputCommandList>
-                    <PromptInputCommandEmpty>No commands found.</PromptInputCommandEmpty>
-                    <PromptInputCommandGroup heading="Suggestions">
-                      {suggestions.map((suggestion) => (
-                        <PromptInputCommandItem
-                          key={suggestion.id}
-                          onSelect={() => handleSuggestionClick(suggestion)}
-                          className="flex items-center gap-3 px-4 py-3 cursor-pointer"
-                        >
-                          <suggestion.icon className="h-4 w-4 text-muted-foreground" />
-                          <div className="flex flex-col">
-                            <span className="font-medium">{suggestion.label}</span>
-                            <span className="text-xs text-muted-foreground">{suggestion.description}</span>
-                          </div>
-                        </PromptInputCommandItem>
-                      ))}
-                    </PromptInputCommandGroup>
-                  </PromptInputCommandList>
-                </PromptInputCommand>
-              </div>
-            )}
-          </PromptInputBody>
-          
-          <PromptInputFooter className="px-6 pb-4 pt-0 border-none flex justify-between items-center text-xs text-muted-foreground">
-            <PromptInputTools>
-              {/* Action Menu with Attachments */}
-              <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger 
-                  tooltip={{ content: "Add attachments", shortcut: "⌘U" }}
-                  variant="ghost"
-                  size="icon-sm"
-                  className="h-8 w-8 text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 rounded-full transition-colors"
-                >
-                  <Plus className="h-5 w-5" />
-                </PromptInputActionMenuTrigger>
-                <PromptInputActionMenuContent>
-                  <PromptInputActionAddAttachments label="Add photos or files" />
-                </PromptInputActionMenuContent>
-              </PromptInputActionMenu>
-
-              {/* Web Search Button with Tooltip */}
-              <PromptInputButton
-                onClick={() => setUseWebSearch(!useWebSearch)}
-                tooltip={{ content: "Search the web", shortcut: "⌘K" }}
-                variant={useWebSearch ? "default" : "ghost"}
-                size="icon-sm"
-                className="h-8 w-8 rounded-full transition-colors"
-              >
-                <GlobeIcon className="h-4 w-4" />
-              </PromptInputButton>
-
-              {/* Model Selector with HoverCard */}
-              <PromptInputHoverCard>
-                <PromptInputHoverCardTrigger asChild>
-                  <PromptInputSelect
-                    value={model}
-                    onValueChange={setModel}
-                  >
-                    <PromptInputSelectTrigger className="bg-muted/40 border border-border/60 h-8 px-3 rounded-full text-[12px] font-medium text-muted-foreground/80 hover:text-foreground hover:bg-muted/60 gap-1.5 shadow-none focus-visible:ring-0">
-                      <PromptInputSelectValue />
-                    </PromptInputSelectTrigger>
-                    <PromptInputSelectContent>
-                      <PromptInputTabsList className="flex gap-2 px-2 py-2 border-b">
-                        <PromptInputTab className="text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer">
-                          Models
-                        </PromptInputTab>
-                      </PromptInputTabsList>
-                      {models.map((m) => (
-                        <PromptInputSelectItem key={m.id} value={m.id}>
-                          {m.name}
-                        </PromptInputSelectItem>
-                      ))}
-                    </PromptInputSelectContent>
-                  </PromptInputSelect>
-                </PromptInputHoverCardTrigger>
-                <PromptInputHoverCardContent className="w-64">
-                  <PromptInputTabLabel>Model Info</PromptInputTabLabel>
-                  <PromptInputTabBody>
-                    <PromptInputTabItem>
-                      <span className="font-medium">
-                        {models.find(m => m.id === model)?.name}
-                      </span>
-                    </PromptInputTabItem>
-                    <p className="text-xs text-muted-foreground px-3 py-2">
-                      Selected model for generating responses. Different models have different capabilities and performance characteristics.
-                    </p>
-                  </PromptInputTabBody>
-                </PromptInputHoverCardContent>
-              </PromptInputHoverCard>
-            </PromptInputTools>
-
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-[1px] bg-border/60 mx-1" />
-
-              {/* Voice Input Button with Tooltip */}
-              <PromptInputButton
-                tooltip={{ content: "Voice input", shortcut: "⌘M" }}
-                variant="ghost"
-                size="icon-sm"
-                className="h-9 w-9 text-muted-foreground/40 hover:text-foreground hover:bg-white/5 rounded-xl transition-all"
-              >
-                <AudioLines className="h-4 w-4" />
-              </PromptInputButton>
-
-              {/* Submit Button */}
-              <PromptInputSubmit
-                disabled={!text && !useWebSearch}
-                className="h-9 w-9 rounded-xl"
-              />
-            </div>
-          </PromptInputFooter>
+          <HeroPromptSurface
+            model={model}
+            onSuggestionClick={handleSuggestionClick}
+            setModel={setModel}
+            setUseWebSearch={setUseWebSearch}
+            showCommandMenu={showCommandMenu}
+            text={text}
+            useWebSearch={useWebSearch}
+            valueChanged={handleTextChange}
+          />
         </PromptInput>
-        
-        {/* Helper text */}
-        <p className="text-center text-xs text-muted-foreground/60 mt-3">
-          Type "/" for quick suggestions • Drag & drop files anywhere
-        </p>
       </div>
     </section>
   );

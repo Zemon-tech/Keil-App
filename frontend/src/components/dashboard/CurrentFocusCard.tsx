@@ -21,7 +21,7 @@ export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
   if (isLoading) {
     return (
       <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-5">
-        <div className="flex justify-between items-start mb-1/2">
+        <div className="flex justify-between items-start mb-1">
           <div>
             <Skeleton className="h-3 w-24 mb-2" />
             <Skeleton className="h-3 w-12" />
@@ -55,7 +55,7 @@ export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
 
   return (
     <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-5 hover:bg-card/95 transition-colors cursor-pointer">
-      <div className="flex justify-between items-start mb-1/2">
+      <div className="flex justify-between items-start mb-1">
         <div>
           <h3 className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground font-bold">
             Current Focus
