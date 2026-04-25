@@ -34,27 +34,29 @@ export function Dashboard() {
       <main
         className={cn(
           containerClassName,
-          "h-full pt-10 lg:pt-12 flex flex-col items-center relative overflow-hidden overscroll-none"
+          "h-full flex flex-col items-center relative overflow-hidden overscroll-none"
         )}
       >
-        {/* Hero: greeting + input area */}
-        <HeroSection />
+        <div className="w-full flex flex-col items-center pt-25 lg:pt-30">
+          {/* Hero: greeting + input area */}
+          <HeroSection />
 
-        {isError && (
-          <div className="w-full max-w-4xl mt-4 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
-            <AlertCircle className="w-4 h-4" />
-            <span>Failed to load dashboard data. Please try again.</span>
-          </div>
-        )}
+          {isError && (
+            <div className="w-full max-w-4xl mt-4 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
+              <AlertCircle className="w-4 h-4" />
+              <span>Failed to load dashboard data. Please try again.</span>
+            </div>
+          )}
 
-        {/* Widgets grid */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl mt-10 opacity-90 hover:opacity-100 transition-opacity">
-          <CurrentFocusCard task={data?.immediate?.[0] ?? null} isLoading={isLoading} />
-          <NextEventCard />
-          <ImmediateBlockersCard tasks={data?.immediate ?? []} isLoading={isLoading} />
-          <NeedsReplyCard />
-          <UpNextCard tasks={data?.today ?? []} isLoading={isLoading} />
-        </section>
+          {/* Widgets grid */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl mt-10 opacity-90 hover:opacity-100 transition-opacity">
+            <CurrentFocusCard task={data?.immediate?.[0] ?? null} isLoading={isLoading} />
+            <NextEventCard />
+            <ImmediateBlockersCard tasks={data?.immediate ?? []} isLoading={isLoading} />
+            <NeedsReplyCard />
+            <UpNextCard tasks={data?.today ?? []} isLoading={isLoading} />
+          </section>
+        </div>
       </main>
     </div>
   );
