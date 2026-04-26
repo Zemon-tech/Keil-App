@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
+import { EventPreviewDialog } from "./EventPreviewDialog";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 
@@ -784,19 +785,35 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         </div>
       </div>
 
-      <TaskPreviewDialog
-        taskId={selectedTaskId}
-        open={!!selectedTaskId}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedTaskId("");
-            setDialogPosition(null);
-          }
-        }}
-        onUnschedule={handleTaskUnschedule}
-        onStatusChange={handleStatusChange}
-        position={dialogPosition}
-      />
+      {tasks.find(t => t.id === selectedTaskId)?.type === "event" ? (
+        <EventPreviewDialog
+          eventId={selectedTaskId}
+          open={!!selectedTaskId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedTaskId("");
+              setDialogPosition(null);
+            }
+          }}
+          onUnschedule={handleTaskUnschedule}
+          onStatusChange={handleStatusChange}
+          position={dialogPosition}
+        />
+      ) : (
+        <TaskPreviewDialog
+          taskId={selectedTaskId}
+          open={!!selectedTaskId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedTaskId("");
+              setDialogPosition(null);
+            }
+          }}
+          onUnschedule={handleTaskUnschedule}
+          onStatusChange={handleStatusChange}
+          position={dialogPosition}
+        />
+      )}
     </>
   );
 }

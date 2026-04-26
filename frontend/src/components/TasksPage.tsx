@@ -3,6 +3,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
+import { EventDetailPane } from "@/components/tasks/EventDetailPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearchParams } from "react-router-dom";
@@ -247,23 +248,40 @@ export function TasksPage() {
 
           <div className="flex-1 min-w-0 bg-background h-full">
             {selected || selectedTaskDetail ? (
-              <TaskDetailPane
-                task={(selectedTaskDetail || selected)!}
-                onUpdateTask={(id, updates) => {
-                  updateTask.mutate({ id, updates });
-                }}
-                onTaskDeleted={() => {
-                  setSelectedTaskId("");
-                  setParentTaskStack([]);
-                }}
-                onClose={() => {
-                  setSelectedTaskId("");
-                  setParentTaskStack([]);
-                }}
-                onNavigateToSubtask={handleNavigateToSubtask}
-                onNavigateToParent={handleNavigateToParent}
-                parentTask={parentTask}
-              />
+              (selectedTaskDetail || selected)?.type === "event" ? (
+                <EventDetailPane
+                  event={(selectedTaskDetail || selected)!}
+                  onUpdateEvent={(id, updates) => {
+                    updateTask.mutate({ id, updates });
+                  }}
+                  onEventDeleted={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onClose={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                />
+              ) : (
+                <TaskDetailPane
+                  task={(selectedTaskDetail || selected)!}
+                  onUpdateTask={(id, updates) => {
+                    updateTask.mutate({ id, updates });
+                  }}
+                  onTaskDeleted={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onClose={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onNavigateToSubtask={handleNavigateToSubtask}
+                  onNavigateToParent={handleNavigateToParent}
+                  parentTask={parentTask}
+                />
+              )
             ) : (
               <TaskSchedulePane
                 tasks={taskList as any}
