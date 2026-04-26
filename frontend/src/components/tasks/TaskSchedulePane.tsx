@@ -309,7 +309,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             taskPriority: t.priority,
             isScheduledTask: true,
           },
-          editable: t.status !== "done",
+          editable: t.status !== "done" && t.status !== "completed",
         } satisfies EventInput;
       });
 
@@ -337,10 +337,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   // Handle status change - remove task from events if status becomes "done"
   const handleStatusChange = (taskId: string, newStatus: string) => {
     console.log("📊 Status change:", taskId, newStatus);
-    if (newStatus === "done") {
-      console.log("🗑️ Removing done task from calendar:", taskId);
+    if (newStatus === "done" || newStatus === "completed") {
+      console.log("🗑️ Removing completed task from calendar:", taskId);
       setEvents(prev => prev.filter(e => e.id !== taskId));
-      console.log("✅ Done task removed from state:", taskId);
+      console.log("✅ Completed task removed from state:", taskId);
     }
   };
 
@@ -368,9 +368,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         viewType,
       });
 
-      // Validation: Check if task is done
-      if (taskStatus === "done") {
-        console.error("❌ Cannot schedule completed tasks");
+      // Validation: Check if task is completed
+      if (taskStatus === "done" || taskStatus === "completed") {
+        console.error("❌ Cannot schedule completed tasks/events");
         toast.error("Cannot schedule completed tasks", {
           description: "This task is already marked as done.",
         });

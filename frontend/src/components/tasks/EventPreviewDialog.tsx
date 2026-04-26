@@ -1,7 +1,7 @@
 import { ExternalLink, Loader2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useTask, useChangeTaskStatus, useUpdateTask } from "@/hooks/api/useTasks";
-import { STATUS_COLOR } from "./task-detail-shared";
-import type { TaskStatus } from "@/types/task";
+
 
 interface EventPreviewDialogProps {
   eventId: string;
@@ -184,28 +183,28 @@ export function EventPreviewDialog({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     <DropdownMenuItem onClick={() => {
-                      changeTaskStatus.mutate({ id: eventId, status: "todo" });
-                      onStatusChange?.(eventId, "todo");
+                      changeTaskStatus.mutate({ id: eventId, status: "confirmed" });
+                      onStatusChange?.(eventId, "confirmed");
                     }}>
-                      Todo
+                      Confirmed
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => {
-                      changeTaskStatus.mutate({ id: eventId, status: "in-progress" });
-                      onStatusChange?.(eventId, "in-progress");
+                      changeTaskStatus.mutate({ id: eventId, status: "tentative" });
+                      onStatusChange?.(eventId, "tentative");
                     }}>
-                      In Progress
+                      Tentative
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => {
-                      changeTaskStatus.mutate({ id: eventId, status: "done" });
-                      onStatusChange?.(eventId, "done");
+                      changeTaskStatus.mutate({ id: eventId, status: "cancelled" });
+                      onStatusChange?.(eventId, "cancelled");
                     }}>
-                      Done
+                      Cancelled
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => {
-                      changeTaskStatus.mutate({ id: eventId, status: "backlog" });
-                      onStatusChange?.(eventId, "backlog");
+                      changeTaskStatus.mutate({ id: eventId, status: "completed" });
+                      onStatusChange?.(eventId, "completed");
                     }}>
-                      Backlog
+                      Completed
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

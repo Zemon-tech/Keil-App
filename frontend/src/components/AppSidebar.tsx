@@ -34,7 +34,6 @@ import {
   HelpCircle,
   MessageSquare,
   CheckSquare,
-  Check,
   Plus,
   Bell
 } from "lucide-react";

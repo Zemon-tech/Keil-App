@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import type { Task, TaskStatus, TaskPriority, EventType } from "@/types/task";
+import type { Task, AnyStatus, TaskPriority, EventType } from "@/types/task";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,7 +16,7 @@ export interface TaskDTO {
   description?: string;
   objective?: string;
   success_criteria?: string;
-  status: TaskStatus;
+  status: AnyStatus;
   priority: TaskPriority;
   due_date?: string;
   start_date?: string;
@@ -49,7 +49,7 @@ export type SortBy = "due_date" | "priority" | "created_at";
 export type SortOrder = "asc" | "desc";
 
 export interface TaskFilters {
-  status?: TaskStatus;
+  status?: AnyStatus;
   priority?: TaskPriority;
   assignee_id?: string;
   due_date_start?: string;
@@ -71,7 +71,7 @@ export interface CreateTaskInput {
   description?: string;
   objective?: string;
   success_criteria?: string;
-  status?: TaskStatus;
+  status?: AnyStatus;
   priority?: TaskPriority;
   start_date?: string;
   due_date?: string;
@@ -290,7 +290,7 @@ export function useChangeTaskStatus() {
   return useMutation<
     TaskDTO,
     { response?: { status?: number; data?: { message?: string } } },
-    { id: string; status: TaskStatus }
+    { id: string; status: AnyStatus }
   >({
     mutationFn: async ({ id, status }) => {
       const res = await api.patch<{ data: TaskDTO }>(

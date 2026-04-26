@@ -39,12 +39,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EditableText } from "@/components/ui/editable-text";
 
-import type { TaskStatus } from "@/types/task";
+import type { AnyStatus, EventStatus } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import { useChangeTaskStatus } from "@/hooks/api/useTasks";
 
 import {
-  STATUS_OPTIONS,
+  EVENT_STATUS_OPTIONS,
   STATUS_COLOR,
   formatDate,
 } from "./task-detail-shared";
@@ -55,8 +55,8 @@ function StatusBadge({
   status,
   onStatusChange,
 }: {
-  status: TaskStatus;
-  onStatusChange: (s: TaskStatus) => void;
+  status: AnyStatus;
+  onStatusChange: (s: EventStatus) => void;
 }) {
   return (
     <Popover>
@@ -70,7 +70,7 @@ function StatusBadge({
         </Badge>
       </PopoverTrigger>
       <PopoverContent className="w-40 p-1" align="start">
-        {STATUS_OPTIONS.map((s) => (
+        {EVENT_STATUS_OPTIONS.map((s) => (
           <button
             key={s}
             onClick={() => onStatusChange(s)}
@@ -137,12 +137,12 @@ export function EventDetailHeader({
   const changeStatus = useChangeTaskStatus();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const handleStatusChange = (newStatus: TaskStatus) => {
+  const handleStatusChange = (newStatus: EventStatus) => {
     changeStatus.mutate({ id: event.id, status: newStatus });
   };
 
-  const handleMarkDone = () => {
-    changeStatus.mutate({ id: event.id, status: "done" });
+  const handleMarkCompleted = () => {
+    changeStatus.mutate({ id: event.id, status: "completed" });
   };
 
   return (
@@ -200,12 +200,12 @@ export function EventDetailHeader({
         <div className="flex items-center gap-1.5">
           <Button
             size="sm"
-            variant={event.status === "done" ? "secondary" : "default"}
+            variant={event.status === "completed" ? "secondary" : "default"}
             className="h-6 px-3 text-xs"
-            onClick={handleMarkDone}
-            disabled={event.status === "done" || changeStatus.isPending}
+            onClick={handleMarkCompleted}
+            disabled={event.status === "completed" || changeStatus.isPending}
           >
-            {event.status === "done" ? "Done ✓" : "Mark done"}
+            {event.status === "completed" ? "Completed ✓" : "Mark completed"}
           </Button>
 
           {/* Actions dropdown */}

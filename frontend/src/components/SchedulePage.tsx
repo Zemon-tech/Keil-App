@@ -151,9 +151,9 @@ export function SchedulePage() {
               <div className="flex-1 min-h-0 w-full min-w-0">
                 <TabsContent value="schedule" className="h-full mt-0 focus-visible:outline-none flex flex-col w-full min-w-0">
                   <TaskSchedulePane 
-                    tasks={tasks} 
+                    tasks={tasks as any} 
                     blocks={mockCalendarBlocks as any} 
-                    selectedTask={selectedTask}
+                    selectedTask={selectedTask as any}
                     onViewChange={(view) => {
                       console.log('📅 Calendar view changed to:', view);
                     }}

@@ -8,7 +8,7 @@ import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearchParams } from "react-router-dom";
 
-import type { TaskStatus, TaskPriority } from "../types/task";
+import type { TaskPriority, AnyStatus } from "../types/task";
 import {
   useTasks,
   useTask,
@@ -70,14 +70,17 @@ export function TasksPage() {
     // Map UI filter chips to API params
     if (statusFilter === "Mine" && user?.id) {
       filters.assignee_id = user.id;
-    } else if (statusFilter === "in-progress") {
-      filters.status = "in-progress" as TaskStatus;
-    } else if (statusFilter === "todo") {
-      filters.status = "todo" as TaskStatus;
-    } else if (statusFilter === "backlog") {
-      filters.status = "backlog" as TaskStatus;
-    } else if (statusFilter === "done") {
-      filters.status = "done" as TaskStatus;
+    } else if (
+      statusFilter === "in-progress" ||
+      statusFilter === "todo" ||
+      statusFilter === "backlog" ||
+      statusFilter === "done" ||
+      statusFilter === "confirmed" ||
+      statusFilter === "tentative" ||
+      statusFilter === "cancelled" ||
+      statusFilter === "completed"
+    ) {
+      filters.status = statusFilter as AnyStatus;
     } else if (statusFilter === "High Priority") {
       filters.priority = "high" as TaskPriority;
     }

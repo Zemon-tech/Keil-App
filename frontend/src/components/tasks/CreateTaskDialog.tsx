@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge"; // ← ShadCN component (already in your codebase)
 import { Switch } from "@/components/ui/switch";
-import type { Task, TaskStatus, EventType } from "@/types/task";
+import type { Task, TaskStatus, EventType, EventStatus, AnyStatus } from "@/types/task";
 import { useCreateTask, useUpdateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
 
 // Simple type for assignees (replace with your real UserDTO if you have one)
@@ -29,7 +29,8 @@ type SimpleAssigneeOption = {
   name: string;
 };
 
-const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+const TASK_STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+const EVENT_STATUS_OPTIONS: EventStatus[] = ["confirmed", "tentative", "cancelled", "completed"];
 const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"] as const;
 
 interface CreateTaskDialogProps {
@@ -74,7 +75,7 @@ export function CreateTaskDialog({
 
   const [newStartDateISO, setNewStartDateISO] = useState("");
   const [newDueDateISO, setNewDueDateISO] = useState("");
-  const [newStatus, setNewStatus] = useState<TaskStatus>("todo");
+  const [newStatus, setNewStatus] = useState<AnyStatus>("todo");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
 
   // New fields from our roadmap
@@ -86,6 +87,7 @@ export function CreateTaskDialog({
   // Event specific fields
   const [newType, setNewType] = useState<"task" | "event">("task");
   const [newEventType, setNewEventType] = useState<EventType | "">("");
+  const [newCustomEventType, setNewCustomEventType] = useState("");
   const [newLocation, setNewLocation] = useState("");
   const [newIsAllDay, setNewIsAllDay] = useState(false);
 
@@ -97,7 +99,7 @@ export function CreateTaskDialog({
     setNewSuccessCriteriaBullets([""]);
     setNewStartDateISO("");
     setNewDueDateISO("");
-    setNewStatus("todo");
+    setNewStatus(newType === "event" ? "confirmed" : "todo");
     setNewPriority("medium");
     setNewAssigneeIds([]);
     setNewStoryPoints("");
@@ -105,6 +107,7 @@ export function CreateTaskDialog({
     setNewParentTaskId(parentTaskId ?? "");
     setNewType("task");
     setNewEventType("");
+    setNewCustomEventType("");
     setNewLocation("");
     setNewIsAllDay(false);
   };
@@ -135,7 +138,7 @@ export function CreateTaskDialog({
       setNewDueDateISO(
         (initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? ""
       );
-      setNewStatus((initialValues.status as TaskStatus) ?? "todo");
+      setNewStatus((initialValues.status as AnyStatus) ?? (initialValues.type === "event" ? "confirmed" : "todo"));
       setNewPriority((initialValues.priority as any) ?? "medium");
       setNewStoryPoints(
         initialValues.story_points != null ? String(initialValues.story_points) : ""
@@ -150,7 +153,16 @@ export function CreateTaskDialog({
       );
       setNewParentTaskId((initialValues as any).parent_task_id ?? "");
       setNewType((initialValues.type as "task" | "event") ?? "task");
-      setNewEventType(initialValues.event_type ?? "");
+      
+      const et = initialValues.event_type ?? "";
+      if (et && !["meeting", "call", "birthday"].includes(et)) {
+        setNewEventType("other");
+        setNewCustomEventType(et);
+      } else {
+        setNewEventType(et as EventType);
+        setNewCustomEventType("");
+      }
+
       setNewLocation(initialValues.location ?? "");
       setNewIsAllDay(initialValues.is_all_day ?? false);
     } else if (open && parentTaskId) {
@@ -226,7 +238,9 @@ export function CreateTaskDialog({
   }
 
   const isFormValid = newTitle.trim() && 
-    (newType === "event" ? newEventType !== "" : (hasValidObjective && hasValidSuccessCriteria)) &&
+    (newType === "event" 
+      ? (newEventType !== "" && (newEventType !== "other" || newCustomEventType.trim() !== "")) 
+      : (hasValidObjective && hasValidSuccessCriteria)) &&
     isDateValid;
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -248,7 +262,9 @@ export function CreateTaskDialog({
     const input: CreateTaskInput = {
       title: newTitle.trim(),
       type: newType,
-      event_type: newType === "event" ? (newEventType as EventType) : undefined,
+      event_type: newType === "event" 
+        ? (newEventType === "other" ? newCustomEventType.trim() : (newEventType as EventType)) 
+        : undefined,
       location: newType === "event" ? newLocation.trim() || undefined : undefined,
       is_all_day: newType === "event" ? newIsAllDay : undefined,
       status: newStatus,
@@ -305,7 +321,7 @@ export function CreateTaskDialog({
                 <div className="inline-flex items-center rounded-md border border-border p-1 bg-muted/20">
                   <button
                     type="button"
-                    onClick={() => setNewType("task")}
+                    onClick={() => { setNewType("task"); if (newStatus === "confirmed" || newStatus === "tentative" || newStatus === "cancelled" || newStatus === "completed") setNewStatus("todo"); }}
                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                       newType === "task"
                         ? "bg-background shadow-sm text-foreground"
@@ -316,7 +332,7 @@ export function CreateTaskDialog({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setNewType("event")}
+                    onClick={() => { setNewType("event"); if (newStatus === "todo" || newStatus === "backlog" || newStatus === "in-progress" || newStatus === "done") setNewStatus("confirmed"); }}
                     className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
                       newType === "event"
                         ? "bg-background shadow-sm text-foreground"
@@ -391,12 +407,25 @@ export function CreateTaskDialog({
                         <SelectContent>
                           <SelectItem value="meeting">Meeting</SelectItem>
                           <SelectItem value="call">Call</SelectItem>
-                          <SelectItem value="personal">Personal</SelectItem>
-                          <SelectItem value="reminder">Reminder</SelectItem>
+                          <SelectItem value="birthday">Birthday</SelectItem>
                           <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Custom Event Type Input (shows only when "Other" is selected) */}
+                    {newEventType === "other" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Specify Type <span className="text-red-500">*</span></Label>
+                        <Input
+                          value={newCustomEventType}
+                          onChange={(e) => setNewCustomEventType(e.target.value)}
+                          placeholder="e.g. Workshop"
+                          className="h-9 text-sm"
+                          required
+                        />
+                      </div>
+                    )}
 
                     {/* Location */}
                     <div className="space-y-1">
@@ -415,16 +444,22 @@ export function CreateTaskDialog({
                   {/* Status */}
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select value={newStatus} onValueChange={(v) => setNewStatus(v as TaskStatus)}>
+                    <Select value={newStatus} onValueChange={(v) => setNewStatus(v as AnyStatus)}>
                       <SelectTrigger className="h-9 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {STATUS_OPTIONS.map((s) => (
-                          <SelectItem key={s} value={s} className="text-sm">
-                            {s}
-                          </SelectItem>
-                        ))}
+                        {newType === "event" 
+                          ? EVENT_STATUS_OPTIONS.map((s) => (
+                            <SelectItem key={s} value={s} className="text-sm capitalize">
+                              {s}
+                            </SelectItem>
+                          ))
+                          : TASK_STATUS_OPTIONS.map((s) => (
+                            <SelectItem key={s} value={s} className="text-sm capitalize">
+                              {s}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
