@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import pino from 'pino';
 import { config } from './index';
 
@@ -18,6 +18,12 @@ if (!config.databaseUrl) {
     logger.error('❌ [database]: DATABASE_URL is not defined in environment variables');
     process.exit(1);
 }
+
+// Configure pg to parse TIMESTAMPTZ as UTC to avoid timezone shifts
+// This ensures that the time component is preserved exactly as stored
+types.setTypeParser(types.builtins.TIMESTAMPTZ, (value) => {
+    return new Date(value + '+00:00'); // Parse as UTC
+});
 
 // Create a new pg Pool (singleton)
 const pool = new Pool({
