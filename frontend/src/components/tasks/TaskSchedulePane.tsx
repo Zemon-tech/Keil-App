@@ -582,25 +582,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 px-2"
-                onClick={goPrev}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 px-2"
-                onClick={goNext}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-
               <div className="inline-flex">
                 <Button
                   type="button"
@@ -632,8 +613,26 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               </div>
             </div>
 
-            <div className="min-w-0 flex-1 text-center">
-              <div className="truncate text-sm font-semibold">{headerTitle}</div>
+            <div className="min-w-0 flex-1 flex items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={goPrev}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="truncate text-sm font-semibold min-w-[140px] text-center">{headerTitle}</div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={goNext}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
