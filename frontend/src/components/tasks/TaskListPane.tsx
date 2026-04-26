@@ -534,10 +534,10 @@ export function TaskListPane({
           {!isLoading && taskList.map((t) => {
             const active = t.id === selectedTaskId;
             const isChecked = selectedTaskIds.has(t.id);
-            const isDone = t.status === "done";
+            const isDone = t.status === "done" || t.status === "completed";
             const isHighPriority =
               t.priority === "high" || t.priority === "urgent";
-            const isDraggable = t.status !== "done";
+            const isDraggable = t.status !== "done" && t.status !== "completed";
             // Use backend date field, falling back to dueDateISO for compat
             const displayDate = t.due_date || t.dueDateISO;
             const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
@@ -776,39 +776,46 @@ export function TaskListPane({
                   Change status
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
-                  <div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tasks</div>
-                  {TASK_STATUS_OPTIONS.map((s) => (
-                    <DropdownMenuItem
-                      key={s}
-                      className="text-xs capitalize"
-                      onClick={() => handleBulkStatusChange(s)}
-                    >
-                      <div
-                        className={cn(
-                          "w-2 h-2 rounded-full mr-2",
-                          STATUS_COLOR[s]
-                        )}
-                      />
-                      {s}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Events</div>
-                  {EVENT_STATUS_OPTIONS.map((s) => (
-                    <DropdownMenuItem
-                      key={s}
-                      className="text-xs capitalize"
-                      onClick={() => handleBulkStatusChange(s)}
-                    >
-                      <div
-                        className={cn(
-                          "w-2 h-2 rounded-full mr-2",
-                          STATUS_COLOR[s]
-                        )}
-                      />
-                      {s}
-                    </DropdownMenuItem>
-                  ))}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-xs">Task Status</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {TASK_STATUS_OPTIONS.map((s) => (
+                        <DropdownMenuItem
+                          key={s}
+                          className="text-xs capitalize"
+                          onClick={() => handleBulkStatusChange(s)}
+                        >
+                          <div
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full mr-2",
+                              STATUS_COLOR[s]
+                            )}
+                          />
+                          {s}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-xs">Event Status</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {EVENT_STATUS_OPTIONS.map((s) => (
+                        <DropdownMenuItem
+                          key={s}
+                          className="text-xs capitalize"
+                          onClick={() => handleBulkStatusChange(s)}
+                        >
+                          <div
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full mr-2",
+                              STATUS_COLOR[s]
+                            )}
+                          />
+                          {s}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
 

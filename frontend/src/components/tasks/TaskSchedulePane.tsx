@@ -208,12 +208,12 @@ function renderEventContent(arg: EventContentArg) {
       </div>
     );
   }
-  
+
   // Handle calendar blocks with type metadata
   if (!type || !typeMeta[type]) {
     return <div className="p-2 text-xs">{arg.event.title}</div>;
   }
-  
+
   const meta = typeMeta[type];
   const Icon = meta.icon;
   const isBg = arg.event.display === "background";
@@ -270,7 +270,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
     const taskEvents = tasks
-      .filter((t) => t.start_date && t.due_date && t.status !== "done" && !unscheduledTaskIds.current.has(t.id))
+      .filter((t) => t.start_date && t.due_date && t.status !== "done" && t.status !== "completed" && !unscheduledTaskIds.current.has(t.id))
       .sort((a, b) => {
         const priorityA = priorityOrder[a.priority] ?? 4;
         const priorityB = priorityOrder[b.priority] ?? 4;
@@ -635,9 +635,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                   variant="outline"
                   size="sm"
                   className="h-8 px-2.5 text-xs rounded-r-none border-r-0"
-                  onClick={goToday}
+                  onClick={currentViewType === "dayGridMonth" ? goToday : () => setView("dayGridMonth")}
                 >
-                  Today
+                  {currentViewType === "dayGridMonth" ? "Today" : "Month"}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
