@@ -145,43 +145,52 @@ function SubtaskList({
             key={sub.id}
             onClick={() => onSelectTask(sub.id)}
             className={cn(
-              "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+              "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
               active ? "bg-accent" : "hover:bg-accent/50",
               isDone && "opacity-50"
             )}
           >
-            {/* Status dot */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "w-1.5 h-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
-                    statusColorMap[sub.status as TaskStatus] || "bg-zinc-500"
-                  )}
-                />
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
-                {STATUS_OPTIONS.map((s) => (
+            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+              {/* Status dot */}
+              <Popover>
+                <PopoverTrigger asChild>
                   <button
-                    key={s}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUpdateTask?.(sub.id, { status: s });
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors"
-                  >
-                    <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", statusColorMap[s])} />
-                    {s}
-                  </button>
-                ))}
-              </PopoverContent>
-            </Popover>
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
+                      statusColorMap[sub.status as TaskStatus] || "bg-zinc-500"
+                    )}
+                  />
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
+                  {STATUS_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateTask?.(sub.id, { status: s });
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors"
+                    >
+                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", statusColorMap[s])} />
+                      {s}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
 
-            {/* Title */}
-            <span className="text-[13px] font-medium truncate flex-1 leading-snug min-w-0">
-              {sub.title}
-            </span>
+              {/* Title & Badge */}
+              <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+                <span className="text-[13px] font-medium truncate leading-snug">
+                  {sub.title}
+                </span>
+                {(sub as any).type === "event" && (
+                  <span className="shrink-0 text-[9px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1 py-0.5 rounded uppercase tracking-wider">
+                    event
+                  </span>
+                )}
+              </div>
+            </div>
 
             {/* Right meta */}
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground">
@@ -536,7 +545,7 @@ export function TaskListPane({
                   data-task-title={t.title}
                   data-task-status={t.status}
                   className={cn(
-                    "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+                    "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
                     active && !isMultiSelecting
                       ? "bg-accent"
                       : "hover:bg-accent/50",
@@ -544,6 +553,7 @@ export function TaskListPane({
                     isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
                   )}
                 >
+                  <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
                   {/* Selection & Drag actions */}
                   <div
                     className={cn(
@@ -623,20 +633,25 @@ export function TaskListPane({
                     </button>
                   </div>
 
-                  {/* Title */}
-                  <div className="flex items-baseline gap-1 flex-1 min-w-0">
-                    <span className="text-sm font-medium truncate leading-snug">
-                      {t.title}
-                    </span>
-                    {displayDate && (
-                      <span className="text-[10px] text-muted-foreground/70 font-medium leading-none">
-                        scheduled
+                    {/* Title & Badge */}
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+                      <span className="text-sm font-medium truncate leading-snug">
+                        {t.title}
                       </span>
-                    )}
+                      {t.type === "event" ? (
+                        <span className="shrink-0 text-[10px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1.5 py-0.5 rounded uppercase tracking-wider">
+                          event
+                        </span>
+                      ) : displayDate ? (
+                        <span className="shrink-0 text-[10px] text-muted-foreground/70 font-medium leading-none">
+                          scheduled
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
                   {/* Right meta with hover menu */}
-                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground min-w-[60px] justify-end relative">
+                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground justify-end relative ml-auto">
                     {isBlocked && (
                       <Zap className="w-3 h-3 text-yellow-400 shrink-0" />
                     )}

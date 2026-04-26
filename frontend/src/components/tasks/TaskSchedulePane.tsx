@@ -281,7 +281,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         // All-day detection should match FullCalendar semantics:
         // - allDay events use an *exclusive* end at the start of a day boundary.
         // - timed events can cross midnight and should remain timed.
-        const isAllDay = isAllDayRangeLocal(startDate, endDate);
+        const isAllDay = t.type === "event" && t.is_all_day !== undefined ? t.is_all_day : isAllDayRangeLocal(startDate, endDate);
 
         console.log("🔍 All-day detection:", {
           taskId: t.id,
@@ -296,9 +296,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           start: t.start_date!,
           end: t.due_date!,
           allDay: isAllDay,
-          backgroundColor: getPriorityColor(t.priority),
+          display: "block",
+          backgroundColor: t.type === "event" ? "#6366f1" : getPriorityColor(t.priority),
           borderColor: "transparent",
-          classNames: [`task-priority-${t.priority}`],
+          classNames: t.type === "event" ? ["task-event-block"] : [`task-priority-${t.priority}`],
           extendedProps: {
             taskId: t.id,
             taskTitle: t.title,

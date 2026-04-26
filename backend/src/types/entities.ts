@@ -28,6 +28,10 @@ export interface Task {
   id: string;
   workspace_id: string;
   parent_task_id: string | null;
+  type: 'task' | 'event';
+  event_type: string | null;
+  location: string | null;
+  is_all_day: boolean;
   title: string;
   description: string | null;
   objective: string | null;

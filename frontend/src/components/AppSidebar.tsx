@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   LayoutDashboard,
   Settings,
@@ -71,9 +70,10 @@ export function AppSidebar() {
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const userInitials = user?.user_metadata?.full_name
     ?.split(" ")
-    .map((n: string) => n[0])
+    .map((n: string) => n?.[0])
+    .filter(Boolean)
     .join("")
-    .toUpperCase() || user?.email?.[0].toUpperCase() || "U";
+    .toUpperCase() || user?.email?.[0]?.toUpperCase() || "U";
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -83,7 +83,6 @@ export function AppSidebar() {
   const userEmail = user?.email || "";
 
   const { state } = useSidebar();
-  const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
 
   const isCollapsed = state === "collapsed";
 

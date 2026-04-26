@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import type { Task, TaskStatus, TaskPriority } from "@/types/task";
+import type { Task, TaskStatus, TaskPriority, EventType } from "@/types/task";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,6 +9,10 @@ import type { Task, TaskStatus, TaskPriority } from "@/types/task";
 export interface TaskDTO {
   id: string;
   title: string;
+  type: "task" | "event";
+  event_type?: EventType | null;
+  location?: string | null;
+  is_all_day?: boolean;
   description?: string;
   objective?: string;
   success_criteria?: string;
@@ -60,6 +64,10 @@ export interface TaskFilters {
 
 export interface CreateTaskInput {
   title: string;
+  type?: "task" | "event";
+  event_type?: EventType | null;
+  location?: string | null;
+  is_all_day?: boolean;
   description?: string;
   objective?: string;
   success_criteria?: string;
@@ -75,6 +83,10 @@ export interface CreateTaskInput {
 
 export interface UpdateTaskInput {
   title?: string;
+  type?: "task" | "event";
+  event_type?: EventType | null;
+  location?: string | null;
+  is_all_day?: boolean;
   description?: string;
   objective?: string;
   success_criteria?: string;

@@ -1,5 +1,6 @@
 export type TaskStatus = "backlog" | "todo" | "in-progress" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type EventType = "meeting" | "call" | "personal" | "reminder" | "other";
 
 export type CalendarBlockType =
     | "meeting"
@@ -76,6 +77,10 @@ export type Task = {
     projectId: string;
     projectTitle: string;
     title: string;
+    type: "task" | "event";
+    event_type?: EventType | null;
+    location?: string | null;
+    is_all_day?: boolean;
     description?: string;
     objective: string;
     success_criteria: string;

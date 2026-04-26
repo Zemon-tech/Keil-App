@@ -20,6 +20,14 @@ export enum MemberRole {
   MEMBER = 'member'
 }
 
+export enum EventType {
+  MEETING = 'meeting',
+  CALL = 'call',
+  PERSONAL = 'personal',
+  REMINDER = 'reminder',
+  OTHER = 'other'
+}
+
 export enum LogEntityType {
   TASK = 'task',
   COMMENT = 'comment',

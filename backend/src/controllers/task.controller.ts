@@ -35,11 +35,19 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         priority,
         start_date,
         due_date,
-        parent_task_id
+        parent_task_id,
+        type,
+        event_type,
+        location,
+        is_all_day
     } = req.body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
         throw new ApiError(400, "Title is required");
+    }
+
+    if (type === 'event' && !event_type) {
+        throw new ApiError(400, "event_type is required for events");
     }
 
     if (status && !validateStatus(status)) throw new ApiError(400, "Invalid status enum value");
@@ -69,8 +77,12 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         if (isNaN(dueDate.getTime())) throw new ApiError(400, "Invalid due_date format");
     }
 
-    if (startDate && dueDate && dueDate < startDate) {
-        throw new ApiError(400, "due_date must be on or after start_date");
+    if (startDate && dueDate) {
+        if (type === 'event' && dueDate <= startDate) {
+            throw new ApiError(400, "end time must be strictly after start time for events");
+        } else if (dueDate < startDate) {
+            throw new ApiError(400, "due_date must be on or after start_date");
+        }
     }
 
     const task = await taskService.createTask({
@@ -84,7 +96,11 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         priority,
         start_date: startDate || undefined,
         due_date: dueDate || undefined,
-        parent_task_id
+        parent_task_id,
+        type,
+        event_type,
+        location,
+        is_all_day
     });
 
     res.status(201).json(new ApiResponse(201, task, "Task created successfully"));
@@ -173,7 +189,7 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
 
     // Explicitly build the updates object to handle partial fields and naming
     const updates: any = {};
-    const allowedFields = ['title', 'description', 'objective', 'success_criteria', 'status', 'priority'];
+    const allowedFields = ['title', 'description', 'objective', 'success_criteria', 'status', 'priority', 'type', 'event_type', 'location', 'is_all_day'];
     
     allowedFields.forEach(field => {
         if (req.body[field] !== undefined) {
@@ -209,9 +225,14 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
     // Comprehensive date validation against existing data
     const finalStart = updates.start_date !== undefined ? updates.start_date : (existingTask.start_date ? new Date(existingTask.start_date) : null);
     const finalDue = updates.due_date !== undefined ? updates.due_date : (existingTask.due_date ? new Date(existingTask.due_date) : null);
+    const finalType = updates.type !== undefined ? updates.type : existingTask.type;
 
-    if (finalStart && finalDue && finalDue < finalStart) {
-         throw new ApiError(400, "due_date must be on or after start_date");
+    if (finalStart && finalDue) {
+         if (finalType === 'event' && finalDue <= finalStart) {
+             throw new ApiError(400, "end time must be strictly after start time for events");
+         } else if (finalDue < finalStart) {
+             throw new ApiError(400, "due_date must be on or after start_date");
+         }
     }
 
     const updatedTask = await taskService.updateTask(id, updates, userId, workspaceId);
