@@ -6,7 +6,7 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventReceiveArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import type { EventContentArg, EventInput } from "@fullcalendar/core";
-import { addMinutes, format, parseISO, isPast } from "date-fns";
+import { addDays, addMinutes, format, parseISO, isPast } from "date-fns";
 import {
   Bell,
   CalendarClock,
@@ -40,6 +40,60 @@ type Props = {
 };
 
 type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
+
+const DEFAULT_TIMED_DURATION_MINUTES = 60;
+const MAX_TIMED_DURATION_MINUTES_BEFORE_CLAMP = 12 * 60;
+
+function isStartOfLocalDay(d: Date): boolean {
+  return (
+    d.getHours() === 0 &&
+    d.getMinutes() === 0 &&
+    d.getSeconds() === 0 &&
+    d.getMilliseconds() === 0
+  );
+}
+
+function isAllDayRangeLocal(start: Date, end: Date): boolean {
+  if (!isStartOfLocalDay(start) || !isStartOfLocalDay(end)) return false;
+  const diffMs = end.getTime() - start.getTime();
+  if (diffMs <= 0) return false;
+  const dayMs = 24 * 60 * 60 * 1000;
+  return diffMs % dayMs === 0;
+}
+
+function normalizeAllDayRangeLocal(start: Date, end?: Date | null): { start: Date; end: Date } {
+  const s = new Date(start);
+  s.setHours(0, 0, 0, 0);
+
+  // FullCalendar uses an exclusive end for all-day ranges. If FC gives us an end,
+  // it is usually already exclusive. We normalize it to a start-of-day boundary.
+  let e: Date;
+  if (end) {
+    e = new Date(end);
+    e.setHours(0, 0, 0, 0);
+    if (e.getTime() <= s.getTime()) {
+      e = addDays(s, 1);
+    }
+  } else {
+    e = addDays(s, 1);
+  }
+
+  return { start: s, end: e };
+}
+
+function normalizeTimedRange(start: Date, end?: Date | null): { start: Date; end: Date } {
+  const s = new Date(start);
+  let e = end ? new Date(end) : addMinutes(s, DEFAULT_TIMED_DURATION_MINUTES);
+  const diffMin = (e.getTime() - s.getTime()) / 60000;
+
+  // When converting an all-day event into a timed event, FullCalendar often keeps
+  // the original (multi-hour/multi-day) duration. Clamp it to a reasonable default.
+  if (!Number.isFinite(diffMin) || diffMin <= 0 || diffMin > MAX_TIMED_DURATION_MINUTES_BEFORE_CLAMP) {
+    e = addMinutes(s, DEFAULT_TIMED_DURATION_MINUTES);
+  }
+
+  return { start: s, end: e };
+}
 
 const typeMeta: Record<CalendarBlockType, { label: string; icon: any; pill: string; bg: string; border: string }> = {
   meeting: {
@@ -224,23 +278,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       .map((t) => {
         const startDate = new Date(t.start_date!);
         const endDate = new Date(t.due_date!);
-        // Check if this is an all-day event:
-        // 1. Spans multiple days, OR
-        // 2. Single day with start at 00:00 and end at or near 23:59
-        const spansMultipleDays = startDate.getDate() !== endDate.getDate() ||
-                                   startDate.getMonth() !== endDate.getMonth() ||
-                                   startDate.getFullYear() !== endDate.getFullYear();
-        const isSingleDayAllDay = startDate.getHours() === 0 &&
-                                   startDate.getMinutes() === 0 &&
-                                   endDate.getHours() >= 23;
-        const isAllDay = spansMultipleDays || isSingleDayAllDay;
+        // All-day detection should match FullCalendar semantics:
+        // - allDay events use an *exclusive* end at the start of a day boundary.
+        // - timed events can cross midnight and should remain timed.
+        const isAllDay = isAllDayRangeLocal(startDate, endDate);
 
         console.log("🔍 All-day detection:", {
           taskId: t.id,
           startDate: t.start_date,
           endDate: t.due_date,
-          spansMultipleDays,
-          isSingleDayAllDay,
           isAllDay,
         });
 
@@ -343,13 +389,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       // Handle month view drop: allow multi-day scheduling
       if (viewType === "dayGridMonth") {
         if (startDate && onTaskSchedule) {
-          // Use the actual end date from the drop event to allow multi-day scheduling
-          // If no end date provided, default to single day
-          const allDayStart = new Date(startDate);
-          allDayStart.setHours(0, 0, 0, 0);
-
-          const allDayEnd = endDate ? new Date(endDate) : new Date(startDate);
-          allDayEnd.setHours(23, 59, 59, 999);
+          const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
 
           const startISO = allDayStart.toISOString();
           const endISO = allDayEnd.toISOString();
@@ -363,11 +403,11 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
           onTaskSchedule(taskId, startISO, endISO);
 
-          const isMultiDay = startDate.getDate() !== allDayEnd.getDate();
+          const isMultiDay = allDayEnd.getTime() - allDayStart.getTime() > 24 * 60 * 60 * 1000;
           toast.success("Task scheduled", {
             description: isMultiDay
-              ? `${info.event.title} scheduled from ${format(startDate, "MMM dd")} to ${format(allDayEnd, "MMM dd")}`
-              : `${info.event.title} scheduled for ${format(startDate, "MMM dd, yyyy")}`,
+              ? `${info.event.title} scheduled from ${format(allDayStart, "MMM dd")} to ${format(addDays(allDayEnd, -1), "MMM dd")}`
+              : `${info.event.title} scheduled for ${format(allDayStart, "MMM dd, yyyy")}`,
           });
 
           // Auto-switch to day view for that date
@@ -379,8 +419,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       } else {
         // Handle day/week view drop: use the dropped time directly
         if (startDate && endDate && onTaskSchedule) {
-          const startISO = startDate.toISOString();
-          const endISO = endDate.toISOString();
+          const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
+          const startISO = timedStart.toISOString();
+          const endISO = timedEnd.toISOString();
 
           console.log("✅ Scheduling task:", {
             taskId,
@@ -423,7 +464,13 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       });
 
       if (onTaskSchedule) {
-        onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+        if ((info.event as any).allDay) {
+          const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
+          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString());
+        } else {
+          const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
+          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString());
+        }
         toast.success("Task duration updated");
       }
     } catch (error) {
@@ -440,7 +487,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       const endDate = info.event.end;
       const viewType = info.view.type;
 
-      if (!taskId || !startDate || !endDate) return;
+      if (!taskId || !startDate) return;
 
       console.log("🔄 Task moved:", { taskId, newStart: startDate, newEnd: endDate, viewType });
 
@@ -453,20 +500,18 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       }
 
       // Handle month view move: treat as all-day event
-      if (viewType === "dayGridMonth") {
-        const allDayStart = new Date(startDate);
-        allDayStart.setHours(0, 0, 0, 0);
-        const allDayEnd = new Date(startDate);
-        allDayEnd.setHours(23, 59, 59, 999);
+      const isAllDayDrop = viewType === "dayGridMonth" || !!info.event.allDay;
 
+      if (isAllDayDrop) {
+        const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
         if (onTaskSchedule) {
           onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString());
           toast.success("Task rescheduled");
         }
       } else {
-        // Handle day/week view move
+        const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
         if (onTaskSchedule) {
-          onTaskSchedule(taskId, startDate.toISOString(), endDate.toISOString());
+          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString());
           toast.success("Task rescheduled");
         }
       }
