@@ -46,6 +46,7 @@ import { ChatDialog } from "@/components/ChatDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { CreateWorkspaceDialog } from "./workspace/CreateWorkspaceDialog";
+import { WorkspaceSwitcher } from "./workspace/WorkspaceSwitcher";
 
 const navigationItems = [
   {
@@ -89,8 +90,8 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6 border-b border-border/50">
-          <SidebarMenu>
+        <SidebarHeader className="px-3 py-4 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6 border-b border-border/50">
+          <SidebarMenu className="gap-1">
             <SidebarMenuItem>
               {isCollapsed ? (
                 <div className="relative group/trigger flex items-center justify-center h-8 w-8 mx-auto transition-all duration-300">
@@ -114,6 +115,9 @@ export function AppSidebar() {
                   <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-sidebar-accent" />
                 </div>
               )}
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <WorkspaceSwitcher />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -206,22 +210,6 @@ export function AppSidebar() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">Workspaces</DropdownMenuLabel>
-                  {workspaces.map((ws) => (
-                    <DropdownMenuItem
-                      key={ws.id}
-                      onClick={() => setActiveWorkspace(ws.id)}
-                      className="flex items-center justify-between cursor-pointer rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
-                          {ws.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium">{ws.name}</span>
-                      </div>
-                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary" />}
-                    </DropdownMenuItem>
-                  ))}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
                     onSelect={() => setCreateWorkspaceOpen(true)}
