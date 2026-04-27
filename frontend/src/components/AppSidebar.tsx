@@ -24,12 +24,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
   LayoutDashboard,
   Settings,
   LogOut,
   ChevronUp,
   User,
+  Check,
   CreditCard,
   HelpCircle,
   MessageSquare,
@@ -44,7 +46,6 @@ import { ChatDialog } from "@/components/ChatDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { CreateWorkspaceDialog } from "./workspace/CreateWorkspaceDialog";
-import { WorkspaceSwitcher } from "./workspace/WorkspaceSwitcher";
 
 const navigationItems = [
   {
@@ -61,6 +62,7 @@ const navigationItems = [
 
 export function AppSidebar() {
   const { user, signOut } = useAuth();
+  const { workspaceName, workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
@@ -113,9 +115,6 @@ export function AppSidebar() {
                   <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-sidebar-accent" />
                 </div>
               )}
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <WorkspaceSwitcher />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -184,15 +183,15 @@ export function AppSidebar() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{userDisplayName}</span>
-                      <span className="truncate text-xs text-muted-foreground">{userEmail}</span>
+                      <span className="truncate font-semibold">{workspaceName || "No Workspace"}</span>
+                      <span className="truncate text-xs text-muted-foreground">{userDisplayName}</span>
                     </div>
                     <ChevronUp className="ml-auto" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   side="top"
-                  className="w-[--radix-popper-anchor-width] rounded-xl p-1"
+                  className="w-72 rounded-xl p-1"
                 >
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
@@ -215,6 +214,23 @@ export function AppSidebar() {
                     <Plus className="h-4 w-4 text-muted-foreground" />
                     Create workspace
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                    Switch workspace
+                  </DropdownMenuLabel>
+                  {workspaces.map((ws) => {
+                    const isActive = workspaceId === ws.id;
+                    return (
+                      <DropdownMenuItem
+                        key={ws.id}
+                        className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
+                        onSelect={() => setActiveWorkspace(ws.id)}
+                      >
+                        <span className="flex-1 truncate">{ws.name}</span>
+                        {isActive ? <Check className="h-4 w-4 text-primary" /> : null}
+                      </DropdownMenuItem>
+                    );
+                  })}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
                     <User className="h-4 w-4 text-muted-foreground" />

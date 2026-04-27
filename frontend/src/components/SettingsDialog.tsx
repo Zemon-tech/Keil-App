@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import {
     ArrowLeft,
     User,
+    Settings,
     SlidersHorizontal,
     Sparkles,
     Bot,
@@ -49,6 +50,7 @@ type SettingsTab =
     | "tasks"
     | "notifications"
     | "connectors"
+    | "workspaceSettings"
     | "api"
     | "members"
     | "enterprise";
@@ -60,6 +62,52 @@ interface SettingsNavItem {
     group: "account" | "workspace";
 }
 
+function WorkspaceSettingsTab() {
+    const { workspaceName, workspaceRole, workspaceId } = useWorkspace();
+
+    return (
+        <div className="space-y-8">
+            <div>
+                <h2 className="text-lg font-semibold text-foreground">Workspace settings</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage your workspace configuration.</p>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+                <div>
+                    <p className="text-sm font-medium text-foreground">Workspace name</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{workspaceName || "No workspace selected"}</p>
+                </div>
+
+                <div>
+                    <p className="text-sm font-medium text-foreground">Your role</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{workspaceRole || "-"}</p>
+                </div>
+
+                <div>
+                    <p className="text-sm font-medium text-foreground">Workspace ID</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-mono">{workspaceId || "-"}</p>
+                </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-medium text-foreground">Rename workspace</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Update your workspace display name.</p>
+                    </div>
+                    <Button variant="outline" size="sm" className="text-xs rounded-lg" disabled>
+                        Coming soon
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 const settingsNavItems: SettingsNavItem[] = [
     { id: "account", label: "Account", icon: User, group: "account" },
     { id: "preferences", label: "Preferences", icon: SlidersHorizontal, group: "account" },
@@ -69,6 +117,7 @@ const settingsNavItems: SettingsNavItem[] = [
     { id: "tasks", label: "Tasks", icon: ListTodo, group: "account" },
     { id: "notifications", label: "Notifications", icon: Bell, group: "account" },
     { id: "connectors", label: "Connectors", icon: Plug, group: "account" },
+    { id: "workspaceSettings", label: "Workspace settings", icon: Settings, group: "workspace" },
     { id: "api", label: "API", icon: Code2, group: "workspace" },
     { id: "members", label: "Members", icon: Users, group: "workspace" },
     { id: "enterprise", label: "Enterprise", icon: Building2, group: "workspace" },
@@ -747,6 +796,7 @@ const tabContent: Record<SettingsTab, React.FC> = {
     tasks: TasksTab,
     notifications: NotificationsTab,
     connectors: ConnectorsTab,
+    workspaceSettings: WorkspaceSettingsTab,
     api: ApiTab,
     members: MembersTab,
     enterprise: EnterpriseTab,
