@@ -312,42 +312,42 @@ export function CreateTaskDialog({
         if (!isOpen) resetCreateForm();
       }}
     >
-      <DialogContent className="max-w-2xl p-0 gap-0">
+      <DialogContent className="max-w-2xl p-0 gap-0" showCloseButton={false}>
         <form onSubmit={handleCreateSubmit}>
           {/* Header */}
           <div className="px-5 pt-5 pb-4 border-b border-border/60">
-            {mode !== "edit" && !parentTaskId && (
-              <div className="mb-4 flex justify-center">
-                <div className="inline-flex items-center rounded-md border border-border p-1 bg-muted/20">
-                  <button
-                    type="button"
-                    onClick={() => { setNewType("task"); if (newStatus === "confirmed" || newStatus === "tentative" || newStatus === "cancelled" || newStatus === "completed") setNewStatus("todo"); }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
-                      newType === "task"
-                        ? "bg-background shadow-sm text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Task
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNewType("event"); if (newStatus === "todo" || newStatus === "backlog" || newStatus === "in-progress" || newStatus === "done") setNewStatus("confirmed"); }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
-                      newType === "event"
-                        ? "bg-background shadow-sm text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Event
-                  </button>
-                </div>
-              </div>
-            )}
             <DialogHeader>
-              <DialogTitle className="text-base">
-                {mode === "edit" ? `Edit ${newType}` : parentTaskId ? "Create subtask" : `Create new ${newType}`}
-              </DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle className="text-base">
+                  {mode === "edit" ? `Edit ${newType}` : parentTaskId ? "Create subtask" : `Create new ${newType}`}
+                </DialogTitle>
+                {mode !== "edit" && !parentTaskId && (
+                  <div className="inline-flex items-center rounded-md border border-border p-1 bg-muted/20">
+                    <button
+                      type="button"
+                      onClick={() => { setNewType("task"); if (newStatus === "confirmed" || newStatus === "tentative" || newStatus === "cancelled" || newStatus === "completed") setNewStatus("todo"); }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
+                        newType === "task"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Task
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setNewType("event"); if (newStatus === "todo" || newStatus === "backlog" || newStatus === "in-progress" || newStatus === "done") setNewStatus("confirmed"); }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
+                        newType === "event"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Event
+                    </button>
+                  </div>
+                )}
+              </div>
               <DialogDescription className="text-xs mt-0.5">
                 {parentTaskId ? (
                   <>Creating a subtask inside <strong>{parentTaskTitle || "parent task"}</strong>.</>
@@ -362,10 +362,14 @@ export function CreateTaskDialog({
 
           <Tabs defaultValue="basics" className="w-full">
             <div className="px-5 pt-3">
-              <TabsList className="h-8 text-xs w-full grid grid-cols-3">
+              <TabsList className={`h-8 text-xs w-full ${newType === "event" ? "grid grid-cols-1" : "grid grid-cols-3"}`}>
                 <TabsTrigger value="basics" className="text-xs">Basics</TabsTrigger>
-                <TabsTrigger value="strategy" className="text-xs">Strategy</TabsTrigger>
-                <TabsTrigger value="schedule" className="text-xs">Schedule</TabsTrigger>
+                {newType === "task" && (
+                  <>
+                    <TabsTrigger value="strategy" className="text-xs">Strategy</TabsTrigger>
+                    <TabsTrigger value="schedule" className="text-xs">Schedule</TabsTrigger>
+                  </>
+                )}
               </TabsList>
             </div>
 
