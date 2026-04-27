@@ -165,6 +165,11 @@ export function CreateTaskDialog({
 
       setNewLocation(initialValues.location ?? "");
       setNewIsAllDay(initialValues.is_all_day ?? false);
+    } else if (open && mode === "create" && initialValues) {
+      // Create mode: allow callers to prefill dates/type (e.g. calendar date click)
+      setNewType((initialValues.type as "task" | "event") ?? "task");
+      setNewStartDateISO((initialValues as any).start_date ?? (initialValues as any).plannedStartISO ?? "");
+      setNewDueDateISO((initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? "");
     } else if (open && parentTaskId) {
       // Subtask mode: pre-fill parent
       setNewParentTaskId(parentTaskId);

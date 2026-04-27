@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import { EventPreviewDialog } from "./EventPreviewDialog";
+import { CreateTaskDialog } from "./CreateTaskDialog";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 
@@ -255,6 +256,8 @@ import "./calendar-styles.css";
 export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [dialogPosition, setDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createInitialValues, setCreateInitialValues] = useState<Partial<TaskDTO> | undefined>(undefined);
   const [currentViewType, setCurrentViewType] = useState<CalendarView>("dayGridMonth");
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<EventInput[]>([]);
@@ -766,10 +769,11 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 }
               }}
               dateClick={(arg) => {
-                const calendarApi = calendarRef.current?.getApi();
-                if (calendarApi) {
-                  calendarApi.changeView("timeGridDay", arg.date);
-                }
+                setCreateInitialValues({
+                  type: "task",
+                  start_date: arg.date.toISOString(),
+                } as Partial<TaskDTO>);
+                setCreateDialogOpen(true);
               }}
               datesSet={(dateInfo) => {
                 const view = dateInfo.view.type as CalendarView;
@@ -814,6 +818,19 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           position={dialogPosition}
         />
       )}
+
+      <CreateTaskDialog
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (!open) setCreateInitialValues(undefined);
+        }}
+        initialValues={createInitialValues}
+        onTaskCreated={() => {
+          setCreateDialogOpen(false);
+          setCreateInitialValues(undefined);
+        }}
+      />
     </>
   );
 }
