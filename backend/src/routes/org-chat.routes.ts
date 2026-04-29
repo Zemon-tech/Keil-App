@@ -1,19 +1,19 @@
 import { Router } from "express";
-import { attachWorkspaceContext, protect } from "../middlewares/auth.middleware";
+import { protect } from "../middlewares/auth.middleware";
+import { requireOrgMember, requireSpaceMember } from "../middlewares/org-context.middleware";
 import {
-    createDirectChannel,
-    createGroupChannel,
-    getUserChannels,
-    getChannelMessages,
-    markChannelAsRead,
-    addChannelMembers,
-    removeChannelMember
-} from "../controllers/chat.controller";
+  addChannelMembers,
+  createDirectChannel,
+  createGroupChannel,
+  getChannelMessages,
+  getUserChannels,
+  markChannelAsRead,
+  removeChannelMember,
+} from "../controllers/org-chat.controller";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
-// All chat routes require authentication
-router.use(protect, attachWorkspaceContext);
+router.use(protect, requireOrgMember, requireSpaceMember);
 
 router.post("/channels/direct", createDirectChannel);
 router.post("/channels/group", createGroupChannel);

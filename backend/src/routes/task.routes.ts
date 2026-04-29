@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware";
+import { attachWorkspaceContext, protect } from "../middlewares/auth.middleware";
 import {
   createTask,
   getTasks,
@@ -19,7 +19,7 @@ import { getTaskComments, addComment } from "../controllers/comment.controller";
 const router = Router();
 
 // All task endpoints require authenticated user context (req.user, req.workspaceId)
-router.use(protect);
+router.use(protect, attachWorkspaceContext);
 
 // Base Task Routes
 router.post("/", createTask);

@@ -62,22 +62,50 @@ export const protect = async (
         // Attach user to request object
         (req as any).user = result.rows[0];
 
-        // Step 0: Fetch and attach workspaceId for Module 1 Tasks
-        const workspaceResult = await pool.query(
-            'SELECT workspace_id FROM public.workspace_members WHERE user_id = $1 LIMIT 1',
-            [supabaseUser.id]
-        );
-
-        if (workspaceResult.rows.length > 0) {
-            (req as any).workspaceId = workspaceResult.rows[0].workspace_id;
-        }
-
         next();
     } catch (err) {
         console.error(`❌ [auth]: Middleware Error: ${(err as Error).message}`);
         res.status(500).json({
             success: false,
             message: "Internal Server Error during authentication",
+        });
+    }
+};
+
+/**
+ * Compatibility middleware for legacy workspace-scoped routes.
+ * This stays until all workspace routes are replaced with explicit org/space context.
+ */
+export const attachWorkspaceContext = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): Promise<void> => {
+    try {
+        const userId = (req as any).user?.id as string | undefined;
+        if (!userId) {
+            res.status(401).json({
+                success: false,
+                message: "User context missing",
+            });
+            return;
+        }
+
+        const workspaceResult = await pool.query(
+            "SELECT workspace_id FROM public.workspace_members WHERE user_id = $1 LIMIT 1",
+            [userId]
+        );
+
+        if (workspaceResult.rows.length > 0) {
+            (req as any).workspaceId = workspaceResult.rows[0].workspace_id as string;
+        }
+
+        next();
+    } catch (err) {
+        console.error(`Authentication workspace compatibility error: ${(err as Error).message}`);
+        res.status(500).json({
+            success: false,
+            message: "Internal Server Error during workspace context resolution",
         });
     }
 };
