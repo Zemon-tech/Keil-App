@@ -25,6 +25,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useAppContext } from "@/contexts/AppContext";
 import {
   LayoutDashboard,
   Settings,
@@ -37,7 +38,10 @@ import {
   CheckSquare,
   Check,
   Plus,
-  Bell
+  Bell,
+  Building2,
+  Layers,
+  ChevronDown,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -84,6 +88,18 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
 
+  // ── New app context (mode / org / space) ───────────────────────────────
+  const {
+    mode,
+    organisations,
+    spaces,
+    activeOrg,
+    activeSpace,
+    setPersonalMode,
+    setActiveOrganisation,
+    setActiveSpace,
+  } = useAppContext();
+
   const isCollapsed = state === "collapsed";
 
   return (
@@ -119,6 +135,107 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent>
+
+          {/* ── Mode Toggle: Personal / Organisation ─────────────── */}
+          <SidebarGroup>
+            <SidebarGroupLabel>Mode</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {/* Personal mode button */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={setPersonalMode}
+                    isActive={mode === "personal"}
+                    tooltip="Personal"
+                  >
+                    <User />
+                    <span>Personal</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                {/* Organisation mode button — only shown when user has orgs */}
+                {organisations.length > 0 && (
+                  <SidebarMenuItem>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                          isActive={mode === "organisation"}
+                          tooltip={activeOrg?.name ?? "Organisation"}
+                          className="w-full"
+                        >
+                          <Building2 />
+                          <span className="flex-1 truncate text-left">
+                            {mode === "organisation" && activeOrg
+                              ? activeOrg.name
+                              : "Organisation"}
+                          </span>
+                          {!isCollapsed && <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />}
+                        </SidebarMenuButton>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="right" align="start" className="w-52">
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Switch organisation</DropdownMenuLabel>
+                        {organisations.map((org) => (
+                          <DropdownMenuItem
+                            key={org.id}
+                            onClick={() => setActiveOrganisation(org.id)}
+                            className="flex items-center justify-between gap-2 text-sm cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="h-5 w-5 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
+                                {org.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="truncate">{org.name}</span>
+                            </div>
+                            {activeOrg?.id === org.id && mode === "organisation" && (
+                              <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </SidebarMenuItem>
+                )}
+
+                {/* Space switcher — only visible in organisation mode */}
+                {mode === "organisation" && spaces.length > 0 && (
+                  <SidebarMenuItem>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton
+                          isActive={false}
+                          tooltip={activeSpace?.name ?? "Space"}
+                          className="w-full pl-6"
+                        >
+                          <Layers className="opacity-60" />
+                          <span className="flex-1 truncate text-left text-muted-foreground">
+                            {activeSpace?.name ?? "Select space"}
+                          </span>
+                          {!isCollapsed && <ChevronDown className="h-3.5 w-3.5 opacity-40 shrink-0" />}
+                        </SidebarMenuButton>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="right" align="start" className="w-48">
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Switch space</DropdownMenuLabel>
+                        {spaces.map((space) => (
+                          <DropdownMenuItem
+                            key={space.id}
+                            onClick={() => setActiveSpace(space.id)}
+                            className="flex items-center justify-between gap-2 text-sm cursor-pointer"
+                          >
+                            <span className="truncate">{space.name}</span>
+                            {activeSpace?.id === space.id && (
+                              <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          {/* ── Navigation ───────────────────────────────────────── */}
           <SidebarGroup>
             <SidebarGroupLabel>Navigation</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -138,17 +255,19 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 ))}
 
-                {/* ── Chat button — opens dialog ── */}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setChatDialogOpen(true)}
-                    isActive={chatDialogOpen}
-                    tooltip="Chat"
-                  >
-                    <MessageSquare />
-                    <span>Chat</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {/* ── Chat button — only in organisation mode (chat lives inside spaces) ── */}
+                {mode === "organisation" && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setChatDialogOpen(true)}
+                      isActive={chatDialogOpen}
+                      tooltip="Chat"
+                    >
+                      <MessageSquare />
+                      <span>Chat</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
 
                 {/* ── Notification button — opens drawer ── */}
                 <SidebarMenuItem>

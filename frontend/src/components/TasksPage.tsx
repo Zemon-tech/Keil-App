@@ -6,6 +6,7 @@ import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearchParams } from "react-router-dom";
+import { useAppContext } from "@/contexts/AppContext";
 
 import type { TaskStatus, TaskPriority } from "../types/task";
 import {
@@ -18,8 +19,14 @@ import {
   type TaskFilters,
   type SortBy,
   type SortOrder,
+  type TaskDTO,
 } from "../hooks/api/useTasks";
 import { useWorkspaceMembers } from "../hooks/api/useWorkspace";
+import {
+  usePersonalTasks,
+  useChangePersonalTaskStatus,
+  type PersonalTaskDTO,
+} from "../hooks/api/usePersonalTasks";
 
 const PAGE_SIZE = 20;
 
@@ -83,14 +90,61 @@ export function TasksPage() {
     return filters;
   }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
-  // ── Fetch real tasks from backend ──
-  const { data: tasks, isLoading, isFetching } = useTasks(serverFilters);
+  // ── App mode ──────────────────────────────────────────
+  const { mode } = useAppContext();
+  const isPersonalMode = mode === "personal";
+
+  // ── Org tasks (legacy route — active in organisation mode) ──
+  const { data: orgTasks, isLoading: orgLoading, isFetching: orgFetching } = useTasks(
+    isPersonalMode ? {} : serverFilters
+  );
+
+  // ── Personal tasks (active in personal mode) ────────────────────
+  const { data: personalTasksRaw, isLoading: personalLoading } = usePersonalTasks(
+    isPersonalMode
+      ? {
+          status: (serverFilters.status as any) ?? undefined,
+          priority: (serverFilters.priority as any) ?? undefined,
+          limit: serverFilters.limit,
+        }
+      : {}
+  );
+
+  // Shape PersonalTaskDTO into the same TaskDTO interface the list/detail panes expect.
+  // The panes only care about: id, title, status, priority, due_date, start_date,
+  // parent_task_id, created_at, updated_at, workspace_id (can be empty string).
+  const personalTasks: TaskDTO[] = useMemo(() => {
+    if (!isPersonalMode || !personalTasksRaw) return [];
+    return personalTasksRaw.map((pt: PersonalTaskDTO): TaskDTO => ({
+      id: pt.id,
+      title: pt.title,
+      description: pt.description ?? undefined,
+      objective: pt.objective ?? undefined,
+      success_criteria: pt.success_criteria ?? undefined,
+      status: pt.status as TaskStatus,
+      priority: pt.priority as TaskPriority,
+      due_date: pt.due_date ?? undefined,
+      start_date: pt.start_date ?? undefined,
+      parent_task_id: pt.parent_task_id ?? undefined,
+      // Personal tasks have no workspace / org — use empty string so legacy hooks
+      // that check workspace_id for member lookup get an empty result gracefully.
+      workspace_id: "",
+      created_by: pt.owner_user_id,
+      created_at: pt.created_at,
+      updated_at: pt.updated_at,
+    }));
+  }, [isPersonalMode, personalTasksRaw]);
+
+  // Active task list and loading state depend on mode
+  const tasks = isPersonalMode ? personalTasks : (orgTasks ?? []);
+  const isLoading = isPersonalMode ? personalLoading : orgLoading;
+  const isFetching = isPersonalMode ? false : orgFetching;
 
   // Stable reference — never creates a new [] on each render
-  const taskList = tasks ?? [];
+  const taskList = tasks;
 
   // Derive pagination state from the result (no useEffect needed)
-  const hasMore = taskList.length >= limit;
+  const hasMore = !isPersonalMode && taskList.length >= limit;
 
   const handleLoadMore = useCallback(() => {
     setLimit((prev) => prev + PAGE_SIZE);
@@ -108,19 +162,27 @@ export function TasksPage() {
     setLimit(PAGE_SIZE);
   }, []);
 
-  // ── Mutations (wired to callbacks) ──
+  // ── Org task mutations ─────────────────────────────────────────
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const assignUser = useAssignUser();
   const removeAssignee = useRemoveAssignee();
 
-  // ── Fetch workspace members for bulk assign ──
-  const { data: members } = useWorkspaceMembers(tasks?.[0]?.workspace_id);
-  const workspaceMembers = members?.map((m) => ({
-    id: m.user.id,
-    name: m.user.name,
-    email: m.user.email,
-  })) ?? [];
+  // Personal task status change
+  const changePersonalStatus = useChangePersonalTaskStatus();
+
+  // ── Workspace members for bulk assign (org mode only) ─────────────
+  // In personal mode, assignees don't exist — pass empty array.
+  const { data: members } = useWorkspaceMembers(
+    isPersonalMode ? undefined : (orgTasks?.[0]?.workspace_id)
+  );
+  const workspaceMembers = isPersonalMode
+    ? []
+    : members?.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+      })) ?? [];
 
   // ── Client-side text filter on top of server results ──
   const filtered = useMemo(() => {
