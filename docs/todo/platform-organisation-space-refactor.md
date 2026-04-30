@@ -201,11 +201,11 @@ platform user -> organisations -> spaces -> org tasks / chat / dashboard
 ### Tasks
 
 - [x] Update sidebar to show personal mode, organisations, and spaces.
-- [ ] Update dashboard to require active org and space.
+- [x] Update dashboard to require active org and space.
 - [x] Update task page to support personal task mode and org task mode.
-- [ ] Update task detail to track task source: personal or organisation.
-- [ ] Update task create dialog to create the correct task type for current mode.
-- [ ] Update assignee UI to show active space members only.
+- [x] Update task detail to track task source: personal or organisation.
+- [x] Update task create dialog to create the correct task type for current mode.
+- [x] Update assignee UI to show active space members only.
 - [x] Update chat UI to appear only inside organisation space mode.
 - [ ] Update settings UI to separate account, organisation, and space settings.
 - [ ] Update invite/join flows from workspace language to organisation/space language.

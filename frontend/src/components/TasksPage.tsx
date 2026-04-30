@@ -24,7 +24,8 @@ import {
 import { useWorkspaceMembers } from "../hooks/api/useWorkspace";
 import {
   usePersonalTasks,
-  useChangePersonalTaskStatus,
+  useUpdatePersonalTask,
+  useDeletePersonalTask,
   type PersonalTaskDTO,
 } from "../hooks/api/usePersonalTasks";
 
@@ -163,13 +164,32 @@ export function TasksPage() {
   }, []);
 
   // ── Org task mutations ─────────────────────────────────────────
-  const updateTask = useUpdateTask();
-  const deleteTask = useDeleteTask();
+  const updateOrgTask = useUpdateTask();
+  const deleteOrgTask = useDeleteTask();
   const assignUser = useAssignUser();
   const removeAssignee = useRemoveAssignee();
 
-  // Personal task status change
-  const changePersonalStatus = useChangePersonalTaskStatus();
+  // Personal task mutations
+  const updatePersonalTask = useUpdatePersonalTask();
+  const deletePersonalTask = useDeletePersonalTask();
+
+  // Unified mutation helpers that dispatch to the correct endpoint
+  const handleUpdateTask = useCallback((id: string, updates: any) => {
+    if (isPersonalMode) {
+      updatePersonalTask.mutate({ id, updates });
+    } else {
+      updateOrgTask.mutate({ id, updates });
+    }
+  }, [isPersonalMode, updatePersonalTask, updateOrgTask]);
+
+  const handleDeleteTask = useCallback((id: string) => {
+    if (isPersonalMode) {
+      deletePersonalTask.mutate(id);
+    } else {
+      deleteOrgTask.mutate(id);
+    }
+    if (id === selectedTaskId) setSelectedTaskId("");
+  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId]);
 
   // ── Workspace members for bulk assign (org mode only) ─────────────
   // In personal mode, assignees don't exist — pass empty array.
@@ -230,16 +250,11 @@ export function TasksPage() {
     setSelectedTaskId(parentId);
   }, []);
 
-  // Handle task scheduling from calendar
+  // Handle task scheduling from calendar (org mode only — personal tasks use simpler update)
   const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string) => {
-    updateTask.mutate({
-      id: taskId,
-      updates: {
-        start_date: startISO,
-        due_date: endISO,
-      },
-    });
-  }, [updateTask]);
+    // In personal mode fall back to a regular update (same fields exist on PersonalTaskDTO)
+    handleUpdateTask(taskId, { start_date: startISO, due_date: endISO });
+  }, [handleUpdateTask]);
 
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",
@@ -261,6 +276,7 @@ export function TasksPage() {
               onSortChange={handleSortChange}
               tasks={filtered}
               allTasks={taskList}
+              isPersonalMode={isPersonalMode}
               selectedTaskId={selectedTaskId}
               onSelectTask={(id) => {
                 // When selecting from list, check if it's a subtask to set the parent stack
@@ -284,21 +300,13 @@ export function TasksPage() {
                 setSelectedTaskId(newTaskId);
                 setCreateDialogOpen(false);
               }}
-              onUpdateTask={(id, updates) => {
-                updateTask.mutate({ id, updates });
-              }}
-              onDeleteTask={(id) => {
-                deleteTask.mutate(id);
-                // Clear selection if deleted task was selected
-                if (id === selectedTaskId) {
-                  setSelectedTaskId("");
-                }
-              }}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
               onAssignUser={(taskId, userId) => {
-                assignUser.mutate({ id: taskId, userId });
+                if (!isPersonalMode) assignUser.mutate({ id: taskId, userId });
               }}
               onRemoveAssignee={(taskId, userId) => {
-                removeAssignee.mutate({ id: taskId, userId });
+                if (!isPersonalMode) removeAssignee.mutate({ id: taskId, userId });
               }}
               workspaceMembers={workspaceMembers}
               hasMore={hasMore}
@@ -311,9 +319,8 @@ export function TasksPage() {
             {selected || selectedTaskDetail ? (
               <TaskDetailPane
                 task={(selectedTaskDetail || selected)!}
-                onUpdateTask={(id, updates) => {
-                  updateTask.mutate({ id, updates });
-                }}
+                isPersonalMode={isPersonalMode}
+                onUpdateTask={handleUpdateTask}
                 onTaskDeleted={() => {
                   setSelectedTaskId("");
                   setParentTaskStack([]);

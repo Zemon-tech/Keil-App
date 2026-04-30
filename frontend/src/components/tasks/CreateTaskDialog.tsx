@@ -18,9 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge"; // ← ShadCN component (already in your codebase)
+import { Badge } from "@/components/ui/badge";
 import type { Task, TaskStatus } from "@/types/task";
 import { useCreateTask, useUpdateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
+import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
 
 // Simple type for assignees (replace with your real UserDTO if you have one)
 type SimpleAssigneeOption = {
@@ -36,7 +37,7 @@ interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   onTaskCreated: (newTaskId: string) => void;
   allTasks?: TaskDTO[];
-  allUsers?: SimpleAssigneeOption[]; // ← pass your workspace users here
+  allUsers?: SimpleAssigneeOption[];
   // Edit mode props
   mode?: "create" | "edit";
   taskId?: string;
@@ -45,6 +46,8 @@ interface CreateTaskDialogProps {
   /** When set, forces "Create subtask" mode — parent_task_id is pre-filled and locked */
   parentTaskId?: string;
   parentTaskTitle?: string;
+  /** When true, routes mutations to personal task endpoints and hides org-only fields */
+  isPersonalMode?: boolean;
 }
 
 export function CreateTaskDialog({
@@ -59,9 +62,12 @@ export function CreateTaskDialog({
   onTaskUpdated,
   parentTaskId,
   parentTaskTitle,
+  isPersonalMode = false,
 }: CreateTaskDialogProps) {
-  const createTask = useCreateTask();
-  const updateTask = useUpdateTask();
+  const createOrgTask = useCreateTask();
+  const updateOrgTask = useUpdateTask();
+  const createPersonalTask = useCreatePersonalTask();
+  const updatePersonalTask = useUpdatePersonalTask();
 
   // ── Form State ─────────────────────────────────────────────────────────────
   const [newTitle, setNewTitle] = useState("");
@@ -220,26 +226,72 @@ export function CreateTaskDialog({
     };
 
     if (mode === "edit" && taskId) {
-      // ── Edit mode: update existing task ──
-      updateTask.mutate(
-        { id: taskId, updates: input },
-        {
-          onSuccess: () => {
+      if (isPersonalMode) {
+        // ── Personal edit mode ──
+        const personalUpdates = {
+          title: newTitle.trim(),
+          status: newStatus,
+          priority: newPriority,
+          description: newDescription.trim() || undefined,
+          objective: objectiveFormatted || undefined,
+          success_criteria: successCriteriaFormatted || undefined,
+          start_date: newStartDateISO || undefined,
+          due_date: newDueDateISO || undefined,
+        };
+        updatePersonalTask.mutate(
+          { id: taskId, updates: personalUpdates },
+          {
+            onSuccess: () => {
+              onOpenChange(false);
+              resetCreateForm();
+              onTaskUpdated?.(taskId);
+            },
+          }
+        );
+      } else {
+        // ── Org edit mode ──
+        updateOrgTask.mutate(
+          { id: taskId, updates: input },
+          {
+            onSuccess: () => {
+              onOpenChange(false);
+              resetCreateForm();
+              onTaskUpdated?.(taskId);
+            },
+          }
+        );
+      }
+    } else {
+      if (isPersonalMode) {
+        // ── Personal create mode ──
+        const personalInput = {
+          title: newTitle.trim(),
+          status: newStatus,
+          priority: newPriority,
+          description: newDescription.trim() || undefined,
+          objective: objectiveFormatted || undefined,
+          success_criteria: successCriteriaFormatted || undefined,
+          start_date: newStartDateISO || undefined,
+          due_date: newDueDateISO || undefined,
+          parent_task_id: newParentTaskId === "none" || !newParentTaskId ? undefined : newParentTaskId,
+        };
+        createPersonalTask.mutate(personalInput, {
+          onSuccess: (data) => {
             onOpenChange(false);
             resetCreateForm();
-            onTaskUpdated?.(taskId);
+            if (data?.id) onTaskCreated(data.id);
           },
-        }
-      );
-    } else {
-      // ── Create mode ──
-      createTask.mutate(input, {
-        onSuccess: (data) => {
-          onOpenChange(false);
-          resetCreateForm();
-          if (data?.id) onTaskCreated(data.id);
-        },
-      });
+        });
+      } else {
+        // ── Org create mode ──
+        createOrgTask.mutate(input, {
+          onSuccess: (data) => {
+            onOpenChange(false);
+            resetCreateForm();
+            if (data?.id) onTaskCreated(data.id);
+          },
+        });
+      }
     }
   }
 
@@ -340,7 +392,8 @@ export function CreateTaskDialog({
                   </div>
                 </div>
 
-                {/* Assignees (multi-select) – NEW */}
+                {/* Assignees (multi-select) — org mode only */}
+                {!isPersonalMode && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Assignees <span className="opacity-50">(optional)</span></Label>
 
@@ -377,6 +430,7 @@ export function CreateTaskDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                )}
 
                 {/* Parent task (hidden when in subtask mode) */}
                 {!parentTaskId && allTasks.length > 0 && (
@@ -504,7 +558,8 @@ export function CreateTaskDialog({
                   </div>
                 </div>
 
-                {/* Estimation fields – now persistent */}
+                {/* Estimation fields — org mode only (not part of personal task schema) */}
+                {!isPersonalMode && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Story points</Label>
@@ -527,6 +582,7 @@ export function CreateTaskDialog({
                     />
                   </div>
                 </div>
+                )}
               </TabsContent>
             </div>
           </Tabs>
@@ -539,11 +595,16 @@ export function CreateTaskDialog({
             <Button
               type="submit"
               size="sm"
-              disabled={(mode === "edit" ? updateTask.isPending : createTask.isPending) || !isFormValid}
+              disabled={
+                (mode === "edit"
+                  ? (isPersonalMode ? updatePersonalTask.isPending : updateOrgTask.isPending)
+                  : (isPersonalMode ? createPersonalTask.isPending : createOrgTask.isPending))
+                || !isFormValid
+              }
             >
               {mode === "edit"
-                ? updateTask.isPending ? "Saving…" : "Save changes"
-                : createTask.isPending ? "Creating…" : parentTaskId ? "Create subtask" : "Create task"}
+                ? (isPersonalMode ? updatePersonalTask.isPending : updateOrgTask.isPending) ? "Saving…" : "Save changes"
+                : (isPersonalMode ? createPersonalTask.isPending : createOrgTask.isPending) ? "Creating…" : parentTaskId ? "Create subtask" : "Create task"}
             </Button>
           </div>
         </form>
