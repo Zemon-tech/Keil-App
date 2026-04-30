@@ -741,14 +741,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 const isScheduledTask = arg.event.extendedProps.isScheduledTask;
                 if (isScheduledTask) {
                   const taskId = arg.event.extendedProps.taskId;
-                  // Capture mouse position for dialog positioning
-                  const rect = (arg.el as HTMLElement).getBoundingClientRect();
+                  // Capture position for dialog relative to the date cell if possible, fallback to event pill
+                  const cellEl = (arg.el as HTMLElement).closest('.fc-daygrid-day, .fc-timegrid-col') as HTMLElement | null;
+                  const rect = (cellEl || arg.el).getBoundingClientRect();
+                  
                   const screenWidth = window.innerWidth;
                   const screenHeight = window.innerHeight;
-                  const dialogWidth = 400; // approximate width
-                  const dialogHeight = 400; // approximate height
+                  const dialogWidth = 340; // match new max-w-[340px]
+                  const dialogHeight = 200; // approximate compact height
 
-                  // Calculate x position: show on right if there's space, otherwise left
+                  // Calculate x position: show on right of cell if there's space, otherwise left
                   let x = rect.right + 10;
                   if (x + dialogWidth > screenWidth) {
                     x = rect.left - dialogWidth - 10;
@@ -756,7 +758,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                   // Ensure x is within bounds
                   x = Math.max(10, Math.min(x, screenWidth - dialogWidth - 10));
 
-                  // Calculate y position: keep it within vertical bounds
+                  // Calculate y position: align with top of the cell
                   let y = rect.top;
                   if (y + dialogHeight > screenHeight) {
                     y = screenHeight - dialogHeight - 10;
