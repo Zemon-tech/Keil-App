@@ -1,4 +1,11 @@
-export type TaskStatus = "backlog" | "todo" | "in-progress" | "done";
+export type TaskStatus =
+  | "backlog"
+  | "todo"
+  | "in-progress"
+  | "in-review"
+  | "done"
+  | "cancelled";
+
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export type CalendarBlockType =

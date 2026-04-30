@@ -1,18 +1,47 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import type { TaskStatus, TaskPriority } from "@/types/task";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type PersonalTaskStatus =
-  | "backlog"
-  | "todo"
-  | "in_progress"
-  | "in_review"
-  | "done"
-  | "cancelled";
+// Re-export canonical types so callers don't need two imports.
+export type { TaskStatus, TaskPriority };
 
-export type PersonalTaskPriority = "low" | "medium" | "high" | "urgent";
+// The personal-task backend stores status with underscores ("in_progress")
+// while the rest of the frontend uses hyphens ("in-progress").
+// This serialiser lives here — at the HTTP boundary — so no UI component
+// ever needs to care about the format difference.
+function toApiStatus(status: TaskStatus): string {
+  switch (status) {
+    case "backlog": return "backlog";
+    case "todo": return "todo";
+    case "in-progress": return "in_progress";
+    case "in-review": return "in_review";
+    case "done": return "done";
+    case "cancelled": return "cancelled";
+    // TypeScript exhaustiveness guard: if a new status is added to
+    // TaskStatus without updating this switch, the build will fail.
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
+  }
+}
+
+// The inverse: deserialise underscore statuses from the backend into
+// the canonical hyphen format used by the rest of the frontend.
+function fromApiStatus(status: string): TaskStatus {
+  switch (status) {
+    case "backlog": return "backlog";
+    case "todo": return "todo";
+    case "in_progress": return "in-progress";
+    case "in_review": return "in-review";
+    case "done": return "done";
+    case "cancelled": return "cancelled";
+    default: return status as TaskStatus; // passthrough for future values
+  }
+}
 
 export interface PersonalTaskDTO {
   id: string;
@@ -22,8 +51,10 @@ export interface PersonalTaskDTO {
   description: string | null;
   objective: string | null;
   success_criteria: string | null;
-  status: PersonalTaskStatus;
-  priority: PersonalTaskPriority;
+  /** Always in canonical hyphen format ("in-progress") — serialisation
+   *  from/to underscore format is handled at the HTTP boundary. */
+  status: TaskStatus;
+  priority: TaskPriority;
   start_date: string | null;
   due_date: string | null;
   created_at: string;
@@ -35,8 +66,8 @@ export interface CreatePersonalTaskInput {
   description?: string;
   objective?: string;
   success_criteria?: string;
-  status?: PersonalTaskStatus;
-  priority?: PersonalTaskPriority;
+  status?: TaskStatus;
+  priority?: TaskPriority;
   start_date?: string;
   due_date?: string;
   parent_task_id?: string;
@@ -47,15 +78,15 @@ export interface UpdatePersonalTaskInput {
   description?: string | null;
   objective?: string | null;
   success_criteria?: string | null;
-  status?: PersonalTaskStatus;
-  priority?: PersonalTaskPriority;
+  status?: TaskStatus;
+  priority?: TaskPriority;
   start_date?: string | null;
   due_date?: string | null;
 }
 
 export interface PersonalTaskFilters {
-  status?: PersonalTaskStatus;
-  priority?: PersonalTaskPriority;
+  status?: TaskStatus;
+  priority?: TaskPriority;
   parent_task_id?: string | null;
   limit?: number;
   offset?: number;
@@ -78,7 +109,7 @@ export const personalTaskKeys = {
 
 function toApiParams(filters: PersonalTaskFilters): Record<string, string> {
   const params: Record<string, string> = {};
-  if (filters.status !== undefined) params.status = filters.status;
+  if (filters.status !== undefined) params.status = toApiStatus(filters.status);
   if (filters.priority !== undefined) params.priority = filters.priority;
   if (filters.parent_task_id !== undefined)
     params.parent_task_id = filters.parent_task_id === null ? "null" : filters.parent_task_id;
@@ -104,7 +135,11 @@ export function usePersonalTasks(filters: PersonalTaskFilters = {}) {
       const res = await api.get<{ data: PersonalTaskDTO[] }>("v1/personal/tasks", {
         params: toApiParams(filters),
       });
-      return res.data.data;
+      // Deserialise backend underscore statuses → canonical hyphen format
+      return res.data.data.map((t) => ({
+        ...t,
+        status: fromApiStatus(t.status as string),
+      }));
     },
     retry: (failureCount, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
@@ -121,7 +156,8 @@ export function usePersonalTask(taskId: string | null) {
     queryKey: personalTaskKeys.detail(taskId ?? ""),
     queryFn: async () => {
       const res = await api.get<{ data: PersonalTaskDTO }>(`v1/personal/tasks/${taskId}`);
-      return res.data.data;
+      const t = res.data.data;
+      return { ...t, status: fromApiStatus(t.status as string) };
     },
     enabled: !!taskId,
     retry: (failureCount, error: unknown) => {
@@ -139,8 +175,13 @@ export function useCreatePersonalTask() {
 
   return useMutation<PersonalTaskDTO, Error, CreatePersonalTaskInput>({
     mutationFn: async (input) => {
-      const res = await api.post<{ data: PersonalTaskDTO }>("v1/personal/tasks", input);
-      return res.data.data;
+      // Serialise canonical status to backend underscore format before sending
+      const payload = input.status
+        ? { ...input, status: toApiStatus(input.status) }
+        : input;
+      const res = await api.post<{ data: PersonalTaskDTO }>("v1/personal/tasks", payload);
+      const t = res.data.data;
+      return { ...t, status: fromApiStatus(t.status as string) };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: personalTaskKeys.lists() });
@@ -167,11 +208,16 @@ export function useUpdatePersonalTask() {
     { id: string; updates: UpdatePersonalTaskInput }
   >({
     mutationFn: async ({ id, updates }) => {
+      // Serialise canonical status to backend underscore format before sending
+      const payload = updates.status
+        ? { ...updates, status: toApiStatus(updates.status) }
+        : updates;
       const res = await api.patch<{ data: PersonalTaskDTO }>(
         `v1/personal/tasks/${id}`,
-        updates
+        payload
       );
-      return res.data.data;
+      const t = res.data.data;
+      return { ...t, status: fromApiStatus(t.status as string) };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: personalTaskKeys.lists() });
@@ -210,12 +256,12 @@ export function useChangePersonalTaskStatus() {
   return useMutation<
     PersonalTaskDTO,
     Error,
-    { id: string; status: PersonalTaskStatus }
+    { id: string; status: TaskStatus }
   >({
     mutationFn: async ({ id, status }) => {
       const res = await api.patch<{ data: PersonalTaskDTO }>(
         `v1/personal/tasks/${id}/status`,
-        { status }
+        { status: toApiStatus(status) }
       );
       return res.data.data;
     },

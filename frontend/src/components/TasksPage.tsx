@@ -112,8 +112,6 @@ export function TasksPage() {
   );
 
   // Shape PersonalTaskDTO into the same TaskDTO interface the list/detail panes expect.
-  // The panes only care about: id, title, status, priority, due_date, start_date,
-  // parent_task_id, created_at, updated_at, workspace_id (can be empty string).
   const personalTasks: TaskDTO[] = useMemo(() => {
     if (!isPersonalMode || !personalTasksRaw) return [];
     return personalTasksRaw.map((pt: PersonalTaskDTO): TaskDTO => ({
@@ -122,14 +120,12 @@ export function TasksPage() {
       description: pt.description ?? undefined,
       objective: pt.objective ?? undefined,
       success_criteria: pt.success_criteria ?? undefined,
-      status: pt.status as TaskStatus,
-      priority: pt.priority as TaskPriority,
+      status: pt.status,       // already TaskStatus — no cast needed
+      priority: pt.priority,   // already TaskPriority — no cast needed
       due_date: pt.due_date ?? undefined,
       start_date: pt.start_date ?? undefined,
       parent_task_id: pt.parent_task_id ?? undefined,
-      // Personal tasks have no workspace / org — use empty string so legacy hooks
-      // that check workspace_id for member lookup get an empty result gracefully.
-      workspace_id: "",
+      workspace_id: "",        // personal tasks have no workspace
       created_by: pt.owner_user_id,
       created_at: pt.created_at,
       updated_at: pt.updated_at,
