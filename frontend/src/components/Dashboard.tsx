@@ -17,7 +17,7 @@ export function Dashboard() {
 
   // ── Mode awareness ─────────────────────────────────────────
   const { mode, activeOrgId, activeSpaceId } = useAppContext();
-  const isOrgMode = mode === "organisation";
+  const isOrgMode = mode === "organisation" && !!activeOrgId && !!activeSpaceId;
 
   // ── Legacy workspace dashboard (personal mode or fallback) ──
   const { data: legacyData, isLoading: legacyLoading, isError: legacyError } = useDashboard();

@@ -15,6 +15,14 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -23,9 +31,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAppContext } from "@/contexts/AppContext";
+import { useJoinWorkspace } from "@/hooks/api/useWorkspace";
 import {
   LayoutDashboard,
   Settings,
@@ -39,9 +50,7 @@ import {
   Check,
   Plus,
   Bell,
-  Building2,
-  Layers,
-  ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -69,6 +78,8 @@ export function AppSidebar() {
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [joinWorkspaceOpen, setJoinWorkspaceOpen] = useState(false);
+  const [joinWorkspaceToken, setJoinWorkspaceToken] = useState("");
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
@@ -83,29 +94,55 @@ export function AppSidebar() {
   const logoSrc = isDark ? "/keilhq-white.svg" : "/keilhq.svg";
 
   const userDisplayName = user?.user_metadata?.full_name || user?.email || "User";
-  const userEmail = user?.email || "";
 
   const { state } = useSidebar();
   const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
+  const joinWorkspace = useJoinWorkspace();
 
   // ── New app context (mode / org / space) ───────────────────────────────
   const {
     mode,
-    organisations,
-    spaces,
     activeOrg,
     activeSpace,
     setPersonalMode,
-    setActiveOrganisation,
-    setActiveSpace,
+    setWorkspaceMode,
   } = useAppContext();
 
   const isCollapsed = state === "collapsed";
 
+  const personalSpaceName = `${userDisplayName.split("@")[0]}'s Personal Space`;
+  const activeWorkspaceName = workspaceId
+    ? workspaces.find((w) => w.id === workspaceId)?.name ?? "Workspace"
+    : "Workspace";
+  const currentSpaceLabel =
+    mode === "personal"
+      ? personalSpaceName
+      : activeSpace?.name ?? activeOrg?.name ?? activeWorkspaceName;
+
+  const handleJoinWorkspace = () => {
+    const token = joinWorkspaceToken.trim();
+    if (!token) return;
+
+    joinWorkspace.mutate(token, {
+      onSuccess: (data) => {
+        const joinedWorkspaceId = (data as any)?.data?.workspaceId;
+        if (joinedWorkspaceId) {
+          setWorkspaceMode();
+          setActiveWorkspace(joinedWorkspaceId);
+        }
+        setJoinWorkspaceOpen(false);
+        setJoinWorkspaceToken("");
+      },
+      onError: () => {
+        // Errors are surfaced by disabling/loading; dialog remains open for retry.
+      },
+    });
+  };
+
   return (
     <>
       <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6 border-b border-border/50">
+        <SidebarHeader className="p-3 pt-4 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-4 border-b border-border/50">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -119,8 +156,8 @@ export function AppSidebar() {
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2 rounded-lg">
-                  <div className="flex items-center gap-2.5 py-1.5">
-                    <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold">
+                  <div className="flex items-center gap-2.5 py-0.5">
+                    <div className="flex size-8 items-center justify-center text-primary font-bold">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
                     <div className="flex flex-col text-left">
@@ -135,106 +172,6 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent>
-
-          {/* ── Mode Toggle: Personal / Organisation ─────────────── */}
-          <SidebarGroup>
-            <SidebarGroupLabel>Mode</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {/* Personal mode button */}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={setPersonalMode}
-                    isActive={mode === "personal"}
-                    tooltip="Personal"
-                  >
-                    <User />
-                    <span>Personal</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-
-                {/* Organisation mode button — only shown when user has orgs */}
-                {organisations.length > 0 && (
-                  <SidebarMenuItem>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <SidebarMenuButton
-                          isActive={mode === "organisation"}
-                          tooltip={activeOrg?.name ?? "Organisation"}
-                          className="w-full"
-                        >
-                          <Building2 />
-                          <span className="flex-1 truncate text-left">
-                            {mode === "organisation" && activeOrg
-                              ? activeOrg.name
-                              : "Organisation"}
-                          </span>
-                          {!isCollapsed && <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />}
-                        </SidebarMenuButton>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent side="right" align="start" className="w-52">
-                        <DropdownMenuLabel className="text-xs text-muted-foreground">Switch organisation</DropdownMenuLabel>
-                        {organisations.map((org) => (
-                          <DropdownMenuItem
-                            key={org.id}
-                            onClick={() => setActiveOrganisation(org.id)}
-                            className="flex items-center justify-between gap-2 text-sm cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="h-5 w-5 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
-                                {org.name.charAt(0).toUpperCase()}
-                              </div>
-                              <span className="truncate">{org.name}</span>
-                            </div>
-                            {activeOrg?.id === org.id && mode === "organisation" && (
-                              <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </SidebarMenuItem>
-                )}
-
-                {/* Space switcher — only visible in organisation mode */}
-                {mode === "organisation" && spaces.length > 0 && (
-                  <SidebarMenuItem>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <SidebarMenuButton
-                          isActive={false}
-                          tooltip={activeSpace?.name ?? "Space"}
-                          className="w-full pl-6"
-                        >
-                          <Layers className="opacity-60" />
-                          <span className="flex-1 truncate text-left text-muted-foreground">
-                            {activeSpace?.name ?? "Select space"}
-                          </span>
-                          {!isCollapsed && <ChevronDown className="h-3.5 w-3.5 opacity-40 shrink-0" />}
-                        </SidebarMenuButton>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent side="right" align="start" className="w-48">
-                        <DropdownMenuLabel className="text-xs text-muted-foreground">Switch space</DropdownMenuLabel>
-                        {spaces.map((space) => (
-                          <DropdownMenuItem
-                            key={space.id}
-                            onClick={() => setActiveSpace(space.id)}
-                            className="flex items-center justify-between gap-2 text-sm cursor-pointer"
-                          >
-                            <span className="truncate">{space.name}</span>
-                            {activeSpace?.id === space.id && (
-                              <Check className="h-3.5 w-3.5 text-primary shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </SidebarMenuItem>
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-
           {/* ── Navigation ───────────────────────────────────────── */}
           <SidebarGroup>
             <SidebarGroupLabel>Navigation</SidebarGroupLabel>
@@ -302,7 +239,7 @@ export function AppSidebar() {
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">{userDisplayName}</span>
-                      <span className="truncate text-xs text-muted-foreground">{userEmail}</span>
+                      <span className="truncate text-xs text-muted-foreground">{currentSpaceLabel}</span>
                     </div>
                     <ChevronUp className="ml-auto" />
                   </SidebarMenuButton>
@@ -320,39 +257,77 @@ export function AppSidebar() {
                       </Avatar>
                       <div className="grid text-left text-sm leading-tight">
                         <span className="truncate font-semibold text-xs">{userDisplayName}</span>
-                        <span className="truncate text-[10px] text-muted-foreground">{userEmail}</span>
+                        <span className="truncate text-[10px] text-muted-foreground">{currentSpaceLabel}</span>
                       </div>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">Workspaces</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">
+                    Mode
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
+                    onSelect={setPersonalMode}
+                  >
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    Personal
+                    {mode === "personal" && <Check className="ml-auto h-4 w-4 text-primary" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">
+                    Workspace
+                  </DropdownMenuLabel>
                   {workspaces.map((ws) => (
                     <DropdownMenuItem
                       key={ws.id}
-                      onClick={() => setActiveWorkspace(ws.id)}
+                      onClick={() => {
+                        setWorkspaceMode();
+                        setActiveWorkspace(ws.id);
+                      }}
                       className="flex items-center justify-between cursor-pointer rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
                     >
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
                           {ws.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-sm font-medium">{ws.name}</span>
+                        <span className="text-sm font-medium truncate">{ws.name}</span>
                       </div>
-                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary" />}
+                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary shrink-0" />}
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={() => setCreateWorkspaceOpen(true)}
+                    onSelect={() => {
+                      setWorkspaceMode();
+                      setJoinWorkspaceOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                    Join workspace
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
+                    onSelect={() => {
+                      setWorkspaceMode();
+                      setCreateWorkspaceOpen(true);
+                    }}
                   >
                     <Plus className="h-4 w-4 text-muted-foreground" />
                     Create workspace
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Profile
+                  <DropdownMenuItem
+                    disabled
+                    className="rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
+                  >
+                    Edit workspace
                   </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled
+                    className="rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
+                  >
+                    Delete workspace
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
                     onSelect={() => setSettingsOpen(true)}
@@ -385,6 +360,39 @@ export function AppSidebar() {
       </Sidebar>
 
       <CreateWorkspaceDialog open={createWorkspaceOpen} onOpenChange={setCreateWorkspaceOpen} />
+      <Dialog open={joinWorkspaceOpen} onOpenChange={setJoinWorkspaceOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Join Workspace</DialogTitle>
+            <DialogDescription>
+              Paste an invitation token to join an existing workspace.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Input
+              value={joinWorkspaceToken}
+              onChange={(e) => setJoinWorkspaceToken(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleJoinWorkspace()}
+              placeholder="Invitation token"
+              autoFocus
+            />
+          </div>
+
+          <DialogFooter className="sm:justify-end">
+            <Button variant="outline" onClick={() => setJoinWorkspaceOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleJoinWorkspace}
+              disabled={!joinWorkspaceToken.trim() || joinWorkspace.isPending}
+            >
+              {joinWorkspace.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Join
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ChatDialog open={chatDialogOpen} onOpenChange={setChatDialogOpen} />
       <NotificationDrawer 

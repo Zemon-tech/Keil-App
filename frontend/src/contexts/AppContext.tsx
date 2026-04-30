@@ -67,6 +67,9 @@ export interface AppContextType {
   /** Switch to personal mode. Clears org and space selections. */
   setPersonalMode: () => void;
 
+  /** Switch to organisation mode without selecting an org/space (legacy workspace mode). */
+  setWorkspaceMode: () => void;
+
   /**
    * Switch to organisation mode and activate the given org.
    * If lastSpaceId is provided it will be used as the active space
@@ -174,6 +177,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.removeItem(STORAGE_SPACE_ID);
   }, []);
 
+  const setWorkspaceMode = useCallback(() => {
+    setMode("organisation");
+    localStorage.setItem(STORAGE_MODE, "organisation");
+  }, []);
+
   const setActiveOrganisation = useCallback(
     (orgId: string, lastSpaceId?: string | null) => {
       setMode("organisation");
@@ -212,6 +220,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       isLoadingOrgs,
       isLoadingSpaces,
       setPersonalMode,
+      setWorkspaceMode,
       setActiveOrganisation,
       setActiveSpace,
     }),
@@ -226,6 +235,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       isLoadingOrgs,
       isLoadingSpaces,
       setPersonalMode,
+      setWorkspaceMode,
       setActiveOrganisation,
       setActiveSpace,
     ]
