@@ -143,7 +143,7 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        <SidebarHeader className="p-3 pt-4 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-4 border-b border-border/50">
+        <SidebarHeader className="px-3 py-2 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-2 border-b border-border/50">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -156,8 +156,8 @@ export function AppSidebar() {
                   <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
-                <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2 rounded-lg">
-                  <div className="flex items-center gap-2.5 py-0.5">
+                <div className="flex h-8 items-center justify-between gap-3 px-1 rounded-lg">
+                  <div className="flex items-center gap-2.5">
                     <div className="flex size-8 items-center justify-center text-primary font-bold">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
