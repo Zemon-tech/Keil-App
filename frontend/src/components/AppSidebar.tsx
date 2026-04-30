@@ -51,6 +51,7 @@ import {
   Plus,
   Bell,
   Loader2,
+  MoreHorizontal,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -143,7 +144,7 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        <SidebarHeader className="p-3 pt-4 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-4 border-b border-border/50">
+        <SidebarHeader className="px-3 py-2 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-2 border-b border-border/50">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -156,8 +157,8 @@ export function AppSidebar() {
                   <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
-                <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2 rounded-lg">
-                  <div className="flex items-center gap-2.5 py-0.5">
+                <div className="flex h-8 items-center justify-between gap-3 px-1 rounded-lg">
+                  <div className="flex items-center gap-2.5">
                     <div className="flex size-8 items-center justify-center text-primary font-bold">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
@@ -275,59 +276,76 @@ export function AppSidebar() {
                     {mode === "personal" && <Check className="ml-auto h-4 w-4 text-primary" />}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">
-                    Workspace
+                  <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
+                    <span className="text-xs text-muted-foreground">Workspace</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWorkspaceMode();
+                          setJoinWorkspaceOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Join
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWorkspaceMode();
+                          setCreateWorkspaceOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Create
+                      </Button>
+                    </div>
                   </DropdownMenuLabel>
                   {workspaces.map((ws) => (
-                    <DropdownMenuItem
-                      key={ws.id}
-                      onClick={() => {
-                        setWorkspaceMode();
-                        setActiveWorkspace(ws.id);
-                      }}
-                      className="flex items-center justify-between cursor-pointer rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
-                          {ws.name.charAt(0).toUpperCase()}
+                    <div key={ws.id} className="group/item relative">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setWorkspaceMode();
+                          setActiveWorkspace(ws.id);
+                        }}
+                        className="flex items-center justify-between cursor-pointer rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
+                            {ws.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium truncate">{ws.name}</span>
                         </div>
-                        <span className="text-sm font-medium truncate">{ws.name}</span>
+                        {workspaceId === ws.id && <Check className="h-4 w-4 text-primary shrink-0" />}
+                      </DropdownMenuItem>
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-muted-foreground/10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-32">
+                            <DropdownMenuItem disabled>Edit</DropdownMenuItem>
+                            <DropdownMenuItem disabled className="text-destructive focus:text-destructive">
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary shrink-0" />}
-                    </DropdownMenuItem>
+                    </div>
                   ))}
-                  <DropdownMenuItem
-                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={() => {
-                      setWorkspaceMode();
-                      setJoinWorkspaceOpen(true);
-                    }}
-                  >
-                    <Plus className="h-4 w-4 text-muted-foreground" />
-                    Join workspace
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={() => {
-                      setWorkspaceMode();
-                      setCreateWorkspaceOpen(true);
-                    }}
-                  >
-                    <Plus className="h-4 w-4 text-muted-foreground" />
-                    Create workspace
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled
-                    className="rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
-                  >
-                    Edit workspace
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled
-                    className="rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
-                  >
-                    Delete workspace
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
