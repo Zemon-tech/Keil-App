@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
+import { EventPreviewDialog } from "./EventPreviewDialog";
+import { CreateTaskDialog } from "./CreateTaskDialog";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 
@@ -162,12 +164,12 @@ function renderEventContent(arg: EventContentArg) {
       </div>
     );
   }
-  
+
   // Handle calendar blocks with type metadata
   if (!type || !typeMeta[type]) {
     return <div className="p-2 text-xs">{arg.event.title}</div>;
   }
-  
+
   const meta = typeMeta[type];
   const Icon = meta.icon;
   const isBg = arg.event.display === "background";
@@ -209,6 +211,8 @@ import "./calendar-styles.css";
 export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [dialogPosition, setDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createInitialValues, setCreateInitialValues] = useState<Partial<TaskDTO> | undefined>(undefined);
   const [currentViewType, setCurrentViewType] = useState<CalendarView>("dayGridMonth");
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<EventInput[]>([]);
@@ -224,7 +228,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
     const taskEvents = tasks
-      .filter((t) => t.start_date && t.due_date && t.status !== "done" && !unscheduledTaskIds.current.has(t.id))
+      .filter((t) => t.start_date && t.due_date && t.status !== "done" && t.status !== "completed" && !unscheduledTaskIds.current.has(t.id))
       .sort((a, b) => {
         const priorityA = priorityOrder[a.priority] ?? 4;
         const priorityB = priorityOrder[b.priority] ?? 4;
@@ -236,7 +240,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         // All-day detection should match FullCalendar semantics:
         // - allDay events use an *exclusive* end at the start of a day boundary.
         // - timed events can cross midnight and should remain timed.
-        const isAllDay = isAllDayRangeLocal(startDate, endDate);
+        const isAllDay = t.type === "event" && t.is_all_day !== undefined ? t.is_all_day : isAllDayRangeLocal(startDate, endDate);
 
         console.log("🔍 All-day detection:", {
           taskId: t.id,
@@ -251,9 +255,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           start: t.start_date!,
           end: t.due_date!,
           allDay: isAllDay,
-          backgroundColor: getPriorityColor(t.priority),
+          display: "block",
+          backgroundColor: t.type === "event" ? "#6366f1" : getPriorityColor(t.priority),
           borderColor: "transparent",
-          classNames: [`task-priority-${t.priority}`],
+          classNames: t.type === "event" ? ["task-event-block"] : [`task-priority-${t.priority}`],
           extendedProps: {
             taskId: t.id,
             taskTitle: t.title,
@@ -262,7 +267,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             taskPriority: t.priority,
             isScheduledTask: true,
           },
-          editable: t.status !== "done",
+          editable: t.status !== "done" && t.status !== "completed",
         } satisfies EventInput;
       });
 
@@ -290,10 +295,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   // Handle status change - remove task from events if status becomes "done"
   const handleStatusChange = (taskId: string, newStatus: string) => {
     console.log("📊 Status change:", taskId, newStatus);
-    if (newStatus === "done") {
-      console.log("🗑️ Removing done task from calendar:", taskId);
+    if (newStatus === "done" || newStatus === "completed") {
+      console.log("🗑️ Removing completed task from calendar:", taskId);
       setEvents(prev => prev.filter(e => e.id !== taskId));
-      console.log("✅ Done task removed from state:", taskId);
+      console.log("✅ Completed task removed from state:", taskId);
     }
   };
 
@@ -321,9 +326,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         viewType,
       });
 
-      // Validation: Check if task is done
-      if (taskStatus === "done") {
-        console.error("❌ Cannot schedule completed tasks");
+      // Validation: Check if task is completed
+      if (taskStatus === "done" || taskStatus === "completed") {
+        console.error("❌ Cannot schedule completed tasks/events");
         toast.error("Cannot schedule completed tasks", {
           description: "This task is already marked as done.",
         });
@@ -585,34 +590,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 px-2"
-                onClick={goPrev}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 px-2"
-                onClick={goNext}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-
               <div className="inline-flex">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-8 px-2.5 text-xs rounded-r-none border-r-0"
-                  onClick={goToday}
+                  onClick={currentViewType === "dayGridMonth" ? goToday : () => setView("dayGridMonth")}
                 >
-                  Today
+                  {currentViewType === "dayGridMonth" ? "Today" : "Month"}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -635,8 +621,26 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               </div>
             </div>
 
-            <div className="min-w-0 flex-1 text-center">
-              <div className="truncate text-sm font-semibold">{headerTitle}</div>
+            <div className="min-w-0 flex-1 flex items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={goPrev}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="truncate text-sm font-semibold min-w-[140px] text-center">{headerTitle}</div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={goNext}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -695,14 +699,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 const isScheduledTask = arg.event.extendedProps.isScheduledTask;
                 if (isScheduledTask) {
                   const taskId = arg.event.extendedProps.taskId;
-                  // Capture mouse position for dialog positioning
-                  const rect = (arg.el as HTMLElement).getBoundingClientRect();
+                  // Capture position for dialog relative to the date cell if possible, fallback to event pill
+                  const cellEl = (arg.el as HTMLElement).closest('.fc-daygrid-day, .fc-timegrid-col') as HTMLElement | null;
+                  const rect = (cellEl || arg.el).getBoundingClientRect();
+                  
                   const screenWidth = window.innerWidth;
                   const screenHeight = window.innerHeight;
-                  const dialogWidth = 400; // approximate width
-                  const dialogHeight = 400; // approximate height
+                  const dialogWidth = 340; // match new max-w-[340px]
+                  const dialogHeight = 200; // approximate compact height
 
-                  // Calculate x position: show on right if there's space, otherwise left
+                  // Calculate x position: show on right of cell if there's space, otherwise left
                   let x = rect.right + 10;
                   if (x + dialogWidth > screenWidth) {
                     x = rect.left - dialogWidth - 10;
@@ -710,7 +716,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                   // Ensure x is within bounds
                   x = Math.max(10, Math.min(x, screenWidth - dialogWidth - 10));
 
-                  // Calculate y position: keep it within vertical bounds
+                  // Calculate y position: align with top of the cell
                   let y = rect.top;
                   if (y + dialogHeight > screenHeight) {
                     y = screenHeight - dialogHeight - 10;
@@ -723,10 +729,11 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 }
               }}
               dateClick={(arg) => {
-                const calendarApi = calendarRef.current?.getApi();
-                if (calendarApi) {
-                  calendarApi.changeView("timeGridDay", arg.date);
-                }
+                setCreateInitialValues({
+                  type: "task",
+                  start_date: arg.date.toISOString(),
+                } as Partial<TaskDTO>);
+                setCreateDialogOpen(true);
               }}
               datesSet={(dateInfo) => {
                 const view = dateInfo.view.type as CalendarView;
@@ -742,18 +749,47 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         </div>
       </div>
 
-      <TaskPreviewDialog
-        taskId={selectedTaskId}
-        open={!!selectedTaskId}
+      {tasks.find(t => t.id === selectedTaskId)?.type === "event" ? (
+        <EventPreviewDialog
+          eventId={selectedTaskId}
+          open={!!selectedTaskId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedTaskId("");
+              setDialogPosition(null);
+            }
+          }}
+          onUnschedule={handleTaskUnschedule}
+          onStatusChange={handleStatusChange}
+          position={dialogPosition}
+        />
+      ) : (
+        <TaskPreviewDialog
+          taskId={selectedTaskId}
+          open={!!selectedTaskId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedTaskId("");
+              setDialogPosition(null);
+            }
+          }}
+          onUnschedule={handleTaskUnschedule}
+          onStatusChange={handleStatusChange}
+          position={dialogPosition}
+        />
+      )}
+
+      <CreateTaskDialog
+        open={createDialogOpen}
         onOpenChange={(open) => {
-          if (!open) {
-            setSelectedTaskId("");
-            setDialogPosition(null);
-          }
+          setCreateDialogOpen(open);
+          if (!open) setCreateInitialValues(undefined);
         }}
-        onUnschedule={handleTaskUnschedule}
-        onStatusChange={handleStatusChange}
-        position={dialogPosition}
+        initialValues={createInitialValues}
+        onTaskCreated={() => {
+          setCreateDialogOpen(false);
+          setCreateInitialValues(undefined);
+        }}
       />
     </>
   );

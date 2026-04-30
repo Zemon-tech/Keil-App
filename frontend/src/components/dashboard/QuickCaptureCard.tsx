@@ -4,7 +4,7 @@ import { Zap } from "lucide-react";
 
 export function QuickCaptureCard() {
   return (
-    <Card className="md:col-span-3 bg-card/90 border border-border/60 rounded-2xl px-4 py-3 shadow-sm hover:bg-card/95 transition-colors">
+    <Card className="md:col-span-3 bg-card/90 border border-border/60 rounded-2xl px-4 py-2.5 gap-2 shadow-sm hover:bg-card/95 transition-colors">
       <div className="flex items-center gap-3 w-full">
         <Zap className="h-4 w-4 text-primary" />
         <Input

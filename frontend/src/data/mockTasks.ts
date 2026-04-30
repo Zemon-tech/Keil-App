@@ -3,6 +3,7 @@ import type { Task } from "../types/task";
 export const mockTasks: Task[] = [
     {
         id: "tsk_01",
+        type: "task",
         projectId: "prj_01",
         projectTitle: "ClarityOS Launch",
         title: "Define Task Module UI",
@@ -59,6 +60,7 @@ export const mockTasks: Task[] = [
     },
     {
         id: "tsk_02",
+        type: "task",
         projectId: "prj_01",
         projectTitle: "ClarityOS Launch",
         title: "Dependency graph (v1)",
@@ -85,6 +87,7 @@ export const mockTasks: Task[] = [
     },
     {
         id: "tsk_03",
+        type: "task",
         projectId: "prj_02",
         projectTitle: "KeilHQ Core",
         title: "Stabilize auth refresh flow",

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { protect } from "../middlewares/auth.middleware";
+import { attachWorkspaceContext, protect } from "../middlewares/auth.middleware";
 import {
     createDirectChannel,
     createGroupChannel,
@@ -13,7 +13,7 @@ import {
 const router = Router();
 
 // All chat routes require authentication
-router.use(protect);
+router.use(protect, attachWorkspaceContext);
 
 router.post("/channels/direct", createDirectChannel);
 router.post("/channels/group", createGroupChannel);

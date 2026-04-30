@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EditableText } from "@/components/ui/editable-text";
 
-import type { TaskPriority, TaskStatus } from "@/types/task";
+import type { TaskPriority, TaskStatus, AnyStatus } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import { useChangeTaskStatus } from "@/hooks/api/useTasks";
 
@@ -59,7 +59,7 @@ function StatusBadge({
   status,
   onStatusChange,
 }: {
-  status: TaskStatus;
+  status: AnyStatus;
   onStatusChange: (s: TaskStatus) => void;
 }) {
   return (

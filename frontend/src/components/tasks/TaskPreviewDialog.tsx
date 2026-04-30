@@ -1,26 +1,55 @@
 // src/components/tasks/TaskPreviewDialog.tsx
 //
 // Read-only task preview dialog — opened when a user clicks a #task-name
-// mention in the Activity tab. Shows name, status, priority, objective, and
-// success criteria. The task name in the header is a link that navigates to
-// /tasks?taskId=<id> so the full task detail pane opens.
+// mention in the Activity tab or calendar. Shows a highly compact, scannable
+// preview of the task. The entire card is clickable and navigates to the full task.
 
-import { ExternalLink, Flag, Loader2, X } from "lucide-react";
+import { useState } from "react";
+import { format, isSameDay } from "date-fns";
+import { 
+  X, 
+  Pencil, 
+  Trash2, 
+  MoreHorizontal, 
+  Clock, 
+  MapPin, 
+  Users, 
+  Calendar, 
+  Phone, 
+  Brain, 
+  CheckSquare,
+  Loader2
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-import { useTask, useChangeTaskStatus, useUpdateTask } from "@/hooks/api/useTasks";
-import { STATUS_COLOR, PRIORITY_CONFIG } from "./task-detail-shared";
-import type { TaskStatus, TaskPriority } from "@/types/task";
+import { 
+  useTask, 
+  useUpdateTask, 
+  useDeleteTask,
+  useChangeTaskStatus 
+} from "@/hooks/api/useTasks";
+import { STATUS_COLOR } from "./task-detail-shared";
+import type { TaskStatus } from "@/types/task";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -36,14 +65,34 @@ interface TaskPreviewDialogProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Strip leading "• " bullet prefix from stored bullet lines */
-function parseBullets(raw: string | undefined): string[] {
-  if (!raw) return [];
-  return raw
-    .split("\n")
-    .map((l) => l.replace(/^•\s*/, "").trim())
-    .filter(Boolean);
+function formatTimeCompact(startISO?: string | null, endISO?: string | null, isAllDay?: boolean) {
+  if (!startISO) return null;
+  const start = new Date(startISO);
+  const dateStr = format(start, "MMM d");
+  
+  if (isAllDay) return `${dateStr} · All Day`;
+  
+  const timeStart = format(start, "h:mm a").replace(":00", "");
+  
+  if (endISO) {
+    const end = new Date(endISO);
+    if (isSameDay(start, end)) {
+      const timeEnd = format(end, "h:mm a").replace(":00", "");
+      return `${dateStr} · ${timeStart}–${timeEnd}`;
+    }
+  }
+  return `${dateStr} · ${timeStart}`;
 }
+
+const getEventIcon = (type?: string | null, eventType?: string | null) => {
+  if (type === "task") return <CheckSquare className="w-4 h-4 text-primary shrink-0" />;
+  switch (eventType) {
+    case "meeting": return <Users className="w-4 h-4 text-blue-500 shrink-0" />;
+    case "call": return <Phone className="w-4 h-4 text-green-500 shrink-0" />;
+    case "focus": return <Brain className="w-4 h-4 text-purple-500 shrink-0" />;
+    default: return <Calendar className="w-4 h-4 text-orange-500 shrink-0" />;
+  }
+};
 
 // ─── TaskPreviewDialog ────────────────────────────────────────────────────────
 
@@ -57,8 +106,11 @@ export function TaskPreviewDialog({
 }: TaskPreviewDialogProps) {
   const navigate = useNavigate();
   const { data: task, isLoading } = useTask(taskId);
-  const changeTaskStatus = useChangeTaskStatus();
   const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+  const changeTaskStatus = useChangeTaskStatus();
+
+  const [descExpanded, setDescExpanded] = useState(false);
 
   const handleNavigateToTask = () => {
     onOpenChange(false);
@@ -66,231 +118,227 @@ export function TaskPreviewDialog({
   };
 
   const handleUnschedule = () => {
-    console.log("🗑️ Unschedule clicked in dialog:", taskId);
     updateTask.mutate({
       id: taskId,
-      updates: {
-        start_date: null,
-        due_date: null,
-      },
-    }, {
-      onSuccess: (data) => {
-        console.log("✅ Backend update successful:", data);
-        console.log("📅 Task dates after update:", { start_date: data.start_date, due_date: data.due_date });
-      },
-      onError: (error) => {
-        console.error("❌ Backend update failed:", error);
-      },
+      updates: { start_date: null, due_date: null },
     });
     onUnschedule?.(taskId);
     onOpenChange(false);
   };
 
-  const objectiveBullets = parseBullets(task?.objective);
-  const successBullets = parseBullets(task?.success_criteria);
+  const handleDelete = () => {
+    if (confirm("Are you sure you want to delete this task?")) {
+      deleteTask.mutate(taskId);
+      onOpenChange(false);
+    }
+  };
+
+  if (!open) return null;
 
   return (
     <>
       {/* Backdrop */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/20 z-50"
-          onClick={() => onOpenChange(false)}
-        />
-      )}
+      <div
+        className="fixed inset-0 z-50 bg-black/5"
+        onClick={() => onOpenChange(false)}
+      />
 
       {/* Dialog content with absolute positioning */}
-      {open && (
-        <div
-          className="fixed z-50 max-w-lg w-full bg-background rounded-lg border shadow-lg"
-          style={{
-            left: position?.x ?? '50%',
-            top: position?.y ?? '50%',
-            transform: position ? 'none' : 'translate(-50%, -50%)',
-          }}
-        >
-          <div className="p-0 gap-0">
+      <div
+        className="fixed z-50 max-w-[340px] w-full bg-background rounded-xl border shadow-xl flex group cursor-pointer hover:shadow-2xl transition-all duration-200 overflow-hidden"
+        style={{
+          left: position?.x ?? '50%',
+          top: position?.y ?? '50%',
+          transform: position ? 'none' : 'translate(-50%, -50%)',
+        }}
+        onClick={handleNavigateToTask}
+      >
+        {/* Left colored border for status indication */}
+        <div 
+          className={cn(
+            "w-1.5 shrink-0 transition-colors", 
+            task ? STATUS_COLOR[task.status as TaskStatus] : "bg-border"
+          )} 
+        />
+        
+        <div className="flex-1 flex flex-col p-4 gap-3 relative min-h-[120px]">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-6 h-full text-muted-foreground gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-xs">Loading task…</span>
+            </div>
+          ) : task ? (
+            <>
+              {/* TOP RIGHT ACTIONS */}
+              <div className="absolute top-2 right-2 flex items-center gap-0.5">
+                {/* Actions that fade in on hover */}
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity mr-1">
+                  <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleNavigateToTask(); }} 
+                          className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Edit</TooltipContent>
+                    </Tooltip>
 
-            {/* ── Header ── */}
-            <div className="px-5 pt-5 pb-4 border-b border-border/60 flex items-start justify-between">
-              <div className="flex-1">
-                {isLoading ? (
-                  <div className="text-base flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading task…
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-base leading-snug">
-                      {/* Clickable task name → navigates to full task page */}
-                      <button
-                        onClick={handleNavigateToTask}
-                        className="group flex items-center gap-1.5 text-left font-semibold text-foreground hover:text-primary transition-colors"
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(); }} 
+                          className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Delete</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button 
+                        onClick={(e) => e.stopPropagation()} 
+                        className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        <span className="truncate">{task?.title ?? "Untitled task"}</span>
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
+                        <MoreHorizontal className="w-3.5 h-3.5" />
                       </button>
-                    </div>
-                    <div className="text-xs mt-1 text-muted-foreground">
-                      Click the task name above to open the full task page.
-                    </div>
-                  </>
-                )}
-              </div>
-              <button
-                onClick={() => onOpenChange(false)}
-                className="ml-2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* ── Body ── */}
-            <div className="px-5 py-4 space-y-4 min-h-[200px]">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      {(task.start_date || task.due_date) && (
+                        <DropdownMenuItem onClick={handleUnschedule}>
+                          Unschedule
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuSubContent>
+                            {["todo", "in-progress", "done", "backlog"].map((s) => (
+                              <DropdownMenuItem key={s} onClick={() => {
+                                changeTaskStatus.mutate({ id: taskId, status: s as TaskStatus });
+                                onStatusChange?.(taskId, s);
+                              }}>
+                                <span className="capitalize">{s.replace("-", " ")}</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenuSub>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              ) : task ? (
-                <>
-                  {/* Status + Priority row */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Status badge */}
-                    <Badge
-                      variant="outline"
-                      className="h-5 gap-1.5 px-2 text-[11px] pointer-events-none"
-                    >
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          STATUS_COLOR[task.status as TaskStatus]
-                        )}
-                      />
-                      {task.status}
-                    </Badge>
 
-                    {/* Priority badge */}
-                    {task.priority && (
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "h-5 gap-1.5 px-2 text-[11px] pointer-events-none",
-                          PRIORITY_CONFIG[task.priority as TaskPriority]?.color
-                        )}
-                      >
-                        <Flag className="h-3 w-3" />
-                        {task.priority}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Objective */}
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Objective
-                    </p>
-                    {objectiveBullets.length > 0 ? (
-                      <ul className="space-y-1">
-                        {objectiveBullets.map((b, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-foreground/90">
-                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
-                            {b}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No objective set.</p>
-                    )}
-                  </div>
-
-                  {/* Success Criteria */}
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Success Criteria
-                    </p>
-                    {successBullets.length > 0 ? (
-                      <ul className="space-y-1">
-                        {successBullets.map((b, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-foreground/90">
-                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500/70" />
-                            {b}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No success criteria set.</p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground py-6 text-center">
-                  Task not found.
-                </p>
-              )}
-            </div>
-
-            {/* ── Footer ── */}
-            <div className="px-5 py-3 border-t border-border/60 bg-muted/20 flex justify-between items-center gap-2">
-              <div className="flex items-center gap-2">
-                {task?.start_date && task?.due_date && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={handleUnschedule}
-                  >
-                    Unschedule
-                  </Button>
-                )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 text-xs">
-                      Change Status
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuItem onClick={() => {
-                      console.log("📊 Status change to todo:", taskId);
-                      changeTaskStatus.mutate({ id: taskId, status: "todo" });
-                      onStatusChange?.(taskId, "todo");
-                    }}>
-                      Todo
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      console.log("📊 Status change to in-progress:", taskId);
-                      changeTaskStatus.mutate({ id: taskId, status: "in-progress" });
-                      onStatusChange?.(taskId, "in-progress");
-                    }}>
-                      In Progress
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      console.log("📊 Status change to done:", taskId);
-                      changeTaskStatus.mutate({ id: taskId, status: "done" });
-                      onStatusChange?.(taskId, "done");
-                    }}>
-                      Done
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      console.log("📊 Status change to backlog:", taskId);
-                      changeTaskStatus.mutate({ id: taskId, status: "backlog" });
-                      onStatusChange?.(taskId, "backlog");
-                    }}>
-                      Backlog
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {/* Close always visible */}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onOpenChange(false); }} 
+                  className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={handleNavigateToTask}
-                className="flex items-center gap-1.5 text-xs text-primary hover:underline font-medium"
-              >
-                Open full task
-                <ExternalLink className="h-3 w-3" />
-              </button>
+
+              {/* 1. TITLE & EVENT TYPE */}
+              <div className="flex items-start gap-2 pr-20">
+                <div className="mt-0.5">
+                  {getEventIcon(task.type, task.event_type)}
+                </div>
+                <h3 className="font-semibold text-[15px] leading-tight text-foreground line-clamp-2">
+                  {task.title || "Untitled task"}
+                </h3>
+              </div>
+
+              {/* 2. TIME */}
+              {task.start_date && (
+                <div className="flex items-center gap-2 text-[13px] text-foreground/80 font-medium">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span>{formatTimeCompact(task.start_date, task.due_date, task.is_all_day)}</span>
+                </div>
+              )}
+
+              {/* 3. ASSIGNED PEOPLE */}
+              {task.assignees && task.assignees.length > 0 && (
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  
+                  {task.assignees.length === 1 ? (
+                    <span className="text-xs text-muted-foreground truncate">
+                      {task.assignees[0].name || task.assignees[0].email}
+                    </span>
+                  ) : (
+                    <TooltipProvider>
+                      <Tooltip delayDuration={200}>
+                        <TooltipTrigger asChild>
+                          <div 
+                            className="flex items-center -space-x-1.5 hover:space-x-0 transition-all duration-200"
+                            onClick={(e) => e.stopPropagation()} // Prevent card click when interacting with avatars
+                          >
+                            {task.assignees.slice(0, 3).map(a => (
+                              <Avatar key={a.id} className="w-5 h-5 border-[1.5px] border-background relative hover:z-10 transition-all">
+                                <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                                  {a.name?.charAt(0) || a.email.charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {task.assignees.length > 3 && (
+                              <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-medium border-[1.5px] border-background relative z-10">
+                                +{task.assignees.length - 3}
+                              </div>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="flex flex-col gap-1 p-2" side="bottom">
+                          {task.assignees.map(a => (
+                            <div key={a.id} className="text-xs">{a.name || a.email}</div>
+                          ))}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
+              )}
+
+              {/* 4. DESCRIPTION */}
+              {(task.description || task.objective) && (
+                <div 
+                  className="mt-0.5" 
+                  onClick={(e) => { 
+                    const content = task.description || task.objective || "";
+                    if (content.length > 80) {
+                      e.stopPropagation(); 
+                      setDescExpanded(!descExpanded); 
+                    }
+                  }}
+                >
+                  <p className={cn(
+                    "text-xs text-muted-foreground leading-relaxed transition-all",
+                    !descExpanded && "line-clamp-2"
+                  )}>
+                    {(task.description || task.objective)?.replace(/^•\s*/gm, "")}
+                  </p>
+                </div>
+              )}
+
+              {/* 5. LOCATION */}
+              {task.location && (
+                <div className="flex items-start gap-2 text-xs text-muted-foreground/80 mt-0.5">
+                  <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span className="truncate">{task.location}</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-center py-6 h-full">
+              <p className="text-sm text-muted-foreground">Task not found.</p>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </>
   );
 }
+

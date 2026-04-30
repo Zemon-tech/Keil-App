@@ -7,13 +7,31 @@ import { NextEventCard } from "./dashboard/NextEventCard";
 import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
 import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
 import { UpNextCard } from "./dashboard/UpNextCard";
-import { useDashboard } from "@/hooks/api/useDashboard";
+import { useDashboard, useOrgDashboard } from "@/hooks/api/useDashboard";
+import { useAppContext } from "@/contexts/AppContext";
 import { AlertCircle } from "lucide-react";
 
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
-  const { data, isLoading, isError } = useDashboard();
+
+  // ── Mode awareness ─────────────────────────────────────────
+  const { mode, activeOrgId, activeSpaceId } = useAppContext();
+  const isOrgMode = mode === "organisation" && !!activeOrgId && !!activeSpaceId;
+
+  // ── Legacy workspace dashboard (personal mode or fallback) ──
+  const { data: legacyData, isLoading: legacyLoading, isError: legacyError } = useDashboard();
+
+  // ── Org/space-scoped dashboard (organisation mode) ──────────
+  const { data: orgData, isLoading: orgLoading, isError: orgError } = useOrgDashboard(
+    isOrgMode ? activeOrgId : null,
+    isOrgMode ? activeSpaceId : null
+  );
+
+  // Use the correct source based on mode
+  const data = isOrgMode ? orgData : legacyData;
+  const isLoading = isOrgMode ? orgLoading : legacyLoading;
+  const isError = isOrgMode ? orgError : legacyError;
 
   useEffect(() => {
     setMounted(true);

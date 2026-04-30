@@ -1,30 +1,35 @@
 const fs = require('fs');
-const { Client } = require('pg');
+const path = require('path');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-async function runMigration() {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-  });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
+async function runMigration() {
   try {
-    await client.connect();
-    console.log("Connected to database");
-    
     const migrations = [
-      '004_chat_schema.sql'
+      '004_chat_schema.sql',
+      '005_add_events_support.sql'
     ];
     
     for (const file of migrations) {
       console.log(`Running ${file}...`);
-      const sql = fs.readFileSync(`src/migrations/${file}`, 'utf8');
-      await client.query(sql);
-      console.log(`Successfully ran ${file}`);
+      const sqlPath = path.join(__dirname, 'src', 'migrations', file);
+      if (fs.existsSync(sqlPath)) {
+        const sql = fs.readFileSync(sqlPath, 'utf8');
+        await pool.query(sql);
+        console.log(`Successfully ran ${file}`);
+      } else {
+        console.warn(`Migration file ${file} not found at ${sqlPath}`);
+      }
     }
   } catch (err) {
-    console.error("Migration failed:", err);
+    console.error("Migration failed:", err.message);
   } finally {
-    await client.end();
+    await pool.end();
   }
 }
 

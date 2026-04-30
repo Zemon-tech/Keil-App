@@ -64,7 +64,7 @@ export function SchedulePage() {
   // Handle task scheduling updates
   const handleTaskSchedule = (taskId: string, startISO: string, endISO: string) => {
     console.log("📅 Scheduling task:", { taskId, startISO, endISO });
-    
+
     setTasks((prevTasks) =>
       prevTasks.map((task) =>
         task.id === taskId
@@ -72,7 +72,7 @@ export function SchedulePage() {
           : task
       )
     );
-    
+
     console.log("✅ Task scheduled successfully");
   };
 
@@ -150,10 +150,10 @@ export function SchedulePage() {
 
               <div className="flex-1 min-h-0 w-full min-w-0">
                 <TabsContent value="schedule" className="h-full mt-0 focus-visible:outline-none flex flex-col w-full min-w-0">
-                  <TaskSchedulePane 
-                    tasks={tasks} 
-                    blocks={mockCalendarBlocks as any} 
-                    selectedTask={selectedTask}
+                  <TaskSchedulePane
+                    tasks={tasks as any}
+                    blocks={mockCalendarBlocks as any}
+                    selectedTask={selectedTask as any}
                     onViewChange={(view) => {
                       console.log('📅 Calendar view changed to:', view);
                     }}

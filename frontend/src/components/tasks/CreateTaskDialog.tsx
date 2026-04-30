@@ -18,9 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge"; // ← ShadCN component (already in your codebase)
-import type { Task, TaskStatus } from "@/types/task";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import type { Task, TaskStatus, EventType, EventStatus, AnyStatus } from "@/types/task";
 import { useCreateTask, useUpdateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
+import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
 
 // Simple type for assignees (replace with your real UserDTO if you have one)
 type SimpleAssigneeOption = {
@@ -28,7 +30,8 @@ type SimpleAssigneeOption = {
   name: string;
 };
 
-const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+const TASK_STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+const EVENT_STATUS_OPTIONS: EventStatus[] = ["confirmed", "tentative", "cancelled", "completed"];
 const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"] as const;
 
 interface CreateTaskDialogProps {
@@ -36,7 +39,7 @@ interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   onTaskCreated: (newTaskId: string) => void;
   allTasks?: TaskDTO[];
-  allUsers?: SimpleAssigneeOption[]; // ← pass your workspace users here
+  allUsers?: SimpleAssigneeOption[];
   // Edit mode props
   mode?: "create" | "edit";
   taskId?: string;
@@ -45,6 +48,8 @@ interface CreateTaskDialogProps {
   /** When set, forces "Create subtask" mode — parent_task_id is pre-filled and locked */
   parentTaskId?: string;
   parentTaskTitle?: string;
+  /** When true, routes mutations to personal task endpoints and hides org-only fields */
+  isPersonalMode?: boolean;
 }
 
 export function CreateTaskDialog({
@@ -59,9 +64,12 @@ export function CreateTaskDialog({
   onTaskUpdated,
   parentTaskId,
   parentTaskTitle,
+  isPersonalMode = false,
 }: CreateTaskDialogProps) {
-  const createTask = useCreateTask();
-  const updateTask = useUpdateTask();
+  const createOrgTask = useCreateTask();
+  const updateOrgTask = useUpdateTask();
+  const createPersonalTask = useCreatePersonalTask();
+  const updatePersonalTask = useUpdatePersonalTask();
 
   // ── Form State ─────────────────────────────────────────────────────────────
   const [newTitle, setNewTitle] = useState("");
@@ -73,7 +81,7 @@ export function CreateTaskDialog({
 
   const [newStartDateISO, setNewStartDateISO] = useState("");
   const [newDueDateISO, setNewDueDateISO] = useState("");
-  const [newStatus, setNewStatus] = useState<TaskStatus>("todo");
+  const [newStatus, setNewStatus] = useState<AnyStatus>("todo");
   const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
 
   // New fields from our roadmap
@@ -81,6 +89,13 @@ export function CreateTaskDialog({
   const [newStoryPoints, setNewStoryPoints] = useState("");
   const [newTimeEstimate, setNewTimeEstimate] = useState(""); // minutes
   const [newParentTaskId, setNewParentTaskId] = useState<string>("");
+
+  // Event specific fields
+  const [newType, setNewType] = useState<"task" | "event">("task");
+  const [newEventType, setNewEventType] = useState<EventType | "">("");
+  const [newCustomEventType, setNewCustomEventType] = useState("");
+  const [newLocation, setNewLocation] = useState("");
+  const [newIsAllDay, setNewIsAllDay] = useState(false);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const resetCreateForm = () => {
@@ -90,12 +105,17 @@ export function CreateTaskDialog({
     setNewSuccessCriteriaBullets([""]);
     setNewStartDateISO("");
     setNewDueDateISO("");
-    setNewStatus("todo");
+    setNewStatus(newType === "event" ? "confirmed" : "todo");
     setNewPriority("medium");
     setNewAssigneeIds([]);
     setNewStoryPoints("");
     setNewTimeEstimate("");
     setNewParentTaskId(parentTaskId ?? "");
+    setNewType("task");
+    setNewEventType("");
+    setNewCustomEventType("");
+    setNewLocation("");
+    setNewIsAllDay(false);
   };
 
   // Pre-fill form when opening in edit mode
@@ -124,7 +144,7 @@ export function CreateTaskDialog({
       setNewDueDateISO(
         (initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? ""
       );
-      setNewStatus((initialValues.status as TaskStatus) ?? "todo");
+      setNewStatus((initialValues.status as AnyStatus) ?? (initialValues.type === "event" ? "confirmed" : "todo"));
       setNewPriority((initialValues.priority as any) ?? "medium");
       setNewStoryPoints(
         initialValues.story_points != null ? String(initialValues.story_points) : ""
@@ -138,6 +158,24 @@ export function CreateTaskDialog({
         ((initialValues as any).assignees ?? []).map((a: any) => a.id)
       );
       setNewParentTaskId((initialValues as any).parent_task_id ?? "");
+      setNewType((initialValues.type as "task" | "event") ?? "task");
+      
+      const et = initialValues.event_type ?? "";
+      if (et && !["meeting", "call", "birthday"].includes(et)) {
+        setNewEventType("other");
+        setNewCustomEventType(et);
+      } else {
+        setNewEventType(et as EventType);
+        setNewCustomEventType("");
+      }
+
+      setNewLocation(initialValues.location ?? "");
+      setNewIsAllDay(initialValues.is_all_day ?? false);
+    } else if (open && mode === "create" && initialValues) {
+      // Create mode: allow callers to prefill dates/type (e.g. calendar date click)
+      setNewType((initialValues.type as "task" | "event") ?? "task");
+      setNewStartDateISO((initialValues as any).start_date ?? (initialValues as any).plannedStartISO ?? "");
+      setNewDueDateISO((initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? "");
     } else if (open && parentTaskId) {
       // Subtask mode: pre-fill parent
       setNewParentTaskId(parentTaskId);
@@ -145,10 +183,20 @@ export function CreateTaskDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const toDateInputValue = (iso: string) => {
+  const toDateInputValue = (iso: string, includeTime: boolean = false) => {
     if (!iso) return "";
     const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    if (Number.isNaN(d.getTime())) return "";
+    
+    if (includeTime) {
+      // Return YYYY-MM-DDThh:mm in local time
+      const offset = d.getTimezoneOffset() * 60000;
+      const localISOTime = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+      return localISOTime;
+    }
+    
+    // Return YYYY-MM-DD
+    return d.toISOString().slice(0, 10);
   };
 
   // Bullet list helpers
@@ -186,7 +234,25 @@ export function CreateTaskDialog({
   // Form validation (enforces our Clarity rules)
   const hasValidObjective = newObjectiveBullets.some((b) => b.trim().length > 0);
   const hasValidSuccessCriteria = newSuccessCriteriaBullets.some((b) => b.trim().length > 0);
-  const isFormValid = newTitle.trim() && hasValidObjective && hasValidSuccessCriteria;
+  
+  // Date validation
+  let isDateValid = true;
+  let dateError = "";
+  if (newStartDateISO && newDueDateISO) {
+    if (newType === "event" && newDueDateISO <= newStartDateISO) {
+      isDateValid = false;
+      dateError = "End time must be after start time.";
+    } else if (newDueDateISO < newStartDateISO) {
+      isDateValid = false;
+      dateError = "Due date must be on or after start date.";
+    }
+  }
+
+  const isFormValid = newTitle.trim() && 
+    (newType === "event" 
+      ? (newEventType !== "" && (newEventType !== "other" || newCustomEventType.trim() !== "")) 
+      : (hasValidObjective && hasValidSuccessCriteria)) &&
+    isDateValid;
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleCreateSubmit(e: React.FormEvent) {
@@ -206,6 +272,12 @@ export function CreateTaskDialog({
 
     const input: CreateTaskInput = {
       title: newTitle.trim(),
+      type: newType,
+      event_type: newType === "event" 
+        ? (newEventType === "other" ? newCustomEventType.trim() : (newEventType as EventType)) 
+        : undefined,
+      location: newType === "event" ? newLocation.trim() || undefined : undefined,
+      is_all_day: newType === "event" ? newIsAllDay : undefined,
       status: newStatus,
       priority: newPriority,
       description: newDescription.trim() || undefined,
@@ -213,33 +285,79 @@ export function CreateTaskDialog({
       success_criteria: successCriteriaFormatted || undefined,
       start_date: newStartDateISO || undefined,
       due_date: newDueDateISO || undefined,
-      story_points: newStoryPoints ? parseInt(newStoryPoints, 10) : undefined,
-      time_estimate: newTimeEstimate ? parseInt(newTimeEstimate, 10) : undefined,
+      story_points: newType === "task" && newStoryPoints ? parseInt(newStoryPoints, 10) : undefined,
+      time_estimate: newType === "task" && newTimeEstimate ? parseInt(newTimeEstimate, 10) : undefined,
       assignee_ids: newAssigneeIds.length > 0 ? newAssigneeIds : undefined,
-      parent_task_id: newParentTaskId === "none" || !newParentTaskId ? undefined : newParentTaskId,
+      parent_task_id: newType === "task" && newParentTaskId !== "none" && newParentTaskId ? newParentTaskId : undefined,
     };
 
     if (mode === "edit" && taskId) {
-      // ── Edit mode: update existing task ──
-      updateTask.mutate(
-        { id: taskId, updates: input },
-        {
-          onSuccess: () => {
+      if (isPersonalMode) {
+        // ── Personal edit mode ──
+        const personalUpdates = {
+          title: newTitle.trim(),
+          status: newStatus as TaskStatus,
+          priority: newPriority,
+          description: newDescription.trim() || undefined,
+          objective: objectiveFormatted || undefined,
+          success_criteria: successCriteriaFormatted || undefined,
+          start_date: newStartDateISO || undefined,
+          due_date: newDueDateISO || undefined,
+        };
+        updatePersonalTask.mutate(
+          { id: taskId, updates: personalUpdates },
+          {
+            onSuccess: () => {
+              onOpenChange(false);
+              resetCreateForm();
+              onTaskUpdated?.(taskId);
+            },
+          }
+        );
+      } else {
+        // ── Org edit mode ──
+        updateOrgTask.mutate(
+          { id: taskId, updates: input },
+          {
+            onSuccess: () => {
+              onOpenChange(false);
+              resetCreateForm();
+              onTaskUpdated?.(taskId);
+            },
+          }
+        );
+      }
+    } else {
+      if (isPersonalMode) {
+        // ── Personal create mode ──
+        const personalInput = {
+          title: newTitle.trim(),
+          status: newStatus as TaskStatus,
+          priority: newPriority,
+          description: newDescription.trim() || undefined,
+          objective: objectiveFormatted || undefined,
+          success_criteria: successCriteriaFormatted || undefined,
+          start_date: newStartDateISO || undefined,
+          due_date: newDueDateISO || undefined,
+          parent_task_id: newParentTaskId === "none" || !newParentTaskId ? undefined : newParentTaskId,
+        };
+        createPersonalTask.mutate(personalInput, {
+          onSuccess: (data) => {
             onOpenChange(false);
             resetCreateForm();
-            onTaskUpdated?.(taskId);
+            if (data?.id) onTaskCreated(data.id);
           },
-        }
-      );
-    } else {
-      // ── Create mode ──
-      createTask.mutate(input, {
-        onSuccess: (data) => {
-          onOpenChange(false);
-          resetCreateForm();
-          if (data?.id) onTaskCreated(data.id);
-        },
-      });
+        });
+      } else {
+        // ── Org create mode ──
+        createOrgTask.mutate(input, {
+          onSuccess: (data) => {
+            onOpenChange(false);
+            resetCreateForm();
+            if (data?.id) onTaskCreated(data.id);
+          },
+        });
+      }
     }
   }
 
@@ -251,17 +369,47 @@ export function CreateTaskDialog({
         if (!isOpen) resetCreateForm();
       }}
     >
-      <DialogContent className="max-w-2xl p-0 gap-0">
+      <DialogContent className="max-w-2xl p-0 gap-0" showCloseButton={false}>
         <form onSubmit={handleCreateSubmit}>
           {/* Header */}
           <div className="px-5 pt-5 pb-4 border-b border-border/60">
             <DialogHeader>
-              <DialogTitle className="text-base">
-                {mode === "edit" ? "Edit task" : parentTaskId ? "Create subtask" : "Create new task"}
-              </DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle className="text-base">
+                  {mode === "edit" ? `Edit ${newType}` : parentTaskId ? "Create subtask" : `Create new ${newType}`}
+                </DialogTitle>
+                {mode !== "edit" && !parentTaskId && (
+                  <div className="inline-flex items-center rounded-md border border-border p-1 bg-muted/20">
+                    <button
+                      type="button"
+                      onClick={() => { setNewType("task"); if (newStatus === "confirmed" || newStatus === "tentative" || newStatus === "cancelled" || newStatus === "completed") setNewStatus("todo"); }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
+                        newType === "task"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Task
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setNewType("event"); if (newStatus === "todo" || newStatus === "backlog" || newStatus === "in-progress" || newStatus === "done") setNewStatus("confirmed"); }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
+                        newType === "event"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Event
+                    </button>
+                  </div>
+                )}
+              </div>
               <DialogDescription className="text-xs mt-0.5">
                 {parentTaskId ? (
                   <>Creating a subtask inside <strong>{parentTaskTitle || "parent task"}</strong>.</>
+                ) : newType === "event" ? (
+                  <>Events are meetings, calls, or anything non-work related.</>
                 ) : (
                   <>Every task must have a clear <strong>Objective</strong> and <strong>Success Criteria</strong>.</>
                 )}
@@ -271,10 +419,14 @@ export function CreateTaskDialog({
 
           <Tabs defaultValue="basics" className="w-full">
             <div className="px-5 pt-3">
-              <TabsList className="h-8 text-xs w-full grid grid-cols-3">
+              <TabsList className={`h-8 text-xs w-full ${newType === "event" ? "grid grid-cols-1" : "grid grid-cols-3"}`}>
                 <TabsTrigger value="basics" className="text-xs">Basics</TabsTrigger>
-                <TabsTrigger value="strategy" className="text-xs">Strategy</TabsTrigger>
-                <TabsTrigger value="schedule" className="text-xs">Schedule</TabsTrigger>
+                {newType === "task" && (
+                  <>
+                    <TabsTrigger value="strategy" className="text-xs">Strategy</TabsTrigger>
+                    <TabsTrigger value="schedule" className="text-xs">Schedule</TabsTrigger>
+                  </>
+                )}
               </TabsList>
             </div>
 
@@ -304,20 +456,71 @@ export function CreateTaskDialog({
                   />
                 </div>
 
+                {newType === "event" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Event Type */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Event Type <span className="text-red-500">*</span></Label>
+                      <Select value={newEventType} onValueChange={(v) => setNewEventType(v as EventType)}>
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="meeting">Meeting</SelectItem>
+                          <SelectItem value="call">Call</SelectItem>
+                          <SelectItem value="birthday">Birthday</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Custom Event Type Input (shows only when "Other" is selected) */}
+                    {newEventType === "other" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Specify Type <span className="text-red-500">*</span></Label>
+                        <Input
+                          value={newCustomEventType}
+                          onChange={(e) => setNewCustomEventType(e.target.value)}
+                          placeholder="e.g. Workshop"
+                          className="h-9 text-sm"
+                          required
+                        />
+                      </div>
+                    )}
+
+                    {/* Location */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Location / Link <span className="opacity-50">(optional)</span></Label>
+                      <Input
+                        value={newLocation}
+                        onChange={(e) => setNewLocation(e.target.value)}
+                        placeholder="e.g. Zoom link or address"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   {/* Status */}
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select value={newStatus} onValueChange={(v) => setNewStatus(v as TaskStatus)}>
+                    <Select value={newStatus} onValueChange={(v) => setNewStatus(v as AnyStatus)}>
                       <SelectTrigger className="h-9 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {STATUS_OPTIONS.map((s) => (
-                          <SelectItem key={s} value={s} className="text-sm">
-                            {s}
-                          </SelectItem>
-                        ))}
+                        {newType === "event" 
+                          ? EVENT_STATUS_OPTIONS.map((s) => (
+                            <SelectItem key={s} value={s} className="text-sm capitalize">
+                              {s}
+                            </SelectItem>
+                          ))
+                          : TASK_STATUS_OPTIONS.map((s) => (
+                            <SelectItem key={s} value={s} className="text-sm capitalize">
+                              {s}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -340,7 +543,8 @@ export function CreateTaskDialog({
                   </div>
                 </div>
 
-                {/* Assignees (multi-select) – NEW */}
+                {/* Assignees (multi-select) — org mode only */}
+                {!isPersonalMode && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Assignees <span className="opacity-50">(optional)</span></Label>
 
@@ -377,9 +581,10 @@ export function CreateTaskDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                )}
 
-                {/* Parent task (hidden when in subtask mode) */}
-                {!parentTaskId && allTasks.length > 0 && (
+                {/* Parent task (hidden when in subtask mode or event type) */}
+                {!parentTaskId && newType === "task" && allTasks.length > 0 && (
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Parent task <span className="opacity-50">(optional)</span></Label>
                     <Select value={newParentTaskId} onValueChange={setNewParentTaskId}>
@@ -403,7 +608,11 @@ export function CreateTaskDialog({
               <TabsContent value="strategy" className="mt-0 space-y-6">
                 {/* Objective – Bullet list editor */}
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Objective <span className="text-red-500">*</span></Label>
+                  <Label className="text-xs text-muted-foreground">
+                    {newType === "event" ? "Agenda / Notes" : "Objective"} 
+                    {newType === "task" && <span className="text-red-500 ml-1">*</span>}
+                    {newType === "event" && <span className="opacity-50 ml-1">(optional)</span>}
+                  </Label>
                   <div className="border border-border rounded-md p-3 space-y-2 bg-muted/30">
                     {newObjectiveBullets.map((bullet, index) => (
                       <div key={index} className="flex items-center gap-2">
@@ -439,7 +648,11 @@ export function CreateTaskDialog({
 
                 {/* Success Criteria – Bullet list editor */}
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Success Criteria <span className="text-red-500">*</span></Label>
+                  <Label className="text-xs text-muted-foreground">
+                    Success Criteria 
+                    {newType === "task" && <span className="text-red-500 ml-1">*</span>}
+                    {newType === "event" && <span className="opacity-50 ml-1">(optional)</span>}
+                  </Label>
                   <div className="border border-border rounded-md p-3 space-y-2 bg-muted/30">
                     {newSuccessCriteriaBullets.map((bullet, index) => (
                       <div key={index} className="flex items-center gap-2">
@@ -476,13 +689,25 @@ export function CreateTaskDialog({
 
               {/* ====================== SCHEDULE TAB ====================== */}
               <TabsContent value="schedule" className="mt-0 space-y-4">
+                {newType === "event" && (
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="all-day"
+                      checked={newIsAllDay}
+                      onCheckedChange={setNewIsAllDay}
+                    />
+                    <Label htmlFor="all-day" className="text-sm cursor-pointer">All day event</Label>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   {/* Start Date */}
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Start date</Label>
+                    <Label className="text-xs text-muted-foreground">
+                      {newType === "event" ? "Start time" : "Start date"}
+                    </Label>
                     <Input
-                      type="date"
-                      value={toDateInputValue(newStartDateISO)}
+                      type={newType === "event" && !newIsAllDay ? "datetime-local" : "date"}
+                      value={toDateInputValue(newStartDateISO, newType === "event" && !newIsAllDay)}
                       onChange={(e) =>
                         setNewStartDateISO(e.target.value ? new Date(e.target.value).toISOString() : "")
                       }
@@ -492,10 +717,12 @@ export function CreateTaskDialog({
 
                   {/* Due Date */}
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Due date</Label>
+                    <Label className="text-xs text-muted-foreground">
+                      {newType === "event" ? "End time" : "Due date"}
+                    </Label>
                     <Input
-                      type="date"
-                      value={toDateInputValue(newDueDateISO)}
+                      type={newType === "event" && !newIsAllDay ? "datetime-local" : "date"}
+                      value={toDateInputValue(newDueDateISO, newType === "event" && !newIsAllDay)}
                       onChange={(e) =>
                         setNewDueDateISO(e.target.value ? new Date(e.target.value).toISOString() : "")
                       }
@@ -504,47 +731,57 @@ export function CreateTaskDialog({
                   </div>
                 </div>
 
-                {/* Estimation fields – now persistent */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Story points</Label>
-                    <Input
-                      type="number"
-                      value={newStoryPoints}
-                      onChange={(e) => setNewStoryPoints(e.target.value)}
-                      placeholder="0"
-                      className="h-9 text-sm"
-                    />
+                {/* Estimation fields — org mode only and only for tasks */}
+                {!isPersonalMode && newType === "task" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Story points</Label>
+                      <Input
+                        type="number"
+                        value={newStoryPoints}
+                        onChange={(e) => setNewStoryPoints(e.target.value)}
+                        placeholder="0"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Time estimate (minutes)</Label>
+                      <Input
+                        type="number"
+                        value={newTimeEstimate}
+                        onChange={(e) => setNewTimeEstimate(e.target.value)}
+                        placeholder="120"
+                        className="h-9 text-sm"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Time estimate (minutes)</Label>
-                    <Input
-                      type="number"
-                      value={newTimeEstimate}
-                      onChange={(e) => setNewTimeEstimate(e.target.value)}
-                      placeholder="120"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                </div>
+                )}
               </TabsContent>
             </div>
           </Tabs>
 
           {/* Footer */}
-          <div className="px-5 py-3 border-t border-border/60 flex justify-end gap-2 bg-muted/20">
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={(mode === "edit" ? updateTask.isPending : createTask.isPending) || !isFormValid}
-            >
-              {mode === "edit"
-                ? updateTask.isPending ? "Saving…" : "Save changes"
-                : createTask.isPending ? "Creating…" : parentTaskId ? "Create subtask" : "Create task"}
-            </Button>
+          <div className="px-5 py-3 border-t border-border/60 flex justify-between gap-2 bg-muted/20 items-center">
+            <span className="text-xs text-red-500 font-medium">{dateError}</span>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={
+                  (mode === "edit"
+                    ? (isPersonalMode ? updatePersonalTask.isPending : updateOrgTask.isPending)
+                    : (isPersonalMode ? createPersonalTask.isPending : createOrgTask.isPending))
+                  || !isFormValid
+                }
+              >
+                {mode === "edit"
+                  ? (isPersonalMode ? updatePersonalTask.isPending : updateOrgTask.isPending) ? "Saving…" : "Save changes"
+                  : (isPersonalMode ? createPersonalTask.isPending : createOrgTask.isPending) ? "Creating…" : parentTaskId ? "Create subtask" : `Create ${newType}`}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
