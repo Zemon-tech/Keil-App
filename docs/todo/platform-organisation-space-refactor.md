@@ -170,15 +170,15 @@ platform user -> organisations -> spaces -> org tasks / chat / dashboard
 
 ### Tasks
 
-- [ ] Replace or wrap `WorkspaceContext` with platform/org/space app context.
-- [ ] Add `mode: personal | organisation`.
-- [ ] Add `activeOrgId`.
-- [ ] Add `activeSpaceId`.
-- [ ] Add organisation list query hook.
-- [ ] Add visible spaces query hook.
-- [ ] Add personal task hooks.
-- [ ] Update local storage keys away from `keil_active_workspace`.
-- [ ] Update query keys to include mode, org id, and space id where relevant.
+- [x] Replace or wrap `WorkspaceContext` with platform/org/space app context.
+- [x] Add `mode: personal | organisation`.
+- [x] Add `activeOrgId`.
+- [x] Add `activeSpaceId`.
+- [x] Add organisation list query hook.
+- [x] Add visible spaces query hook.
+- [x] Add personal task hooks.
+- [x] Update local storage keys away from `keil_active_workspace`.
+- [x] Update query keys to include mode, org id, and space id where relevant.
 
 ### Constraints
 
@@ -200,13 +200,13 @@ platform user -> organisations -> spaces -> org tasks / chat / dashboard
 
 ### Tasks
 
-- [ ] Update sidebar to show personal mode, organisations, and spaces.
+- [x] Update sidebar to show personal mode, organisations, and spaces.
 - [ ] Update dashboard to require active org and space.
-- [ ] Update task page to support personal task mode and org task mode.
+- [x] Update task page to support personal task mode and org task mode.
 - [ ] Update task detail to track task source: personal or organisation.
 - [ ] Update task create dialog to create the correct task type for current mode.
 - [ ] Update assignee UI to show active space members only.
-- [ ] Update chat UI to appear only inside organisation space mode.
+- [x] Update chat UI to appear only inside organisation space mode.
 - [ ] Update settings UI to separate account, organisation, and space settings.
 - [ ] Update invite/join flows from workspace language to organisation/space language.
 
