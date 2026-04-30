@@ -738,6 +738,10 @@ html,
     background-color: #22c55e !important;
 }
 
+.task-event-block {
+    background-color: #6366f1 !important;
+}
+
 .fc-dayGridMonth-view .fc-h-event {
     border: none !important;
 }

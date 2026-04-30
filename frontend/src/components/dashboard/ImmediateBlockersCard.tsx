@@ -12,8 +12,8 @@ interface ImmediateBlockersCardProps {
 export function ImmediateBlockersCard({ tasks, isLoading }: ImmediateBlockersCardProps) {
   if (isLoading) {
     return (
-      <Card className="bg-card/90 border border-border/60 rounded-2xl p-3">
-        <div className="flex items-center gap-2 mb-2">
+      <Card className="bg-card/90 border border-border/60 rounded-2xl p-3 gap-2">
+        <div className="flex items-center gap-2 mb-1">
           <Skeleton className="h-3.5 w-3.5 rounded-full" />
           <Skeleton className="h-2.5 w-24" />
         </div>
@@ -30,12 +30,12 @@ export function ImmediateBlockersCard({ tasks, isLoading }: ImmediateBlockersCar
   }
 
   return (
-    <Card className="bg-card/90 border border-border/60 rounded-2xl p-3 hover:bg-card/95 transition-colors cursor-pointer">
-      <h3 className="text-[10px] uppercase tracking-[0.22em] text-destructive font-bold mb-2 flex items-center gap-2">
+    <Card className="bg-card/90 border border-border/60 rounded-2xl p-3 gap-2 hover:bg-card/95 transition-colors cursor-pointer">
+      <h3 className="text-[10px] uppercase tracking-[0.22em] text-destructive font-bold mb-1 flex items-center gap-2">
         <AlertTriangle className="h-3.5 w-3.5" />
         Immediate Blockers
       </h3>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {tasks.slice(0, 3).map((task) => (
           <div key={task.id} className="space-y-0.5">
             <p className="text-sm text-foreground leading-tight truncate">

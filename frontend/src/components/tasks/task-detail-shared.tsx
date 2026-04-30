@@ -1,16 +1,22 @@
 import { FileText, Box, Github, Link2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
-import type { TaskPriority, TaskStatus } from "@/types/task";
+import type { TaskPriority, TaskStatus, EventStatus, AnyStatus } from "@/types/task";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 export const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
+export const EVENT_STATUS_OPTIONS: EventStatus[] = ["confirmed", "tentative", "cancelled", "completed"];
 
-export const STATUS_COLOR: Record<TaskStatus, string> = {
+export const STATUS_COLOR: Record<AnyStatus, string> = {
   done: "bg-emerald-500",
   "in-progress": "bg-blue-500",
+  "in-review": "bg-violet-500",
   backlog: "bg-zinc-500",
   todo: "bg-violet-500",
+  confirmed: "bg-blue-500",
+  tentative: "bg-yellow-500",
+  cancelled: "bg-red-500",
+  completed: "bg-emerald-500"
 };
 
 export const PRIORITY_OPTIONS: TaskPriority[] = ["low", "medium", "high", "urgent"];

@@ -4,7 +4,11 @@ export enum TaskStatus {
   BACKLOG = 'backlog',
   TODO = 'todo',
   IN_PROGRESS = 'in-progress',
-  DONE = 'done'
+  DONE = 'done',
+  CONFIRMED = 'confirmed',
+  TENTATIVE = 'tentative',
+  CANCELLED = 'cancelled',
+  COMPLETED = 'completed'
 }
 
 export enum TaskPriority {
@@ -18,6 +22,14 @@ export enum MemberRole {
   OWNER = 'owner',
   ADMIN = 'admin',
   MEMBER = 'member'
+}
+
+export enum EventType {
+  MEETING = 'meeting',
+  CALL = 'call',
+  PERSONAL = 'personal',
+  REMINDER = 'reminder',
+  OTHER = 'other'
 }
 
 export enum LogEntityType {

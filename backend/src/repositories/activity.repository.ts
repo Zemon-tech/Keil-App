@@ -15,6 +15,8 @@ export class ActivityRepository extends BaseRepository<ActivityLog> {
   async log(
     data: {
       workspace_id: string;
+      org_id?: string | null;
+      space_id?: string | null;
       user_id: string | null;
       entity_type: LogEntityType;
       entity_id: string;
@@ -26,14 +28,16 @@ export class ActivityRepository extends BaseRepository<ActivityLog> {
   ): Promise<ActivityLog> {
     const query = `
       INSERT INTO ${this.tableName}
-        (workspace_id, user_id, entity_type, entity_id, action_type, old_value, new_value)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (workspace_id, org_id, space_id, user_id, entity_type, entity_id, action_type, old_value, new_value)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `;
 
     const executor = client || this.pool;
     const result = await executor.query(query, [
       data.workspace_id,
+      data.org_id ?? null,
+      data.space_id ?? null,
       data.user_id,
       data.entity_type,
       data.entity_id,

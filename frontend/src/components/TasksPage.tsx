@@ -3,11 +3,13 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
+import { EventDetailPane } from "@/components/tasks/EventDetailPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearchParams } from "react-router-dom";
+import { useAppContext } from "@/contexts/AppContext";
 
-import type { TaskStatus, TaskPriority } from "../types/task";
+import type { TaskPriority, AnyStatus } from "../types/task";
 import {
   useTasks,
   useTask,
@@ -18,8 +20,15 @@ import {
   type TaskFilters,
   type SortBy,
   type SortOrder,
+  type TaskDTO,
 } from "../hooks/api/useTasks";
 import { useWorkspaceMembers } from "../hooks/api/useWorkspace";
+import {
+  usePersonalTasks,
+  useUpdatePersonalTask,
+  useDeletePersonalTask,
+  type PersonalTaskDTO,
+} from "../hooks/api/usePersonalTasks";
 
 const PAGE_SIZE = 20;
 
@@ -69,28 +78,75 @@ export function TasksPage() {
     // Map UI filter chips to API params
     if (statusFilter === "Mine" && user?.id) {
       filters.assignee_id = user.id;
-    } else if (statusFilter === "in-progress") {
-      filters.status = "in-progress" as TaskStatus;
-    } else if (statusFilter === "todo") {
-      filters.status = "todo" as TaskStatus;
-    } else if (statusFilter === "backlog") {
-      filters.status = "backlog" as TaskStatus;
-    } else if (statusFilter === "done") {
-      filters.status = "done" as TaskStatus;
+    } else if (
+      statusFilter === "in-progress" ||
+      statusFilter === "todo" ||
+      statusFilter === "backlog" ||
+      statusFilter === "done" ||
+      statusFilter === "confirmed" ||
+      statusFilter === "tentative" ||
+      statusFilter === "cancelled" ||
+      statusFilter === "completed"
+    ) {
+      filters.status = statusFilter as AnyStatus;
     } else if (statusFilter === "High Priority") {
       filters.priority = "high" as TaskPriority;
     }
     return filters;
   }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
-  // ── Fetch real tasks from backend ──
-  const { data: tasks, isLoading, isFetching } = useTasks(serverFilters);
+  // ── App mode ──────────────────────────────────────────
+  const { mode } = useAppContext();
+  const isPersonalMode = mode === "personal";
+
+  // ── Org tasks (legacy route — active in organisation mode) ──
+  const { data: orgTasks, isLoading: orgLoading, isFetching: orgFetching } = useTasks(
+    isPersonalMode ? {} : serverFilters
+  );
+
+  // ── Personal tasks (active in personal mode) ────────────────────
+  const { data: personalTasksRaw, isLoading: personalLoading } = usePersonalTasks(
+    isPersonalMode
+      ? {
+          status: (serverFilters.status as any) ?? undefined,
+          priority: (serverFilters.priority as any) ?? undefined,
+          limit: serverFilters.limit,
+        }
+      : {}
+  );
+
+  // Shape PersonalTaskDTO into the same TaskDTO interface the list/detail panes expect.
+  const personalTasks: TaskDTO[] = useMemo(() => {
+    if (!isPersonalMode || !personalTasksRaw) return [];
+    return personalTasksRaw.map((pt: PersonalTaskDTO): TaskDTO => ({
+      id: pt.id,
+      title: pt.title,
+      type: "task",
+      description: pt.description ?? undefined,
+      objective: pt.objective ?? undefined,
+      success_criteria: pt.success_criteria ?? undefined,
+      status: pt.status,       // already TaskStatus — no cast needed
+      priority: pt.priority,   // already TaskPriority — no cast needed
+      due_date: pt.due_date ?? undefined,
+      start_date: pt.start_date ?? undefined,
+      parent_task_id: pt.parent_task_id ?? undefined,
+      workspace_id: "",        // personal tasks have no workspace
+      created_by: pt.owner_user_id,
+      created_at: pt.created_at,
+      updated_at: pt.updated_at,
+    }));
+  }, [isPersonalMode, personalTasksRaw]);
+
+  // Active task list and loading state depend on mode
+  const tasks = isPersonalMode ? personalTasks : (orgTasks ?? []);
+  const isLoading = isPersonalMode ? personalLoading : orgLoading;
+  const isFetching = isPersonalMode ? false : orgFetching;
 
   // Stable reference — never creates a new [] on each render
-  const taskList = tasks ?? [];
+  const taskList = tasks;
 
   // Derive pagination state from the result (no useEffect needed)
-  const hasMore = taskList.length >= limit;
+  const hasMore = !isPersonalMode && taskList.length >= limit;
 
   const handleLoadMore = useCallback(() => {
     setLimit((prev) => prev + PAGE_SIZE);
@@ -108,19 +164,46 @@ export function TasksPage() {
     setLimit(PAGE_SIZE);
   }, []);
 
-  // ── Mutations (wired to callbacks) ──
-  const updateTask = useUpdateTask();
-  const deleteTask = useDeleteTask();
+  // ── Org task mutations ─────────────────────────────────────────
+  const updateOrgTask = useUpdateTask();
+  const deleteOrgTask = useDeleteTask();
   const assignUser = useAssignUser();
   const removeAssignee = useRemoveAssignee();
 
-  // ── Fetch workspace members for bulk assign ──
-  const { data: members } = useWorkspaceMembers(tasks?.[0]?.workspace_id);
-  const workspaceMembers = members?.map((m) => ({
-    id: m.user.id,
-    name: m.user.name,
-    email: m.user.email,
-  })) ?? [];
+  // Personal task mutations
+  const updatePersonalTask = useUpdatePersonalTask();
+  const deletePersonalTask = useDeletePersonalTask();
+
+  // Unified mutation helpers that dispatch to the correct endpoint
+  const handleUpdateTask = useCallback((id: string, updates: any) => {
+    if (isPersonalMode) {
+      updatePersonalTask.mutate({ id, updates });
+    } else {
+      updateOrgTask.mutate({ id, updates });
+    }
+  }, [isPersonalMode, updatePersonalTask, updateOrgTask]);
+
+  const handleDeleteTask = useCallback((id: string) => {
+    if (isPersonalMode) {
+      deletePersonalTask.mutate(id);
+    } else {
+      deleteOrgTask.mutate(id);
+    }
+    if (id === selectedTaskId) setSelectedTaskId("");
+  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId]);
+
+  // ── Workspace members for bulk assign (org mode only) ─────────────
+  // In personal mode, assignees don't exist — pass empty array.
+  const { data: members } = useWorkspaceMembers(
+    isPersonalMode ? undefined : (orgTasks?.[0]?.workspace_id)
+  );
+  const workspaceMembers = isPersonalMode
+    ? []
+    : members?.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+      })) ?? [];
 
   // ── Client-side text filter on top of server results ──
   const filtered = useMemo(() => {
@@ -168,16 +251,11 @@ export function TasksPage() {
     setSelectedTaskId(parentId);
   }, []);
 
-  // Handle task scheduling from calendar
+  // Handle task scheduling from calendar (org mode only — personal tasks use simpler update)
   const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string) => {
-    updateTask.mutate({
-      id: taskId,
-      updates: {
-        start_date: startISO,
-        due_date: endISO,
-      },
-    });
-  }, [updateTask]);
+    // In personal mode fall back to a regular update (same fields exist on PersonalTaskDTO)
+    handleUpdateTask(taskId, { start_date: startISO, due_date: endISO });
+  }, [handleUpdateTask]);
 
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",
@@ -199,6 +277,7 @@ export function TasksPage() {
               onSortChange={handleSortChange}
               tasks={filtered}
               allTasks={taskList}
+              isPersonalMode={isPersonalMode}
               selectedTaskId={selectedTaskId}
               onSelectTask={(id) => {
                 // When selecting from list, check if it's a subtask to set the parent stack
@@ -222,21 +301,13 @@ export function TasksPage() {
                 setSelectedTaskId(newTaskId);
                 setCreateDialogOpen(false);
               }}
-              onUpdateTask={(id, updates) => {
-                updateTask.mutate({ id, updates });
-              }}
-              onDeleteTask={(id) => {
-                deleteTask.mutate(id);
-                // Clear selection if deleted task was selected
-                if (id === selectedTaskId) {
-                  setSelectedTaskId("");
-                }
-              }}
+              onUpdateTask={handleUpdateTask}
+              onDeleteTask={handleDeleteTask}
               onAssignUser={(taskId, userId) => {
-                assignUser.mutate({ id: taskId, userId });
+                if (!isPersonalMode) assignUser.mutate({ id: taskId, userId });
               }}
               onRemoveAssignee={(taskId, userId) => {
-                removeAssignee.mutate({ id: taskId, userId });
+                if (!isPersonalMode) removeAssignee.mutate({ id: taskId, userId });
               }}
               workspaceMembers={workspaceMembers}
               hasMore={hasMore}
@@ -247,23 +318,37 @@ export function TasksPage() {
 
           <div className="flex-1 min-w-0 bg-background h-full">
             {selected || selectedTaskDetail ? (
-              <TaskDetailPane
-                task={(selectedTaskDetail || selected)!}
-                onUpdateTask={(id, updates) => {
-                  updateTask.mutate({ id, updates });
-                }}
-                onTaskDeleted={() => {
-                  setSelectedTaskId("");
-                  setParentTaskStack([]);
-                }}
-                onClose={() => {
-                  setSelectedTaskId("");
-                  setParentTaskStack([]);
-                }}
-                onNavigateToSubtask={handleNavigateToSubtask}
-                onNavigateToParent={handleNavigateToParent}
-                parentTask={parentTask}
-              />
+              (selectedTaskDetail || selected)?.type === "event" ? (
+                <EventDetailPane
+                  event={(selectedTaskDetail || selected)!}
+                  onUpdateEvent={handleUpdateTask}
+                  onEventDeleted={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onClose={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                />
+              ) : (
+                <TaskDetailPane
+                  task={(selectedTaskDetail || selected)!}
+                  isPersonalMode={isPersonalMode}
+                  onUpdateTask={handleUpdateTask}
+                  onTaskDeleted={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onClose={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onNavigateToSubtask={handleNavigateToSubtask}
+                  onNavigateToParent={handleNavigateToParent}
+                  parentTask={parentTask}
+                />
+              )
             ) : (
               <TaskSchedulePane
                 tasks={taskList as any}

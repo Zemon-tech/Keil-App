@@ -47,6 +47,14 @@ export const initSocket = (server: HttpServer) => {
         // Join personal room
         socket.join(`user:${user.id}`);
 
+        const isChannelMember = async (channelId: string): Promise<boolean> => {
+            const result = await pool.query(
+                'SELECT 1 FROM channel_members WHERE channel_id = $1 AND user_id = $2 LIMIT 1',
+                [channelId, user.id]
+            );
+            return (result.rowCount ?? 0) > 0;
+        };
+
         // Fetch all channels user belongs to and join them
         try {
             const result = await pool.query('SELECT channel_id FROM channel_members WHERE user_id = $1', [user.id]);
@@ -64,8 +72,7 @@ export const initSocket = (server: HttpServer) => {
                 if (!channel_id || !content) return;
 
                 // Verify user is in channel
-                const check = await pool.query('SELECT 1 FROM channel_members WHERE channel_id = $1 AND user_id = $2', [channel_id, user.id]);
-                if (check.rowCount === 0) return; // Not authorized
+                if (!(await isChannelMember(channel_id))) return;
 
                 // Save message
                 const message = await chatService.saveMessage(channel_id, user.id, content);
@@ -78,8 +85,8 @@ export const initSocket = (server: HttpServer) => {
         });
 
         // Typing indicators
-        socket.on("typing_start", (payload: { channel_id: string }) => {
-            if (payload.channel_id) {
+        socket.on("typing_start", async (payload: { channel_id: string }) => {
+            if (payload.channel_id && await isChannelMember(payload.channel_id)) {
                 // broadcast to everyone else in the room
                 socket.to(`channel:${payload.channel_id}`).emit("user_typing", { 
                     channel_id: payload.channel_id, 
@@ -89,8 +96,8 @@ export const initSocket = (server: HttpServer) => {
             }
         });
 
-        socket.on("typing_end", (payload: { channel_id: string }) => {
-            if (payload.channel_id) {
+        socket.on("typing_end", async (payload: { channel_id: string }) => {
+            if (payload.channel_id && await isChannelMember(payload.channel_id)) {
                 socket.to(`channel:${payload.channel_id}`).emit("user_stopped_typing", { 
                     channel_id: payload.channel_id, 
                     user_id: user.id 

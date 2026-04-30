@@ -20,15 +20,15 @@ export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
 
   if (isLoading) {
     return (
-      <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-3">
-        <div className="flex justify-between items-start mb-2">
+      <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-3 gap-2">
+        <div className="flex justify-between items-start mb-1">
           <div>
             <Skeleton className="h-3 w-20 mb-1" />
             <Skeleton className="h-2.5 w-12" />
           </div>
           <Skeleton className="h-5 w-14 rounded-full" />
         </div>
-        <div className="space-y-3 mt-3">
+        <div className="space-y-2 mt-2">
           <Skeleton className="h-5 w-3/4" />
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -50,8 +50,8 @@ export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
   }
 
   return (
-    <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-3 hover:bg-card/95 transition-colors cursor-pointer">
-      <div className="flex justify-between items-start mb-2">
+    <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-3 gap-2 hover:bg-card/95 transition-colors cursor-pointer">
+      <div className="flex justify-between items-start mb-1">
         <div>
           <h3 className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground font-bold">
             Current Focus
@@ -64,7 +64,7 @@ export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
           {task.priority}
         </Badge>
       </div>
-      <div className="space-y-3 mt-3">
+      <div className="space-y-2 mt-2">
         <h2 className="text-base font-semibold leading-tight">{task.title}</h2>
         <div className="grid grid-cols-2 gap-3">
           <div>

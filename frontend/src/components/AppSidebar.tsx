@@ -15,6 +15,14 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -23,21 +31,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useAppContext } from "@/contexts/AppContext";
+import { useJoinWorkspace } from "@/hooks/api/useWorkspace";
 import {
   LayoutDashboard,
   Settings,
   LogOut,
   ChevronUp,
   User,
+  Check,
   CreditCard,
   HelpCircle,
   MessageSquare,
   CheckSquare,
-  Check,
   Plus,
-  Bell
+  Bell,
+  Loader2,
+  MoreHorizontal,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -62,34 +76,75 @@ const navigationItems = [
 
 export function AppSidebar() {
   const { user, signOut } = useAuth();
+  const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [joinWorkspaceOpen, setJoinWorkspaceOpen] = useState(false);
+  const [joinWorkspaceToken, setJoinWorkspaceToken] = useState("");
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const userInitials = user?.user_metadata?.full_name
     ?.split(" ")
-    .map((n: string) => n[0])
+    .map((n: string) => n?.[0])
+    .filter(Boolean)
     .join("")
-    .toUpperCase() || user?.email?.[0].toUpperCase() || "U";
+    .toUpperCase() || user?.email?.[0]?.toUpperCase() || "U";
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const logoSrc = isDark ? "/keilhq-white.svg" : "/keilhq.svg";
 
   const userDisplayName = user?.user_metadata?.full_name || user?.email || "User";
-  const userEmail = user?.email || "";
 
   const { state } = useSidebar();
-  const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
+  const joinWorkspace = useJoinWorkspace();
+
+  // ── New app context (mode / org / space) ───────────────────────────────
+  const {
+    mode,
+    activeOrg,
+    activeSpace,
+    setPersonalMode,
+    setWorkspaceMode,
+  } = useAppContext();
 
   const isCollapsed = state === "collapsed";
+
+  const personalSpaceName = `${userDisplayName.split("@")[0]}'s Personal Space`;
+  const activeWorkspaceName = workspaceId
+    ? workspaces.find((w) => w.id === workspaceId)?.name ?? "Workspace"
+    : "Workspace";
+  const currentSpaceLabel =
+    mode === "personal"
+      ? personalSpaceName
+      : activeSpace?.name ?? activeOrg?.name ?? activeWorkspaceName;
+
+  const handleJoinWorkspace = () => {
+    const token = joinWorkspaceToken.trim();
+    if (!token) return;
+
+    joinWorkspace.mutate(token, {
+      onSuccess: (data) => {
+        const joinedWorkspaceId = (data as any)?.data?.workspaceId;
+        if (joinedWorkspaceId) {
+          setWorkspaceMode();
+          setActiveWorkspace(joinedWorkspaceId);
+        }
+        setJoinWorkspaceOpen(false);
+        setJoinWorkspaceToken("");
+      },
+      onError: () => {
+        // Errors are surfaced by disabling/loading; dialog remains open for retry.
+      },
+    });
+  };
 
   return (
     <>
       <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        <SidebarHeader className="p-4 pt-6 group-data-[state=collapsed]:p-2 group-data-[state=collapsed]:pt-6 border-b border-border/50">
+        <SidebarHeader className="px-3 py-2 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-2 border-b border-border/50">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -102,9 +157,9 @@ export function AppSidebar() {
                   <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
-                <div className="flex items-center justify-between gap-3 px-1 transition-all duration-500 animate-in fade-in slide-in-from-left-2 rounded-lg">
-                  <div className="flex items-center gap-2.5 py-1.5">
-                    <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold">
+                <div className="flex h-8 items-center justify-between gap-3 px-1 rounded-lg">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-8 items-center justify-center text-primary font-bold">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
                     <div className="flex flex-col text-left">
@@ -119,6 +174,7 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent>
+          {/* ── Navigation ───────────────────────────────────────── */}
           <SidebarGroup>
             <SidebarGroupLabel>Navigation</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -138,17 +194,19 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 ))}
 
-                {/* ── Chat button — opens dialog ── */}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setChatDialogOpen(true)}
-                    isActive={chatDialogOpen}
-                    tooltip="Chat"
-                  >
-                    <MessageSquare />
-                    <span>Chat</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {/* ── Chat button — only in organisation mode (chat lives inside spaces) ── */}
+                {mode === "organisation" && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setChatDialogOpen(true)}
+                      isActive={chatDialogOpen}
+                      tooltip="Chat"
+                    >
+                      <MessageSquare />
+                      <span>Chat</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
 
                 {/* ── Notification button — opens drawer ── */}
                 <SidebarMenuItem>
@@ -183,14 +241,14 @@ export function AppSidebar() {
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">{userDisplayName}</span>
-                      <span className="truncate text-xs text-muted-foreground">{userEmail}</span>
+                      <span className="truncate text-xs text-muted-foreground">{currentSpaceLabel}</span>
                     </div>
                     <ChevronUp className="ml-auto" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   side="top"
-                  className="w-[--radix-popper-anchor-width] rounded-xl p-1"
+                  className="w-72 rounded-xl p-1"
                 >
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
@@ -201,39 +259,94 @@ export function AppSidebar() {
                       </Avatar>
                       <div className="grid text-left text-sm leading-tight">
                         <span className="truncate font-semibold text-xs">{userDisplayName}</span>
-                        <span className="truncate text-[10px] text-muted-foreground">{userEmail}</span>
+                        <span className="truncate text-[10px] text-muted-foreground">{currentSpaceLabel}</span>
                       </div>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">Workspaces</DropdownMenuLabel>
-                  {workspaces.map((ws) => (
-                    <DropdownMenuItem
-                      key={ws.id}
-                      onClick={() => setActiveWorkspace(ws.id)}
-                      className="flex items-center justify-between cursor-pointer rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
-                          {ws.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium">{ws.name}</span>
-                      </div>
-                      {workspaceId === ws.id && <Check className="h-4 w-4 text-primary" />}
-                    </DropdownMenuItem>
-                  ))}
+                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">
+                    Mode
+                  </DropdownMenuLabel>
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={() => setCreateWorkspaceOpen(true)}
+                    onSelect={setPersonalMode}
                   >
-                    <Plus className="h-4 w-4 text-muted-foreground" />
-                    Create workspace
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    Personal
+                    {mode === "personal" && <Check className="ml-auto h-4 w-4 text-primary" />}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Profile
-                  </DropdownMenuItem>
+                  <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
+                    <span className="text-xs text-muted-foreground">Workspace</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWorkspaceMode();
+                          setJoinWorkspaceOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Join
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWorkspaceMode();
+                          setCreateWorkspaceOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Create
+                      </Button>
+                    </div>
+                  </DropdownMenuLabel>
+                  {workspaces.map((ws) => (
+                    <div key={ws.id} className="group/item relative">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setWorkspaceMode();
+                          setActiveWorkspace(ws.id);
+                        }}
+                        className="flex items-center justify-between cursor-pointer rounded-lg gap-2.5 px-2.5 py-2 text-[13px]"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
+                            {ws.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium truncate">{ws.name}</span>
+                        </div>
+                        {workspaceId === ws.id && <Check className="h-4 w-4 text-primary shrink-0" />}
+                      </DropdownMenuItem>
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 hover:bg-muted-foreground/10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-32">
+                            <DropdownMenuItem disabled>Edit</DropdownMenuItem>
+                            <DropdownMenuItem disabled className="text-destructive focus:text-destructive">
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
                     onSelect={() => setSettingsOpen(true)}
@@ -266,10 +379,43 @@ export function AppSidebar() {
       </Sidebar>
 
       <CreateWorkspaceDialog open={createWorkspaceOpen} onOpenChange={setCreateWorkspaceOpen} />
+      <Dialog open={joinWorkspaceOpen} onOpenChange={setJoinWorkspaceOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Join Workspace</DialogTitle>
+            <DialogDescription>
+              Paste an invitation token to join an existing workspace.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Input
+              value={joinWorkspaceToken}
+              onChange={(e) => setJoinWorkspaceToken(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleJoinWorkspace()}
+              placeholder="Invitation token"
+              autoFocus
+            />
+          </div>
+
+          <DialogFooter className="sm:justify-end">
+            <Button variant="outline" onClick={() => setJoinWorkspaceOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleJoinWorkspace}
+              disabled={!joinWorkspaceToken.trim() || joinWorkspace.isPending}
+            >
+              {joinWorkspace.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Join
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ChatDialog open={chatDialogOpen} onOpenChange={setChatDialogOpen} />
-      <NotificationDrawer 
-        open={notificationDrawerOpen} 
+      <NotificationDrawer
+        open={notificationDrawerOpen}
         onOpenChange={setNotificationDrawerOpen}
         onOpenFullView={() => {
           setNotificationDrawerOpen(false);

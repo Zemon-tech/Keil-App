@@ -103,7 +103,7 @@ export const OverviewTab = ({
           <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 rounded-md overflow-hidden border border-border/40">
             <div className="bg-background p-4 min-h-[120px]">
               <BulletListEditor
-                title="Objective"
+                title={task.type === "event" ? "Agenda / Notes" : "Objective"}
                 value={task.objective ?? ""}
                 onSave={(objective) => onUpdateField?.({ objective })}
                 placeholder="No objective points set"
@@ -119,8 +119,8 @@ export const OverviewTab = ({
             </div>
           </div>
 
-          {/* Subtasks — only shown for top-level tasks (single-level nesting) */}
-          {isTopLevelTask && (
+          {/* Subtasks — only shown for top-level tasks and tasks only (no subtasks for events) */}
+          {isTopLevelTask && task.type === "task" && (
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -342,25 +342,27 @@ export const OverviewTab = ({
           <Separator />
 
           {/* Estimation */}
-          <div>
-            <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Estimation
-            </span>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Story points</span>
-                <span className="font-mono font-medium">{task.story_points ?? "—"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Time estimate</span>
-                <span className="font-mono font-medium">
-                  {task.time_estimate
-                    ? `${Math.floor(task.time_estimate / 60)}h ${task.time_estimate % 60}m`
-                    : "—"}
-                </span>
+          {task.type === "task" && (
+            <div>
+              <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Estimation
+              </span>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Story points</span>
+                  <span className="font-mono font-medium">{task.story_points ?? "—"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Time estimate</span>
+                  <span className="font-mono font-medium">
+                    {task.time_estimate
+                      ? `${Math.floor(task.time_estimate / 60)}h ${task.time_estimate % 60}m`
+                      : "—"}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Labels */}
           {(task.labels ?? []).length > 0 && (

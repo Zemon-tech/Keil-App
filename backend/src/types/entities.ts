@@ -24,10 +24,56 @@ export interface WorkspaceMember {
   created_at: Date;
 }
 
+export interface Organisation {
+  id: string;
+  name: string;
+  owner_user_id: string;
+  source_workspace_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+}
+
+export interface OrganisationMember {
+  id: string;
+  org_id: string;
+  user_id: string;
+  role: MemberRole;
+  created_at: Date;
+}
+
+export interface Space {
+  id: string;
+  workspace_id: string | null;
+  org_id: string | null;
+  name: string;
+  visibility: string;
+  created_by: string | null;
+  source_workspace_id: string | null;
+  created_at: Date;
+  updated_at: Date | null;
+  deleted_at: Date | null;
+}
+
+export interface SpaceMember {
+  id: string;
+  org_id: string | null;
+  space_id: string;
+  user_id: string;
+  role: MemberRole;
+  created_at: Date | null;
+}
+
 export interface Task {
   id: string;
   workspace_id: string;
+  org_id?: string | null;
+  space_id?: string | null;
   parent_task_id: string | null;
+  type: 'task' | 'event';
+  event_type: string | null;
+  location: string | null;
+  is_all_day: boolean;
   title: string;
   description: string | null;
   objective: string | null;
@@ -70,6 +116,8 @@ export interface Comment {
 export interface ActivityLog {
   id: string;
   workspace_id: string;
+  org_id?: string | null;
+  space_id?: string | null;
   user_id: string | null;
   entity_type: LogEntityType;
   entity_id: string;
@@ -77,4 +125,21 @@ export interface ActivityLog {
   old_value: Record<string, any> | null;
   new_value: Record<string, any> | null;
   created_at: Date;
+}
+
+export interface PersonalTask {
+  id: string;
+  owner_user_id: string;
+  parent_task_id: string | null;
+  title: string;
+  description: string | null;
+  objective: string | null;
+  success_criteria: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  start_date: Date | null;
+  due_date: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
 }

@@ -8,15 +8,12 @@
 //
 // The caller is responsible for managing the preview dialog state.
 
-import { Hash } from "lucide-react";
+import { Hash, DollarSign } from "lucide-react";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 
 /**
- * Splits `content` into segments of plain text and #task-name tokens,
+ * Splits `content` into segments of plain text, #task-name, and $event-name tokens,
  * then renders each segment appropriately.
- *
- * A "#task-name" token is matched when the text after "#" exactly matches
- * a task title (case-insensitive). Unrecognised #words are rendered as plain text.
  */
 export function renderMessageContent(
   content: string,
@@ -25,36 +22,26 @@ export function renderMessageContent(
 ): React.ReactNode {
   if (!content) return null;
 
-  // Build a lookup: lowercase title → task
-  const titleMap = new Map<string, TaskDTO>();
-  for (const t of allTasks) {
-    titleMap.set(t.title.toLowerCase(), t);
-  }
-
-  // Split on #<word-or-phrase> tokens — we match # followed by non-whitespace chars
-  // We'll do a greedy match: try the longest possible title after # first.
-  // Strategy: scan character by character, detect "#", then try to match a task title.
   const segments: React.ReactNode[] = [];
   let i = 0;
   let plainBuffer = "";
   let keyCounter = 0;
 
   while (i < content.length) {
-    if (content[i] === "#") {
-      // Try to match a task title starting at i+1
+    const char = content[i];
+    if (char === "#" || char === "$") {
       const rest = content.slice(i + 1);
       let matched: TaskDTO | null = null;
-      let matchedLength = 0;
+      const targetType = char === "#" ? "task" : "event";
 
-      // Try longest match first (greedy): check all tasks sorted by title length desc
-      const sortedTasks = [...allTasks].sort(
-        (a, b) => b.title.length - a.title.length
-      );
+      // Filter tasks based on type associated with the symbol
+      const potentialMatches = allTasks
+        .filter(t => t.type === targetType)
+        .sort((a, b) => b.title.length - a.title.length);
 
-      for (const t of sortedTasks) {
+      for (const t of potentialMatches) {
         const titleLower = t.title.toLowerCase();
         if (rest.toLowerCase().startsWith(titleLower)) {
-          // Make sure the match ends at a word boundary (space, end, or punctuation)
           const afterMatch = rest[titleLower.length];
           if (
             afterMatch === undefined ||
@@ -63,52 +50,53 @@ export function renderMessageContent(
             /[.,!?;:)]/.test(afterMatch)
           ) {
             matched = t;
-            matchedLength = t.title.length;
             break;
           }
         }
       }
 
       if (matched) {
-        // Flush plain buffer
         if (plainBuffer) {
-          segments.push(
-            <span key={`plain-${keyCounter++}`}>{plainBuffer}</span>
-          );
+          segments.push(<span key={`plain-${keyCounter++}`}>{plainBuffer}</span>);
           plainBuffer = "";
         }
 
         const task = matched;
+        const isEvent = task.type === "event";
+
         segments.push(
           <button
-            key={`task-${task.id}-${keyCounter++}`}
+            key={`${task.type}-${task.id}-${keyCounter++}`}
             type="button"
             onClick={() => onTaskClick(task.id)}
-            className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[13px] font-medium
-                       bg-emerald-500/10 text-emerald-600 dark:text-emerald-400
-                       hover:bg-emerald-500/20 transition-colors cursor-pointer"
+            className={cn(
+              "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[13px] font-medium transition-colors cursor-pointer",
+              isEvent 
+                ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20"
+                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+            )}
           >
-            <Hash className="h-3 w-3 shrink-0" />
+            {isEvent ? <DollarSign className="h-3 w-3 shrink-0" /> : <Hash className="h-3 w-3 shrink-0" />}
             {task.title}
           </button>
         );
 
-        i += 1 + matchedLength; // skip "#" + title
+        i += 1 + matched.title.length;
       } else {
-        // No task matched — treat "#" as plain text
-        plainBuffer += content[i];
+        plainBuffer += char;
         i++;
       }
     } else {
-      plainBuffer += content[i];
+      plainBuffer += char;
       i++;
     }
   }
 
-  // Flush remaining plain text
   if (plainBuffer) {
     segments.push(<span key={`plain-${keyCounter++}`}>{plainBuffer}</span>);
   }
 
   return <>{segments}</>;
 }
+
+import { cn } from "@/lib/utils";

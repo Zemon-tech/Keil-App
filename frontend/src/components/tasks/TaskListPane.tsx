@@ -36,9 +36,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Task, TaskStatus, TaskPriority } from "@/types/task";
+import type { Task, AnyStatus, TaskPriority } from "@/types/task";
 import { type TaskDTO, type SortBy, type SortOrder, useSubtasks } from "@/hooks/api/useTasks";
 import { CreateTaskDialog } from "./CreateTaskDialog";
+import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, STATUS_COLOR } from "./task-detail-shared";
 
 type Props = {
   query: string;
@@ -69,27 +70,11 @@ type Props = {
   isLoadingMore?: boolean;
   /** Workspace members for bulk assign */
   workspaceMembers?: Array<{ id: string; name: string | null; email: string }>;
+  /** When true, CreateTaskDialog uses personal task endpoints */
+  isPersonalMode?: boolean;
 };
 
-const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
-
-const statusColorMap: Record<TaskStatus, string> = {
-  "in-progress": "bg-blue-500",
-  done: "bg-green-500",
-  backlog: "bg-zinc-500",
-  todo: "bg-violet-500",
-};
-
-const FILTER_OPTIONS: { value: string; label: string }[] = [
-  { value: "All", label: "All" },
-  { value: "Mine", label: "Mine" },
-  { value: "backlog", label: "Backlog" },
-  { value: "todo", label: "To Do" },
-  { value: "in-progress", label: "Active" },
-  { value: "done", label: "Done" },
-  { value: "Blocked", label: "Blocked" },
-  { value: "High Priority", label: "High Priority" },
-];
+// Using STATUS_COLOR from task-detail-shared
 
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: "created_at", label: "Created" },
@@ -145,43 +130,52 @@ function SubtaskList({
             key={sub.id}
             onClick={() => onSelectTask(sub.id)}
             className={cn(
-              "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+              "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
               active ? "bg-accent" : "hover:bg-accent/50",
               isDone && "opacity-50"
             )}
           >
-            {/* Status dot */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "w-1.5 h-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
-                    statusColorMap[sub.status as TaskStatus] || "bg-zinc-500"
-                  )}
-                />
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
-                {STATUS_OPTIONS.map((s) => (
+            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+              {/* Status dot */}
+              <Popover>
+                <PopoverTrigger asChild>
                   <button
-                    key={s}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUpdateTask?.(sub.id, { status: s });
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors"
-                  >
-                    <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", statusColorMap[s])} />
-                    {s}
-                  </button>
-                ))}
-              </PopoverContent>
-            </Popover>
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
+                      STATUS_COLOR[sub.status as AnyStatus] || "bg-zinc-500"
+                    )}
+                  />
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
+                  {((sub as any).type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
+                    <button
+                      key={s}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateTask?.(sub.id, { status: s });
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                    >
+                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
+                      {s}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
 
-            {/* Title */}
-            <span className="text-[13px] font-medium truncate flex-1 leading-snug min-w-0">
-              {sub.title}
-            </span>
+              {/* Title & Badge */}
+              <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+                <span className="text-[13px] font-medium truncate leading-snug">
+                  {sub.title}
+                </span>
+                {(sub as any).type === "event" && (
+                  <span className="shrink-0 text-[9px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1 py-0.5 rounded uppercase tracking-wider">
+                    event
+                  </span>
+                )}
+              </div>
+            </div>
 
             {/* Right meta */}
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground">
@@ -223,6 +217,7 @@ export function TaskListPane({
   onLoadMore,
   isLoadingMore = false,
   workspaceMembers = [],
+  isPersonalMode = false,
 }: Props) {
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -325,7 +320,7 @@ export function TaskListPane({
     setSelectedTaskIds(next);
   };
 
-  const handleBulkStatusChange = (status: TaskStatus) => {
+  const handleBulkStatusChange = (status: AnyStatus) => {
     if (onUpdateTask) {
       selectedTaskIds.forEach((id) => onUpdateTask(id, { status }));
     }
@@ -444,21 +439,43 @@ export function TaskListPane({
         {/* Filters & Sort row */}
         <div className="flex items-center gap-1.5 mt-2.5 pb-0.5">
           {/* Status Filter Dropdown */}
-          <Select
-            value={statusFilter}
-            onValueChange={onStatusFilterChange}
-          >
-            <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
-              <SelectValue placeholder="Filter" />
-            </SelectTrigger>
-            <SelectContent>
-              {FILTER_OPTIONS.map(({ value, label }) => (
-                <SelectItem key={value} value={value} className="text-xs">
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors justify-start font-normal capitalize">
+                {statusFilter || "Filter"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => onStatusFilterChange("All")}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onStatusFilterChange("Mine")}>Mine</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Task Status</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {TASK_STATUS_OPTIONS.map(s => (
+                    <DropdownMenuItem key={s} onClick={() => onStatusFilterChange(s)} className="capitalize">
+                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0 mr-2", STATUS_COLOR[s])} />
+                      {s}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Event Status</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {EVENT_STATUS_OPTIONS.map(s => (
+                    <DropdownMenuItem key={s} onClick={() => onStatusFilterChange(s)} className="capitalize">
+                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0 mr-2", STATUS_COLOR[s])} />
+                      {s}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onStatusFilterChange("Blocked")}>Blocked</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onStatusFilterChange("High Priority")}>High Priority</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Sort By Dropdown */}
           <Select
@@ -520,10 +537,10 @@ export function TaskListPane({
           {!isLoading && taskList.map((t) => {
             const active = t.id === selectedTaskId;
             const isChecked = selectedTaskIds.has(t.id);
-            const isDone = t.status === "done";
+            const isDone = t.status === "done" || t.status === "completed";
             const isHighPriority =
               t.priority === "high" || t.priority === "urgent";
-            const isDraggable = t.status !== "done";
+            const isDraggable = t.status !== "done" && t.status !== "completed";
             // Use backend date field, falling back to dueDateISO for compat
             const displayDate = t.due_date || t.dueDateISO;
             const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
@@ -536,7 +553,7 @@ export function TaskListPane({
                   data-task-title={t.title}
                   data-task-status={t.status}
                   className={cn(
-                    "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+                    "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
                     active && !isMultiSelecting
                       ? "bg-accent"
                       : "hover:bg-accent/50",
@@ -544,6 +561,7 @@ export function TaskListPane({
                     isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
                   )}
                 >
+                  <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
                   {/* Selection & Drag actions */}
                   <div
                     className={cn(
@@ -580,7 +598,7 @@ export function TaskListPane({
                           onClick={(e) => e.stopPropagation()}
                           className={cn(
                             "w-2 h-2 rounded-full shrink-0 transition-transform hover:scale-125",
-                            statusColorMap[t.status as TaskStatus],
+                            STATUS_COLOR[t.status as AnyStatus],
                             "group-hover/item:opacity-0 transition-opacity"
                           )}
                         />
@@ -589,19 +607,19 @@ export function TaskListPane({
                         align="start"
                         className="w-36 p-1 rounded-lg shadow-lg"
                       >
-                        {STATUS_OPTIONS.map((s) => (
+                        {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
                           <button
                             key={s}
                             onClick={(e) => {
                               e.stopPropagation();
                               onUpdateTask?.(t.id, { status: s });
                             }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors"
+                            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
                           >
                             <div
                               className={cn(
                                 "w-2 h-2 rounded-full shrink-0",
-                                statusColorMap[s]
+                                STATUS_COLOR[s]
                               )}
                             />
                             {s}
@@ -623,20 +641,25 @@ export function TaskListPane({
                     </button>
                   </div>
 
-                  {/* Title */}
-                  <div className="flex items-baseline gap-1 flex-1 min-w-0">
-                    <span className="text-sm font-medium truncate leading-snug">
-                      {t.title}
-                    </span>
-                    {displayDate && (
-                      <span className="text-[10px] text-muted-foreground/70 font-medium leading-none">
-                        scheduled
+                    {/* Title & Badge */}
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+                      <span className="text-sm font-medium truncate leading-snug">
+                        {t.title}
                       </span>
-                    )}
+                      {t.type === "event" ? (
+                        <span className="shrink-0 text-[10px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1.5 py-0.5 rounded uppercase tracking-wider">
+                          event
+                        </span>
+                      ) : displayDate ? (
+                        <span className="shrink-0 text-[10px] text-muted-foreground/70 font-medium leading-none">
+                          scheduled
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
                   {/* Right meta with hover menu */}
-                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground min-w-[60px] justify-end relative">
+                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground justify-end relative ml-auto">
                     {isBlocked && (
                       <Zap className="w-3 h-3 text-yellow-400 shrink-0" />
                     )}
@@ -756,21 +779,46 @@ export function TaskListPane({
                   Change status
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
-                  {STATUS_OPTIONS.map((s) => (
-                    <DropdownMenuItem
-                      key={s}
-                      className="text-xs"
-                      onClick={() => handleBulkStatusChange(s)}
-                    >
-                      <div
-                        className={cn(
-                          "w-2 h-2 rounded-full mr-2",
-                          statusColorMap[s]
-                        )}
-                      />
-                      {s}
-                    </DropdownMenuItem>
-                  ))}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-xs">Task Status</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {TASK_STATUS_OPTIONS.map((s) => (
+                        <DropdownMenuItem
+                          key={s}
+                          className="text-xs capitalize"
+                          onClick={() => handleBulkStatusChange(s)}
+                        >
+                          <div
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full mr-2",
+                              STATUS_COLOR[s]
+                            )}
+                          />
+                          {s}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-xs">Event Status</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {EVENT_STATUS_OPTIONS.map((s) => (
+                        <DropdownMenuItem
+                          key={s}
+                          className="text-xs capitalize"
+                          onClick={() => handleBulkStatusChange(s)}
+                        >
+                          <div
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full mr-2",
+                              STATUS_COLOR[s]
+                            )}
+                          />
+                          {s}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
 
@@ -950,6 +998,7 @@ export function TaskListPane({
         onOpenChange={onCreateDialogOpenChange}
         onTaskCreated={onTaskCreated}
         allTasks={allTasks ?? tasks}
+        isPersonalMode={isPersonalMode}
       />
     </div>
   );

@@ -14,6 +14,7 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import type { ContextItem } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import { useTask, useUpdateTask, useDeleteTask } from "@/hooks/api/useTasks";
+import { useUpdatePersonalTask, useDeletePersonalTask } from "@/hooks/api/usePersonalTasks";
 
 import { TaskDetailHeader } from "./TaskDetailHeader";
 import { OverviewTab } from "./OverviewTab";
@@ -36,6 +37,8 @@ type Props = {
   onNavigateToParent?: (parentTaskId: string) => void;
   /** Parent task info for breadcrumb trail */
   parentTask?: { id: string; title: string } | null;
+  /** When true, routes mutations to personal task endpoints and hides org-only tabs */
+  isPersonalMode?: boolean;
 };
 
 // ─── Tab header metadata ──────────────────────────────────────────────────────
@@ -68,6 +71,7 @@ export function TaskDetailPane({
   onNavigateToSubtask,
   onNavigateToParent,
   parentTask,
+  isPersonalMode = false,
 }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -80,9 +84,11 @@ export function TaskDetailPane({
   // Fetch fresh server data whenever a task is selected
   const { data: freshTask } = useTask(task?.id ?? "");
 
-  // Mutations
-  const updateTask = useUpdateTask();
-  const deleteTask = useDeleteTask();
+  // Mutations — personal mode routes to personal task endpoints
+  const updateOrgTask = useUpdateTask();
+  const deleteOrgTask = useDeleteTask();
+  const updatePersonalTask = useUpdatePersonalTask();
+  const deletePersonalTask = useDeletePersonalTask();
 
   // Use fresh data from server if available, fall back to prop (list data)
   const displayTask = freshTask ?? task;
@@ -110,17 +116,27 @@ export function TaskDetailPane({
     }
   };
 
-  // Centralized field-update handler — used by header, overview tab, etc.
+  // Centralized field-update handler — routes to correct endpoint based on mode
   const handleUpdateField = (updates: UpdateTaskInput) => {
     if (!displayTask) return;
-    updateTask.mutate({ id: displayTask.id, updates });
+    if (isPersonalMode) {
+      updatePersonalTask.mutate({ id: displayTask.id, updates });
+    } else {
+      updateOrgTask.mutate({ id: displayTask.id, updates });
+    }
   };
 
   const handleDelete = () => {
     if (!displayTask) return;
-    deleteTask.mutate(displayTask.id, {
-      onSuccess: () => onTaskDeleted?.(displayTask.id),
-    });
+    if (isPersonalMode) {
+      deletePersonalTask.mutate(displayTask.id, {
+        onSuccess: () => onTaskDeleted?.(displayTask.id),
+      });
+    } else {
+      deleteOrgTask.mutate(displayTask.id, {
+        onSuccess: () => onTaskDeleted?.(displayTask.id),
+      });
+    }
   };
 
   if (!displayTask) {
@@ -166,6 +182,7 @@ export function TaskDetailPane({
         mode="edit"
         taskId={taskToRender.id}
         initialValues={taskToRender}
+        isPersonalMode={isPersonalMode}
         onTaskCreated={() => {}}
         onTaskUpdated={() => setEditDialogOpen(false)}
       />
@@ -185,17 +202,20 @@ export function TaskDetailPane({
               {TAB_HEADERS[activeTab as keyof typeof TAB_HEADERS]?.description}
             </p>
           </div>
-          <TabsList className="grid w-full xl:w-[450px] grid-cols-4">
+          {/* Personal mode: only show Overview tab (Activity/Deps/History need org context) */}
+          <TabsList className={`grid w-full ${isPersonalMode ? "xl:w-[200px] grid-cols-1" : "xl:w-[450px] grid-cols-4"}`}>
             {(
               [
                 { value: "overview", label: "Overview" },
-                { value: "activity", label: "Activity" },
-                {
-                  value: "dependencies",
-                  label: "Dependencies",
-                  count: (taskToRender.dependencies ?? []).length,
-                },
-                { value: "history", label: "History" },
+                ...(!isPersonalMode ? [
+                  { value: "activity", label: "Activity" },
+                  {
+                    value: "dependencies",
+                    label: "Dependencies",
+                    count: (taskToRender.dependencies ?? []).length,
+                  },
+                  { value: "history", label: "History" },
+                ] : []),
               ] as const
             ).map((tab) => (
               <TabsTrigger
@@ -204,7 +224,7 @@ export function TaskDetailPane({
                 className="text-sm font-medium"
               >
                 {tab.label}
-                {"count" in tab && tab.count > 0 && (
+                {"count" in tab && tab.count !== undefined && tab.count > 0 && (
                   <span className="ml-1.5 rounded bg-muted-foreground/20 px-1 font-mono text-[10px]">
                     {tab.count}
                   </span>

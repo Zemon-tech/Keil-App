@@ -8,6 +8,7 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext'
 import { WorkspaceProvider } from './contexts/WorkspaceContext'
+import { AppProvider } from './contexts/AppContext'
 
 // TanStack Query client — 5 min stale time, 1 retry on failure
 const queryClient = new QueryClient({
@@ -31,9 +32,11 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <AuthProvider>
           <WorkspaceProvider>
-            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-              <App />
-            </ThemeProvider>
+            <AppProvider>
+              <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+                <App />
+              </ThemeProvider>
+            </AppProvider>
           </WorkspaceProvider>
         </AuthProvider>
       </BrowserRouter>

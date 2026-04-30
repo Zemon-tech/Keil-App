@@ -39,6 +39,12 @@ export interface CreateCommentData {
   parent_comment_id?: string | null;
 }
 
+export interface CommentActivityContext {
+  workspace_id: string;
+  org_id?: string | null;
+  space_id?: string | null;
+}
+
 /**
  * Safe ISO string conversion — handles both Date objects (top-level pg columns)
  * and strings (values inside json/jsonb aggregates, which pg never auto-parses).
@@ -94,11 +100,16 @@ const threadedCommentToDTO = (
  */
 export const createComment = async (
   data: CreateCommentData,
-  workspaceId: string
+  activityContext: string | CommentActivityContext
 ): Promise<CommentDTO> => {
   if (!data.content || data.content.trim().length === 0) {
     throw new ApiError(400, 'Comment content cannot be empty');
   }
+
+  const context =
+    typeof activityContext === 'string'
+      ? { workspace_id: activityContext, org_id: null, space_id: null }
+      : activityContext;
 
   const comment = await commentRepository.executeInTransaction(async (client) => {
     // Create comment
@@ -106,7 +117,9 @@ export const createComment = async (
 
     // Log comment creation
     await activityRepository.log({
-      workspace_id: workspaceId,
+      workspace_id: context.workspace_id,
+      org_id: context.org_id ?? null,
+      space_id: context.space_id ?? null,
       user_id: data.user_id,
       entity_type: LogEntityType.COMMENT,
       entity_id: newComment.id,
@@ -174,8 +187,13 @@ export const getCommentReplies = async (parentCommentId: string): Promise<Commen
 export const deleteComment = async (
   commentId: string,
   userId: string,
-  workspaceId: string
+  activityContext: string | CommentActivityContext
 ): Promise<void> => {
+  const context =
+    typeof activityContext === 'string'
+      ? { workspace_id: activityContext, org_id: null, space_id: null }
+      : activityContext;
+
   await commentRepository.executeInTransaction(async (client) => {
     const comment = await commentRepository.findById(commentId, client);
     if (!comment) {
@@ -192,7 +210,9 @@ export const deleteComment = async (
 
     // Log deletion
     await activityRepository.log({
-      workspace_id: workspaceId,
+      workspace_id: context.workspace_id,
+      org_id: context.org_id ?? null,
+      space_id: context.space_id ?? null,
       user_id: userId,
       entity_type: LogEntityType.COMMENT,
       entity_id: commentId,
@@ -209,8 +229,13 @@ export const deleteComment = async (
 export const hardDeleteComment = async (
   commentId: string,
   userId: string,
-  workspaceId: string
+  activityContext: string | CommentActivityContext
 ): Promise<void> => {
+  const context =
+    typeof activityContext === 'string'
+      ? { workspace_id: activityContext, org_id: null, space_id: null }
+      : activityContext;
+
   await commentRepository.executeInTransaction(async (client) => {
     const comment = await commentRepository.findById(commentId, client, true);
     if (!comment) {
@@ -227,7 +252,9 @@ export const hardDeleteComment = async (
 
     // Log deletion
     await activityRepository.log({
-      workspace_id: workspaceId,
+      workspace_id: context.workspace_id,
+      org_id: context.org_id ?? null,
+      space_id: context.space_id ?? null,
       user_id: userId,
       entity_type: LogEntityType.COMMENT,
       entity_id: commentId,
