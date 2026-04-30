@@ -3,6 +3,7 @@ import { personalTaskRepository } from "../repositories";
 import { PersonalTask } from "../types/entities";
 import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
+import { syncTaskToCalendar, deleteCalendarEvent } from "./google-calendar.service";
 
 export interface PersonalTaskDTO {
   id: string;
@@ -109,13 +110,35 @@ export const updatePersonalTask = async (
   validateDateOrder(finalStart ?? null, finalDue ?? null);
 
   const updated = await personalTaskRepository.update(taskId, input);
-  return updated ? toDTO(updated) : null;
+  if (!updated) return null;
+
+  // Fire-and-forget Google Calendar sync — never blocks the task update
+  syncTaskToCalendar(ownerUserId, {
+    id: updated.id,
+    title: updated.title,
+    description: updated.description,
+    start_date: updated.start_date,
+    due_date: updated.due_date,
+    is_all_day: false, // personal tasks don't have is_all_day
+    location: null,
+    status: updated.status,
+    google_event_id: updated.google_event_id,
+    source: 'personal_tasks',
+  }).catch(err => console.error('[gcal] personal task sync failed:', err.message));
+
+  return toDTO(updated);
 };
 
 export const deletePersonalTask = async (taskId: string, ownerUserId: string): Promise<boolean> => {
   const existingTask = await personalTaskRepository.findById(taskId);
   if (!existingTask || existingTask.owner_user_id !== ownerUserId) {
     return false;
+  }
+
+  // Fire-and-forget Google Calendar event deletion
+  if (existingTask.google_event_id) {
+    deleteCalendarEvent(ownerUserId, existingTask.google_event_id)
+      .catch(err => console.error('[gcal] delete personal task event failed:', err.message));
   }
 
   await personalTaskRepository.softDelete(taskId);

@@ -11,6 +11,7 @@ import { OrganisationRepository } from './organisation.repository';
 import { SpaceRepository } from './space.repository';
 import { PersonalTaskRepository } from './personal-task.repository';
 import { OrgTaskRepository } from './org-task.repository';
+import { IntegrationRepository } from './integration.repository';
 
 // Instantiate repositories with the shared pool
 export const userRepository = new UserRepository();
@@ -24,6 +25,7 @@ export const organisationRepository = new OrganisationRepository();
 export const spaceRepository = new SpaceRepository();
 export const personalTaskRepository = new PersonalTaskRepository();
 export const orgTaskRepository = new OrgTaskRepository();
+export const integrationRepository = new IntegrationRepository();
 
 // Export repository classes for testing/mocking
 export {
@@ -37,5 +39,6 @@ export {
   OrganisationRepository,
   SpaceRepository,
   PersonalTaskRepository,
-  OrgTaskRepository
+  OrgTaskRepository,
+  IntegrationRepository
 };
