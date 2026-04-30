@@ -35,6 +35,10 @@ export interface TaskDTO {
   id: string;
   workspace_id: string;
   parent_task_id: string | null;
+  type: 'task' | 'event';
+  event_type?: string | null;
+  location?: string | null;
+  is_all_day?: boolean;
   title: string;
   description: string | null;
   objective: string | null;
@@ -56,6 +60,10 @@ export interface TaskDTO {
 export interface CreateTaskData {
   workspace_id: string;
   parent_task_id?: string | null;
+  type?: 'task' | 'event';
+  event_type?: string | null;
+  location?: string | null;
+  is_all_day?: boolean;
   title: string;
   description?: string;
   objective?: string;
@@ -68,6 +76,10 @@ export interface CreateTaskData {
 }
 
 export interface UpdateTaskData {
+  type?: 'task' | 'event';
+  event_type?: string | null;
+  location?: string | null;
+  is_all_day?: boolean;
   title?: string;
   description?: string | null;
   objective?: string | null;
@@ -86,6 +98,10 @@ const taskToDTO = (task: Task & { assignees?: User[] }): TaskDTO => {
     id: task.id,
     workspace_id: task.workspace_id,
     parent_task_id: task.parent_task_id,
+    type: task.type,
+    event_type: task.event_type,
+    location: task.location,
+    is_all_day: task.is_all_day,
     title: task.title,
     description: task.description,
     objective: task.objective,
@@ -107,8 +123,12 @@ const taskToDTO = (task: Task & { assignees?: User[] }): TaskDTO => {
  */
 export const createTask = async (data: CreateTaskData): Promise<TaskDTO> => {
   // Validate date order
-  if (data.start_date && data.due_date && data.due_date < data.start_date) {
-    throw new ApiError(400, 'due_date must be on or after start_date');
+  if (data.start_date && data.due_date) {
+    if (data.type === 'event' && data.due_date <= data.start_date) {
+      throw new ApiError(400, 'end time must be strictly after start time for events');
+    } else if (data.due_date < data.start_date) {
+      throw new ApiError(400, 'due_date must be on or after start_date');
+    }
   }
 
   const task = await taskRepository.executeInTransaction(async (client) => {
@@ -209,10 +229,8 @@ export const updateTask = async (
   userId: string,
   workspaceId: string
 ): Promise<TaskDTO | null> => {
-  // Validate date order if both are provided
-  if (data.start_date && data.due_date && data.due_date < data.start_date) {
-    throw new ApiError(400, 'due_date must be on or after start_date');
-  }
+  // Note: Date validation is handled in the controller since it depends on existing dates
+
 
   const result = await taskRepository.executeInTransaction(async (client) => {
     // Get old task for activity log

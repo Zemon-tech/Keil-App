@@ -17,7 +17,8 @@ import { TaskStatus, TaskPriority } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
 
 // Helper function to validate enums
-const validateStatus = (status: any) => Object.values(TaskStatus).includes(status);
+const isTaskStatus = (status: any) => ['backlog', 'todo', 'in-progress', 'done'].includes(status);
+const isEventStatus = (status: any) => ['confirmed', 'tentative', 'cancelled', 'completed'].includes(status);
 const validatePriority = (priority: any) => Object.values(TaskPriority).includes(priority);
 
 export const createTask = catchAsync(async (req: Request, res: Response) => {
@@ -35,14 +36,32 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         priority,
         start_date,
         due_date,
-        parent_task_id
+        parent_task_id,
+        type,
+        event_type,
+        location,
+        is_all_day
     } = req.body;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
         throw new ApiError(400, "Title is required");
     }
 
-    if (status && !validateStatus(status)) throw new ApiError(400, "Invalid status enum value");
+    if (type === 'event' && !event_type) {
+        throw new ApiError(400, "event_type is required for events");
+    }
+
+    if (status) {
+        if (type === 'event' && !isEventStatus(status)) {
+            throw new ApiError(400, "Invalid status for an event. Must be confirmed, tentative, cancelled, or completed.");
+        }
+        if (type !== 'event' && !isTaskStatus(status)) {
+            throw new ApiError(400, "Invalid status for a task. Must be backlog, todo, in-progress, or done.");
+        }
+    } else {
+        // Set default status if not provided
+        req.body.status = type === 'event' ? 'confirmed' : 'todo';
+    }
     if (priority && !validatePriority(priority)) throw new ApiError(400, "Invalid priority enum value");
 
     // Parent task validation: must exist in same workspace
@@ -69,8 +88,12 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         if (isNaN(dueDate.getTime())) throw new ApiError(400, "Invalid due_date format");
     }
 
-    if (startDate && dueDate && dueDate < startDate) {
-        throw new ApiError(400, "due_date must be on or after start_date");
+    if (startDate && dueDate) {
+        if (type === 'event' && dueDate <= startDate) {
+            throw new ApiError(400, "end time must be strictly after start time for events");
+        } else if (dueDate < startDate) {
+            throw new ApiError(400, "due_date must be on or after start_date");
+        }
     }
 
     const task = await taskService.createTask({
@@ -80,11 +103,15 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
         description,
         objective,
         success_criteria,
-        status,
+        status: status || (type === 'event' ? 'confirmed' : 'todo'),
         priority,
         start_date: startDate || undefined,
         due_date: dueDate || undefined,
-        parent_task_id
+        parent_task_id,
+        type,
+        event_type,
+        location,
+        is_all_day
     });
 
     res.status(201).json(new ApiResponse(201, task, "Task created successfully"));
@@ -173,7 +200,7 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
 
     // Explicitly build the updates object to handle partial fields and naming
     const updates: any = {};
-    const allowedFields = ['title', 'description', 'objective', 'success_criteria', 'status', 'priority'];
+    const allowedFields = ['title', 'description', 'objective', 'success_criteria', 'status', 'priority', 'type', 'event_type', 'location', 'is_all_day'];
     
     allowedFields.forEach(field => {
         if (req.body[field] !== undefined) {
@@ -182,7 +209,14 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
     });
 
     // Handle enums validation if present
-    if (updates.status && !validateStatus(updates.status)) throw new ApiError(400, "Invalid status value");
+    if (updates.status) {
+        if (existingTask.type === 'event' && !isEventStatus(updates.status)) {
+            throw new ApiError(400, "Invalid status for an event.");
+        }
+        if (existingTask.type !== 'event' && !isTaskStatus(updates.status)) {
+            throw new ApiError(400, "Invalid status for a task.");
+        }
+    }
     if (updates.priority && !validatePriority(updates.priority)) throw new ApiError(400, "Invalid priority value");
 
     // Handle dates with proper clearing support (null)
@@ -209,9 +243,14 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
     // Comprehensive date validation against existing data
     const finalStart = updates.start_date !== undefined ? updates.start_date : (existingTask.start_date ? new Date(existingTask.start_date) : null);
     const finalDue = updates.due_date !== undefined ? updates.due_date : (existingTask.due_date ? new Date(existingTask.due_date) : null);
+    const finalType = updates.type !== undefined ? updates.type : existingTask.type;
 
-    if (finalStart && finalDue && finalDue < finalStart) {
-         throw new ApiError(400, "due_date must be on or after start_date");
+    if (finalStart && finalDue) {
+         if (finalType === 'event' && finalDue <= finalStart) {
+             throw new ApiError(400, "end time must be strictly after start time for events");
+         } else if (finalDue < finalStart) {
+             throw new ApiError(400, "due_date must be on or after start_date");
+         }
     }
 
     const updatedTask = await taskService.updateTask(id, updates, userId, workspaceId);
@@ -227,12 +266,19 @@ export const changeTaskStatus = catchAsync(async (req: Request, res: Response) =
     const id = req.params.id as string;
     const { status } = req.body;
 
-    if (!status || !validateStatus(status)) throw new ApiError(400, "Invalid or missing status value");
-
     const existingTask = await taskService.getTaskById(id);
     // Consistent 404 for security
     if (!existingTask || existingTask.workspace_id !== workspaceId) {
         throw new ApiError(404, "Task not found");
+    }
+
+    if (!status) throw new ApiError(400, "Missing status value");
+    
+    if (existingTask.type === 'event' && !isEventStatus(status)) {
+        throw new ApiError(400, "Invalid status for an event. Must be confirmed, tentative, cancelled, or completed.");
+    }
+    if (existingTask.type !== 'event' && !isTaskStatus(status)) {
+        throw new ApiError(400, "Invalid status for a task. Must be backlog, todo, in-progress, or done.");
     }
 
     const updatedTask = await taskService.changeTaskStatus(id, status, userId, workspaceId);

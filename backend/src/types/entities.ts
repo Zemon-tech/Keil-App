@@ -70,6 +70,10 @@ export interface Task {
   org_id?: string | null;
   space_id?: string | null;
   parent_task_id: string | null;
+  type: 'task' | 'event';
+  event_type: string | null;
+  location: string | null;
+  is_all_day: boolean;
   title: string;
   description: string | null;
   objective: string | null;

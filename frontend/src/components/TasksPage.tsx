@@ -3,12 +3,13 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
 import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
+import { EventDetailPane } from "@/components/tasks/EventDetailPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import { useAppContext } from "@/contexts/AppContext";
 
-import type { TaskStatus, TaskPriority } from "../types/task";
+import type { TaskPriority, AnyStatus } from "../types/task";
 import {
   useTasks,
   useTask,
@@ -77,14 +78,17 @@ export function TasksPage() {
     // Map UI filter chips to API params
     if (statusFilter === "Mine" && user?.id) {
       filters.assignee_id = user.id;
-    } else if (statusFilter === "in-progress") {
-      filters.status = "in-progress" as TaskStatus;
-    } else if (statusFilter === "todo") {
-      filters.status = "todo" as TaskStatus;
-    } else if (statusFilter === "backlog") {
-      filters.status = "backlog" as TaskStatus;
-    } else if (statusFilter === "done") {
-      filters.status = "done" as TaskStatus;
+    } else if (
+      statusFilter === "in-progress" ||
+      statusFilter === "todo" ||
+      statusFilter === "backlog" ||
+      statusFilter === "done" ||
+      statusFilter === "confirmed" ||
+      statusFilter === "tentative" ||
+      statusFilter === "cancelled" ||
+      statusFilter === "completed"
+    ) {
+      filters.status = statusFilter as AnyStatus;
     } else if (statusFilter === "High Priority") {
       filters.priority = "high" as TaskPriority;
     }
@@ -117,6 +121,7 @@ export function TasksPage() {
     return personalTasksRaw.map((pt: PersonalTaskDTO): TaskDTO => ({
       id: pt.id,
       title: pt.title,
+      type: "task",
       description: pt.description ?? undefined,
       objective: pt.objective ?? undefined,
       success_criteria: pt.success_criteria ?? undefined,
@@ -313,22 +318,37 @@ export function TasksPage() {
 
           <div className="flex-1 min-w-0 bg-background h-full">
             {selected || selectedTaskDetail ? (
-              <TaskDetailPane
-                task={(selectedTaskDetail || selected)!}
-                isPersonalMode={isPersonalMode}
-                onUpdateTask={handleUpdateTask}
-                onTaskDeleted={() => {
-                  setSelectedTaskId("");
-                  setParentTaskStack([]);
-                }}
-                onClose={() => {
-                  setSelectedTaskId("");
-                  setParentTaskStack([]);
-                }}
-                onNavigateToSubtask={handleNavigateToSubtask}
-                onNavigateToParent={handleNavigateToParent}
-                parentTask={parentTask}
-              />
+              (selectedTaskDetail || selected)?.type === "event" ? (
+                <EventDetailPane
+                  event={(selectedTaskDetail || selected)!}
+                  onUpdateEvent={handleUpdateTask}
+                  onEventDeleted={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onClose={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                />
+              ) : (
+                <TaskDetailPane
+                  task={(selectedTaskDetail || selected)!}
+                  isPersonalMode={isPersonalMode}
+                  onUpdateTask={handleUpdateTask}
+                  onTaskDeleted={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onClose={() => {
+                    setSelectedTaskId("");
+                    setParentTaskStack([]);
+                  }}
+                  onNavigateToSubtask={handleNavigateToSubtask}
+                  onNavigateToParent={handleNavigateToParent}
+                  parentTask={parentTask}
+                />
+              )
             ) : (
               <TaskSchedulePane
                 tasks={taskList as any}

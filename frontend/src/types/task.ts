@@ -6,7 +6,10 @@ export type TaskStatus =
   | "done"
   | "cancelled";
 
+export type EventStatus = "confirmed" | "tentative" | "cancelled" | "completed";
+export type AnyStatus = TaskStatus | EventStatus;
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type EventType = "meeting" | "call" | "birthday" | "other" | string;
 
 export type CalendarBlockType =
     | "meeting"
@@ -83,10 +86,14 @@ export type Task = {
     projectId: string;
     projectTitle: string;
     title: string;
+    type: "task" | "event";
+    event_type?: EventType | null;
+    location?: string | null;
+    is_all_day?: boolean;
     description?: string;
     objective: string;
     success_criteria: string;
-    status: TaskStatus;
+    status: AnyStatus;
     priority: TaskPriority;
     owner: string;
     assignees: AssigneeUser[];
@@ -107,7 +114,7 @@ export type Task = {
 export type DashboardTaskDTO = {
     id: string;
     title: string;
-    status: TaskStatus;
+    status: AnyStatus;
     priority: TaskPriority;
     due_date: string | null;
     objective: string | null;

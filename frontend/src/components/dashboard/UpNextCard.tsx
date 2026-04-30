@@ -37,7 +37,7 @@ export function UpNextCard({ tasks, isLoading }: UpNextCardProps) {
             </p>
             <div className="flex gap-2 mt-1 text-[10px] text-muted-foreground flex-wrap">
               <span className="px-1.5 py-0.5 rounded border border-border/60 bg-card/70 flex items-center gap-1.5 capitalize">
-                <span className={`w-1 h-1 rounded-full ${task.status === "done" ? "bg-green-500" : task.status === "in-progress" ? "bg-blue-500" : "bg-muted-foreground"}`} />
+                <span className={`w-1 h-1 rounded-full ${task.status === "done" || task.status === "completed" ? "bg-green-500" : task.status === "in-progress" ? "bg-blue-500" : "bg-muted-foreground"}`} />
                 {task.status.replace("-", " ")}
               </span>
               <span className="px-1.5 py-0.5 rounded border border-border/60 bg-card/70 capitalize text-orange-400 font-medium">

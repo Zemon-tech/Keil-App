@@ -12,6 +12,7 @@ import {
   Smile,
   Trash2,
   X,
+  DollarSign,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,6 +36,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import { formatRelTime } from "./task-detail-shared";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
+import { EventPreviewDialog } from "./EventPreviewDialog";
 import { renderMessageContent } from "./renderMessageContent";
 
 // ─── CommentNode ──────────────────────────────────────────────────────────────
@@ -221,11 +223,26 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   const { data: comments, isPending } = useTaskComments(task.id);
   const createComment = useCreateComment();
 
-  const [activePicker, setActivePicker] = useState<"user" | "task" | null>(null);
+  const [activePicker, setActivePicker] = useState<"user" | "task" | "event" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
   const { data: members } = useWorkspaceMembers(task.workspace_id);
   const { data: allTasks = [] } = useTasks();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-trigger picker on special characters
+  useEffect(() => {
+    const lastChar = input.slice(-1);
+    if (lastChar === "@") {
+      setActivePicker("user");
+      setPickerSearch("");
+    } else if (lastChar === "#") {
+      setActivePicker("task");
+      setPickerSearch("");
+    } else if (lastChar === "$") {
+      setActivePicker("event");
+      setPickerSearch("");
+    }
+  }, [input]);
 
   // ── Task preview dialog state ──
   const [previewTaskId, setPreviewTaskId] = useState<string>("");
@@ -244,8 +261,17 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     );
   };
 
-  const handleInsertMention = (text: string) => {
-    setInput((prev) => prev + text + " ");
+  const handleInsertMention = (symbol: string, text: string) => {
+    setInput((prev) => {
+      const trimmed = prev.trim();
+      if (trimmed.endsWith(symbol)) {
+        return trimmed + text + " ";
+      }
+      // If we're midway through a search (e.g. "#te"), this simple logic will append.
+      // A full solution would use cursor position/regex replacement, but this matches
+      // the existing manual trigger behavior while supporting the new symbols.
+      return (trimmed ? trimmed + " " : "") + symbol + text + " ";
+    });
     setActivePicker(null);
     setPickerSearch("");
   };
@@ -263,17 +289,29 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   );
 
   const filteredTasks = allTasks.filter(t =>
-    t.id !== task.id && t.title.toLowerCase().includes(pickerSearch.toLowerCase())
+    t.type === "task" && t.id !== task.id && t.title.toLowerCase().includes(pickerSearch.toLowerCase())
+  );
+
+  const filteredEvents = allTasks.filter(t =>
+    t.type === "event" && t.id !== task.id && t.title.toLowerCase().includes(pickerSearch.toLowerCase())
   );
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-background h-full relative">
       {/* Task preview dialog — opened when a #task-name chip is clicked */}
-      <TaskPreviewDialog
-        taskId={previewTaskId}
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-      />
+      {allTasks.find(t => t.id === previewTaskId)?.type === "event" ? (
+        <EventPreviewDialog
+          eventId={previewTaskId}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+        />
+      ) : (
+        <TaskPreviewDialog
+          taskId={previewTaskId}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+        />
+      )}
       <ScrollArea className="flex-1 min-h-0">
         <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto">
           {isPending ? (
@@ -305,7 +343,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <Input
               autoFocus
-              placeholder={`Search ${activePicker === 'user' ? 'people' : 'tasks'}...`}
+              placeholder={`Search ${activePicker === 'user' ? 'people' : activePicker === 'event' ? 'events' : 'tasks'}...`}
               value={pickerSearch}
               onChange={(e) => setPickerSearch(e.target.value)}
               className="h-7 text-sm border-none shadow-none focus-visible:ring-0 p-0 bg-transparent flex-1"
@@ -325,7 +363,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                     return (
                       <button
                         key={m.id}
-                        onClick={() => handleInsertMention(`@${name}`)}
+                        onClick={() => handleInsertMention("@", name)}
                         className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
                       >
                         <Avatar className="h-6 w-6">
@@ -337,7 +375,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                   })
                 )}
               </div>
-            ) : (
+            ) : activePicker === 'task' ? (
               <div className="p-1.5 space-y-0.5">
                 {filteredTasks.length === 0 ? (
                   <p className="py-4 text-xs text-muted-foreground text-center">No tasks found</p>
@@ -345,10 +383,28 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                   filteredTasks.map(t => (
                     <button
                       key={t.id}
-                      onClick={() => handleInsertMention(`#${t.title}`)}
+                      onClick={() => handleInsertMention("#", t.title)}
                       className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
                     >
                       <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate font-medium flex-1">{t.title}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0 font-mono hidden sm:inline-block">{t.id.slice(0, 8)}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="p-1.5 space-y-0.5">
+                {filteredEvents.length === 0 ? (
+                  <p className="py-4 text-xs text-muted-foreground text-center">No events found</p>
+                ) : (
+                  filteredEvents.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => handleInsertMention("$", t.title)}
+                      className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
+                    >
+                      <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="text-sm truncate font-medium flex-1">{t.title}</span>
                       <span className="text-[10px] text-muted-foreground shrink-0 font-mono hidden sm:inline-block">{t.id.slice(0, 8)}</span>
                     </button>
@@ -395,6 +451,15 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">Mention task</span>
                   <span className="text-xs text-muted-foreground">Reference a task name</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setActivePicker('event')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
+                  <DollarSign className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Mention event</span>
+                  <span className="text-xs text-muted-foreground">Reference an event name</span>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="mx-2 my-1" />

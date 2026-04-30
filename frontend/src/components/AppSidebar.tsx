@@ -43,11 +43,11 @@ import {
   LogOut,
   ChevronUp,
   User,
+  Check,
   CreditCard,
   HelpCircle,
   MessageSquare,
   CheckSquare,
-  Check,
   Plus,
   Bell,
   Loader2,
@@ -75,6 +75,7 @@ const navigationItems = [
 
 export function AppSidebar() {
   const { user, signOut } = useAuth();
+  const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
@@ -85,9 +86,10 @@ export function AppSidebar() {
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const userInitials = user?.user_metadata?.full_name
     ?.split(" ")
-    .map((n: string) => n[0])
+    .map((n: string) => n?.[0])
+    .filter(Boolean)
     .join("")
-    .toUpperCase() || user?.email?.[0].toUpperCase() || "U";
+    .toUpperCase() || user?.email?.[0]?.toUpperCase() || "U";
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -96,7 +98,6 @@ export function AppSidebar() {
   const userDisplayName = user?.user_metadata?.full_name || user?.email || "User";
 
   const { state } = useSidebar();
-  const { workspaces, workspaceId, setActiveWorkspace } = useWorkspace();
   const joinWorkspace = useJoinWorkspace();
 
   // ── New app context (mode / org / space) ───────────────────────────────
@@ -246,7 +247,7 @@ export function AppSidebar() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   side="top"
-                  className="w-[--radix-popper-anchor-width] rounded-xl p-1"
+                  className="w-72 rounded-xl p-1"
                 >
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
@@ -395,8 +396,8 @@ export function AppSidebar() {
       </Dialog>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ChatDialog open={chatDialogOpen} onOpenChange={setChatDialogOpen} />
-      <NotificationDrawer 
-        open={notificationDrawerOpen} 
+      <NotificationDrawer
+        open={notificationDrawerOpen}
         onOpenChange={setNotificationDrawerOpen}
         onOpenFullView={() => {
           setNotificationDrawerOpen(false);

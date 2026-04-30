@@ -224,7 +224,7 @@ export function TaskDetailPane({
                 className="text-sm font-medium"
               >
                 {tab.label}
-                {"count" in tab && tab.count > 0 && (
+                {"count" in tab && tab.count !== undefined && tab.count > 0 && (
                   <span className="ml-1.5 rounded bg-muted-foreground/20 px-1 font-mono text-[10px]">
                     {tab.count}
                   </span>
