@@ -16,7 +16,7 @@ export function connectSocket(token: string): Socket {
   // Guard: don't create a second socket if one already exists
   if (socket?.connected) return socket;
 
-  socket = io(import.meta.env.VITE_SOCKET_URL ?? "http://localhost:5000", {
+  socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5001", {
     auth: { token }, // Server reads this to verify the user
   });
 

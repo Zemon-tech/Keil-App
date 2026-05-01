@@ -52,6 +52,7 @@ import {
   Bell,
   Loader2,
   MoreHorizontal,
+  Image,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -71,6 +72,11 @@ const navigationItems = [
     title: "Tasks",
     url: "/tasks",
     icon: CheckSquare,
+  },
+  {
+    title: "Motion",
+    url: "/motion",
+    icon: Image,
   },
 ];
 

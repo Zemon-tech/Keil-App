@@ -94,7 +94,7 @@ export const createInviteLink = catchAsync(async (req: Request, res: Response) =
     }
     
     const token = jwt.sign({ workspaceId }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '7d' });
-    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/invite/${token}`;
+    const inviteLink = `${process.env.FRONTEND_URL}/invite/${token}`;
 
     res.status(200).json(new ApiResponse(200, { inviteLink, token }, "Invite link generated successfully"));
 });
