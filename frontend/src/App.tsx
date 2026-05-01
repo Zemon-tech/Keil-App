@@ -9,6 +9,7 @@ import { useAuth } from "./contexts/AuthContext";
 import { InvitePage } from "./components/workspace/InvitePage";
 
 import { MotionPage } from "./components/motion/MotionPage";
+import { MotionHome } from "./components/motion/MotionHome";
 
 /**
  * Main application component.
@@ -45,6 +46,14 @@ function App() {
         />
         <Route
           path="/motion"
+          element={
+            <Layout>
+              <MotionHome />
+            </Layout>
+          }
+        />
+        <Route
+          path="/motion/:pageId"
           element={
             <Layout>
               <MotionPage />
