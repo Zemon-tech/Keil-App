@@ -21,9 +21,10 @@ import { Toaster } from "@/components/ui/sonner";
 type LayoutProps = {
   children: ReactNode;
   className?: string;
+  sidebar?: ReactNode;
 };
 
-export function Layout({ children, className }: LayoutProps) {
+export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const location = useLocation();
 
@@ -41,7 +42,7 @@ export function Layout({ children, className }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      {sidebar || <AppSidebar />}
       <SidebarInset className="bg-background">
 
         {/* Command Palette */}
@@ -80,8 +81,8 @@ export function Layout({ children, className }: LayoutProps) {
         </main>
       </SidebarInset>
 
-      {/* AI Assistant - Available on all pages except dashboard */}
-      {location.pathname !== "/" && location.pathname !== "/dashboard" ? <AiAssistant /> : null}
+      {/* AI Assistant - Available on all pages except dashboard and motion */}
+      {location.pathname !== "/" && location.pathname !== "/dashboard" && location.pathname !== "/motion" ? <AiAssistant /> : null}
       <Toaster />
     </SidebarProvider>
   );

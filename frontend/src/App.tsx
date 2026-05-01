@@ -8,6 +8,8 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
 import { InvitePage } from "./components/workspace/InvitePage";
 
+import { MotionPage } from "./components/motion/MotionPage";
+
 /**
  * Main application component.
  * Configures application routes and protected access.
@@ -38,6 +40,14 @@ function App() {
           element={
             <Layout>
               <TasksPage />
+            </Layout>
+          }
+        />
+        <Route
+          path="/motion"
+          element={
+            <Layout>
+              <MotionPage />
             </Layout>
           }
         />
