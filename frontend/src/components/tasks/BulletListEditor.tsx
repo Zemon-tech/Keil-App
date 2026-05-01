@@ -18,7 +18,7 @@ export function BulletListEditor({
   onSave: (val: string) => void;
   placeholder: string;
 }) {
-  const points = value ? value.split("\n").filter(Boolean) : [];
+  const points = value ? value.split("\n").filter(Boolean).map(p => p.replace(/^•\s*/, "")) : [];
   const [newPoint, setNewPoint] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
@@ -55,7 +55,7 @@ export function BulletListEditor({
 
       <ScrollArea className="flex-1 min-h-0 max-h-[160px] pr-2">
         {points.length > 0 ? (
-          <ul className="space-y-1.5">
+          <ul className="space-y-1.5 list-none">
             {points.map((pt, i) => (
               <li key={i} className="group flex items-start gap-2.5 text-sm text-foreground">
                 <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />

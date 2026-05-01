@@ -771,9 +771,46 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 }
               }}
               dateClick={(arg) => {
+                const clickedDate = arg.date;
+                // Compute a default due_date so the created task is visible on the calendar.
+                // The calendar filter requires BOTH start_date AND due_date to render an event.
+                let defaultDueDate: Date;
+                if (arg.allDay) {
+                  // Month view or all-day row click → schedule as a full-day event (exclusive end = next midnight)
+                  const { end: allDayEnd } = normalizeAllDayRangeLocal(clickedDate);
+                  defaultDueDate = allDayEnd;
+                } else {
+                  // Timed view click → default to 1-hour slot (matches DEFAULT_TIMED_DURATION_MINUTES)
+                  defaultDueDate = addMinutes(clickedDate, DEFAULT_TIMED_DURATION_MINUTES);
+                }
                 setCreateInitialValues({
                   type: "task",
-                  start_date: arg.date.toISOString(),
+                  start_date: clickedDate.toISOString(),
+                  due_date: defaultDueDate.toISOString(),
+                } as Partial<TaskDTO>);
+                setCreateDialogOpen(true);
+              }}
+              selectMirror
+              select={(arg) => {
+                // User dragged to select a time range — open create dialog with exact start/end.
+                // Uses the same normalisation helpers as drop/resize to stay consistent.
+                let startISO: string;
+                let endISO: string;
+                if (arg.allDay) {
+                  // All-day selection (month view or all-day row drag)
+                  const { start, end } = normalizeAllDayRangeLocal(arg.start, arg.end);
+                  startISO = start.toISOString();
+                  endISO = end.toISOString();
+                } else {
+                  // Timed selection (day/week view drag)
+                  const { start, end } = normalizeTimedRange(arg.start, arg.end);
+                  startISO = start.toISOString();
+                  endISO = end.toISOString();
+                }
+                setCreateInitialValues({
+                  type: "task",
+                  start_date: startISO,
+                  due_date: endISO,
                 } as Partial<TaskDTO>);
                 setCreateDialogOpen(true);
               }}

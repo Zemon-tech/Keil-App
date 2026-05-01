@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Draggable } from "@fullcalendar/interaction";
-import { Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User, AlertCircle, ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
+import { Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User, AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -135,7 +135,7 @@ function SubtaskList({
               isDone && "opacity-50"
             )}
           >
-            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               {/* Status dot */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -164,23 +164,23 @@ function SubtaskList({
                 </PopoverContent>
               </Popover>
 
-              {/* Title & Badge */}
-              <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-                <span className="text-[13px] font-medium truncate leading-snug">
+              {/* Title Area */}
+              <div className="task-name-container">
+                <span className="task-name-scroll text-[13px] font-medium leading-snug">
                   {sub.title}
                 </span>
-                {(sub as any).type === "event" && (
-                  <span className="shrink-0 text-[9px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1 py-0.5 rounded uppercase tracking-wider">
-                    event
-                  </span>
-                )}
               </div>
             </div>
 
-            {/* Right meta */}
-            <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground">
+            {/* Right block: Badge and Date */}
+            <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
+              {(sub as any).type === "event" && (
+                <span className="text-[9px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
+                  event
+                </span>
+              )}
               {isHighPriority && <Flag className="w-2.5 h-2.5 text-orange-400 shrink-0" />}
-              <span className="tabular-nums">
+              <span className="tabular-nums whitespace-nowrap">
                 {displayDate
                   ? new Date(displayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })
                   : ""}
@@ -225,6 +225,7 @@ export function TaskListPane({
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
 
   // Toggle subtask expansion for a task
   const toggleExpanded = (e: React.MouseEvent, taskId: string) => {
@@ -561,115 +562,119 @@ export function TaskListPane({
                     isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
                   )}
                 >
-                  <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-                  {/* Selection & Drag actions */}
-                  <div
-                    className={cn(
-                      "flex items-center overflow-hidden transition-all duration-200 shrink-0",
-                      !isChecked && !isMultiSelecting
-                        ? "w-0 opacity-0 group-hover:w-[36px] group-hover:opacity-100"
-                        : "w-[36px] opacity-100"
-                    )}
-                  >
-                    {/* Drag handle */}
-                    {isDraggable ? (
-                      <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
-                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <div className="w-[22px] shrink-0" />
-                    )}
-
-                    {/* Multi-select checkbox */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {/* Selection & Drag actions */}
                     <div
-                      className="shrink-0"
-                      onClick={(e) => toggleSelection(e, t.id)}
+                      className={cn(
+                        "flex items-center overflow-hidden transition-all duration-200 shrink-0",
+                        !isChecked && !isMultiSelecting
+                          ? "w-0 opacity-0 group-hover:w-[36px] group-hover:opacity-100"
+                          : "w-[36px] opacity-100"
+                      )}
                     >
-                      <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                      {/* Drag handle */}
+                      {isDraggable ? (
+                        <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
+                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <div className="w-[22px] shrink-0" />
+                      )}
+
+                      {/* Multi-select checkbox */}
+                      <div
+                        className="shrink-0"
+                        onClick={(e) => toggleSelection(e, t.id)}
+                      >
+                        <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* Icon/Dot — click opens popover or expands if parent hovered */}
+                    <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
+                      {/* Status dot — visible by default, hidden on hover if parent */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            onClick={(e) => e.stopPropagation()}
+                            className={cn(
+                              "w-2 h-2 rounded-full shrink-0 transition-transform hover:scale-125",
+                              STATUS_COLOR[t.status as AnyStatus],
+                              "group-hover/item:opacity-0 transition-opacity"
+                            )}
+                          />
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="start"
+                          className="w-36 p-1 rounded-lg shadow-lg"
+                        >
+                          {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
+                            <button
+                              key={s}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onUpdateTask?.(t.id, { status: s });
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                            >
+                              <div
+                                className={cn(
+                                  "w-2 h-2 rounded-full shrink-0",
+                                  STATUS_COLOR[s]
+                                )}
+                              />
+                              {s}
+                            </button>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Chevron — visible ALWAYS on hover for all tasks */}
+                      <button
+                        onClick={(e) => toggleExpanded(e, t.id)}
+                        className="absolute inset-0 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-opacity hover:text-foreground"
+                      >
+                        {expandedTasks.has(t.id) ? (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Title Area */}
+                    <div className="task-name-container">
+                      <span className="task-name-scroll text-sm font-medium leading-snug">
+                        {t.title}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Icon/Dot — click opens popover or expands if parent hovered */}
-                  <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
-                    {/* Status dot — visible by default, hidden on hover if parent */}
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          onClick={(e) => e.stopPropagation()}
-                          className={cn(
-                            "w-2 h-2 rounded-full shrink-0 transition-transform hover:scale-125",
-                            STATUS_COLOR[t.status as AnyStatus],
-                            "group-hover/item:opacity-0 transition-opacity"
-                          )}
-                        />
-                      </PopoverTrigger>
-                      <PopoverContent
-                        align="start"
-                        className="w-36 p-1 rounded-lg shadow-lg"
-                      >
-                        {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
-                          <button
-                            key={s}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateTask?.(t.id, { status: s });
-                            }}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
-                          >
-                            <div
-                              className={cn(
-                                "w-2 h-2 rounded-full shrink-0",
-                                STATUS_COLOR[s]
-                              )}
-                            />
-                            {s}
-                          </button>
-                        ))}
-                      </PopoverContent>
-                    </Popover>
-
-                    {/* Chevron — visible ALWAYS on hover for all tasks */}
-                    <button
-                      onClick={(e) => toggleExpanded(e, t.id)}
-                      className="absolute inset-0 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-opacity hover:text-foreground"
-                    >
-                      {expandedTasks.has(t.id) ? (
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-
-                    {/* Title & Badge */}
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-                      <span className="text-sm font-medium truncate leading-snug">
-                        {t.title}
-                      </span>
+                  {/* Right block: Badge and Date */}
+                  <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground justify-end relative ml-auto min-w-fit">
+                    {/* Badges & Icons */}
+                    <div className="flex items-center gap-1.5">
                       {t.type === "event" ? (
-                        <span className="shrink-0 text-[10px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1.5 py-0.5 rounded uppercase tracking-wider">
+                        <span className="text-[10px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1.5 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
                           event
                         </span>
                       ) : displayDate ? (
-                        <span className="shrink-0 text-[10px] text-muted-foreground/70 font-medium leading-none">
+                        <span className="text-[10px] text-muted-foreground/70 font-medium leading-none whitespace-nowrap">
                           scheduled
                         </span>
                       ) : null}
+                      
+                      {isBlocked && (
+                        <Zap className="w-3 h-3 text-yellow-400 shrink-0" />
+                      )}
+                      {isHighPriority && (
+                        <Flag className="w-3 h-3 text-orange-400 shrink-0" />
+                      )}
                     </div>
-                  </div>
-
-                  {/* Right meta with hover menu */}
-                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-muted-foreground justify-end relative ml-auto">
-                    {isBlocked && (
-                      <Zap className="w-3 h-3 text-yellow-400 shrink-0" />
-                    )}
-                    {isHighPriority && (
-                      <Flag className="w-3 h-3 text-orange-400 shrink-0" />
-                    )}
                     
                     {/* Date / Action Menu */}
-                    <div className="relative flex items-center justify-end">
-                      <span className="tabular-nums transition-opacity group-hover/item:opacity-0">
+                    <div className="relative flex items-center justify-end min-w-[45px]">
+                      <span className="tabular-nums transition-opacity group-hover/item:opacity-0 whitespace-nowrap">
                         {displayDate
                           ? new Date(displayDate).toLocaleDateString(
                             undefined,
@@ -693,6 +698,10 @@ export function TaskListPane({
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
                               View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingTask(t)}>
+                              <Pencil className="h-3.5 w-3.5 mr-2" />
+                              Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive focus:text-destructive" 
@@ -1000,6 +1009,20 @@ export function TaskListPane({
         allTasks={allTasks ?? tasks}
         isPersonalMode={isPersonalMode}
       />
+
+      {/* ── Edit task dialog ──────────────────────────────────── */}
+      {editingTask && (
+        <CreateTaskDialog
+          open={!!editingTask}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          taskId={editingTask.id}
+          initialValues={editingTask}
+          onTaskUpdated={() => setEditingTask(null)}
+          allTasks={allTasks ?? tasks}
+          isPersonalMode={isPersonalMode}
+        />
+      )}
     </div>
   );
 }

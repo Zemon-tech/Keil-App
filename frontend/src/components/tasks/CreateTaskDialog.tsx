@@ -37,7 +37,7 @@ const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"] as const;
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onTaskCreated: (newTaskId: string) => void;
+  onTaskCreated?: (newTaskId: string) => void;
   allTasks?: TaskDTO[];
   allUsers?: SimpleAssigneeOption[];
   // Edit mode props
@@ -262,12 +262,12 @@ export function CreateTaskDialog({
     // Format bullet lists with • prefix
     const objectiveFormatted = newObjectiveBullets
       .filter((b) => b.trim())
-      .map((b) => `• ${b.trim()}`)
+      .map((b) => b.trim())
       .join("\n");
 
     const successCriteriaFormatted = newSuccessCriteriaBullets
       .filter((b) => b.trim())
-      .map((b) => `• ${b.trim()}`)
+      .map((b) => b.trim())
       .join("\n");
 
     const input: CreateTaskInput = {
@@ -345,7 +345,7 @@ export function CreateTaskDialog({
           onSuccess: (data) => {
             onOpenChange(false);
             resetCreateForm();
-            if (data?.id) onTaskCreated(data.id);
+            if (data?.id) onTaskCreated?.(data.id);
           },
         });
       } else {
@@ -354,7 +354,7 @@ export function CreateTaskDialog({
           onSuccess: (data) => {
             onOpenChange(false);
             resetCreateForm();
-            if (data?.id) onTaskCreated(data.id);
+            if (data?.id) onTaskCreated?.(data.id);
           },
         });
       }
@@ -419,14 +419,10 @@ export function CreateTaskDialog({
 
           <Tabs defaultValue="basics" className="w-full">
             <div className="px-5 pt-3">
-              <TabsList className={`h-8 text-xs w-full ${newType === "event" ? "grid grid-cols-1" : "grid grid-cols-3"}`}>
+              <TabsList className="h-8 text-xs w-full grid grid-cols-3">
                 <TabsTrigger value="basics" className="text-xs">Basics</TabsTrigger>
-                {newType === "task" && (
-                  <>
-                    <TabsTrigger value="strategy" className="text-xs">Strategy</TabsTrigger>
-                    <TabsTrigger value="schedule" className="text-xs">Schedule</TabsTrigger>
-                  </>
-                )}
+                <TabsTrigger value="strategy" className="text-xs">Strategy</TabsTrigger>
+                <TabsTrigger value="schedule" className="text-xs">Schedule</TabsTrigger>
               </TabsList>
             </div>
 
@@ -620,7 +616,7 @@ export function CreateTaskDialog({
                         <Input
                           value={bullet}
                           onChange={(e) => updateBullet(index, e.target.value, setNewObjectiveBullets)}
-                          placeholder="What are we trying to achieve?"
+                          placeholder={newType === "event" ? "What will be discussed?" : "What are we trying to achieve?"}
                           className="flex-1 h-8 text-sm"
                         />
                         <Button
@@ -660,7 +656,7 @@ export function CreateTaskDialog({
                         <Input
                           value={bullet}
                           onChange={(e) => updateBullet(index, e.target.value, setNewSuccessCriteriaBullets)}
-                          placeholder="How do we know this is done?"
+                          placeholder={newType === "event" ? "What is the desired outcome?" : "How do we know this is done?"}
                           className="flex-1 h-8 text-sm"
                         />
                         <Button
