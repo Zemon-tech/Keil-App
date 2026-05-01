@@ -22,13 +22,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
@@ -43,7 +42,7 @@ import {
   useChangeTaskStatus 
 } from "@/hooks/api/useTasks";
 import { STATUS_COLOR } from "./task-detail-shared";
-import type { TaskStatus, EventStatus, AnyStatus } from "@/types/task";
+import type { AnyStatus } from "@/types/task";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
