@@ -87,6 +87,7 @@ export interface Task {
   updated_at: Date;
   deleted_at: Date | null;
   subtask_count?: number | string;
+  google_event_id?: string | null;
 }
 
 export interface TaskAssignee {
@@ -142,4 +143,17 @@ export interface PersonalTask {
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
+  google_event_id?: string | null;
+}
+
+export interface UserIntegration {
+  id: string;
+  user_id: string;
+  provider: string;
+  access_token: string | null;
+  refresh_token: string;
+  token_expiry: Date | null;
+  calendar_id: string;
+  created_at: Date;
+  updated_at: Date;
 }

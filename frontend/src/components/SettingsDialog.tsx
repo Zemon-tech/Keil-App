@@ -39,6 +39,11 @@ import { useTheme } from "next-themes";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useWorkspaceMembers, useCreateInviteLink } from "@/hooks/api/useWorkspace";
 import { Loader2, Copy, Users } from "lucide-react";
+import {
+    useGoogleCalendarStatus,
+    useConnectGoogleCalendar,
+    useDisconnectGoogleCalendar,
+} from "@/hooks/api/useGoogleCalendar";
 
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type SettingsTab =
@@ -574,12 +579,16 @@ function NotificationsTab() {
 }
 
 function ConnectorsTab() {
-    const connectors = [
-        { name: "GitHub", description: "Connect your repositories", connected: true },
-        { name: "Slack", description: "Send notifications to Slack", connected: false },
-        { name: "Jira", description: "Sync tasks with Jira", connected: false },
-        { name: "Figma", description: "View design files inline", connected: false },
-        { name: "Google Calendar", description: "Sync deadlines and events", connected: true },
+    const { data: gcalStatus, isLoading: gcalLoading } = useGoogleCalendarStatus();
+    const connectGcal = useConnectGoogleCalendar();
+    const disconnectGcal = useDisconnectGoogleCalendar();
+
+    // Static placeholder connectors (not yet implemented)
+    const staticConnectors = [
+        { name: "GitHub", description: "Connect your repositories" },
+        { name: "Slack", description: "Send notifications to Slack" },
+        { name: "Jira", description: "Sync tasks with Jira" },
+        { name: "Figma", description: "View design files inline" },
     ];
 
     return (
@@ -592,7 +601,58 @@ function ConnectorsTab() {
             <Separator />
 
             <div className="space-y-3">
-                {connectors.map((connector, i) => (
+                {/* Google Calendar — live integration */}
+                <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                            <Plug className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">Google Calendar</p>
+                                {!gcalLoading && (
+                                    <span className={cn(
+                                        "inline-block h-2 w-2 rounded-full",
+                                        gcalStatus?.connected ? "bg-emerald-500" : "bg-muted-foreground/40"
+                                    )} />
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {gcalStatus?.connected
+                                    ? "Scheduled tasks sync automatically"
+                                    : "Sync scheduled tasks to your calendar"}
+                            </p>
+                        </div>
+                    </div>
+                    {gcalStatus?.connected ? (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs rounded-lg"
+                            disabled={disconnectGcal.isPending}
+                            onClick={() => disconnectGcal.mutate()}
+                        >
+                            {disconnectGcal.isPending
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : "Disconnect"}
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="default"
+                            size="sm"
+                            className="text-xs rounded-lg"
+                            disabled={gcalLoading}
+                            onClick={connectGcal}
+                        >
+                            {gcalLoading
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : "Connect"}
+                        </Button>
+                    )}
+                </div>
+
+                {/* Static placeholder connectors */}
+                {staticConnectors.map((connector, i) => (
                     <div
                         key={i}
                         className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
@@ -607,11 +667,12 @@ function ConnectorsTab() {
                             </div>
                         </div>
                         <Button
-                            variant={connector.connected ? "outline" : "default"}
+                            variant="outline"
                             size="sm"
                             className="text-xs rounded-lg"
+                            disabled
                         >
-                            {connector.connected ? "Disconnect" : "Connect"}
+                            Coming soon
                         </Button>
                     </div>
                 ))}

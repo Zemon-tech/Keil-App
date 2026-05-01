@@ -8,6 +8,9 @@ import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearchParams } from "react-router-dom";
 import { useAppContext } from "@/contexts/AppContext";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { integrationKeys } from "@/hooks/api/useGoogleCalendar";
 
 import type { TaskPriority, AnyStatus } from "../types/task";
 import {
@@ -67,6 +70,24 @@ export function TasksPage() {
   // searchParams identity changes on every navigation — this is intentional
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // Handle Google Calendar OAuth redirect back (?gcal=connected or ?gcal=error)
+  // Runs once on mount — cleans the param immediately after showing the toast
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const gcal = searchParams.get("gcal");
+    if (gcal === "connected") {
+      toast.success("Google Calendar connected successfully");
+      // Invalidate status so the Connectors tab reflects the new state
+      queryClient.invalidateQueries({ queryKey: integrationKeys.googleStatus });
+      setSearchParams({}, { replace: true });
+    } else if (gcal === "error") {
+      toast.error("Failed to connect Google Calendar. Please try again.");
+      setSearchParams({}, { replace: true });
+    }
+  // Run once on mount only — intentionally omitting deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Pagination: just increase the limit to fetch more ──
   const [limit, setLimit] = useState(PAGE_SIZE);
