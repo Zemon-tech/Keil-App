@@ -1,0 +1,25 @@
+# Dependencies
+node_modules
+
+# Build output (rebuilt inside Docker)
+dist
+
+# Environment files — never bake secrets into the image
+.env
+.env.*
+
+# Scratch and docs
+scratch
+*.md
+
+# Git
+.git
+.gitignore
+
+# Editor
+.vscode
+.idea
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,12 @@
+{
+  // Cloudflare Worker name — must match your existing workers.dev subdomain
+  "name": "keilhq",
+  "compatibility_date": "2026-05-01",
+
+  // Serve the Vite build output as static assets
+  "assets": {
+    "directory": "./dist",
+    // Serve index.html for any route not matching a static file (SPA routing)
+    "not_found_handling": "single-page-application"
+  }
+}

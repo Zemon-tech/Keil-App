@@ -3,14 +3,22 @@ import { Server as HttpServer } from "http";
 import { supabaseAdmin } from "./config/supabase";
 import pool from "./config/pg";
 import { chatService } from "./services/chat.service";
+import { config } from "./config";
 
 export let io: SocketIOServer;
+
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    config.frontendUrl,
+].filter(Boolean);
 
 export const initSocket = (server: HttpServer) => {
     io = new SocketIOServer(server, {
         cors: {
-            origin: "*", // Adjust for production
-            methods: ["GET", "POST"]
+            origin: allowedOrigins,
+            methods: ["GET", "POST"],
+            credentials: true,
         }
     });
 
