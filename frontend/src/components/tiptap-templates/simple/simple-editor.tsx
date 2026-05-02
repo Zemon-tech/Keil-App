@@ -4,6 +4,8 @@ import type { JSONContent } from "@tiptap/core"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { EditorContent, EditorContext, useEditor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
+import type { Editor } from "@tiptap/core"
+import type { EditorState } from "@tiptap/pm/state"
 
 // --- Tiptap Core Extensions ---
 import { StarterKit } from "@tiptap/starter-kit"
@@ -48,7 +50,6 @@ import {
   Bold,
   Italic,
   Strikethrough,
-  Link2,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -131,7 +132,7 @@ export function SimpleEditor({
       BlockIdExtension,
       EnforceFinalBlockExtension,
       GlobalDragHandle.configure({
-        dragHandleWidth: 20,
+        dragHandleWidth: 52,
         scrollTreshold: 100,
         customNodes: ['taskItem', 'listItem'],
       }),
@@ -200,12 +201,51 @@ export function SimpleEditor({
   useEffect(() => {
     if (!editor) return
     onReady?.(editor)
+
+    // Inject + button into global drag handle
+    const injectPlusButton = () => {
+      const handle = document.querySelector('.drag-handle')
+      if (handle && !handle.querySelector('.plus-button')) {
+        const btn = document.createElement('button')
+        btn.innerHTML = '+'
+        btn.className = 'plus-button'
+        btn.title = 'Click to add a block below'
+        
+        btn.onclick = (e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          
+          const rect = handle.getBoundingClientRect()
+          // Look slightly to the right of the handle to find the node
+          const pos = editor.view.posAtCoords({ 
+            left: rect.right + 20, 
+            top: rect.top + (rect.height / 2) 
+          })
+          
+          if (pos) {
+            // Find the end of the current node to insert after it
+            const $pos = editor.state.doc.resolve(pos.pos)
+            const nodeEnd = $pos.after()
+            
+            editor.chain()
+              .focus()
+              .insertContentAt(nodeEnd, { type: 'paragraph' })
+              .run()
+          } else {
+            // Fallback: just append at the end
+            editor.chain().focus().insertContent({ type: 'paragraph' }).run()
+          }
+        }
+        
+        handle.prepend(btn)
+      }
+    }
+
+    const interval = setInterval(injectPlusButton, 1000)
+    return () => clearInterval(interval)
   }, [editor, onReady])
 
-  const isEmpty = useMemo(() => {
-    if (!editor) return true
-    return editor.isEmpty
-  }, [editor, editor?.state])
+
 
   const slashItems = useMemo<SlashItem[]>(() => {
     if (!editor) return []
@@ -391,7 +431,7 @@ export function SimpleEditor({
         {editor && (
           <BubbleMenu
             editor={editor}
-            shouldShow={({ editor }) => editor.isActive("table")}
+            shouldShow={({ editor }: { editor: Editor }) => editor.isActive("table")}
             options={{ placement: 'top' }}
           >
             <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
@@ -469,8 +509,8 @@ export function SimpleEditor({
         {editor && (
           <BubbleMenu
             editor={editor}
-            shouldShow={({ editor, view, state, from, to }) => {
-              const { doc, selection } = state
+            shouldShow={({ editor, state }: { editor: Editor; state: EditorState }) => {
+              const { selection } = state
               const { empty } = selection
               
               if (empty || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
@@ -478,7 +518,7 @@ export function SimpleEditor({
               }
               return true
             }}
-            tippyOptions={{ duration: 100 }}
+
           >
             <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
               <Button
@@ -523,11 +563,11 @@ export function SimpleEditor({
           className="simple-editor-content"
         />
 
-        {isEmpty && (
+        {/* {isEmpty && (
           <div className="pointer-events-none max-w-[900px] mx-auto w-full text-muted-foreground/50 text-sm pt-2">
             Type <span className="text-muted-foreground">/</span> for commands
           </div>
-        )}
+        )} */}
 
         {slashOpen && slashPos && editor && (
           <div

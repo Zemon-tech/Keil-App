@@ -2,13 +2,11 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { nanoid } from 'nanoid';
 
-declare global {
-  namespace TiptapExtension {
-    interface Commands<ReturnType> {
-      blockId: {
-        setBlockId: (id: string) => ReturnType;
-      };
-    }
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    blockId: {
+      setBlockId: (id: string) => ReturnType;
+    };
   }
 }
 
@@ -53,7 +51,7 @@ export const BlockIdExtension = Extension.create({
     return [
       new Plugin({
         key: new PluginKey('blockIdPlugin'),
-        appendTransaction: (transactions, oldState, newState) => {
+        appendTransaction: (transactions, _oldState, newState) => {
           let tr = newState.tr;
           let modified = false;
 
@@ -85,9 +83,10 @@ export const BlockIdExtension = Extension.create({
     return {
       setBlockId:
         (id: string) =>
-        ({ commands }) => {
+        ({ commands }: { commands: any }) => {
           return commands.updateAttributes(this.name, { id });
         },
     };
   },
 });
+

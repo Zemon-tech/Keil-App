@@ -8,7 +8,7 @@ export const EnforceFinalBlockExtension = Extension.create({
   addProseMirrorPlugins() {
     return [
       new Plugin({
-        appendTransaction: (transactions, oldState, newState) => {
+        appendTransaction: (_transactions, _oldState, newState) => {
           const { doc } = newState;
           const docSize = doc.content.size;
 
