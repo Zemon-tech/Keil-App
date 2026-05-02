@@ -271,11 +271,15 @@ export function TasksPage() {
     setSelectedTaskId(parentId);
   }, []);
 
-  // Handle task scheduling from calendar (org mode only — personal tasks use simpler update)
+  // Handle task scheduling from calendar
   const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string, isAllDay: boolean) => {
-    // In personal mode fall back to a regular update (same fields exist on PersonalTaskDTO)
-    handleUpdateTask(taskId, { start_date: startISO, due_date: endISO, is_all_day: isAllDay });
-  }, [handleUpdateTask]);
+    if (isPersonalMode) {
+      // Personal tasks have no is_all_day column — only update the dates
+      handleUpdateTask(taskId, { start_date: startISO, due_date: endISO });
+    } else {
+      handleUpdateTask(taskId, { start_date: startISO, due_date: endISO, is_all_day: isAllDay });
+    }
+  }, [isPersonalMode, handleUpdateTask]);
 
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",

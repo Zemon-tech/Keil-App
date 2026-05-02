@@ -93,13 +93,18 @@ export const getPersonalTaskById = catchAsync(async (req: Request, res: Response
 
 export const updatePersonalTask = catchAsync(async (req: Request, res: Response) => {
   const userId = (req as any).user?.id as string;
-  const { status, priority, start_date, due_date, ...rest } = req.body;
+  // Explicitly whitelist allowed fields — unknown fields (e.g. is_all_day from the
+  // calendar scheduler) are dropped here so they never reach the repository.
+  const { title, description, objective, success_criteria, status, priority, start_date, due_date } = req.body;
 
   if (status !== undefined && !validateStatus(status)) throw new ApiError(400, "Invalid status");
   if (priority !== undefined && !validatePriority(priority)) throw new ApiError(400, "Invalid priority");
 
   const task = await personalTaskService.updatePersonalTask(asString(req.params.id), userId, {
-    ...rest,
+    title,
+    description,
+    objective,
+    success_criteria,
     status,
     priority,
     start_date: parseOptionalDate(start_date, "start_date"),
