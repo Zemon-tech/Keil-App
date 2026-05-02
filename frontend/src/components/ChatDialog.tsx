@@ -21,8 +21,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useRef, useEffect } from "react";
 import { useMe } from "@/hooks/api/useMe";
-import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useAppContext } from "@/contexts/AppContext";
 import { useOpenDM } from "@/hooks/api/useChat";
 import { getSocket } from "@/lib/socket";
 
@@ -33,17 +33,19 @@ interface ChatDialogProps {
 
 export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     const { activeChannelId, setActiveChannel, typingUsers } = useChatStore();
-    const { data: channels = [], isLoading } = useChatChannels();
-    const readChannel = useReadChannel();
-    const { data: messages = [], isLoading: messagesLoading } = useChatMessages(activeChannelId || "");
+    // Phase D will fully migrate this component; for now we pass org/space context
+    // to the new hook signatures while keeping the legacy member list intact.
+    const { activeOrgId, activeSpaceId } = useAppContext();
+    const { data: channels = [], isLoading } = useChatChannels(activeOrgId, activeSpaceId);
+    const readChannel = useReadChannel(activeOrgId, activeSpaceId);
+    const { data: messages = [], isLoading: messagesLoading } = useChatMessages(activeChannelId || "", activeOrgId, activeSpaceId);
     const sendMessage = useSendMessage();
     const { data: me } = useMe();
-    const { workspaceId } = useWorkspace();
-    const { data: members } = useWorkspaceMembers(workspaceId ?? undefined);
-    const openDM = useOpenDM();
+    const { data: members } = useSpaceMembers(activeOrgId, activeSpaceId);
+    const openDM = useOpenDM(activeOrgId, activeSpaceId);
 
     // Mount global socket listeners at dialog level
-    useChatSocketListeners(activeChannelId);
+    useChatSocketListeners(activeChannelId, activeOrgId, activeSpaceId);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [messageText, setMessageText] = useState("");
@@ -63,12 +65,13 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
         c.members[0]?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    // Filter users for adding new chat
+    // Filter users for adding new chat — SpaceMember shape: { user_id, name, email }
+    const myId = (me as any)?.id ?? (me as any)?.user?.id;
     const filteredUsers = members?.filter(member => {
-        if (member.user.id === (me as any)?.user?.id || member.user.id === (me as any)?.id) return false;
+        if (member.user_id === myId) return false;
         const searchLower = userSearchQuery.toLowerCase();
-        return member.user.name?.toLowerCase().includes(searchLower) ||
-               member.user.email.toLowerCase().includes(searchLower);
+        return member.name?.toLowerCase().includes(searchLower) ||
+               member.email.toLowerCase().includes(searchLower);
     });
 
     const currentChannel = channels.find(c => c.id === activeChannelId);
@@ -477,12 +480,12 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                     <ScrollArea className="h-[calc(100vh-180px)]">
                                         <div className="space-y-1">
                                             {filteredUsers?.map((member) => {
-                                                const displayName = member.user.name || member.user.email;
+                                                const displayName = member.name || member.email;
                                                 const initials = displayName.charAt(0).toUpperCase();
                                                 return (
                                                     <button
-                                                        key={member.id}
-                                                        onClick={() => handleStartChat(member.user.id)}
+                                                        key={member.user_id}
+                                                        onClick={() => handleStartChat(member.user_id)}
                                                         disabled={openDM.isPending}
                                                         className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-left"
                                                     >
@@ -493,7 +496,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                         </Avatar>
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-sm font-medium truncate">{displayName}</p>
-                                                            <p className="text-xs text-muted-foreground truncate">{member.user.email}</p>
+                                                            <p className="text-xs text-muted-foreground truncate">{member.email}</p>
                                                         </div>
                                                         <UserPlus className="h-4 w-4 text-muted-foreground" />
                                                     </button>

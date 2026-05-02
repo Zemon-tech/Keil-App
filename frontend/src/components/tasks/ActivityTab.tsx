@@ -29,7 +29,8 @@ import {
 
 import type { TaskDTO } from "@/hooks/api/useTasks";
 import { useTasks } from "@/hooks/api/useTasks";
-import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useAppContext } from "@/contexts/AppContext";
 import { useTaskComments, useCreateComment, useDeleteComment } from "@/hooks/api/useComments";
 import type { Comment } from "@/types/task";
 import { useAuth } from "@/contexts/AuthContext";
@@ -225,7 +226,12 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
 
   const [activePicker, setActivePicker] = useState<"user" | "task" | "event" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
-  const { data: members } = useWorkspaceMembers(task.workspace_id);
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const isOrgMode = mode === "organisation";
+  const { data: members = [] } = useSpaceMembers(
+    isOrgMode ? activeOrgId : null,
+    isOrgMode ? activeSpaceId : null
+  );
   const { data: allTasks = [] } = useTasks();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -285,7 +291,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   };
 
   const filteredMembers = (members || []).filter(m =>
-    (m.user.name || m.user.email).toLowerCase().includes(pickerSearch.toLowerCase())
+    (m.name || m.email).toLowerCase().includes(pickerSearch.toLowerCase())
   );
 
   const filteredTasks = allTasks.filter(t =>
@@ -359,10 +365,10 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                   <p className="py-4 text-xs text-muted-foreground text-center">No people found</p>
                 ) : (
                   filteredMembers.map(m => {
-                    const name = m.user.name || m.user.email;
+                    const name = m.name || m.email;
                     return (
                       <button
-                        key={m.id}
+                        key={m.user_id}
                         onClick={() => handleInsertMention("@", name)}
                         className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
                       >

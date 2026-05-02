@@ -1,38 +1,49 @@
 // src/components/chat/NewChatDialog.tsx
 
 import { useState } from "react";
-import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useOpenDM, useCreateGroup } from "@/hooks/api/useChat";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useChatStore } from "@/store/useChatStore";
 import { useMe } from "@/hooks/api/useMe";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, Loader2, Users } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 
-export function NewChatDialog() {
+interface NewChatDialogProps {
+  orgId: string | null;
+  spaceId: string | null;
+}
+
+export function NewChatDialog({ orgId, spaceId }: NewChatDialogProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const { workspaceId } = useWorkspace();
-  const { data: members, isLoading } = useWorkspaceMembers(workspaceId ?? undefined);
+  const { data: members = [], isLoading } = useSpaceMembers(orgId, spaceId);
   const { data: me } = useMe();
-  const openDM = useOpenDM();
-  const createGroup = useCreateGroup();
+  const openDM = useOpenDM(orgId, spaceId);
+  const createGroup = useCreateGroup(orgId, spaceId);
   const { setActiveChannel } = useChatStore();
 
   const [groupName, setGroupName] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Filter out the current user and apply search
-  const filteredMembers = members?.filter(member => {
-    if (member.user.id === (me as any)?.user?.id || member.user.id === (me as any)?.id) return false;
+  const myId = (me as any)?.id ?? (me as any)?.user?.id;
+
+  const filteredMembers = members.filter((member) => {
+    if (member.user_id === myId) return false;
     const searchLower = search.toLowerCase();
-    const nameMatch = member.user.name?.toLowerCase().includes(searchLower);
-    const emailMatch = member.user.email.toLowerCase().includes(searchLower);
-    return nameMatch || emailMatch;
+    return (
+      member.name?.toLowerCase().includes(searchLower) ||
+      member.email.toLowerCase().includes(searchLower)
+    );
   });
 
   const handleStartChat = (userId: string) => {
@@ -40,20 +51,23 @@ export function NewChatDialog() {
       onSuccess: (channel: any) => {
         setActiveChannel(channel.id);
         setOpen(false);
-      }
+      },
     });
   };
 
   const handleCreateGroup = () => {
     if (!groupName.trim() || selectedIds.size === 0) return;
-    createGroup.mutate({ name: groupName.trim(), member_ids: Array.from(selectedIds) }, {
-      onSuccess: (channel: any) => {
-        setActiveChannel(channel.id);
-        setOpen(false);
-        setGroupName("");
-        setSelectedIds(new Set());
+    createGroup.mutate(
+      { name: groupName.trim(), member_ids: Array.from(selectedIds) },
+      {
+        onSuccess: (channel: any) => {
+          setActiveChannel(channel.id);
+          setOpen(false);
+          setGroupName("");
+          setSelectedIds(new Set());
+        },
       }
-    });
+    );
   };
 
   const toggleMember = (id: string) => {
@@ -66,7 +80,11 @@ export function NewChatDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+        >
           <Plus className="h-4 w-4" />
         </Button>
       </DialogTrigger>
@@ -87,8 +105,8 @@ export function NewChatDialog() {
               <Search className="h-4 w-4 text-muted-foreground mr-2" />
               <input
                 type="text"
-                className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Search workspace members..."
+                className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                placeholder="Search space members..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -99,20 +117,19 @@ export function NewChatDialog() {
                 <div className="flex h-full items-center justify-center">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              ) : filteredMembers?.length === 0 ? (
+              ) : filteredMembers.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   No members found.
                 </div>
               ) : (
                 <ul className="space-y-1">
-                  {filteredMembers?.map((member) => {
-                    const displayName = member.user.name || member.user.email;
+                  {filteredMembers.map((member) => {
+                    const displayName = member.name || member.email;
                     const initials = displayName.charAt(0).toUpperCase();
-
                     return (
-                      <li key={member.id}>
+                      <li key={member.user_id}>
                         <button
-                          onClick={() => handleStartChat(member.user.id)}
+                          onClick={() => handleStartChat(member.user_id)}
                           disabled={openDM.isPending}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
                         >
@@ -123,7 +140,9 @@ export function NewChatDialog() {
                           </Avatar>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{displayName}</p>
-                            <p className="text-xs text-muted-foreground truncate">{member.user.email}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {member.email}
+                            </p>
                           </div>
                         </button>
                       </li>
@@ -140,7 +159,7 @@ export function NewChatDialog() {
               <label className="text-sm font-medium text-foreground">Channel Name</label>
               <input
                 type="text"
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="e.g. #announcements, Project Alpha..."
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
@@ -161,43 +180,50 @@ export function NewChatDialog() {
                   />
                 </div>
               </div>
-              
+
               <div className="min-h-[140px] max-h-[180px] overflow-y-auto border rounded-md p-1 space-y-1">
                 {isLoading ? (
                   <div className="flex h-full items-center justify-center py-4">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
-                ) : filteredMembers?.map((member) => {
-                  const displayName = member.user.name || member.user.email;
-                  const isChecked = selectedIds.has(member.user.id);
-                  
-                  return (
-                    <div 
-                      key={member.id} 
-                      className="flex flex-row items-center space-x-3 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
-                      onClick={() => toggleMember(member.user.id)}
-                    >
-                      <Checkbox checked={isChecked} onCheckedChange={() => toggleMember(member.user.id)} />
-                      <div className="flex-1 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                        {displayName}
+                ) : (
+                  filteredMembers.map((member) => {
+                    const displayName = member.name || member.email;
+                    const isChecked = selectedIds.has(member.user_id);
+                    return (
+                      <div
+                        key={member.user_id}
+                        className="flex flex-row items-center space-x-3 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                        onClick={() => toggleMember(member.user_id)}
+                      >
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleMember(member.user_id)}
+                        />
+                        <div className="flex-1 text-sm font-medium leading-none">
+                          {displayName}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 
-            <Button 
-              className="w-full" 
+            <Button
+              className="w-full"
               disabled={!groupName.trim() || selectedIds.size === 0 || createGroup.isPending}
               onClick={handleCreateGroup}
             >
-              {createGroup.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+              {createGroup.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Users className="mr-2 h-4 w-4" />
+              )}
               Create Group Channel ({selectedIds.size} members)
             </Button>
           </TabsContent>
         </Tabs>
-
       </DialogContent>
     </Dialog>
   );

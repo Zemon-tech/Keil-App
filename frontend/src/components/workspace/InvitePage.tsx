@@ -1,15 +1,15 @@
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useJoinWorkspace } from "@/hooks/api/useWorkspace";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useJoinOrganisation } from "@/hooks/api/useOrganisations";
+import { useAppContext } from "@/contexts/AppContext";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function InvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const joinWorkspace = useJoinWorkspace();
-  const { setActiveWorkspace } = useWorkspace();
+  const joinOrg = useJoinOrganisation();
+  const { setActiveOrganisation } = useAppContext();
 
   useEffect(() => {
     if (!token) {
@@ -17,38 +17,36 @@ export function InvitePage() {
       return;
     }
 
-    joinWorkspace.mutate(token, {
-      onSuccess: (data) => {
-        // Update active workspace and navigate to dashboard
-        if (data?.data?.workspaceId) {
-          setActiveWorkspace(data.data.workspaceId);
-        }
+    joinOrg.mutate(token, {
+      onSuccess: ({ orgId, spaceId }) => {
+        setActiveOrganisation(orgId, spaceId);
         navigate("/");
       },
-      onError: (_err) => {
-        // Optional tracking if needed, error is rendered below
-      }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  if (joinWorkspace.isPending) {
+  if (joinOrg.isPending) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-background text-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-        <h2 className="text-xl font-semibold">Joining Workspace...</h2>
+        <h2 className="text-xl font-semibold">Joining Organisation...</h2>
         <p className="text-muted-foreground mt-2">Validating your invitation token.</p>
       </div>
     );
   }
 
-  if (joinWorkspace.isError) {
+  if (joinOrg.isError) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-background text-foreground bg-red-50/10 p-6">
         <div className="max-w-md text-center">
           <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-destructive mb-2">Invalid or Expired Invite</h2>
+          <h2 className="text-2xl font-bold text-destructive mb-2">
+            Invalid or Expired Invite
+          </h2>
           <p className="text-muted-foreground mb-6">
-            {(joinWorkspace.error as any)?.response?.data?.error?.message || "This invitation link could not be processed. It may have expired or you might already be a member of this workspace."}
+            {(joinOrg.error as any)?.response?.data?.message ||
+              "This invitation link could not be processed. It may have expired or you might already be a member of this organisation."}
           </p>
           <Button onClick={() => navigate("/")} size="lg">
             Return to Dashboard

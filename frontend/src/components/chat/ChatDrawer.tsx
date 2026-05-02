@@ -2,6 +2,7 @@
 
 import { useChatStore } from "@/store/useChatStore";
 import { useChatSocketListeners } from "@/hooks/api/useChat";
+import { useAppContext } from "@/contexts/AppContext";
 import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
@@ -10,29 +11,26 @@ import { useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 
 export function ChatDrawer() {
-  // Read state from Zustand
   const { isChatOpen, activeChannelId, closeChat } = useChatStore();
   const [width, setWidth] = useState(360);
   const isResizing = useRef(false);
   const navigate = useNavigate();
 
+  const { activeOrgId, activeSpaceId } = useAppContext();
+
   const handleExpandClick = () => {
-    navigate('/chat');
+    navigate("/chat");
     closeChat();
   };
 
   // ⚠️ Mount socket listeners here — once, at the drawer level.
-  // They stay active even when you navigate between channel list and messages.
-  useChatSocketListeners(activeChannelId);
+  useChatSocketListeners(activeChannelId, activeOrgId, activeSpaceId);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing.current) return;
-      // Calculate from the right edge
       const newWidth = window.innerWidth - e.clientX;
-      if (newWidth > 320 && newWidth < 800) {
-        setWidth(newWidth);
-      }
+      if (newWidth > 320 && newWidth < 800) setWidth(newWidth);
     };
 
     const handleMouseUp = () => {
@@ -54,14 +52,12 @@ export function ChatDrawer() {
     };
   }, [isChatOpen]);
 
-  // Don't render anything if the drawer is closed
   if (!isChatOpen) return null;
 
   return (
-    // Fixed panel pinned to the right side of the screen, on top of everything
-    <div 
+    <div
       style={{ width: `${width}px` }}
-      className="fixed inset-y-0 right-0 z-[60] flex shadow-2xl border-l border-border bg-background transition-colors duration-200"
+      className="fixed inset-y-0 right-0 z-60 flex shadow-2xl border-l border-border bg-background transition-colors duration-200"
     >
       {/* Resize Handle */}
       <div
@@ -75,12 +71,11 @@ export function ChatDrawer() {
       />
 
       <div className="flex flex-col w-full h-full relative">
-
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <h2 className="font-semibold text-sm">Chat</h2>
-            <NewChatDialog />
+            <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} />
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -100,17 +95,18 @@ export function ChatDrawer() {
           </div>
         </div>
 
-        {/* ── Body ──
-            If a channel is selected → show its messages.
-            If no channel selected → show the list of conversations. */}
+        {/* ── Body ── */}
         <div className="flex-1 overflow-hidden flex flex-col">
           {activeChannelId ? (
-            <MessageView channelId={activeChannelId} />
+            <MessageView
+              channelId={activeChannelId}
+              orgId={activeOrgId}
+              spaceId={activeSpaceId}
+            />
           ) : (
-            <ChannelList />
+            <ChannelList orgId={activeOrgId} spaceId={activeSpaceId} />
           )}
         </div>
-
       </div>
     </div>
   );

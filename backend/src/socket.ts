@@ -11,7 +11,7 @@ const allowedOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
     config.frontendUrl,
-].filter(Boolean);
+].filter((origin): origin is string => Boolean(origin));
 
 export const initSocket = (server: HttpServer) => {
     io = new SocketIOServer(server, {

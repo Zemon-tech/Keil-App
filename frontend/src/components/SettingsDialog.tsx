@@ -36,8 +36,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useWorkspaceMembers, useCreateInviteLink } from "@/hooks/api/useWorkspace";
+import { useAppContext } from "@/contexts/AppContext";
+import { useOrgMembers, useCreateOrgInvite } from "@/hooks/api/useOrganisations";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { Loader2, Copy, Users } from "lucide-react";
 import {
     useGoogleCalendarStatus,
@@ -68,31 +69,42 @@ interface SettingsNavItem {
 }
 
 function WorkspaceSettingsTab() {
-    const { workspaceName, workspaceRole, workspaceId } = useWorkspace();
+    const { activeOrg, activeOrgId, mode } = useAppContext();
+
+    if (mode !== "organisation" || !activeOrg) {
+        return (
+            <div className="space-y-8">
+                <div>
+                    <h2 className="text-lg font-semibold text-foreground">Organisation settings</h2>
+                    <p className="text-sm text-muted-foreground mt-1">No organisation selected. Switch to an organisation to manage its settings.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
             <div>
-                <h2 className="text-lg font-semibold text-foreground">Workspace settings</h2>
-                <p className="text-sm text-muted-foreground mt-1">Manage your workspace configuration.</p>
+                <h2 className="text-lg font-semibold text-foreground">Organisation settings</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage your organisation configuration.</p>
             </div>
 
             <Separator />
 
             <div className="space-y-4">
                 <div>
-                    <p className="text-sm font-medium text-foreground">Workspace name</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{workspaceName || "No workspace selected"}</p>
+                    <p className="text-sm font-medium text-foreground">Organisation name</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{activeOrg.name}</p>
                 </div>
 
                 <div>
                     <p className="text-sm font-medium text-foreground">Your role</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{workspaceRole || "-"}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 capitalize">{activeOrg.role}</p>
                 </div>
 
                 <div>
-                    <p className="text-sm font-medium text-foreground">Workspace ID</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 font-mono">{workspaceId || "-"}</p>
+                    <p className="text-sm font-medium text-foreground">Organisation ID</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-mono">{activeOrgId}</p>
                 </div>
             </div>
 
@@ -101,8 +113,8 @@ function WorkspaceSettingsTab() {
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-medium text-foreground">Rename workspace</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Update your workspace display name.</p>
+                        <p className="text-sm font-medium text-foreground">Rename organisation</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Update your organisation display name.</p>
                     </div>
                     <Button variant="outline" size="sm" className="text-xs rounded-lg" disabled>
                         Coming soon
@@ -122,7 +134,7 @@ const settingsNavItems: SettingsNavItem[] = [
     { id: "tasks", label: "Tasks", icon: ListTodo, group: "account" },
     { id: "notifications", label: "Notifications", icon: Bell, group: "account" },
     { id: "connectors", label: "Connectors", icon: Plug, group: "account" },
-    { id: "workspaceSettings", label: "Workspace settings", icon: Settings, group: "workspace" },
+    { id: "workspaceSettings", label: "Organisation settings", icon: Settings, group: "workspace" },
     { id: "api", label: "API", icon: Code2, group: "workspace" },
     { id: "members", label: "Members", icon: Users, group: "workspace" },
     { id: "enterprise", label: "Enterprise", icon: Building2, group: "workspace" },
@@ -768,26 +780,41 @@ function EnterpriseTab() {
 }
 
 function MembersTab() {
-    const { workspaceId, workspaceRole } = useWorkspace();
-    const { data: members = [] } = useWorkspaceMembers(workspaceId || undefined);
-    const createInvite = useCreateInviteLink();
+    const { activeOrgId, activeSpaceId, activeOrg, mode } = useAppContext();
+    const { data: orgMembers = [] } = useOrgMembers(mode === "organisation" ? activeOrgId : null);
+    const { data: spaceMembers = [] } = useSpaceMembers(
+        mode === "organisation" ? activeOrgId : null,
+        mode === "organisation" ? activeSpaceId : null
+    );
+    const createInvite = useCreateOrgInvite();
     const [inviteLink, setInviteLink] = useState("");
 
     const handleCreateInvite = () => {
-        if (!workspaceId) return;
-        createInvite.mutate(workspaceId, {
+        if (!activeOrgId) return;
+        createInvite.mutate(activeOrgId, {
             onSuccess: (data) => setInviteLink(data.inviteLink),
-            onError: (err: any) => alert(err?.response?.data?.error?.message || "Failed to create invite link")
+            onError: (err: any) => alert(err?.response?.data?.message || "Failed to create invite link")
         });
     };
 
-    const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
+    const isAdmin = activeOrg?.role === "owner" || activeOrg?.role === "admin";
+
+    if (mode !== "organisation" || !activeOrg) {
+        return (
+            <div className="space-y-8">
+                <div>
+                    <h2 className="text-lg font-semibold text-foreground">Members</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Switch to an organisation to manage members.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
             <div>
-                <h2 className="text-lg font-semibold text-foreground">Workspace Members</h2>
-                <p className="text-sm text-muted-foreground mt-1">Manage who has access to your workspace.</p>
+                <h2 className="text-lg font-semibold text-foreground">Members</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage who has access to your organisation and spaces.</p>
             </div>
 
             <Separator />
@@ -818,23 +845,24 @@ function MembersTab() {
 
             {!isAdmin && (
                 <div className="p-4 rounded-xl border border-border bg-muted/30">
-                    <p className="text-xs text-muted-foreground text-center">Only Workspace Admins and Owners can invite new members.</p>
+                    <p className="text-xs text-muted-foreground text-center">Only Organisation Admins and Owners can invite new members.</p>
                 </div>
             )}
 
             <Separator />
 
+            {/* Organisation Members */}
             <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground mb-4">Current Members ({members.length})</p>
-                {members.map(member => (
-                    <div key={member.id} className="flex items-center justify-between p-2 hover:bg-muted/30 rounded-lg">
+                <p className="text-sm font-medium text-foreground mb-4">Organisation Members ({orgMembers.length})</p>
+                {orgMembers.map(member => (
+                    <div key={member.user_id} className="flex items-center justify-between p-2 hover:bg-muted/30 rounded-lg">
                         <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
-                                <AvatarFallback className="bg-primary/10 text-xs">{(member.user.name || member.user.email).charAt(0).toUpperCase()}</AvatarFallback>
+                                <AvatarFallback className="bg-primary/10 text-xs">{(member.name || member.email).charAt(0).toUpperCase()}</AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col">
-                                <span className="text-sm font-medium">{member.user.name || "Unknown"}</span>
-                                <span className="text-xs text-muted-foreground">{member.user.email}</span>
+                                <span className="text-sm font-medium">{member.name || "Unknown"}</span>
+                                <span className="text-xs text-muted-foreground">{member.email}</span>
                             </div>
                         </div>
                         <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground px-2 py-1 bg-muted rounded-md pointer-events-none">
@@ -842,6 +870,33 @@ function MembersTab() {
                         </span>
                     </div>
                 ))}
+            </div>
+
+            <Separator />
+
+            {/* Space Members */}
+            <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground mb-4">Space Members ({spaceMembers.length})</p>
+                {spaceMembers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No space selected or no members in this space.</p>
+                ) : (
+                    spaceMembers.map(member => (
+                        <div key={member.user_id} className="flex items-center justify-between p-2 hover:bg-muted/30 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                    <AvatarFallback className="bg-primary/10 text-xs">{(member.name || member.email).charAt(0).toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-medium">{member.name || "Unknown"}</span>
+                                    <span className="text-xs text-muted-foreground">{member.email}</span>
+                                </div>
+                            </div>
+                            <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground px-2 py-1 bg-muted rounded-md pointer-events-none">
+                                {member.role}
+                            </span>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );

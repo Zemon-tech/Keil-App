@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
 import { ApiResponse } from "../utils/ApiResponse";
+import { ApiError } from "../utils/ApiError";
 import * as spaceService from "../services/space.service";
 
 const asString = (value: string | string[] | undefined): string =>
@@ -23,3 +24,18 @@ export const getSpaceMembers = catchAsync(async (req: Request, res: Response) =>
     .status(200)
     .json(new ApiResponse(200, { members }, "Space members retrieved successfully"));
 });
+
+export const createSpace = catchAsync(async (req: Request, res: Response) => {
+  const orgId = asString(req.params.orgId);
+  const userId = (req as any).user?.id as string;
+  const { name } = req.body;
+
+  if (!name || typeof name !== "string" || name.trim() === "") {
+    throw new ApiError(400, "Space name is required");
+  }
+
+  const space = await spaceService.createSpace(orgId, userId, name);
+
+  res.status(201).json(new ApiResponse(201, { space }, "Space created successfully"));
+});
+

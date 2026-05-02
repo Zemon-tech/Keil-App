@@ -7,7 +7,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext'
-import { WorkspaceProvider } from './contexts/WorkspaceContext'
 import { AppProvider } from './contexts/AppContext'
 
 // TanStack Query client — 5 min stale time, 1 retry on failure
@@ -20,24 +19,22 @@ const queryClient = new QueryClient({
   },
 })
 
-// Provider order matters:
+// Provider order:
 // QueryClientProvider  → outermost so TanStack hooks work everywhere
 // BrowserRouter        → routing
-// AuthProvider         → Supabase session (must wrap WorkspaceProvider)
-// WorkspaceProvider    → calls GET /api/users/me after session is ready
+// AuthProvider         → Supabase session (must wrap AppProvider)
+// AppProvider          → org/space context (requires auth session)
 // ThemeProvider        → theme
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <WorkspaceProvider>
-            <AppProvider>
-              <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-                <App />
-              </ThemeProvider>
-            </AppProvider>
-          </WorkspaceProvider>
+          <AppProvider>
+            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+              <App />
+            </ThemeProvider>
+          </AppProvider>
         </AuthProvider>
       </BrowserRouter>
       {/* Only rendered in development builds */}
@@ -45,4 +42,3 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
-

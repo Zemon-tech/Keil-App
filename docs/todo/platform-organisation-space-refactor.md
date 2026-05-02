@@ -266,6 +266,32 @@ platform user -> organisations -> spaces -> org tasks / chat / dashboard
 - [ ] Manual chat works only inside selected space.
 - [ ] Manual dashboard changes when active space changes.
 
+## Phase 7 - Production Hardening & User-Centric Aggregation
+
+### Tasks
+- [ ] **Production Readiness: Creation Flow**
+    - [ ] Implement `POST /api/v1/orgs` (Create Organisation).
+    - [ ] Implement `POST /api/v1/orgs/:orgId/spaces` (Create Space).
+    - [ ] Add "New Organisation" and "New Space" buttons to the UI.
+- [ ] **Production Readiness: Functional Dead Ends**
+    - [ ] Complete the migration of "Members" and "Invite" logic to Organisation context.
+    - [ ] Ensure legacy workspace links in Settings point to the correct Org/Space equivalent.
+- [ ] **AppContext Resilience**
+    - [ ] Implement "Membership Validation" on app load.
+    - [ ] Gracefully handle cases where the `activeOrgId` in local storage is no longer accessible.
+- [ ] **User-Centric Aggregation (The Unified Workflow)**
+    - [ ] **Backend Database**: Add partial index `idx_tasks_my_work` on `tasks(assignee_id, status)` to speed up global lookups.
+    - [ ] **Backend API**: Implement `GET /api/v1/me/tasks` (Unified Aggregator) to fetch both personal and assigned org tasks in one fast query.
+    - [ ] **Real-time Tier**: Implement single persistent `user:<id>` socket room for fan-out events, eliminating the need to join multiple space rooms in Personal Mode.
+    - [ ] **Frontend Integration**: Update the Personal Space to act as a "Unified Filter" rather than an isolated silo, driven by `useUnifiedTasks`.
+    - [ ] **Task Creation**: Add a "Destination Picker" to the task creation dialog in Personal Mode to allow dispatching tasks to specific Org Spaces without switching contexts.
+
+### Acceptance Criteria
+- [ ] A user can go from Sign-up to having a fully functional Organisation without manual DB entry.
+- [ ] Deleting an organisation or removing a member does not crash the active session.
+- [ ] The Personal Space displays a highly responsive, real-time updated list of *both* private tasks and all assigned work across organisations.
+- [ ] Subscribing to updates uses only one socket room per user, ensuring the real-time server scales efficiently.
+
 ## Files Expected To Change
 
 Backend:

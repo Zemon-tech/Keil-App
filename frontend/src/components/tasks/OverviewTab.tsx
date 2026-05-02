@@ -24,7 +24,8 @@ import {
   useAssignUser,
   useRemoveAssignee,
 } from "@/hooks/api/useTasks";
-import { useWorkspaceMembers } from "@/hooks/api/useWorkspace";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useAppContext } from "@/contexts/AppContext";
 
 import { formatDate } from "./task-detail-shared";
 import { BulletListEditor } from "./BulletListEditor";
@@ -47,7 +48,12 @@ export const OverviewTab = ({
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const [createSubtaskOpen, setCreateSubtaskOpen] = useState(false);
 
-  const { data: members } = useWorkspaceMembers(task.workspace_id);
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const isOrgMode = mode === "organisation";
+  const { data: members = [] } = useSpaceMembers(
+    isOrgMode ? activeOrgId : null,
+    isOrgMode ? activeSpaceId : null
+  );
   const assignUser = useAssignUser();
   const removeAssignee = useRemoveAssignee();
 
@@ -258,6 +264,8 @@ export const OverviewTab = ({
                 );
               })}
 
+              {/* Assignees section — only shown in org mode */}
+              {isOrgMode && (
               <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
@@ -277,13 +285,13 @@ export const OverviewTab = ({
                   </div>
                   <div className="max-h-40 overflow-y-auto space-y-1">
                     {members
-                      ?.filter(m => !(task.assignees ?? []).some(a => a.id === m.user_id))
-                      .filter(m => (m.user.name || m.user.email).toLowerCase().includes(assigneeSearch.toLowerCase()))
+                      .filter(m => !(task.assignees ?? []).some(a => a.id === m.user_id))
+                      .filter(m => (m.name || m.email).toLowerCase().includes(assigneeSearch.toLowerCase()))
                       .map((m) => {
-                        const mName = m.user.name || m.user.email;
+                        const mName = m.name || m.email;
                         return (
                           <button
-                            key={m.id}
+                            key={m.user_id}
                             onClick={() => {
                               handleAssignUser(m.user_id);
                               setIsAssigneePickerOpen(false);
@@ -303,6 +311,7 @@ export const OverviewTab = ({
                   </div>
                 </PopoverContent>
               </Popover>
+              )}
             </div>
           </div>
 

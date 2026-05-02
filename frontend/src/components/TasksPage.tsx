@@ -25,7 +25,7 @@ import {
   type SortOrder,
   type TaskDTO,
 } from "../hooks/api/useTasks";
-import { useWorkspaceMembers } from "../hooks/api/useWorkspace";
+import { useSpaceMembers } from "../hooks/api/useSpaces";
 import {
   usePersonalTasks,
   useUpdatePersonalTask,
@@ -117,7 +117,7 @@ export function TasksPage() {
   }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
   // ── App mode ──────────────────────────────────────────
-  const { mode } = useAppContext();
+  const { mode, activeOrgId, activeSpaceId } = useAppContext();
   const isPersonalMode = mode === "personal";
 
   // ── Org tasks (legacy route — active in organisation mode) ──
@@ -213,18 +213,17 @@ export function TasksPage() {
     if (id === selectedTaskId) setSelectedTaskId("");
   }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId]);
 
-  // ── Workspace members for bulk assign (org mode only) ─────────────
-  // In personal mode, assignees don't exist — pass empty array.
-  const { data: members } = useWorkspaceMembers(
-    isPersonalMode ? undefined : (orgTasks?.[0]?.workspace_id)
+  // ── Space members for assignee picker (org mode only) ─────────────
+  // In personal mode, assignees don't exist — pass null so the hook is disabled.
+  const { data: spaceMembers = [] } = useSpaceMembers(
+    isPersonalMode ? null : activeOrgId,
+    isPersonalMode ? null : activeSpaceId
   );
-  const workspaceMembers = isPersonalMode
-    ? []
-    : members?.map((m) => ({
-        id: m.user.id,
-        name: m.user.name,
-        email: m.user.email,
-      })) ?? [];
+  const workspaceMembers = spaceMembers.map((m) => ({
+    id: m.user_id,
+    name: m.name,
+    email: m.email,
+  }));
 
   // ── Client-side text filter on top of server results ──
   const filtered = useMemo(() => {

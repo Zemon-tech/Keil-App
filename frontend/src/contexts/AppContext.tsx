@@ -1,9 +1,7 @@
 /**
  * AppContext — Platform / Organisation / Space app-level context.
  *
- * This is the new source of truth for the active mode and active org/space.
- * It sits alongside the legacy WorkspaceContext during the Phase 3 → 5 transition.
- * WorkspaceContext continues to serve legacy hooks unchanged.
+ * This is the single source of truth for the active mode and active org/space.
  *
  * Context rules:
  * - A user with no organisations is valid; they land in "personal" mode.
@@ -11,8 +9,7 @@
  * - Organisation mode requires both activeOrgId and activeSpaceId to be set
  *   before org-scoped queries run.
  * - Switching org clears or recalculates the active space.
- * - Active org and space are persisted to localStorage under new keys so they
- *   do not collide with the legacy "keil_active_workspace" key.
+ * - Active org and space are persisted to localStorage under dedicated keys.
  */
 
 import React, {
@@ -28,9 +25,12 @@ import { useSpaces, type Space } from "@/hooks/api/useSpaces";
 
 // ─── Storage Keys ─────────────────────────────────────────────────────────────
 
-const STORAGE_MODE     = "keil_app_mode";       // "personal" | "organisation"
-const STORAGE_ORG_ID   = "keil_active_org";     // uuid
-const STORAGE_SPACE_ID = "keil_active_space";   // uuid
+const STORAGE_MODE     = "keil_app_mode";    // "personal" | "organisation"
+const STORAGE_ORG_ID   = "keil_active_org";  // uuid
+const STORAGE_SPACE_ID = "keil_active_space"; // uuid
+
+// Legacy key written by the old WorkspaceContext — cleaned up on first load.
+const LEGACY_WORKSPACE_KEY = "keil_active_workspace";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,8 +67,11 @@ export interface AppContextType {
   /** Switch to personal mode. Clears org and space selections. */
   setPersonalMode: () => void;
 
-  /** Switch to organisation mode without selecting an org/space (legacy workspace mode). */
-  setWorkspaceMode: () => void;
+  /**
+   * Switch to organisation mode without selecting a specific org/space.
+   * Used when the user opens the Create/Join dialogs before an org is selected.
+   */
+  setOrganisationMode: () => void;
 
   /**
    * Switch to organisation mode and activate the given org.
@@ -91,6 +94,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  // ── One-time legacy key cleanup ───────────────────────────────────────────
+  // Remove the old WorkspaceContext key so it doesn't linger in storage.
+  useEffect(() => {
+    localStorage.removeItem(LEGACY_WORKSPACE_KEY);
+  }, []);
+
   // ── Restore persisted state ──────────────────────────────────────────────
   const [mode, setMode] = useState<AppMode>(() => {
     const stored = localStorage.getItem(STORAGE_MODE);
@@ -111,12 +120,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     mode === "organisation" ? activeOrgId : null
   );
 
-  // ── Auto-select first org when user has orgs but none is stored ───────────
+  // ── Membership validation: clear stale org from storage ──────────────────
   useEffect(() => {
     if (isLoadingOrgs) return;
 
-    // If the stored org is no longer in the list (e.g. user was removed),
-    // clear it and fall back to personal mode.
     if (activeOrgId) {
       const stillMember = organisations.some((o) => o.id === activeOrgId);
       if (!stillMember) {
@@ -128,8 +135,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         localStorage.removeItem(STORAGE_SPACE_ID);
       }
     }
-    // Never auto-switch to org mode — the user must choose.
-    // A user with no orgs stays in personal mode.
+    // Never auto-switch to org mode — the user must choose explicitly.
   }, [organisations, isLoadingOrgs, activeOrgId]);
 
   // ── Auto-select space when org becomes active ─────────────────────────────
@@ -137,17 +143,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     if (mode !== "organisation" || !activeOrgId || isLoadingSpaces) return;
     if (spaces.length === 0) return;
 
-    // Validate stored space still belongs to this org and user is still a member
     if (activeSpaceId) {
       const stillInSpace = spaces.some((s) => s.id === activeSpaceId);
       if (!stillInSpace) {
-        // Space is gone — pick the first available one
         const first = spaces[0];
         setActiveSpaceId(first.id);
         localStorage.setItem(STORAGE_SPACE_ID, first.id);
       }
     }
-    // If no space stored at all, pick the first one automatically
     if (!activeSpaceId) {
       const first = spaces[0];
       setActiveSpaceId(first.id);
@@ -177,7 +180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.removeItem(STORAGE_SPACE_ID);
   }, []);
 
-  const setWorkspaceMode = useCallback(() => {
+  const setOrganisationMode = useCallback(() => {
     setMode("organisation");
     localStorage.setItem(STORAGE_MODE, "organisation");
   }, []);
@@ -189,8 +192,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       localStorage.setItem(STORAGE_MODE, "organisation");
       localStorage.setItem(STORAGE_ORG_ID, orgId);
 
-      // If a preferred space is passed AND it belongs to the new org, use it.
-      // Otherwise clear — the space auto-select effect will pick from the list.
       if (lastSpaceId) {
         setActiveSpaceId(lastSpaceId);
         localStorage.setItem(STORAGE_SPACE_ID, lastSpaceId);
@@ -220,7 +221,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       isLoadingOrgs,
       isLoadingSpaces,
       setPersonalMode,
-      setWorkspaceMode,
+      setOrganisationMode,
       setActiveOrganisation,
       setActiveSpace,
     }),
@@ -235,7 +236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       isLoadingOrgs,
       isLoadingSpaces,
       setPersonalMode,
-      setWorkspaceMode,
+      setOrganisationMode,
       setActiveOrganisation,
       setActiveSpace,
     ]

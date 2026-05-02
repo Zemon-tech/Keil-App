@@ -56,4 +56,65 @@ export class SpaceRepository extends BaseRepository<Space> {
     const result = await executor.query(query, [orgId, spaceId]);
     return result.rows as Array<{ user_id: string; role: string; name: string | null; email: string }>;
   }
+
+  /**
+   * Creates a new space inside an org and adds the creator as owner.
+   * Must be called inside a transaction.
+   */
+  async createWithOwner(
+    orgId: string,
+    name: string,
+    createdBy: string,
+    client: PoolClient,
+  ): Promise<Space> {
+    const spaceResult = await client.query<Space>(
+      `INSERT INTO public.spaces (org_id, name, visibility, created_by)
+       VALUES ($1, $2, 'private', $3)
+       RETURNING *`,
+      [orgId, name, createdBy],
+    );
+    const space = spaceResult.rows[0];
+
+    await client.query(
+      `INSERT INTO public.space_members (org_id, space_id, user_id, role)
+       VALUES ($1, $2, $3, 'owner')`,
+      [orgId, space.id, createdBy],
+    );
+
+    return space;
+  }
+
+  /**
+   * Returns the first (oldest) space in an org — used as the "default" space for invites.
+   */
+  async findDefaultSpace(orgId: string, client?: PoolClient): Promise<Space | null> {
+    const executor = client || this.pool;
+    const result = await executor.query<Space>(
+      `SELECT * FROM public.spaces
+       WHERE org_id = $1 AND deleted_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [orgId],
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  /**
+   * Adds a user to a space as a member. Idempotent — does nothing if already a member.
+   */
+  async addMember(
+    orgId: string,
+    spaceId: string,
+    userId: string,
+    role: string,
+    client: PoolClient,
+  ): Promise<void> {
+    await client.query(
+      `INSERT INTO public.space_members (org_id, space_id, user_id, role)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (space_id, user_id) DO NOTHING`,
+      [orgId, spaceId, userId, role],
+    );
+  }
 }
+

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -68,16 +68,42 @@ export function useSpaceMembers(orgId: string | null, spaceId: string | null) {
   return useQuery<SpaceMember[]>({
     queryKey: spaceKeys.members(orgId ?? "", spaceId ?? ""),
     queryFn: async () => {
-      const res = await api.get<{ data: SpaceMember[] }>(
+      const res = await api.get<{ data: { members: SpaceMember[] } }>(
         `v1/orgs/${orgId}/spaces/${spaceId}/members`
       );
-      return res.data.data ?? [];
+      return res.data.data.members ?? [];
     },
     enabled: !!orgId && !!spaceId,
     retry: (failureCount, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;
       return failureCount < 1;
+    },
+  });
+}
+
+// ─── useCreateSpace ───────────────────────────────────────────────────────────
+
+/**
+ * Creates a new space inside an organisation.
+ * Calls: POST /api/v1/orgs/:orgId/spaces
+ * Caller must be an org owner or admin.
+ */
+export function useCreateSpace(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<Space, Error, string>({
+    mutationFn: async (name) => {
+      const res = await api.post<{ data: { space: Space } }>(
+        `v1/orgs/${orgId}/spaces`,
+        { name }
+      );
+      return res.data.data.space;
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: spaceKeys.list(orgId) });
+      }
     },
   });
 }
