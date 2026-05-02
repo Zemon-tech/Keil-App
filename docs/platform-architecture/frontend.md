@@ -11,7 +11,10 @@ frontend/src/
 │   ├── useOrganisations.ts          # useOrganisations, useOrgMembers,
 │   │                                #   useCreateOrganisation, useCreateOrgInvite,
 │   │                                #   useJoinOrganisation
-│   ├── useSpaces.ts                 # useSpaces, useSpaceMembers, useCreateSpace
+│   ├── useSpaces.ts                 # useSpaces, useSpaceMembers, useDeletedSpaces,
+│   │                                #   useCreateSpace, useRenameSpace, useDeleteSpace,
+│   │                                #   useRestoreSpace, useHardDeleteSpace,
+│   │                                #   useAddSpaceMember, useRemoveSpaceMember
 │   ├── usePersonalTasks.ts          # Full CRUD for personal tasks
 │   ├── useTasks.ts                  # Org task CRUD (legacy /v1/tasks route)
 │   ├── useChat.ts                   # Chat hooks — all accept (orgId, spaceId) params
@@ -22,13 +25,15 @@ frontend/src/
 │   ├── org/
 │   │   ├── CreateOrganisationDialog.tsx
 │   │   └── JoinOrganisationDialog.tsx
+│   ├── settings/
+│   │   └── SpacesTab.tsx            # Settings → Spaces tab (space list + detail panel)
 │   ├── workspace/
 │   │   └── InvitePage.tsx           # /invite/:token — joins org via token
 │   ├── TasksPage.tsx                # Mode-aware task orchestrator
 │   ├── Dashboard.tsx                # Mode-aware dashboard
 │   ├── ChatDialog.tsx               # Full-screen chat dialog (org mode only)
 │   ├── ChatPage.tsx                 # /chat route
-│   ├── SettingsDialog.tsx           # Account + Organisation settings
+│   ├── SettingsDialog.tsx           # Account + Organisation + Spaces settings
 │   └── chat/
 │       ├── ChannelList.tsx          # Accepts (orgId, spaceId) props
 │       ├── MessageView.tsx          # Accepts (orgId, spaceId) props
@@ -116,7 +121,39 @@ The personal task backend stores status with underscores (`in_progress`). The fr
 
 No UI component ever sees the underscore format.
 
-## Usage Examples
+## Space Management Hooks (`useSpaces.ts`)
+
+All space mutation hooks follow the same pattern: accept `orgId` (and `spaceId` where needed) as parameters, invalidate the relevant cache keys on success.
+
+| Hook | Cache invalidated | Notes |
+| :--- | :--- | :--- |
+| `useCreateSpace(orgId)` | `spaceKeys.list(orgId)` | Owner/admin only |
+| `useRenameSpace(orgId)` | `spaceKeys.list(orgId)` | **Optimistic update** — cache updated instantly, rolled back on error |
+| `useDeleteSpace(orgId)` | `list` + `deleted` | Soft-delete. Caller handles active-space fallback in `onSuccess` |
+| `useRestoreSpace(orgId)` | `list` + `deleted` | Restores space row only; tasks remain soft-deleted |
+| `useHardDeleteSpace(orgId)` | `spaceKeys.deleted(orgId)` | Space must already be soft-deleted |
+| `useDeletedSpaces(orgId)` | — (query) | Only returns data for org owner/admin |
+| `useAddSpaceMember(orgId, spaceId)` | `spaceKeys.members(orgId, spaceId)` | Target must be an org member |
+| `useRemoveSpaceMember(orgId, spaceId)` | `spaceKeys.members(orgId, spaceId)` | Cannot remove self |
+
+**Active-space fallback pattern** (used in `SpacesTab`):
+```tsx
+const del = useDeleteSpace(orgId);
+del.mutate(spaceId, {
+  onSuccess: () => {
+    if (activeSpaceId === spaceId) setActiveOrganisation(orgId); // auto-selects first remaining space
+  },
+});
+```
+
+## Settings → Spaces Tab
+
+`SpacesTab` (`frontend/src/components/settings/SpacesTab.tsx`) is a two-column layout inside Settings:
+
+- **Left panel**: list of all active spaces + a "Deleted" section (org owner/admin only). Clicking a space opens the detail panel.
+- **Right panel**: inline rename (optimistic), members list with remove buttons, add-member popover (shows org members not already in the space), danger zone with soft-delete button (disabled when last space).
+- Deleted space detail: Restore and Delete Forever buttons with separate confirmation dialogs.
+- Non-admin users see a read-only view — no rename, no add/remove, no delete.
 
 **Check current mode before rendering org-only UI:**
 ```tsx

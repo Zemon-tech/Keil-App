@@ -32,6 +32,7 @@ cd frontend && npm run dev
 2. **Organisation Mode**: Activated by creating or joining an org. The sidebar profile dropdown lists orgs; hovering an org reveals its spaces in a sub-menu.
 3. **Space Scope**: All org tasks, chat channels, and dashboard data are strictly scoped to the active space. Switching space changes all data.
 4. **Invite Flow**: Org owners/admins generate an invite link from Settings → Members. The token encodes the `orgId`. Joining adds the user to the org and its default General space.
+5. **Space Management**: Org owners/admins can create, rename, soft-delete, restore, and permanently delete spaces from Settings → Spaces. Members can be added (from org members) or removed per space. The last space in an org cannot be deleted.
 
 ## Tech Stack
 

@@ -34,6 +34,11 @@ Create Organisation  (POST /api/v1/orgs)
   └── space_members (owner)
   └── App switches to new org + General space
 
+Create additional Space  (POST /api/v1/orgs/:orgId/spaces)
+  └── spaces row
+  └── space_members (owner = caller)
+  └── Owner/admin only
+
 Invite another user  (POST /api/v1/orgs/:orgId/invite)
   └── Signed JWT { orgId, type: "org_invite" }, 7-day expiry
 
@@ -41,6 +46,19 @@ Join via token  (POST /api/v1/orgs/join)
   └── organisation_members (member)
   └── space_members for default space (member)
   └── App switches to joined org + default space
+
+Delete Space  (DELETE /api/v1/orgs/:orgId/spaces/:spaceId)
+  └── Soft-delete: sets deleted_at on space + cascades to tasks
+  └── Last space in org is blocked (400)
+  └── If active space deleted → app auto-switches to first remaining space
+
+Restore Space  (POST /api/v1/orgs/:orgId/spaces/:spaceId/restore)
+  └── Clears deleted_at on space row only
+  └── Tasks remain soft-deleted (restore separately)
+
+Permanent Delete  (DELETE /api/v1/orgs/:orgId/spaces/:spaceId/permanent)
+  └── Space must already be soft-deleted
+  └── Removes all tasks, channels, activity_logs, space_members in a transaction
 ```
 
 ## Key Design Decisions
@@ -60,7 +78,8 @@ All collaborative data (tasks, chat, dashboard, activity) belongs to a space, no
 ### 5. Token-Based Invite (Org-Scoped)
 Invite tokens are JWTs signed with `JWT_SECRET`, containing `{ orgId, type: "org_invite" }` with a 7-day expiry. The token is tied to the org only — joining always adds the user to the org's default (oldest) space. Admins can then add them to additional spaces manually.
 
-### 6. Canonical `TaskStatus` Serialisation
+### 7. Space Soft-Delete and Cascade Rules
+Deleting a space is a two-step process. Soft-delete (`DELETE /spaces/:spaceId`) sets `deleted_at` on the space and cascades to `tasks` (which also have `deleted_at`). `channels` and `activity_logs` do not have `deleted_at` — they are excluded from the soft-delete cascade and are only removed on permanent deletion. `space_members` rows are preserved during soft-delete so the space can be restored. Permanent deletion (`DELETE /spaces/:spaceId/permanent`) runs in a single transaction and removes all child data. The last active space in an org is blocked from deletion at the service layer.
 The frontend uses a single canonical `TaskStatus` (`"in-progress"`, hyphen). The personal task backend stores `in_progress` (underscore). `usePersonalTasks.ts` handles the conversion at the HTTP boundary so no UI component ever sees the inconsistency.
 
 ## Security Model
