@@ -1,38 +1,57 @@
 import { useState, useEffect } from "react";
+import { format, addDays, nextMonday, startOfToday, parseISO } from "date-fns";
+import {
+  CalendarIcon,
+  Flag,
+  Plus,
+  Target,
+  MapPin,
+  Users,
+  CheckCircle2,
+  Clock,
+  Timer,
+  Zap,
+  Layout
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import type { Task, TaskStatus, EventType, EventStatus, AnyStatus } from "@/types/task";
-import { useCreateTask, useUpdateTask, type TaskDTO, type CreateTaskInput } from "@/hooks/api/useTasks";
-import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-// Simple type for assignees (replace with your real UserDTO if you have one)
+import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
+import { useCreateTask, useUpdateTask } from "@/hooks/api/useTasks";
+import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+
 type SimpleAssigneeOption = {
   id: string;
   name: string;
+  avatarUrl?: string;
 };
-
-const TASK_STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "done"];
-const EVENT_STATUS_OPTIONS: EventStatus[] = ["confirmed", "tentative", "cancelled", "completed"];
-const PRIORITY_OPTIONS = ["low", "medium", "high", "urgent"] as const;
 
 interface CreateTaskDialogProps {
   open: boolean;
@@ -40,23 +59,26 @@ interface CreateTaskDialogProps {
   onTaskCreated?: (newTaskId: string) => void;
   allTasks?: TaskDTO[];
   allUsers?: SimpleAssigneeOption[];
-  // Edit mode props
   mode?: "create" | "edit";
   taskId?: string;
   initialValues?: Partial<TaskDTO>;
   onTaskUpdated?: (taskId: string) => void;
-  /** When set, forces "Create subtask" mode — parent_task_id is pre-filled and locked */
   parentTaskId?: string;
   parentTaskTitle?: string;
-  /** When true, routes mutations to personal task endpoints and hides org-only fields */
   isPersonalMode?: boolean;
 }
+
+const PRIORITY_LEVELS = [
+  { label: "Low", value: "low", color: "text-zinc-400 bg-zinc-400/10", icon: Flag },
+  { label: "Medium", value: "medium", color: "text-yellow-400 bg-yellow-400/10", icon: Flag },
+  { label: "High", value: "high", color: "text-orange-400 bg-orange-400/10", icon: Flag },
+  { label: "Urgent", value: "urgent", color: "text-red-400 bg-red-400/10", icon: Flag },
+] as const;
 
 export function CreateTaskDialog({
   open,
   onOpenChange,
   onTaskCreated,
-  allTasks = [],
   allUsers = [],
   mode = "create",
   taskId,
@@ -72,718 +94,583 @@ export function CreateTaskDialog({
   const updatePersonalTask = useUpdatePersonalTask();
 
   // ── Form State ─────────────────────────────────────────────────────────────
-  const [newTitle, setNewTitle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState<"task" | "event">("task");
 
-  // Bullet-list editors (matches your final UI screenshot)
-  const [newObjectiveBullets, setNewObjectiveBullets] = useState<string[]>([""]);
-  const [newSuccessCriteriaBullets, setNewSuccessCriteriaBullets] = useState<string[]>([""]);
+  // Metadata
+  const [date, setDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [priority, setPriority] = useState<string>("medium");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
-  const [newStartDateISO, setNewStartDateISO] = useState("");
-  const [newDueDateISO, setNewDueDateISO] = useState("");
-  const [newStatus, setNewStatus] = useState<AnyStatus>("todo");
-  const [newPriority, setNewPriority] = useState<Task["priority"]>("medium");
+  // Advanced sections
+  const [description, setDescription] = useState("");
+  const [objective, setObjective] = useState("");
+  const [successCriteria, setSuccessCriteria] = useState("");
+  const [location, setLocation] = useState("");
 
-  // New fields from our roadmap
-  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
-  const [newStoryPoints, setNewStoryPoints] = useState("");
-  const [newTimeEstimate, setNewTimeEstimate] = useState(""); // minutes
-  const [newParentTaskId, setNewParentTaskId] = useState<string>("");
+  // Collapsible states
+  const [showDetails, setShowDetails] = useState(false);
+  const [showClarity, setShowClarity] = useState(false);
+  const [showAgenda, setShowAgenda] = useState(false);
+  const [showCommandMenu, setShowCommandMenu] = useState(false);
 
-  // Event specific fields
-  const [newType, setNewType] = useState<"task" | "event">("task");
-  const [newEventType, setNewEventType] = useState<EventType | "">("");
-  const [newCustomEventType, setNewCustomEventType] = useState("");
-  const [newLocation, setNewLocation] = useState("");
-  const [newIsAllDay, setNewIsAllDay] = useState(false);
+  // New metadata fields
+  const [storyPoints, setStoryPoints] = useState<number | undefined>(undefined);
+  const [timeEstimate, setTimeEstimate] = useState<number | undefined>(undefined); // in minutes
+  const [isAllDay, setIsAllDay] = useState(true);
+  const [eventType, setEventType] = useState<string>("meeting");
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const resetCreateForm = () => {
-    setNewTitle("");
-    setNewDescription("");
-    setNewObjectiveBullets([""]);
-    setNewSuccessCriteriaBullets([""]);
-    setNewStartDateISO("");
-    setNewDueDateISO("");
-    setNewStatus(newType === "event" ? "confirmed" : "todo");
-    setNewPriority("medium");
-    setNewAssigneeIds([]);
-    setNewStoryPoints("");
-    setNewTimeEstimate("");
-    setNewParentTaskId(parentTaskId ?? "");
-    setNewType("task");
-    setNewEventType("");
-    setNewCustomEventType("");
-    setNewLocation("");
-    setNewIsAllDay(false);
-  };
-
-  // Pre-fill form when opening in edit mode
+  // ── Smart Parsing ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (open && mode === "edit" && initialValues) {
-      setNewTitle(initialValues.title ?? "");
-      setNewDescription(initialValues.description ?? "");
+    if (mode === "edit" || !open) return;
 
-      // Parse objective bullets — strip leading "• " if present
-      const objBullets = (initialValues.objective ?? "")
-        .split("\n")
-        .filter(Boolean)
-        .map((b) => b.replace(/^•\s*/, "").trim());
-      setNewObjectiveBullets(objBullets.length > 0 ? objBullets : [""]);
+    const lowerTitle = title.toLowerCase();
 
-      // Parse success criteria bullets
-      const scBullets = (initialValues.success_criteria ?? "")
-        .split("\n")
-        .filter(Boolean)
-        .map((b) => b.replace(/^•\s*/, "").trim());
-      setNewSuccessCriteriaBullets(scBullets.length > 0 ? scBullets : [""]);
+    // Detect Type
+    if (lowerTitle.match(/\b(meeting|call|sync|lunch|coffee|event|workshop)\b/)) {
+      setType("event");
+    }
 
-      setNewStartDateISO(
-        (initialValues as any).start_date ?? (initialValues as any).plannedStartISO ?? ""
-      );
-      setNewDueDateISO(
-        (initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? ""
-      );
-      setNewStatus((initialValues.status as AnyStatus) ?? (initialValues.type === "event" ? "confirmed" : "todo"));
-      setNewPriority((initialValues.priority as any) ?? "medium");
-      setNewStoryPoints(
-        initialValues.story_points != null ? String(initialValues.story_points) : ""
-      );
-      setNewTimeEstimate(
-        (initialValues as any).time_estimate != null
-          ? String((initialValues as any).time_estimate)
-          : ""
-      );
-      setNewAssigneeIds(
-        ((initialValues as any).assignees ?? []).map((a: any) => a.id)
-      );
-      setNewParentTaskId((initialValues as any).parent_task_id ?? "");
-      setNewType((initialValues.type as "task" | "event") ?? "task");
-      
-      const et = initialValues.event_type ?? "";
-      if (et && !["meeting", "call", "birthday"].includes(et)) {
-        setNewEventType("other");
-        setNewCustomEventType(et);
-      } else {
-        setNewEventType(et as EventType);
-        setNewCustomEventType("");
+    // Detect Priority
+    if (lowerTitle.includes("!urgent") || lowerTitle.includes("urgent")) setPriority("urgent");
+    else if (lowerTitle.includes("!high") || lowerTitle.includes("high")) setPriority("high");
+    else if (lowerTitle.includes("!low") || lowerTitle.includes("low")) setPriority("low");
+
+    // Detect Date
+    if (lowerTitle.includes("today")) setDate(startOfToday());
+    else if (lowerTitle.includes("tomorrow")) setDate(addDays(startOfToday(), 1));
+    else if (lowerTitle.includes("monday")) setDate(nextMonday(startOfToday()));
+
+    // Detect Assignees (simple @ match)
+    allUsers.forEach(user => {
+      if (lowerTitle.includes(`@${user.name.toLowerCase().replace(/\s/g, "")}`)) {
+        if (!assigneeIds.includes(user.id)) {
+          setAssigneeIds(prev => [...prev, user.id]);
+        }
       }
-
-      setNewLocation(initialValues.location ?? "");
-      setNewIsAllDay(initialValues.is_all_day ?? false);
-    } else if (open && mode === "create" && initialValues) {
-      // Create mode: allow callers to prefill dates/type (e.g. calendar date click)
-      setNewType((initialValues.type as "task" | "event") ?? "task");
-      setNewStartDateISO((initialValues as any).start_date ?? (initialValues as any).plannedStartISO ?? "");
-      setNewDueDateISO((initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? "");
-      setNewIsAllDay((initialValues as any).is_all_day ?? false);
-    } else if (open && parentTaskId) {
-      // Subtask mode: pre-fill parent
-      setNewParentTaskId(parentTaskId);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const toDateInputValue = (iso: string, includeTime: boolean = false) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "";
-    
-    if (includeTime) {
-      // Return YYYY-MM-DDThh:mm in local time
-      const offset = d.getTimezoneOffset() * 60000;
-      const localISOTime = new Date(d.getTime() - offset).toISOString().slice(0, 16);
-      return localISOTime;
-    }
-    
-    // Return YYYY-MM-DD
-    return d.toISOString().slice(0, 10);
-  };
-
-  // Bullet list helpers
-  const addBullet = (setter: React.Dispatch<React.SetStateAction<string[]>>) => {
-    setter((prev) => [...prev, ""]);
-  };
-
-  const removeBullet = (index: number, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
-    setter((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateBullet = (
-    index: number,
-    value: string,
-    setter: React.Dispatch<React.SetStateAction<string[]>>
-  ) => {
-    setter((prev) => {
-      const copy = [...prev];
-      copy[index] = value;
-      return copy;
     });
-  };
+  }, [title, allUsers, mode, open]);
 
-  // Assignee helpers
-  const addAssignee = (userId: string) => {
-    if (!newAssigneeIds.includes(userId)) {
-      setNewAssigneeIds((prev) => [...prev, userId]);
+  // ── Pre-fill Mode ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (open && initialValues) {
+      setTitle(initialValues.title ?? "");
+      setType((initialValues.type as "task" | "event") ?? "task");
+      setDescription(initialValues.description ?? "");
+      setObjective(initialValues.objective ?? "");
+      setSuccessCriteria(initialValues.success_criteria ?? "");
+      setPriority((initialValues.priority as any) ?? "medium");
+      setAssigneeIds(((initialValues as any).assignees ?? []).map((a: any) => a.id));
+      setLocation(initialValues.location ?? "");
+      setIsAllDay(initialValues.is_all_day ?? true);
+      setEventType(initialValues.event_type ?? "meeting");
+
+      const start = (initialValues as any).start_date;
+      const end = (initialValues as any).due_date;
+      if (start) setDate(parseISO(start));
+      if (end) setEndDate(parseISO(end));
+
+      // Auto-expand if content exists
+      if (initialValues.description) setShowDetails(true);
+      if (initialValues.objective || initialValues.success_criteria) setShowClarity(true);
+
+      setStoryPoints(initialValues.story_points || undefined);
+      setTimeEstimate((initialValues as any).time_estimate || undefined);
+    } else if (open && mode === "create") {
+      // Reset
+      setTitle("");
+      setType("task");
+      setDate(undefined);
+      setEndDate(undefined);
+      setPriority("medium");
+      setAssigneeIds([]);
+      setDescription("");
+      setObjective("");
+      setSuccessCriteria("");
+      setLocation("");
+      setShowDetails(false);
+      setShowClarity(false);
+      setShowAgenda(false);
+      setStoryPoints(undefined);
+      setTimeEstimate(undefined);
+      setShowCommandMenu(false);
+      setIsAllDay(true);
+      setEventType("meeting");
     }
-  };
+  }, [open, mode, initialValues]);
 
-  const removeAssignee = (userId: string) => {
-    setNewAssigneeIds((prev) => prev.filter((id) => id !== userId));
-  };
-
-  // Form validation (enforces our Clarity rules)
-  const hasValidObjective = newObjectiveBullets.some((b) => b.trim().length > 0);
-  const hasValidSuccessCriteria = newSuccessCriteriaBullets.some((b) => b.trim().length > 0);
-  
-  // Date validation
-  let isDateValid = true;
-  let dateError = "";
-  if (newStartDateISO && newDueDateISO) {
-    if (newType === "event" && newDueDateISO <= newStartDateISO) {
-      isDateValid = false;
-      dateError = "End time must be after start time.";
-    } else if (newDueDateISO < newStartDateISO) {
-      isDateValid = false;
-      dateError = "Due date must be on or after start date.";
+  // Sync end date if not set for events
+  useEffect(() => {
+    if (type === 'event' && date && !endDate) {
+      setEndDate(addDays(date, 0)); // just to have it initialized if needed
     }
-  }
+  }, [type, date]);
 
-  const isFormValid = newTitle.trim() && 
-    (newType === "event" 
-      ? (newEventType !== "" && (newEventType !== "other" || newCustomEventType.trim() !== "")) 
-      : (hasValidObjective && hasValidSuccessCriteria)) &&
-    isDateValid;
-
-  // ── Submit ─────────────────────────────────────────────────────────────────
-  async function handleCreateSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!isFormValid) return;
-
-    // Format bullet lists with • prefix
-    const objectiveFormatted = newObjectiveBullets
-      .filter((b) => b.trim())
-      .map((b) => b.trim())
-      .join("\n");
-
-    const successCriteriaFormatted = newSuccessCriteriaBullets
-      .filter((b) => b.trim())
-      .map((b) => b.trim())
-      .join("\n");
+  // ── Submission ─────────────────────────────────────────────────────────────
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!title.trim()) return;
 
     const input: CreateTaskInput = {
-      title: newTitle.trim(),
-      type: newType,
-      event_type: newType === "event" 
-        ? (newEventType === "other" ? newCustomEventType.trim() : (newEventType as EventType)) 
-        : undefined,
-      location: newType === "event" ? newLocation.trim() || undefined : undefined,
-      is_all_day: newIsAllDay,
-      status: newStatus,
-      priority: newPriority,
-      description: newDescription.trim() || undefined,
-      objective: objectiveFormatted || undefined,
-      success_criteria: successCriteriaFormatted || undefined,
-      start_date: newStartDateISO || undefined,
-      due_date: newDueDateISO || undefined,
-      story_points: newType === "task" && newStoryPoints ? parseInt(newStoryPoints, 10) : undefined,
-      time_estimate: newType === "task" && newTimeEstimate ? parseInt(newTimeEstimate, 10) : undefined,
-      assignee_ids: newAssigneeIds.length > 0 ? newAssigneeIds : undefined,
-      parent_task_id: newType === "task" && newParentTaskId !== "none" && newParentTaskId ? newParentTaskId : undefined,
+      title: title.trim(),
+      type,
+      priority: priority as any,
+      description: description.trim() || undefined,
+      objective: objective.trim() || undefined,
+      success_criteria: successCriteria.trim() || undefined,
+      location: location.trim() || undefined,
+      start_date: date?.toISOString(),
+      due_date: endDate?.toISOString() || (type === 'task' ? date?.toISOString() : undefined),
+      assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
+      status: (type === 'task' ? 'todo' : 'confirmed') as any,
+      parent_task_id: parentTaskId,
+      story_points: storyPoints,
+      time_estimate: timeEstimate,
+      is_all_day: isAllDay,
+      event_type: type === 'event' ? eventType : undefined,
+    };
+
+    const options = {
+      onSuccess: (data: any) => {
+        onOpenChange(false);
+        if (mode === "edit" && taskId) {
+          onTaskUpdated?.(taskId);
+        } else if (data?.id) {
+          onTaskCreated?.(data.id);
+        }
+      }
     };
 
     if (mode === "edit" && taskId) {
       if (isPersonalMode) {
-        // ── Personal edit mode ──
-        const personalUpdates = {
-          title: newTitle.trim(),
-          status: newStatus as TaskStatus,
-          priority: newPriority,
-          description: newDescription.trim() || undefined,
-          objective: objectiveFormatted || undefined,
-          success_criteria: successCriteriaFormatted || undefined,
-          start_date: newStartDateISO || undefined,
-          due_date: newDueDateISO || undefined,
+          const personalUpdate = {
+          title: input.title,
+          description: input.description,
+          priority: input.priority as any,
+          status: 'todo' as any,
+          due_date: input.due_date,
+          story_points: input.story_points,
         };
-        updatePersonalTask.mutate(
-          { id: taskId, updates: personalUpdates },
-          {
-            onSuccess: () => {
-              onOpenChange(false);
-              resetCreateForm();
-              onTaskUpdated?.(taskId);
-            },
-          }
-        );
+        updatePersonalTask.mutate({ id: taskId, updates: personalUpdate }, options);
       } else {
-        // ── Org edit mode ──
-        updateOrgTask.mutate(
-          { id: taskId, updates: input },
-          {
-            onSuccess: () => {
-              onOpenChange(false);
-              resetCreateForm();
-              onTaskUpdated?.(taskId);
-            },
-          }
-        );
+        updateOrgTask.mutate({ id: taskId, updates: input }, options);
       }
     } else {
       if (isPersonalMode) {
-        // ── Personal create mode ──
-        const personalInput = {
-          title: newTitle.trim(),
-          status: newStatus as TaskStatus,
-          priority: newPriority,
-          description: newDescription.trim() || undefined,
-          objective: objectiveFormatted || undefined,
-          success_criteria: successCriteriaFormatted || undefined,
-          start_date: newStartDateISO || undefined,
-          due_date: newDueDateISO || undefined,
-          parent_task_id: newParentTaskId === "none" || !newParentTaskId ? undefined : newParentTaskId,
+          const personalCreate = {
+          title: input.title,
+          description: input.description,
+          priority: input.priority as any,
+          status: 'todo' as any,
+          due_date: input.due_date,
+          story_points: input.story_points,
         };
-        createPersonalTask.mutate(personalInput, {
-          onSuccess: (data) => {
-            onOpenChange(false);
-            resetCreateForm();
-            if (data?.id) onTaskCreated?.(data.id);
-          },
-        });
+        createPersonalTask.mutate(personalCreate, options);
       } else {
-        // ── Org create mode ──
-        createOrgTask.mutate(input, {
-          onSuccess: (data) => {
-            onOpenChange(false);
-            resetCreateForm();
-            if (data?.id) onTaskCreated?.(data.id);
-          },
-        });
+        createOrgTask.mutate(input, options);
       }
     }
-  }
+  };
+
+  const currentPriority = PRIORITY_LEVELS.find(p => p.value === priority) || PRIORITY_LEVELS[1];
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(isOpen) => {
-        onOpenChange(isOpen);
-        if (!isOpen) resetCreateForm();
-      }}
-    >
-      <DialogContent className="max-w-2xl p-0 gap-0" showCloseButton={false}>
-        <form onSubmit={handleCreateSubmit}>
-          {/* Header */}
-          <div className="px-5 pt-5 pb-4 border-b border-border/60">
-            <DialogHeader>
-              <div className="flex items-center justify-between">
-                <DialogTitle className="text-base">
-                  {mode === "edit" ? `Edit ${newType}` : parentTaskId ? "Create subtask" : `Create new ${newType}`}
-                </DialogTitle>
-                {mode !== "edit" && !parentTaskId && (
-                  <div className="inline-flex items-center rounded-md border border-border p-1 bg-muted/20">
-                    <button
-                      type="button"
-                      onClick={() => { setNewType("task"); if (newStatus === "confirmed" || newStatus === "tentative" || newStatus === "cancelled" || newStatus === "completed") setNewStatus("todo"); }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
-                        newType === "task"
-                          ? "bg-background shadow-sm text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Task
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setNewType("event"); if (newStatus === "todo" || newStatus === "backlog" || newStatus === "in-progress" || newStatus === "done") setNewStatus("confirmed"); }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${
-                        newType === "event"
-                          ? "bg-background shadow-sm text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Event
-                    </button>
-                  </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[600px] bg-background border-border p-0 overflow-hidden shadow-2xl [&>button]:hidden">
+        <DialogHeader className="p-6 pb-2 relative">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex bg-muted/50 rounded-lg p-1">
+              <button
+                onClick={() => setType("task")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                  type === "task" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
-              </div>
-              <DialogDescription className="text-xs mt-0.5">
-                {parentTaskId ? (
-                  <>Creating a subtask inside <strong>{parentTaskTitle || "parent task"}</strong>.</>
-                ) : newType === "event" ? (
-                  <>Events are meetings, calls, or anything non-work related.</>
-                ) : (
-                  <>Every task must have a clear <strong>Objective</strong> and <strong>Success Criteria</strong>.</>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-
-          <Tabs defaultValue="basics" className="w-full">
-            <div className="px-5 pt-3">
-              <TabsList className="h-8 text-xs w-full grid grid-cols-3">
-                <TabsTrigger value="basics" className="text-xs">Basics</TabsTrigger>
-                <TabsTrigger value="strategy" className="text-xs">Strategy</TabsTrigger>
-                <TabsTrigger value="schedule" className="text-xs">Schedule</TabsTrigger>
-              </TabsList>
-            </div>
-
-            <div className="px-5 pt-3 pb-6 min-h-[340px]">
-              {/* ====================== BASICS TAB ====================== */}
-              <TabsContent value="basics" className="mt-0 space-y-4">
-                {/* Title */}
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Title <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="e.g. Implement dependency graph UI"
-                    className="h-9 text-sm"
-                    required
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Description <span className="opacity-50">(optional)</span></Label>
-                  <Textarea
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    placeholder="Detailed context, instructions, or notes..."
-                    className="text-sm min-h-[80px] resize-none"
-                  />
-                </div>
-
-                {newType === "event" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Event Type */}
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Event Type <span className="text-red-500">*</span></Label>
-                      <Select value={newEventType} onValueChange={(v) => setNewEventType(v as EventType)}>
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="meeting">Meeting</SelectItem>
-                          <SelectItem value="call">Call</SelectItem>
-                          <SelectItem value="birthday">Birthday</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Custom Event Type Input (shows only when "Other" is selected) */}
-                    {newEventType === "other" && (
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Specify Type <span className="text-red-500">*</span></Label>
-                        <Input
-                          value={newCustomEventType}
-                          onChange={(e) => setNewCustomEventType(e.target.value)}
-                          placeholder="e.g. Workshop"
-                          className="h-9 text-sm"
-                          required
-                        />
-                      </div>
-                    )}
-
-                    {/* Location */}
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Location / Link <span className="opacity-50">(optional)</span></Label>
-                      <Input
-                        value={newLocation}
-                        onChange={(e) => setNewLocation(e.target.value)}
-                        placeholder="e.g. Zoom link or address"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Status */}
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select value={newStatus} onValueChange={(v) => setNewStatus(v as AnyStatus)}>
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {newType === "event" 
-                          ? EVENT_STATUS_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s} className="text-sm capitalize">
-                              {s}
-                            </SelectItem>
-                          ))
-                          : TASK_STATUS_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s} className="text-sm capitalize">
-                              {s}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Priority */}
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Priority</Label>
-                    <Select value={newPriority} onValueChange={(v) => setNewPriority(v as Task["priority"])}>
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRIORITY_OPTIONS.map((p) => (
-                          <SelectItem key={p} value={p} className="text-sm">
-                            {p}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Assignees (multi-select) — org mode only */}
-                {!isPersonalMode && (
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Assignees <span className="opacity-50">(optional)</span></Label>
-
-                  {/* Selected badges */}
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {newAssigneeIds.map((id) => {
-                      const user = allUsers.find((u) => u.id === id);
-                      return (
-                        <Badge key={id} variant="secondary" className="flex items-center gap-1 text-xs">
-                          {user?.name || id}
-                          <button
-                            type="button"
-                            onClick={() => removeAssignee(id)}
-                            className="text-muted-foreground hover:text-foreground ml-1"
-                          >
-                            ✕
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-
-                  {/* Add assignee dropdown */}
-                  <Select onValueChange={addAssignee}>
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="Add assignee..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allUsers.map((user) => (
-                        <SelectItem key={user.id} value={user.id} className="text-sm">
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                )}
-
-                {/* Parent task (hidden when in subtask mode or event type) */}
-                {!parentTaskId && newType === "task" && allTasks.length > 0 && (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Parent task <span className="opacity-50">(optional)</span></Label>
-                    <Select value={newParentTaskId} onValueChange={setNewParentTaskId}>
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="None (top-level task)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" className="text-sm">None (top-level)</SelectItem>
-                        {allTasks.filter(t => !t.parent_task_id).map((t) => (
-                          <SelectItem key={t.id} value={t.id} className="text-sm">
-                            {t.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* ====================== STRATEGY TAB ====================== */}
-              <TabsContent value="strategy" className="mt-0 space-y-6">
-                {/* Objective – Bullet list editor */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">
-                    {newType === "event" ? "Agenda / Notes" : "Objective"} 
-                    {newType === "task" && <span className="text-red-500 ml-1">*</span>}
-                    {newType === "event" && <span className="opacity-50 ml-1">(optional)</span>}
-                  </Label>
-                  <div className="border border-border rounded-md p-3 space-y-2 bg-muted/30">
-                    {newObjectiveBullets.map((bullet, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <span className="text-muted-foreground text-lg leading-none">•</span>
-                        <Input
-                          value={bullet}
-                          onChange={(e) => updateBullet(index, e.target.value, setNewObjectiveBullets)}
-                          placeholder={newType === "event" ? "What will be discussed?" : "What are we trying to achieve?"}
-                          className="flex-1 h-8 text-sm"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeBullet(index, setNewObjectiveBullets)}
-                          className="h-8 w-8 p-0 text-muted-foreground"
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addBullet(setNewObjectiveBullets)}
-                      className="w-full text-xs"
-                    >
-                      + Add bullet
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Success Criteria – Bullet list editor */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">
-                    Success Criteria 
-                    {newType === "task" && <span className="text-red-500 ml-1">*</span>}
-                    {newType === "event" && <span className="opacity-50 ml-1">(optional)</span>}
-                  </Label>
-                  <div className="border border-border rounded-md p-3 space-y-2 bg-muted/30">
-                    {newSuccessCriteriaBullets.map((bullet, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <span className="text-muted-foreground text-lg leading-none">•</span>
-                        <Input
-                          value={bullet}
-                          onChange={(e) => updateBullet(index, e.target.value, setNewSuccessCriteriaBullets)}
-                          placeholder={newType === "event" ? "What is the desired outcome?" : "How do we know this is done?"}
-                          className="flex-1 h-8 text-sm"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeBullet(index, setNewSuccessCriteriaBullets)}
-                          className="h-8 w-8 p-0 text-muted-foreground"
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addBullet(setNewSuccessCriteriaBullets)}
-                      className="w-full text-xs"
-                    >
-                      + Add bullet
-                    </Button>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* ====================== SCHEDULE TAB ====================== */}
-              <TabsContent value="schedule" className="mt-0 space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="all-day"
-                    checked={newIsAllDay}
-                    onCheckedChange={setNewIsAllDay}
-                  />
-                  <Label htmlFor="all-day" className="text-sm cursor-pointer">
-                    {newType === "event" ? "All day event" : "All day task"}
-                  </Label>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Start Date / Time */}
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      {newIsAllDay ? "Start date" : "Start time"}
-                    </Label>
-                    <Input
-                      type={!newIsAllDay ? "datetime-local" : "date"}
-                      value={toDateInputValue(newStartDateISO, !newIsAllDay)}
-                      onChange={(e) =>
-                        setNewStartDateISO(e.target.value ? new Date(e.target.value).toISOString() : "")
-                      }
-                      className="h-9 text-sm"
-                    />
-                  </div>
-
-                  {/* Due Date / End Time */}
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      {newType === "event" 
-                        ? (newIsAllDay ? "End date" : "End time") 
-                        : (newIsAllDay ? "Due date" : "Due time")}
-                    </Label>
-                    <Input
-                      type={!newIsAllDay ? "datetime-local" : "date"}
-                      value={toDateInputValue(newDueDateISO, !newIsAllDay)}
-                      onChange={(e) =>
-                        setNewDueDateISO(e.target.value ? new Date(e.target.value).toISOString() : "")
-                      }
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* Estimation fields — org mode only and only for tasks */}
-                {!isPersonalMode && newType === "task" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Story points</Label>
-                      <Input
-                        type="number"
-                        value={newStoryPoints}
-                        onChange={(e) => setNewStoryPoints(e.target.value)}
-                        placeholder="0"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Time estimate (minutes)</Label>
-                      <Input
-                        type="number"
-                        value={newTimeEstimate}
-                        onChange={(e) => setNewTimeEstimate(e.target.value)}
-                        placeholder="120"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                  </div>
-                )}
-              </TabsContent>
-            </div>
-          </Tabs>
-
-          {/* Footer */}
-          <div className="px-5 py-3 border-t border-border/60 flex justify-between gap-2 bg-muted/20 items-center">
-            <span className="text-xs text-red-500 font-medium">{dateError}</span>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={
-                  (mode === "edit"
-                    ? (isPersonalMode ? updatePersonalTask.isPending : updateOrgTask.isPending)
-                    : (isPersonalMode ? createPersonalTask.isPending : createOrgTask.isPending))
-                  || !isFormValid
-                }
               >
-                {mode === "edit"
-                  ? (isPersonalMode ? updatePersonalTask.isPending : updateOrgTask.isPending) ? "Saving…" : "Save changes"
-                  : (isPersonalMode ? createPersonalTask.isPending : createOrgTask.isPending) ? "Creating…" : parentTaskId ? "Create subtask" : `Create ${newType}`}
-              </Button>
+                Task
+              </button>
+              <button
+                onClick={() => setType("event")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                  type === "event" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Event
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* Top Right Actions: All Day & Date */}
+              <div className="flex items-center gap-3 pr-2">
+                <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-muted/30 border border-border/50">
+                  <Switch id="header-all-day" checked={isAllDay} onCheckedChange={setIsAllDay} className="scale-75" />
+                  <Label htmlFor="header-all-day" className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider cursor-pointer pr-1">All Day</Label>
+                </div>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors text-[11px] font-bold text-primary">
+                      <CalendarIcon className="size-3.5" />
+                      {date ? format(date, "MMM d, yyyy") : "Set date"}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-auto bg-background border-border shadow-xl">
+                    <Calendar
+                      mode="single"
+                      selected={date}
+                      onSelect={setDate}
+                      initialFocus
+                      className="bg-background"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {parentTaskId && (
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] uppercase tracking-wider px-2 py-0">
+                  Subtask of {parentTaskTitle}
+                </Badge>
+              )}
             </div>
           </div>
-        </form>
+          <div className="relative mt-2 px-1">
+            <Input
+              autoFocus
+              value={title}
+              onChange={(e) => {
+                const val = e.target.value;
+                setTitle(val);
+                setShowCommandMenu(val.startsWith("/") && val.length > 0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !showCommandMenu) {
+                  handleSubmit();
+                }
+              }}
+              placeholder={type === "task" ? "What needs to be done?" : "What is this event?"}
+              className="text-2xl font-semibold border-none bg-transparent px-3 py-3 h-auto focus-visible:ring-0 placeholder:text-muted-foreground/50"
+            />
+
+            {showCommandMenu && (
+              <div className="absolute left-3 top-full z-50 w-64 mt-1 bg-background border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                <Command className="bg-transparent">
+                  <CommandList>
+                    <CommandGroup heading="Quick Actions">
+                      <CommandItem onSelect={() => {
+                        // Assuming you have access to the current user's ID
+                        // For now, I'll assume allUsers has the current user or we can find them
+                        // But since I don't have the current user ID directly in this component's props, 
+                        // I'll leave it for now or just add the UI.
+                        setPriority("urgent");
+                        setShowCommandMenu(false);
+                      }} className="gap-2">
+                        <Flag className="size-3.5 text-red-500" /> Set Urgent Priority
+                      </CommandItem>
+                      <CommandItem onSelect={() => { setDate(startOfToday()); setShowCommandMenu(false); }} className="gap-2">
+                        <CalendarIcon className="size-3.5 text-blue-500" /> Due Today
+                      </CommandItem>
+                      <CommandItem onSelect={() => { setType("event"); setShowCommandMenu(false); }} className="gap-2">
+                        <Clock className="size-3.5 text-purple-500" /> Convert to Event
+                      </CommandItem>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </div>
+            )}
+          </div>
+        </DialogHeader>
+
+        <div className="px-6 pb-6 space-y-6">
+          {/* Metadata Chips */}
+          <div className="flex flex-wrap gap-2 items-center">
+            {/* Event Type (Event Only) */}
+            {type === "event" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground capitalize">
+                    <Layout className="size-3.5" />
+                    {eventType}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-1 w-32 bg-background border-border">
+                  {["meeting", "call", "birthday", "workshop", "other"].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setEventType(t)}
+                      className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors capitalize"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+            )}
+            {type === "event" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground">
+                    <Clock className="size-3.5" />
+                    {endDate ? format(endDate, "HH:mm") : "End time"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-4 w-48 bg-background border-border">
+                  <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">End Time</div>
+                  <Input
+                    type="time"
+                    className="bg-muted/50 border-border"
+                    onChange={(e) => {
+                      const [h, m] = e.target.value.split(':');
+                      const d = date ? new Date(date) : new Date();
+                      d.setHours(parseInt(h), parseInt(m));
+                      setEndDate(d);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {/* Priority (Task Only) */}
+            {type === "task" && (
+              <>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className={cn(
+                      "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-colors text-xs",
+                      currentPriority.color,
+                      "border-transparent hover:border-current"
+                    )}>
+                      <currentPriority.icon className="size-3.5" />
+                      {currentPriority.label}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-1 w-32 bg-background border-border">
+                    {PRIORITY_LEVELS.map((p) => (
+                      <button
+                        key={p.value}
+                        onClick={() => setPriority(p.value)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+                      >
+                        <p.icon className={cn("size-3", p.color.split(' ')[0])} />
+                        {p.label}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+
+                {/* Story Points */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground">
+                      <Zap className="size-3.5 text-yellow-500" />
+                      {storyPoints ? `${storyPoints} pts` : "Points"}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-2 w-32 bg-background border-border">
+                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Story Points</div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {[1, 2, 3, 5, 8].map(pts => (
+                        <button
+                          key={pts}
+                          onClick={() => setStoryPoints(pts)}
+                          className={cn(
+                            "h-7 rounded flex items-center justify-center text-xs transition-colors",
+                            storyPoints === pts ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          )}
+                        >
+                          {pts}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setStoryPoints(undefined)}
+                        className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground"
+                      >
+                        -
+                      </button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Time Estimate */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground">
+                      <Timer className="size-3.5 text-blue-500" />
+                      {timeEstimate ? `${timeEstimate}m` : "Estimate"}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-3 w-40 bg-background border-border">
+                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Estimate (mins)</div>
+                    <Input
+                      type="number"
+                      value={timeEstimate || ""}
+                      onChange={(e) => setTimeEstimate(parseInt(e.target.value) || undefined)}
+                      placeholder="e.g. 60"
+                      className="h-8 text-xs bg-muted/30"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
+
+            {/* Assignee */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="inline-flex items-center gap-1.5 px-1 py-1 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground min-w-[32px]">
+                  {assigneeIds.length > 0 ? (
+                    <div className="flex -space-x-1 ml-1">
+                      {assigneeIds.map(id => {
+                        const user = allUsers.find(u => u.id === id);
+                        return (
+                          <Avatar key={id} className="size-5 border border-background">
+                            <AvatarImage src={user?.avatarUrl} />
+                            <AvatarFallback className="text-[8px] bg-muted">{user?.name[0]}</AvatarFallback>
+                          </Avatar>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-1.5">
+                      <Users className="size-3.5" />
+                      Assign
+                    </div>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-64 bg-background border-border overflow-hidden">
+                <Command className="bg-transparent">
+                  <CommandInput placeholder="Assign to..." className="border-none focus:ring-0" />
+                  <CommandList>
+                    <CommandEmpty>No members found.</CommandEmpty>
+                    <CommandGroup>
+                      {allUsers.map((user) => (
+                        <CommandItem
+                          key={user.id}
+                          onSelect={() => {
+                            setAssigneeIds(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]);
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 cursor-pointer aria-selected:bg-muted"
+                        >
+                          <Avatar className="size-6">
+                            <AvatarImage src={user.avatarUrl} />
+                            <AvatarFallback>{user.name[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 flex flex-col">
+                            <span className="text-sm font-medium">{user.name}</span>
+                          </div>
+                          {assigneeIds.includes(user.id) && <CheckCircle2 className="size-4 text-primary" />}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Progressive Disclosure Sections */}
+          <div className="space-y-3 pt-2">
+            {/* Details / Description */}
+            <Collapsible open={showDetails} onOpenChange={setShowDetails}>
+              <CollapsibleTrigger asChild>
+                <button className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1">
+                  <Plus className={cn("size-3 transition-transform", showDetails && "rotate-45")} />
+                  {description ? "Description added" : "Add details"}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add context, links, or instructions..."
+                  className="bg-muted/30 border-border text-sm min-h-[100px] focus-visible:ring-primary/20"
+                />
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Clarity / Strategy (Task only) */}
+            {type === "task" && (
+              <Collapsible open={showClarity} onOpenChange={setShowClarity}>
+                <CollapsibleTrigger asChild>
+                  <button className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1">
+                    <Plus className={cn("size-3 transition-transform", showClarity && "rotate-45")} />
+                    {objective || successCriteria ? "Clarity defined" : "Add clarity (Objective & Success Criteria)"}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2 space-y-3">
+                  <div className="relative">
+                    <Target className="absolute left-3 top-2.5 size-3.5 text-muted-foreground/60" />
+                    <Input
+                      value={objective}
+                      onChange={(e) => setObjective(e.target.value)}
+                      placeholder="What is the high-level objective?"
+                      className="bg-muted/30 border-border pl-9 text-sm h-9 focus-visible:ring-primary/20"
+                    />
+                  </div>
+                  <div className="relative">
+                    <CheckCircle2 className="absolute left-3 top-2.5 size-3.5 text-muted-foreground/60" />
+                    <Input
+                      value={successCriteria}
+                      onChange={(e) => setSuccessCriteria(e.target.value)}
+                      placeholder="How do we measure success?"
+                      className="bg-muted/30 border-border pl-9 text-sm h-9 focus-visible:ring-primary/20"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {/* Location & Agenda (Event only) */}
+            {type === "event" && (
+              <div className="space-y-3">
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-2.5 size-3.5 text-muted-foreground/60" />
+                  <Input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Add location or meeting link"
+                    className="bg-muted/30 border-border pl-9 text-sm h-9 focus-visible:ring-primary/20"
+                  />
+                </div>
+                <Collapsible open={showAgenda} onOpenChange={setShowAgenda}>
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1">
+                      <Plus className={cn("size-3 transition-transform", showAgenda && "rotate-45")} />
+                      Add agenda
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2">
+                    <Textarea
+                      placeholder="List agenda items..."
+                      className="bg-muted/30 border-border text-sm min-h-[80px] focus-visible:ring-primary/20"
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Action Row */}
+        <div className="px-6 py-4 bg-muted/20 border-t border-border flex items-center justify-between">
+          <div className="flex items-center gap-4 text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
+            <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">ENTER</kbd> TO CREATE</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-foreground">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => handleSubmit()}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 h-8 font-medium"
+              disabled={!title.trim()}
+            >
+              {mode === "edit" ? "Save Changes" : `Create ${type === 'task' ? 'Task' : 'Event'}`}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
