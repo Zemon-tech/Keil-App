@@ -5,20 +5,18 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
-import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
-import throttle from "lodash.throttle";
+import BlockEditor from "@/components/BlockEditor/BlockEditor";
 
 export function MotionPage() {
   const navigate = useNavigate();
   const { pageId } = useParams();
-  const [pageEditor, setPageEditor] = useState<any>(null);
+
 
   const { 
     pages, 
-    addPage, 
     updatePage, 
     deletePage, 
-    getPageById, 
+    getPageById,  
     sidebarOpen,
     setSidebarOpen
   } = useMotionStore();
@@ -46,25 +44,11 @@ export function MotionPage() {
     setTitleDraft(page?.title ?? "");
   }, [page?.title]);
 
-  const saveContent = useMemo(
-    () =>
-      throttle((id: string, json: any) => {
-        updatePage(id, { content: json });
-      }, 400),
-    [updatePage]
-  );
 
-  const handleAddSubpage = () => {
-    if (!pageId) return;
-    const newPage = addPage({ parentId: pageId });
-    navigate(`/motion/${newPage.id}`);
-  };
 
-  useEffect(() => {
-    return () => {
-      saveContent.cancel();
-    };
-  }, [saveContent]);
+
+
+
 
   if (!pageId || !page) {
     return (
@@ -160,7 +144,9 @@ export function MotionPage() {
                 onKeyDown={(e) => {
                   if (e.key !== "Enter") return;
                   e.preventDefault();
-                  pageEditor?.commands?.focus?.("start");
+                  // Focus first block if we press enter on title
+                  const firstBlockEl = document.querySelector('[data-block-id] [contenteditable]') as HTMLElement;
+                  if (firstBlockEl) firstBlockEl.focus();
                 }}
                 onBlur={() =>
                   updatePage(pageId, { title: titleDraft.trim() || "Untitled" })
@@ -169,14 +155,7 @@ export function MotionPage() {
                 placeholder="Untitled"
               />
 
-              <div className="pt-6">
-                <SimpleEditor
-                  content={page.content}
-                  onContentChange={(json) => saveContent(pageId, json)}
-                  onReady={(editor) => setPageEditor(editor)}
-                  onAddSubpage={handleAddSubpage}
-                />
-              </div>
+                <BlockEditor pageId={pageId} />
 
             </main>
           </div>
