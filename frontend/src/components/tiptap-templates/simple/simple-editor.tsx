@@ -24,9 +24,7 @@ import { Underline } from "@tiptap/extension-underline"
 import { Link } from "@tiptap/extension-link"
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight"
 import { common, createLowlight } from "lowlight"
-import { Details } from "@tiptap/extension-details"
-import { DetailsSummary } from "@tiptap/extension-details-summary"
-import { DetailsContent } from "@tiptap/extension-details-content"
+import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-details"
 
 import {
   Heading1,

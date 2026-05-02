@@ -29,8 +29,6 @@
     "@tiptap/core": "^3.22.5",
     "@tiptap/extension-code-block-lowlight": "^3.22.5",
     "@tiptap/extension-details": "^3.22.5",
-    "@tiptap/extension-details-content": "^2.26.2",
-    "@tiptap/extension-details-summary": "^2.26.2",
     "@tiptap/extension-highlight": "^3.22.5",
     "@tiptap/extension-horizontal-rule": "^3.22.5",
     "@tiptap/extension-image": "^3.22.5",
