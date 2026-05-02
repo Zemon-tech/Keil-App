@@ -6,7 +6,7 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventReceiveArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import type { EventContentArg, EventInput } from "@fullcalendar/core";
-import { format, parseISO, isPast } from "date-fns";
+import { format, parseISO, isPast, addMinutes } from "date-fns";
 import {
   isAllDayRangeLocal,
   normalizeAllDayRangeLocal,
@@ -14,6 +14,7 @@ import {
   clampTimedRange,
   normalizeAllDayRangeForUpdate,
   ensureAllDayDropEndDate,
+  DEFAULT_TIMED_DURATION_MINUTES,
 } from "@/lib/date-utils";
 import {
   Bell,
