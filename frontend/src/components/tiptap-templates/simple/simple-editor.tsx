@@ -24,6 +24,9 @@ import { Link } from "@tiptap/extension-link"
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight"
 import { common, createLowlight } from "lowlight"
 import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-details"
+import { BlockIdExtension } from "@/extensions/BlockIdExtension"
+import { EnforceFinalBlockExtension } from "@/extensions/EnforceFinalBlockExtension"
+import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
 
 import {
   Heading1,
@@ -42,6 +45,10 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronUp,
+  Bold,
+  Italic,
+  Strikethrough,
+  Link2,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -121,6 +128,13 @@ export function SimpleEditor({
       },
     },
     extensions: [
+      BlockIdExtension,
+      EnforceFinalBlockExtension,
+      GlobalDragHandle.configure({
+        dragHandleWidth: 20,
+        scrollTreshold: 100,
+        customNodes: ['taskItem', 'listItem'],
+      }),
       StarterKit.configure({
         horizontalRule: false,
         codeBlock: false,
@@ -450,6 +464,59 @@ export function SimpleEditor({
             </div>
           </BubbleMenu>
         )}
+        
+        {/* Text Formatting Bubble Menu */}
+        {editor && (
+          <BubbleMenu
+            editor={editor}
+            shouldShow={({ editor, view, state, from, to }) => {
+              const { doc, selection } = state
+              const { empty } = selection
+              
+              if (empty || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
+                return false
+              }
+              return true
+            }}
+            tippyOptions={{ duration: 100 }}
+          >
+            <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('bold') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleBold().run()}
+              >
+                <Bold className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('italic') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+              >
+                <Italic className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('strike') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleStrike().run()}
+              >
+                <Strikethrough className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('code') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleCode().run()}
+              >
+                <Code className="size-3.5" />
+              </Button>
+            </div>
+          </BubbleMenu>
+        )}
+
         <EditorContent
           editor={editor}
           role="presentation"
