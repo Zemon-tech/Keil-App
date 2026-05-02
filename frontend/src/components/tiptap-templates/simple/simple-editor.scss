@@ -81,16 +81,19 @@ body,
     overflow: hidden;
     table-layout: fixed;
     width: 100%;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    margin-top: 0.5rem;
 
     td,
     th {
       border: 1px solid var(--border);
       box-sizing: border-box;
       min-width: 1em;
-      padding: 6px 10px;
+      padding: 8px 12px;
       position: relative;
       vertical-align: top;
+      font-size: 0.875rem;
+      line-height: 1.5;
 
       > * {
         margin-bottom: 0;
@@ -99,7 +102,7 @@ body,
 
     th {
       background-color: var(--muted);
-      font-weight: bold;
+      font-weight: 600;
       text-align: left;
     }
 
@@ -150,7 +153,7 @@ body,
       align-items: center;
       justify-content: center;
       width: 24px;
-      height: 28px; /* Match summary line-height */
+      height: 24px;
       background: transparent;
       border: none;
       cursor: pointer;
@@ -201,21 +204,22 @@ body,
   /* Summary styling for both Tiptap and Native */
   summary, [data-type="detailsSummary"] {
     font-weight: 600;
+    font-size: 1rem;
     list-style: none;
     list-style-type: none;
     outline: none;
     margin: 0;
-    min-height: 28px;
-    line-height: 28px;
+    min-height: 24px;
+    line-height: 1.5;
     cursor: text;
-    
+
     /* Remove native arrow */
     &::-webkit-details-marker,
     &::marker {
       display: none;
       content: "";
     }
-    
+
     /* Placeholder support */
     &[data-placeholder]:empty:before {
       content: attr(data-placeholder);
