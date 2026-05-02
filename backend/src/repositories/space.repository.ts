@@ -116,5 +116,66 @@ export class SpaceRepository extends BaseRepository<Space> {
       [orgId, spaceId, userId, role],
     );
   }
+
+  // ── Space CRUD ────────────────────────────────────────────────────────────
+
+  async rename(spaceId: string, name: string, client?: PoolClient): Promise<Space | null> {
+    const executor = client || this.pool;
+    const result = await executor.query<Space>(
+      `UPDATE public.spaces SET name = $1, updated_at = NOW()
+       WHERE id = $2 AND deleted_at IS NULL
+       RETURNING *`,
+      [name, spaceId],
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  async softDeleteSpace(spaceId: string, client: PoolClient): Promise<void> {
+    await client.query(
+      `UPDATE public.spaces SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`,
+      [spaceId],
+    );
+  }
+
+  async restore(spaceId: string, client: PoolClient): Promise<Space | null> {
+    const result = await client.query<Space>(
+      `UPDATE public.spaces SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL
+       RETURNING *`,
+      [spaceId],
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  async hardDelete(spaceId: string, client: PoolClient): Promise<void> {
+    await client.query(`DELETE FROM public.spaces WHERE id = $1`, [spaceId]);
+  }
+
+  async findDeletedByOrg(orgId: string, client?: PoolClient): Promise<Space[]> {
+    const executor = client || this.pool;
+    const result = await executor.query<Space>(
+      `SELECT * FROM public.spaces
+       WHERE org_id = $1 AND deleted_at IS NOT NULL
+       ORDER BY deleted_at DESC`,
+      [orgId],
+    );
+    return result.rows;
+  }
+
+  async countActiveByOrg(orgId: string, client?: PoolClient): Promise<number> {
+    const executor = client || this.pool;
+    const result = await executor.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM public.spaces
+       WHERE org_id = $1 AND deleted_at IS NULL`,
+      [orgId],
+    );
+    return parseInt(result.rows[0].count, 10);
+  }
+
+  async removeMember(spaceId: string, userId: string, client: PoolClient): Promise<void> {
+    await client.query(
+      `DELETE FROM public.space_members WHERE space_id = $1 AND user_id = $2`,
+      [spaceId, userId],
+    );
+  }
 }
 

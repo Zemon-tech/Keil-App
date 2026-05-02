@@ -16,6 +16,16 @@ export interface Space {
   compatibility_workspace_id: string | null;
 }
 
+export interface DeletedSpace {
+  id: string;
+  org_id: string | null;
+  name: string;
+  visibility: string;
+  created_by: string | null;
+  created_at: string;
+  deleted_at: string;
+}
+
 export interface SpaceMember {
   user_id: string;
   role: "owner" | "admin" | "member";
@@ -28,6 +38,7 @@ export interface SpaceMember {
 export const spaceKeys = {
   all: ["spaces"] as const,
   list: (orgId: string) => [...spaceKeys.all, orgId, "list"] as const,
+  deleted: (orgId: string) => [...spaceKeys.all, orgId, "deleted"] as const,
   members: (orgId: string, spaceId: string) =>
     [...spaceKeys.all, orgId, spaceId, "members"] as const,
 };
@@ -45,6 +56,31 @@ export function useSpaces(orgId: string | null) {
     queryFn: async () => {
       const res = await api.get<{ data: { spaces: Space[] } }>(
         `v1/orgs/${orgId}/spaces`
+      );
+      return res.data.data.spaces ?? [];
+    },
+    enabled: !!orgId,
+    retry: (failureCount, error: unknown) => {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) return false;
+      return failureCount < 1;
+    },
+  });
+}
+
+// ─── useDeletedSpaces ─────────────────────────────────────────────────────────
+
+/**
+ * Fetches soft-deleted spaces for an org.
+ * Calls: GET /api/v1/orgs/:orgId/spaces/deleted
+ * Only org owner/admin will receive results (backend enforces 403 for members).
+ */
+export function useDeletedSpaces(orgId: string | null) {
+  return useQuery<DeletedSpace[]>({
+    queryKey: spaceKeys.deleted(orgId ?? ""),
+    queryFn: async () => {
+      const res = await api.get<{ data: { spaces: DeletedSpace[] } }>(
+        `v1/orgs/${orgId}/spaces/deleted`
       );
       return res.data.data.spaces ?? [];
     },
@@ -103,6 +139,187 @@ export function useCreateSpace(orgId: string | null) {
     onSuccess: () => {
       if (orgId) {
         queryClient.invalidateQueries({ queryKey: spaceKeys.list(orgId) });
+      }
+    },
+  });
+}
+
+// ─── useRenameSpace ───────────────────────────────────────────────────────────
+
+/**
+ * Renames a space with an optimistic update.
+ * The cache is updated immediately; rolled back on error.
+ * Calls: PATCH /api/v1/orgs/:orgId/spaces/:spaceId
+ */
+export function useRenameSpace(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { space: Space },
+    Error,
+    { spaceId: string; name: string }
+  >({
+    mutationFn: async ({ spaceId, name }) => {
+      const res = await api.patch<{ data: { space: Space } }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}`,
+        { name }
+      );
+      return res.data.data;
+    },
+    onMutate: async ({ spaceId, name }) => {
+      if (!orgId) return;
+      // Cancel any in-flight refetches so they don't overwrite the optimistic update
+      await queryClient.cancelQueries({ queryKey: spaceKeys.list(orgId) });
+
+      // Snapshot the previous value for rollback
+      const previous = queryClient.getQueryData<Space[]>(spaceKeys.list(orgId));
+
+      // Optimistically update the name in the cache
+      queryClient.setQueryData<Space[]>(spaceKeys.list(orgId), (old = []) =>
+        old.map((s) => (s.id === spaceId ? { ...s, name } : s))
+      );
+
+      return { previous };
+    },
+    onError: (_err, _vars, context: any) => {
+      // Roll back to the snapshot on error
+      if (orgId && context?.previous) {
+        queryClient.setQueryData(spaceKeys.list(orgId), context.previous);
+      }
+    },
+    onSettled: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: spaceKeys.list(orgId) });
+      }
+    },
+  });
+}
+
+// ─── useDeleteSpace ───────────────────────────────────────────────────────────
+
+/**
+ * Soft-deletes a space.
+ * Calls: DELETE /api/v1/orgs/:orgId/spaces/:spaceId
+ *
+ * The caller is responsible for handling the active-space fallback:
+ *   const del = useDeleteSpace(orgId);
+ *   del.mutate(spaceId, {
+ *     onSuccess: () => {
+ *       if (activeSpaceId === spaceId) setActiveOrganisation(orgId);
+ *     },
+ *   });
+ */
+export function useDeleteSpace(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: async (spaceId) => {
+      await api.delete(`v1/orgs/${orgId}/spaces/${spaceId}`);
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: spaceKeys.list(orgId) });
+        queryClient.invalidateQueries({ queryKey: spaceKeys.deleted(orgId) });
+      }
+    },
+  });
+}
+
+// ─── useRestoreSpace ──────────────────────────────────────────────────────────
+
+/**
+ * Restores a soft-deleted space.
+ * Calls: POST /api/v1/orgs/:orgId/spaces/:spaceId/restore
+ */
+export function useRestoreSpace(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<{ space: Space }, Error, string>({
+    mutationFn: async (spaceId) => {
+      const res = await api.post<{ data: { space: Space } }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/restore`
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: spaceKeys.list(orgId) });
+        queryClient.invalidateQueries({ queryKey: spaceKeys.deleted(orgId) });
+      }
+    },
+  });
+}
+
+// ─── useHardDeleteSpace ───────────────────────────────────────────────────────
+
+/**
+ * Permanently deletes a soft-deleted space and all its data.
+ * Calls: DELETE /api/v1/orgs/:orgId/spaces/:spaceId/permanent
+ * The space must already be soft-deleted.
+ */
+export function useHardDeleteSpace(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: async (spaceId) => {
+      await api.delete(`v1/orgs/${orgId}/spaces/${spaceId}/permanent`);
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: spaceKeys.deleted(orgId) });
+      }
+    },
+  });
+}
+
+// ─── useAddSpaceMember ────────────────────────────────────────────────────────
+
+/**
+ * Adds an org member to a space (role: member).
+ * Calls: POST /api/v1/orgs/:orgId/spaces/:spaceId/members
+ * Target user must already be an org member.
+ */
+export function useAddSpaceMember(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: async (targetUserId) => {
+      await api.post(
+        `v1/orgs/${orgId}/spaces/${spaceId}/members`,
+        { user_id: targetUserId }
+      );
+    },
+    onSuccess: () => {
+      if (orgId && spaceId) {
+        queryClient.invalidateQueries({
+          queryKey: spaceKeys.members(orgId, spaceId),
+        });
+      }
+    },
+  });
+}
+
+// ─── useRemoveSpaceMember ─────────────────────────────────────────────────────
+
+/**
+ * Removes a member from a space (space only — org membership is unaffected).
+ * Calls: DELETE /api/v1/orgs/:orgId/spaces/:spaceId/members/:userId
+ * Org owner/admin only. Cannot remove yourself.
+ */
+export function useRemoveSpaceMember(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: async (targetUserId) => {
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/members/${targetUserId}`
+      );
+    },
+    onSuccess: () => {
+      if (orgId && spaceId) {
+        queryClient.invalidateQueries({
+          queryKey: spaceKeys.members(orgId, spaceId),
+        });
       }
     },
   });

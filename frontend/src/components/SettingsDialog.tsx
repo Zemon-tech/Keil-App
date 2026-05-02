@@ -33,6 +33,7 @@ import {
     Monitor,
     Moon,
     Sun,
+    Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
@@ -40,11 +41,11 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useOrgMembers, useCreateOrgInvite } from "@/hooks/api/useOrganisations";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { Loader2, Copy, Users } from "lucide-react";
-import {
-    useGoogleCalendarStatus,
+import { useGoogleCalendarStatus,
     useConnectGoogleCalendar,
     useDisconnectGoogleCalendar,
 } from "@/hooks/api/useGoogleCalendar";
+import { SpacesTab } from "@/components/settings/SpacesTab";
 
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type SettingsTab =
@@ -59,6 +60,7 @@ type SettingsTab =
     | "workspaceSettings"
     | "api"
     | "members"
+    | "spaces"
     | "enterprise";
 
 interface SettingsNavItem {
@@ -137,6 +139,7 @@ const settingsNavItems: SettingsNavItem[] = [
     { id: "workspaceSettings", label: "Organisation settings", icon: Settings, group: "workspace" },
     { id: "api", label: "API", icon: Code2, group: "workspace" },
     { id: "members", label: "Members", icon: Users, group: "workspace" },
+    { id: "spaces", label: "Spaces", icon: Layers, group: "workspace" },
     { id: "enterprise", label: "Enterprise", icon: Building2, group: "workspace" },
 ];
 
@@ -915,6 +918,7 @@ const tabContent: Record<SettingsTab, React.FC> = {
     workspaceSettings: WorkspaceSettingsTab,
     api: ApiTab,
     members: MembersTab,
+    spaces: SpacesTab,
     enterprise: EnterpriseTab,
 };
 
@@ -1015,9 +1019,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
                     {/* ── Main Content ────────────────────────────── */}
                     <main className="flex-1 overflow-y-auto bg-background">
-                        <div className="max-w-2xl mx-auto px-8 py-10">
-                            <ActiveContent />
-                        </div>
+                        {activeTab === "spaces" ? (
+                            // Spaces tab needs full height for its two-column layout
+                            <div className="h-full">
+                                <ActiveContent />
+                            </div>
+                        ) : (
+                            <div className="max-w-2xl mx-auto px-8 py-10">
+                                <ActiveContent />
+                            </div>
+                        )}
                     </main>
                 </div>
             </DialogContent>

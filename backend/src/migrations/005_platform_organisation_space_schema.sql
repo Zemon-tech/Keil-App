@@ -163,6 +163,11 @@ ALTER TABLE public.spaces
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
+-- workspace_id was originally created as NOT NULL in the legacy schema.
+-- Drop the constraint so new spaces created via the org model (without a
+-- legacy workspace) can be inserted with workspace_id = NULL.
+ALTER TABLE public.spaces ALTER COLUMN workspace_id DROP NOT NULL;
+
 UPDATE public.spaces
 SET id = gen_random_uuid()
 WHERE id IS NULL;
