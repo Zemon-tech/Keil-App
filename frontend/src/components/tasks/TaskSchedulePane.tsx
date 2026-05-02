@@ -351,31 +351,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
       if (isAllDayDrop) {
         if (startDate && onTaskSchedule) {
-<<<<<<< HEAD
-          const range = normalizeAllDayRangeLocal(startDate, endDate);
-          const { startISO, endISO } = normalizeAllDayRangeForUpdate(range);
-
-          console.log("✅ Scheduling task as all-day event:", {
-            taskId,
-            startISO,
-            endISO,
-            multiDay: startDate.getDate() !== range.end.getDate(),
-          });
-
-          onTaskSchedule(taskId, startISO, endISO);
-=======
           const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
           const startISO = allDayStart.toISOString();
           const endISO = allDayEnd.toISOString();
 
           onTaskSchedule(taskId, startISO, endISO, true);
->>>>>>> HK2
 
-          const isMultiDay = range.end.getTime() - range.start.getTime() > 24 * 60 * 60 * 1000;
+          const isMultiDay = allDayEnd.getTime() - allDayStart.getTime() > 24 * 60 * 60 * 1000;
           toast.success("Task scheduled", {
             description: isMultiDay
-              ? `${info.event.title} scheduled from ${format(range.start, "MMM dd")} to ${format(new Date(range.end.getTime() - 86400000), "MMM dd")}`
-              : `${info.event.title} scheduled for ${format(range.start, "MMM dd, yyyy")}`,
+              ? `${info.event.title} scheduled from ${format(allDayStart, "MMM dd")} to ${format(new Date(allDayEnd.getTime() - 86400000), "MMM dd")}`
+              : `${info.event.title} scheduled for ${format(allDayStart, "MMM dd, yyyy")}`,
           });
 
           if (viewType === "dayGridMonth") {
@@ -388,24 +374,8 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       } else {
         // Handle day/week view drop: use the dropped time directly
         if (startDate && endDate && onTaskSchedule) {
-<<<<<<< HEAD
-          const clampedRange = clampTimedRange(startDate, endDate);
-          const { start: timedStart, end: timedEnd } = normalizeTimedRange(clampedRange.start, clampedRange.end);
-          const startISO = timedStart.toISOString();
-          const endISO = timedEnd.toISOString();
-
-          console.log("✅ Scheduling task:", {
-            taskId,
-            startISO,
-            endISO,
-            duration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
-          });
-
-          onTaskSchedule(taskId, startISO, endISO);
-=======
           const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
           onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
->>>>>>> HK2
 
           toast.success("Task scheduled", {
             description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
@@ -438,16 +408,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
       });
 
-<<<<<<< HEAD
-      if (onTaskSchedule) {
-        if ((info.event as any).allDay) {
-          const range = normalizeAllDayRangeLocal(startDate, endDate);
-          const { startISO, endISO } = normalizeAllDayRangeForUpdate(range);
-          onTaskSchedule(taskId, startISO, endISO);
-        } else {
-          const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
-          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString());
-=======
         if (onTaskSchedule) {
           const isAllDay = !!(info.event as any).allDay;
           if (isAllDay) {
@@ -458,7 +418,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
           }
           toast.success("Task duration updated");
->>>>>>> HK2
         }
     } catch (error) {
       console.error("❌ Error in handleEventResize:", error);
@@ -494,11 +453,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         const range = normalizeAllDayRangeLocal(startDate, safeEndDate.end);
         const { startISO, endISO } = normalizeAllDayRangeForUpdate(range);
         if (onTaskSchedule) {
-<<<<<<< HEAD
-          onTaskSchedule(taskId, startISO, endISO);
-=======
-          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString(), true);
->>>>>>> HK2
+          onTaskSchedule(taskId, startISO, endISO, true);
           toast.success("Task rescheduled");
         }
       } else {
