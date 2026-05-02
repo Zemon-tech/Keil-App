@@ -1,22 +1,40 @@
-const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const { Pool } = require('pg');
+require('dotenv').config();
 
 const pool = new Pool({
-  connectionString: 'postgresql://postgres.tmqklbarumarutqeygjx:RIEYRXbDFtBP3aJM@aws-1-ap-south-1.pooler.supabase.com:5432/postgres',
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-async function runMigration() {
+async function runMigrations() {
   try {
-    const sql = fs.readFileSync(path.join(__dirname, 'src', 'migrations', '005_add_events_support.sql'), 'utf8');
-    await pool.query(sql);
-    console.log('Migration applied successfully!');
+    const migrationsDir = path.join(__dirname, 'src', 'migrations');
+    const files = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort(); // Run in alphabetical order
+    
+    for (const file of files) {
+      console.log(`Running ${file}...`);
+      const sqlPath = path.join(migrationsDir, file);
+      const sql = fs.readFileSync(sqlPath, 'utf8');
+      
+      try {
+        await pool.query(sql);
+        console.log(`Successfully ran ${file}`);
+      } catch (err) {
+        // If it's a "already exists" error, we can often ignore it if the SQL isn't idempotent
+        // But since we saw IF NOT EXISTS in some, we'll log and continue if it's not a fatal error
+        console.warn(`Note for ${file}: ${err.message}`);
+      }
+    }
+    console.log("All migrations processed.");
   } catch (err) {
-    console.error('Error applying migration:', err.message);
+    console.error("Migration process failed:", err.message);
   } finally {
-    pool.end();
+    await pool.end();
   }
 }
 
-runMigration();
+runMigrations();

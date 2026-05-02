@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import api from "@/lib/api";
@@ -12,6 +12,8 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     signOut: () => Promise<void>;
+    /** Call with `true` before signUp to suppress auto-login, then `false` after. */
+    setSuppressAutoLogin: (value: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +30,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const suppressAutoLoginRef = useRef(false);
+
+    const setSuppressAutoLogin = (value: boolean) => {
+        suppressAutoLoginRef.current = value;
+    };
 
     useEffect(() => {
         // Get initial session
@@ -49,6 +56,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (_event, session) => {
+                // If signup is in progress, suppress the auto-login session
+                // so the user is forced to sign in explicitly.
+                if (suppressAutoLoginRef.current && session) {
+                    suppressAutoLoginRef.current = false;
+                    await supabase.auth.signOut();
+                    return;
+                }
+
                 setSession(session);
                 setUser(session?.user ?? null);
                 setLoading(false);
@@ -76,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         user,
         loading,
         signOut,
+        setSuppressAutoLogin,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
