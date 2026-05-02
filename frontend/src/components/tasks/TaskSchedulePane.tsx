@@ -38,7 +38,7 @@ type Props = {
   blocks: CalendarBlock[];
   selectedTask: TaskDTO | null;
   onViewChange?: (view: string) => void;
-  onTaskSchedule?: (taskId: string, startISO: string, endISO: string) => void;
+  onTaskSchedule?: (taskId: string, startISO: string, endISO: string, isAllDay: boolean) => void;
 };
 
 type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
@@ -285,7 +285,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         // All-day detection should match FullCalendar semantics:
         // - allDay events use an *exclusive* end at the start of a day boundary.
         // - timed events can cross midnight and should remain timed.
-        const isAllDay = t.type === "event" && t.is_all_day !== undefined ? t.is_all_day : isAllDayRangeLocal(startDate, endDate);
+        const isAllDay = t.is_all_day !== undefined ? t.is_all_day : isAllDayRangeLocal(startDate, endDate);
 
         console.log("🔍 All-day detection:", {
           taskId: t.id,
@@ -391,22 +391,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         return;
       }
 
-      // Handle month view drop: allow multi-day scheduling
-      if (viewType === "dayGridMonth") {
+      const isAllDayDrop = !!info.event.allDay || viewType === "dayGridMonth";
+
+      if (isAllDayDrop) {
         if (startDate && onTaskSchedule) {
           const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
-
           const startISO = allDayStart.toISOString();
           const endISO = allDayEnd.toISOString();
 
-          console.log("✅ Scheduling task as all-day event:", {
-            taskId,
-            startISO,
-            endISO,
-            multiDay: startDate.getDate() !== allDayEnd.getDate(),
-          });
-
-          onTaskSchedule(taskId, startISO, endISO);
+          onTaskSchedule(taskId, startISO, endISO, true);
 
           const isMultiDay = allDayEnd.getTime() - allDayStart.getTime() > 24 * 60 * 60 * 1000;
           toast.success("Task scheduled", {
@@ -415,27 +408,18 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
               : `${info.event.title} scheduled for ${format(allDayStart, "MMM dd, yyyy")}`,
           });
 
-          // Auto-switch to day view for that date
-          const calendarApi = calendarRef.current?.getApi();
-          if (calendarApi) {
-            calendarApi.changeView("timeGridDay", startDate);
+          if (viewType === "dayGridMonth") {
+            const calendarApi = calendarRef.current?.getApi();
+            if (calendarApi) {
+              calendarApi.changeView("timeGridDay", startDate);
+            }
           }
         }
       } else {
         // Handle day/week view drop: use the dropped time directly
         if (startDate && endDate && onTaskSchedule) {
           const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
-          const startISO = timedStart.toISOString();
-          const endISO = timedEnd.toISOString();
-
-          console.log("✅ Scheduling task:", {
-            taskId,
-            startISO,
-            endISO,
-            duration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
-          });
-
-          onTaskSchedule(taskId, startISO, endISO);
+          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
 
           toast.success("Task scheduled", {
             description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
@@ -468,16 +452,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
       });
 
-      if (onTaskSchedule) {
-        if ((info.event as any).allDay) {
-          const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
-          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString());
-        } else {
-          const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
-          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString());
+        if (onTaskSchedule) {
+          const isAllDay = !!(info.event as any).allDay;
+          if (isAllDay) {
+            const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
+            onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString(), true);
+          } else {
+            const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
+            onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
+          }
+          toast.success("Task duration updated");
         }
-        toast.success("Task duration updated");
-      }
     } catch (error) {
       console.error("❌ Error in handleEventResize:", error);
       toast.error("Failed to resize task");
@@ -510,13 +495,13 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
       if (isAllDayDrop) {
         const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
         if (onTaskSchedule) {
-          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString());
+          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString(), true);
           toast.success("Task rescheduled");
         }
       } else {
         const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
         if (onTaskSchedule) {
-          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString());
+          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
           toast.success("Task rescheduled");
         }
       }
@@ -787,6 +772,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                   type: "task",
                   start_date: clickedDate.toISOString(),
                   due_date: defaultDueDate.toISOString(),
+                  is_all_day: arg.allDay,
                 } as Partial<TaskDTO>);
                 setCreateDialogOpen(true);
               }}
@@ -811,6 +797,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                   type: "task",
                   start_date: startISO,
                   due_date: endISO,
+                  is_all_day: arg.allDay,
                 } as Partial<TaskDTO>);
                 setCreateDialogOpen(true);
               }}

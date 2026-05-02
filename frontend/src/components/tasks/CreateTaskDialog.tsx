@@ -176,6 +176,7 @@ export function CreateTaskDialog({
       setNewType((initialValues.type as "task" | "event") ?? "task");
       setNewStartDateISO((initialValues as any).start_date ?? (initialValues as any).plannedStartISO ?? "");
       setNewDueDateISO((initialValues as any).due_date ?? (initialValues as any).dueDateISO ?? "");
+      setNewIsAllDay((initialValues as any).is_all_day ?? false);
     } else if (open && parentTaskId) {
       // Subtask mode: pre-fill parent
       setNewParentTaskId(parentTaskId);
@@ -277,7 +278,7 @@ export function CreateTaskDialog({
         ? (newEventType === "other" ? newCustomEventType.trim() : (newEventType as EventType)) 
         : undefined,
       location: newType === "event" ? newLocation.trim() || undefined : undefined,
-      is_all_day: newType === "event" ? newIsAllDay : undefined,
+      is_all_day: newIsAllDay,
       status: newStatus,
       priority: newPriority,
       description: newDescription.trim() || undefined,
@@ -685,25 +686,26 @@ export function CreateTaskDialog({
 
               {/* ====================== SCHEDULE TAB ====================== */}
               <TabsContent value="schedule" className="mt-0 space-y-4">
-                {newType === "event" && (
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="all-day"
-                      checked={newIsAllDay}
-                      onCheckedChange={setNewIsAllDay}
-                    />
-                    <Label htmlFor="all-day" className="text-sm cursor-pointer">All day event</Label>
-                  </div>
-                )}
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="all-day"
+                    checked={newIsAllDay}
+                    onCheckedChange={setNewIsAllDay}
+                  />
+                  <Label htmlFor="all-day" className="text-sm cursor-pointer">
+                    {newType === "event" ? "All day event" : "All day task"}
+                  </Label>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Start Date */}
+                  {/* Start Date / Time */}
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">
-                      {newType === "event" ? "Start time" : "Start date"}
+                      {newIsAllDay ? "Start date" : "Start time"}
                     </Label>
                     <Input
-                      type={newType === "event" && !newIsAllDay ? "datetime-local" : "date"}
-                      value={toDateInputValue(newStartDateISO, newType === "event" && !newIsAllDay)}
+                      type={!newIsAllDay ? "datetime-local" : "date"}
+                      value={toDateInputValue(newStartDateISO, !newIsAllDay)}
                       onChange={(e) =>
                         setNewStartDateISO(e.target.value ? new Date(e.target.value).toISOString() : "")
                       }
@@ -711,14 +713,16 @@ export function CreateTaskDialog({
                     />
                   </div>
 
-                  {/* Due Date */}
+                  {/* Due Date / End Time */}
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">
-                      {newType === "event" ? "End time" : "Due date"}
+                      {newType === "event" 
+                        ? (newIsAllDay ? "End date" : "End time") 
+                        : (newIsAllDay ? "Due date" : "Due time")}
                     </Label>
                     <Input
-                      type={newType === "event" && !newIsAllDay ? "datetime-local" : "date"}
-                      value={toDateInputValue(newDueDateISO, newType === "event" && !newIsAllDay)}
+                      type={!newIsAllDay ? "datetime-local" : "date"}
+                      value={toDateInputValue(newDueDateISO, !newIsAllDay)}
                       onChange={(e) =>
                         setNewDueDateISO(e.target.value ? new Date(e.target.value).toISOString() : "")
                       }
