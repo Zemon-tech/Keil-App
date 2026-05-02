@@ -8,7 +8,7 @@ const logger = pino();
 const oauth2Client = new google.auth.OAuth2(
     config.googleClientId,
     config.googleClientSecret,
-    config.googleCallbackUrl
+    config.googleRedirectUri
 );
 
 export const getGoogleAuthUrl = (req: Request, res: Response) => {
@@ -63,7 +63,7 @@ export const googleCallback = async (req: Request, res: Response) => {
         
         // Redirecting back to frontend (adjust URL as needed for your app's flow)
         // Optionally pass tokens or a status flag via URL fragments or a session.
-        res.redirect(`http://localhost:5173/settings?google_sync=success`);
+        res.redirect(`${config.frontendUrl}/settings?google_sync=success`);
     } catch (err) {
         logger.error(`Failed to exchange token: ${err}`);
         res.status(500).json({ error: 'Failed to exchange authorization code' });

@@ -70,9 +70,197 @@ body,
   flex: 1;
 }
 
-.simple-editor-content .tiptap.ProseMirror.simple-editor {
+.tiptap.ProseMirror.simple-editor {
   flex: 1;
   padding: 0 0 30vh;
+
+  /* Table Styles */
+  table {
+    border-collapse: collapse;
+    margin: 0;
+    overflow: hidden;
+    table-layout: fixed;
+    width: 100%;
+    margin-bottom: 1.5rem;
+
+    td,
+    th {
+      border: 1px solid var(--border);
+      box-sizing: border-box;
+      min-width: 1em;
+      padding: 6px 10px;
+      position: relative;
+      vertical-align: top;
+
+      > * {
+        margin-bottom: 0;
+      }
+    }
+
+    th {
+      background-color: var(--muted);
+      font-weight: bold;
+      text-align: left;
+    }
+
+    .selectedCell:after {
+      background: var(--primary);
+      opacity: 0.1;
+      content: "";
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      pointer-events: none;
+      position: absolute;
+      z-index: 2;
+    }
+
+    .column-resize-handle {
+      background-color: var(--primary);
+      bottom: -2px;
+      pointer-events: none;
+      position: absolute;
+      right: -2px;
+      top: 0;
+      width: 4px;
+      z-index: 20;
+    }
+  }
+
+  .tableWrapper {
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+
+  &.resize-cursor {
+    cursor: ew-resize;
+    cursor: col-resize;
+  }
+
+  /* Toggle / Details Styles */
+  [data-type="details"] {
+    display: flex;
+    align-items: flex-start;
+    margin: 0.5rem 0;
+
+    /* Tiptap NodeView Toggle Button */
+    > button[type="button"] {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 28px; /* Match summary line-height */
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--foreground);
+      opacity: 0.5;
+      border-radius: 4px;
+      flex-shrink: 0;
+      margin-right: 4px;
+      padding: 0;
+
+      &:hover {
+        background: var(--muted);
+        opacity: 0.8;
+      }
+
+      &::before {
+        content: "";
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-top: 4.5px solid transparent;
+        border-bottom: 4.5px solid transparent;
+        border-left: 6px solid currentColor;
+        transition: transform 0.2s;
+      }
+    }
+
+    &.is-open > button[type="button"]::before {
+      transform: rotate(90deg);
+    }
+
+    /* Content Wrapper */
+    > div {
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Hide content when closed */
+    div[data-type="detailsContent"] {
+      display: none;
+    }
+
+    &.is-open div[data-type="detailsContent"] {
+      display: block;
+    }
+  }
+
+  /* Summary styling for both Tiptap and Native */
+  summary, [data-type="detailsSummary"] {
+    font-weight: 600;
+    list-style: none;
+    list-style-type: none;
+    outline: none;
+    margin: 0;
+    min-height: 28px;
+    line-height: 28px;
+    cursor: text;
+    
+    /* Remove native arrow */
+    &::-webkit-details-marker,
+    &::marker {
+      display: none;
+      content: "";
+    }
+    
+    /* Placeholder support */
+    &[data-placeholder]:empty:before {
+      content: attr(data-placeholder);
+      color: var(--muted-foreground);
+      opacity: 0.5;
+      pointer-events: none;
+    }
+  }
+
+  /* Native HTML details (for viewing outside editor) */
+  details:not([data-type="details"]) {
+    margin: 0.5rem 0;
+    
+    > summary {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+
+      &::before {
+        content: "";
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-top: 4.5px solid transparent;
+        border-bottom: 4.5px solid transparent;
+        border-left: 6px solid currentColor;
+        margin-right: 8px;
+        transition: transform 0.2s;
+        opacity: 0.5;
+      }
+    }
+
+    &[open] > summary::before {
+      transform: rotate(90deg);
+    }
+  }
+
+  /* Content area styling */
+  div[data-type="detailsContent"],
+  .details-content {
+    margin-top: 4px;
+    /* Optional left border for child elements to show grouping */
+    /* padding-left: 4px; */
+    /* border-left: 2px solid var(--border); */
+  }
 }
 
 @media screen and (max-width: 480px) {

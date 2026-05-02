@@ -1,38 +1,50 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Menu, MoreHorizontal } from "lucide-react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import { Menu, MoreHorizontal, Trash2, FileText, Plus, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
-import {
-  getMotionPageById,
-  updateMotionPageContent,
-  updateMotionPageTitle,
-} from "./motionStorage";
+import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import throttle from "lodash.throttle";
 
 export function MotionPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const { pageId } = useParams();
   const [pageEditor, setPageEditor] = useState<any>(null);
 
+  const { 
+    pages, 
+    addPage, 
+    updatePage, 
+    deletePage, 
+    getPageById, 
+    getSubpages,
+    sidebarOpen,
+    setSidebarOpen
+  } = useMotionStore();
+
   const page = useMemo(() => {
     if (!pageId) return null;
-    return getMotionPageById(pageId);
-  }, [pageId]);
+    return getPageById(pageId);
+  }, [pageId, pages, getPageById]);
+
+  const parentPage = useMemo(() => {
+    if (!page?.parentId) return null;
+    return getPageById(page.parentId);
+  }, [page?.parentId, pages, getPageById]);
+
+  const subpages = useMemo(() => {
+    if (!pageId) return [];
+    return getSubpages(pageId);
+  }, [pageId, pages, getSubpages]);
 
   useEffect(() => {
-    if (!pageId) {
-      navigate("/motion", { replace: true });
+    if (!pageId || !page) {
+      if (pages.length > 0) navigate("/motion", { replace: true });
       return;
     }
-
-    if (!page) {
-      navigate("/motion", { replace: true });
-    }
-  }, [navigate, page, pageId]);
+  }, [navigate, page, pageId, pages.length]);
 
   const [titleDraft, setTitleDraft] = useState("");
   useEffect(() => {
@@ -42,10 +54,16 @@ export function MotionPage() {
   const saveContent = useMemo(
     () =>
       throttle((id: string, json: any) => {
-        updateMotionPageContent(id, json);
+        updatePage(id, { content: json });
       }, 400),
-    []
+    [updatePage]
   );
+
+  const handleAddSubpage = () => {
+    if (!pageId) return;
+    const newPage = addPage({ parentId: pageId });
+    navigate(`/motion/${newPage.id}`);
+  };
 
   useEffect(() => {
     return () => {
@@ -72,15 +90,42 @@ export function MotionPage() {
 
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         <header className="flex items-center justify-between px-2 py-1 z-40 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground/50 hover:text-foreground transition-colors"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            <Menu className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground/50 hover:text-foreground transition-colors"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            >
+              <Menu className="size-4" />
+            </Button>
+            {parentPage && (
+              <div className="flex items-center text-xs text-muted-foreground/50">
+                <Link
+                  to={`/motion/${parentPage.id}`}
+                  className="hover:text-foreground transition-colors max-w-[100px] truncate"
+                >
+                  {parentPage.title}
+                </Link>
+                <ChevronRight className="size-3 mx-0.5" />
+                <span className="text-foreground/70 max-w-[100px] truncate">{page.title}</span>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground/50 hover:text-destructive transition-colors"
+              onClick={() => {
+                if (confirm("Are you sure you want to delete this page?")) {
+                  deletePage(pageId);
+                  navigate("/motion");
+                }
+              }}
+            >
+              <Trash2 className="size-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -123,7 +168,7 @@ export function MotionPage() {
                   pageEditor?.commands?.focus?.("start");
                 }}
                 onBlur={() =>
-                  updateMotionPageTitle(pageId, titleDraft.trim() || "Untitled")
+                  updatePage(pageId, { title: titleDraft.trim() || "Untitled" })
                 }
                 className="w-full bg-transparent text-[44px] leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25"
                 placeholder="Untitled"
@@ -134,8 +179,10 @@ export function MotionPage() {
                   content={page.content}
                   onContentChange={(json) => saveContent(pageId, json)}
                   onReady={(editor) => setPageEditor(editor)}
+                  onAddSubpage={handleAddSubpage}
                 />
               </div>
+
             </main>
           </div>
         </div>

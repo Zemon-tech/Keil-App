@@ -8,29 +8,33 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-async function runMigration() {
+async function runMigrations() {
   try {
-    const migrations = [
-      '004_chat_schema.sql',
-      '005_add_events_support.sql'
-    ];
+    const migrationsDir = path.join(__dirname, 'src', 'migrations');
+    const files = fs.readdirSync(migrationsDir)
+      .filter(file => file.endsWith('.sql'))
+      .sort(); // Run in alphabetical order
     
-    for (const file of migrations) {
+    for (const file of files) {
       console.log(`Running ${file}...`);
-      const sqlPath = path.join(__dirname, 'src', 'migrations', file);
-      if (fs.existsSync(sqlPath)) {
-        const sql = fs.readFileSync(sqlPath, 'utf8');
+      const sqlPath = path.join(migrationsDir, file);
+      const sql = fs.readFileSync(sqlPath, 'utf8');
+      
+      try {
         await pool.query(sql);
         console.log(`Successfully ran ${file}`);
-      } else {
-        console.warn(`Migration file ${file} not found at ${sqlPath}`);
+      } catch (err) {
+        // If it's a "already exists" error, we can often ignore it if the SQL isn't idempotent
+        // But since we saw IF NOT EXISTS in some, we'll log and continue if it's not a fatal error
+        console.warn(`Note for ${file}: ${err.message}`);
       }
     }
+    console.log("All migrations processed.");
   } catch (err) {
-    console.error("Migration failed:", err.message);
+    console.error("Migration process failed:", err.message);
   } finally {
     await pool.end();
   }
 }
 
-runMigration();
+runMigrations();

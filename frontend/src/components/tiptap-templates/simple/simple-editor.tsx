@@ -3,6 +3,7 @@
 import type { JSONContent } from "@tiptap/core"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { EditorContent, EditorContext, useEditor } from "@tiptap/react"
+import { BubbleMenu } from "@tiptap/react/menus"
 
 // --- Tiptap Core Extensions ---
 import { StarterKit } from "@tiptap/starter-kit"
@@ -14,6 +15,41 @@ import { Highlight } from "@tiptap/extension-highlight"
 import { Subscript } from "@tiptap/extension-subscript"
 import { Superscript } from "@tiptap/extension-superscript"
 import { Selection } from "@tiptap/extensions"
+import { Table } from "@tiptap/extension-table"
+import { TableRow } from "@tiptap/extension-table-row"
+import { TableCell } from "@tiptap/extension-table-cell"
+import { TableHeader } from "@tiptap/extension-table-header"
+import { Placeholder } from "@tiptap/extension-placeholder"
+import { Underline } from "@tiptap/extension-underline"
+import { Link } from "@tiptap/extension-link"
+import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight"
+import { common, createLowlight } from "lowlight"
+import { Details } from "@tiptap/extension-details"
+import { DetailsSummary } from "@tiptap/extension-details-summary"
+import { DetailsContent } from "@tiptap/extension-details-content"
+
+import {
+  Heading1,
+  Heading2,
+  Heading3,
+  List,
+  ListOrdered,
+  CheckSquare,
+  Quote,
+  Code,
+  Minus,
+  Table as TableIcon,
+  Plus,
+  Trash2,
+  FileText,
+  ChevronLast,
+  ChevronDown as ChevronDownIcon,
+  ChevronRight,
+  ChevronLeft,
+  ChevronUp,
+} from "lucide-react"
+
+import { Button } from "@/components/ui/button"
 
 // --- UI Primitives ---
 import {
@@ -40,9 +76,12 @@ import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
 
+const lowlight = createLowlight(common)
+
 type SlashItem = {
   title: string
   subtitle?: string
+  icon?: any
   keywords: string[]
   run: () => void
 }
@@ -57,10 +96,12 @@ export function SimpleEditor({
   content,
   onContentChange,
   onReady,
+  onAddSubpage,
 }: {
   content?: JSONContent
   onContentChange?: (content: JSONContent) => void
   onReady?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void
+  onAddSubpage?: () => void
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [slashOpen, setSlashOpen] = useState(false)
@@ -87,10 +128,8 @@ export function SimpleEditor({
     extensions: [
       StarterKit.configure({
         horizontalRule: false,
-        link: {
-          openOnClick: false,
-          enableClickSelection: true,
-        },
+        codeBlock: false,
+        link: false,
       }),
       HorizontalRule,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
@@ -102,6 +141,32 @@ export function SimpleEditor({
       Superscript,
       Subscript,
       Selection,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "text-primary underline underline-offset-4 cursor-pointer",
+        },
+      }),
+      Placeholder.configure({
+        placeholder: ({ node }) => {
+          if (node.type.name === "heading") {
+            return `Heading ${node.attrs.level}`
+          }
+          if (node.type.name === "detailsSummary") {
+            return "Toggle"
+          }
+          return "Type '/' for commands..."
+        },
+      }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      CodeBlockLowlight.configure({
+        lowlight,
+      }),
       ImageUploadNode.configure({
         accept: "image/*",
         maxSize: MAX_FILE_SIZE,
@@ -109,6 +174,13 @@ export function SimpleEditor({
         upload: handleImageUpload,
         onError: (error) => console.error("Upload failed:", error),
       }),
+      Details.configure({
+        HTMLAttributes: {
+          class: "details",
+        },
+      }),
+      DetailsSummary,
+      DetailsContent,
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -130,61 +202,97 @@ export function SimpleEditor({
     if (!editor) return []
     return [
       {
+        title: "Subpage",
+        subtitle: "Create a nested page",
+        icon: <FileText className="size-4" />,
+        keywords: ["sub", "page", "child", "nested"],
+        run: () => onAddSubpage?.(),
+      },
+      {
         title: "Heading 1",
         subtitle: "Big section heading",
+        icon: <Heading1 className="size-4" />,
         keywords: ["h1", "heading", "title"],
         run: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
       },
       {
         title: "Heading 2",
         subtitle: "Medium section heading",
+        icon: <Heading2 className="size-4" />,
         keywords: ["h2", "heading"],
         run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
       },
       {
         title: "Heading 3",
         subtitle: "Small section heading",
+        icon: <Heading3 className="size-4" />,
         keywords: ["h3", "heading"],
         run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
       },
       {
         title: "Bullet list",
         subtitle: "Create a bulleted list",
+        icon: <List className="size-4" />,
         keywords: ["bullet", "list", "ul"],
         run: () => editor.chain().focus().toggleBulletList().run(),
       },
       {
         title: "Numbered list",
         subtitle: "Create a numbered list",
+        icon: <ListOrdered className="size-4" />,
         keywords: ["ordered", "list", "ol"],
         run: () => editor.chain().focus().toggleOrderedList().run(),
       },
       {
         title: "To-do list",
         subtitle: "Track tasks with checkboxes",
+        icon: <CheckSquare className="size-4" />,
         keywords: ["todo", "task", "checkbox"],
         run: () => editor.chain().focus().toggleTaskList().run(),
       },
       {
         title: "Quote",
         subtitle: "Capture a quote",
+        icon: <Quote className="size-4" />,
         keywords: ["quote", "blockquote"],
         run: () => editor.chain().focus().toggleBlockquote().run(),
       },
       {
         title: "Code block",
         subtitle: "Write code with monospaced font",
+        icon: <Code className="size-4" />,
         keywords: ["code", "snippet"],
         run: () => editor.chain().focus().toggleCodeBlock().run(),
       },
       {
         title: "Divider",
         subtitle: "Insert a horizontal rule",
+        icon: <Minus className="size-4" />,
         keywords: ["divider", "hr", "rule"],
         run: () => editor.chain().focus().setHorizontalRule().run(),
       },
+      {
+        title: "Table",
+        subtitle: "Insert a 3x3 table",
+        icon: <TableIcon className="size-4" />,
+        keywords: ["table", "grid"],
+        run: () =>
+          editor
+            .chain()
+            .focus()
+            .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+            .run(),
+      },
+      {
+        title: "Toggle list",
+        subtitle: "Toggle content visibility",
+        icon: <ChevronRight className="size-4" />,
+        keywords: ["toggle", "details", "expand"],
+        run: () => editor.chain().focus().setDetails().run(),
+      },
     ]
-  }, [editor])
+  }, [editor, onAddSubpage])
+
 
   const filteredSlashItems = useMemo(() => {
     const q = slashQuery.trim().toLowerCase()
@@ -271,6 +379,82 @@ export function SimpleEditor({
   return (
     <div ref={wrapperRef} className="simple-editor-wrapper relative">
       <EditorContext.Provider value={{ editor }}>
+        {editor && (
+          <BubbleMenu
+            editor={editor}
+            shouldShow={({ editor }) => editor.isActive("table")}
+            tippyOptions={{ duration: 100, maxWidth: "none" }}
+          >
+            <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => editor.chain().focus().addColumnBefore().run()}
+                title="Add column before"
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => editor.chain().focus().addColumnAfter().run()}
+                title="Add column after"
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+              <div className="w-px h-4 bg-border mx-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => editor.chain().focus().addRowBefore().run()}
+                title="Add row before"
+              >
+                <ChevronUp className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => editor.chain().focus().addRowAfter().run()}
+                title="Add row after"
+              >
+                <ChevronDownIcon className="size-3.5" />
+              </Button>
+              <div className="w-px h-4 bg-border mx-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 hover:text-destructive"
+                onClick={() => editor.chain().focus().deleteColumn().run()}
+                title="Delete column"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 hover:text-destructive"
+                onClick={() => editor.chain().focus().deleteRow().run()}
+                title="Delete row"
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+              <div className="w-px h-4 bg-border mx-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 hover:text-destructive"
+                onClick={() => editor.chain().focus().deleteTable().run()}
+                title="Delete table"
+              >
+                <TableIcon className="size-3.5 text-destructive" />
+              </Button>
+            </div>
+          </BubbleMenu>
+        )}
         <EditorContent
           editor={editor}
           role="presentation"
@@ -298,8 +482,11 @@ export function SimpleEditor({
                     key={item.title}
                     value={item.title}
                     onSelect={() => runSlashItem(item)}
-                    className="px-3 py-2"
+                    className="px-3 py-2 flex items-center gap-3"
                   >
+                    <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
+                      {item.icon}
+                    </div>
                     <div className="flex flex-col gap-0.5">
                       <div className="text-sm font-medium text-foreground">
                         {item.title}

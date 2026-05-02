@@ -16,80 +16,176 @@ import {
   Inbox,
   Library,
   ChevronDown,
+  ChevronRight,
   Plus,
   FileText,
   X,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useState } from "react";
-import {
-  createMotionPage,
-  getAllMotionPages,
-  type MotionPageRecord,
-} from "./motionStorage";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 
 const mainNav = [
   { title: "Search", icon: Search, url: "#" },
   { title: "Home", icon: Home, url: "/motion" },
-  { title: "Meetings", icon: Calendar, url: "#" },
-  { title: "Notion AI", icon: Sparkles, url: "#" },
   { title: "Inbox", icon: Inbox, url: "#" },
-  { title: "Library", icon: Library, url: "#" },
 ];
 
-const recents = [
-  { title: "KEIL HQ", icon: "🏢", time: "7m ago" },
-  { title: "Manasvi Agarwal", icon: "💀", time: "15h ago" },
-  { title: "Rohan Vashist", icon: "👳", time: "15h ago" },
-  { title: "ZEMON TEAM", icon: "🌳", time: "15h ago" },
-  { title: "Quild - May Training Plan", icon: "📄", time: "4h ago" },
-  { title: "Krishna Kumar", icon: "📄", time: "17h ago" },
-  { title: "Ansh Chauhan", icon: "👤", time: "" },
-  { title: "Tabish", icon: "💀", time: "" },
-  { title: "Arnesh Gupta", icon: "👤", time: "" },
-  { title: "PodSoft", icon: "📄", time: "" },
-];
-
-interface MotionSidebarProps {
+function SidebarPageItem({
+  item,
+  pageId,
+  onClose,
+  onDelete,
+  onAddSubpage,
+  level = 0,
+}: {
+  item: MotionPageRecord;
+  pageId?: string;
   onClose?: () => void;
+  onDelete: (id: string) => void;
+  onAddSubpage: (parentId: string) => void;
+  level?: number;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const getSubpages = useMotionStore((state) => state.getSubpages);
+  const subpages = getSubpages(item.id);
+  const hasSubpages = subpages.length > 0;
+
+  return (
+    <div className="flex flex-col w-full">
+      <div className="flex items-center group/item w-full px-0 relative">
+        <div
+          className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/20 opacity-0 group-hover/item:opacity-100 transition-opacity"
+          style={{ marginLeft: `${level * 12}px` }}
+        />
+        <SidebarMenuButton
+          asChild
+          isActive={pageId === item.id}
+          className="h-8 rounded-md hover:bg-white/5 data-[active=true]:bg-white/10 text-foreground/70 hover:text-foreground transition-none group flex-1"
+          style={{ paddingLeft: `${level * 12 + 12}px` }}
+        >
+          <div className="flex items-center gap-1.5 w-full pr-12">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsOpen(!isOpen);
+              }}
+              className="size-4 flex items-center justify-center hover:bg-white/10 rounded transition-colors"
+            >
+              {hasSubpages ? (
+                isOpen ? (
+                  <ChevronDown className="size-3" />
+                ) : (
+                  <ChevronRight className="size-3" />
+                )
+              ) : (
+                <div className="size-3" />
+              )}
+            </button>
+            <Link
+              to={`/motion/${item.id}`}
+              onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}
+              className="flex items-center gap-2 flex-1 truncate"
+            >
+              <FileText className="size-3.5 text-foreground/30 shrink-0 group-hover:text-foreground/50" />
+              <span className="text-xs font-medium truncate">{item.title}</span>
+            </Link>
+          </div>
+        </SidebarMenuButton>
+        <div className="absolute right-1 flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onAddSubpage(item.id);
+            }}
+          >
+            <Plus className="size-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 hover:bg-white/10 text-muted-foreground hover:text-destructive transition-all"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete(item.id);
+            }}
+          >
+            <Trash2 className="size-3" />
+          </Button>
+        </div>
+      </div>
+      {isOpen && hasSubpages && (
+        <div className="flex flex-col">
+          {subpages.map((sub) => (
+            <SidebarPageItem
+              key={sub.id}
+              item={sub}
+              pageId={pageId}
+              onClose={onClose}
+              onDelete={onDelete}
+              onAddSubpage={onAddSubpage}
+              level={level + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function MotionSidebar({ onClose }: MotionSidebarProps) {
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { pageId } = useParams();
 
-  const [pages, setPages] = useState<MotionPageRecord[]>([]);
+  const { 
+    getRootPages, 
+    getTrashPages, 
+    addPage, 
+    deletePage, 
+    restorePage, 
+    permanentlyDeletePage 
+  } = useMotionStore();
 
-  useEffect(() => {
-    const refresh = () => setPages(getAllMotionPages());
-    refresh();
+  const displayName = user?.user_metadata?.full_name || user?.email || "User";
+  const initial = displayName.charAt(0).toUpperCase();
 
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "motion.pages.v1") refresh();
-    };
+  const rootPages = getRootPages();
+  const trashPages = getTrashPages();
+  const [trashOpen, setTrashOpen] = useState(false);
 
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  const privateItems = useMemo(
-    () =>
-      pages.map((p) => ({
-        id: p.id,
-        title: p.title,
-        icon: FileText,
-        url: `/motion/${p.id}`,
-      })),
-    [pages]
-  );
-
-  const handleAddPage = () => {
-    const page = createMotionPage();
-    setPages(getAllMotionPages());
+  const handleAddPage = (parentId?: string) => {
+    const page = addPage({ parentId });
     navigate(`/motion/${page.id}`);
-    onClose?.();
+    if (window.innerWidth < 1024) onClose?.();
+  };
+
+  const handleDeletePage = (id: string) => {
+    deletePage(id);
+    if (pageId === id) {
+      navigate("/motion");
+    }
+  };
+
+  const handleRestorePage = (id: string) => {
+    restorePage(id);
+  };
+
+  const handlePermanentDelete = (id: string) => {
+    if (confirm("Permanently delete this page? This cannot be undone.")) {
+      permanentlyDeletePage(id);
+    }
   };
 
   return (
@@ -97,12 +193,25 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
       {/* Header - User / Workspace switcher */}
       <SidebarHeader className="px-3 py-4">
         <div className="flex items-center justify-between group">
-          <Button variant="ghost" className="h-10 w-full justify-start gap-3 px-3 hover:bg-white/5 text-foreground/90">
-            <div className="size-6 rounded bg-muted flex items-center justify-center text-[11px] font-bold">S</div>
-            <span className="text-sm font-medium truncate flex-1 text-left">SHIVANG KANDOI's ...</span>
+          <Button 
+            variant="ghost" 
+            className="h-10 w-full justify-start gap-3 px-3 hover:bg-white/5 text-foreground/90"
+            onClick={() => {
+              navigate("/motion/profile");
+              if (window.innerWidth < 1024) onClose?.();
+            }}
+          >
+            <div className="size-6 rounded bg-muted flex items-center justify-center text-[11px] font-bold">{initial}</div>
+            <span className="text-sm font-medium truncate flex-1 text-left">{displayName}'s ...</span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Plus 
+                className="size-4 text-muted-foreground hover:text-foreground transition-colors" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddPage();
+                }} 
+              />
               <ChevronDown className="size-4 text-muted-foreground" />
-              <Plus className="size-4 text-muted-foreground" />
             </div>
           </Button>
           {onClose && (
@@ -124,7 +233,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                   isActive={location.pathname === item.url}
                   className="h-9 rounded-md px-3 hover:bg-white/5 data-[active=true]:bg-white/10 text-foreground/70 hover:text-foreground transition-none"
                 >
-                  <Link to={item.url} onClick={onClose} className="flex items-center gap-3">
+                  <Link to={item.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }} className="flex items-center gap-3">
                     <item.icon className="size-4 shrink-0" />
                     <span className="text-sm font-medium">{item.title}</span>
                   </Link>
@@ -134,65 +243,74 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           </SidebarMenu>
         </SidebarGroup>
 
-        {/* Recents Section */}
-        <SidebarGroup className="p-0 mb-4">
-          <SidebarGroupLabel className="px-3 h-8 text-xs font-bold text-foreground/30 uppercase tracking-tight">
-            Recents
-          </SidebarGroupLabel>
-          <SidebarMenu className="gap-1">
-            {recents.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton className="h-9 rounded-md px-3 hover:bg-white/5 text-foreground/70 hover:text-foreground group transition-none">
-                  <div className="flex items-center gap-3 w-full">
-                    <span className="size-4 flex items-center justify-center text-xs shrink-0">{item.icon}</span>
-                    <span className="text-sm font-medium truncate flex-1">{item.title}</span>
-                    {item.time && <span className="text-xs text-foreground/20 hidden group-hover:block whitespace-nowrap">{item.time}</span>}
-                  </div>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-
-        {/* Agents Section */}
-        <SidebarGroup className="p-0 mb-4">
-          <div className="flex items-center justify-between px-3 h-8 mb-1">
-            <span className="text-xs font-bold text-foreground/30 uppercase tracking-tight">Agents</span>
-            <span className="text-xs px-1.5 bg-white/5 rounded text-foreground/40 font-bold uppercase tracking-widest scale-90 origin-right">Beta</span>
-          </div>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton className="h-9 rounded-md px-3 hover:bg-white/5 text-foreground/30 hover:text-foreground/60 transition-none">
-                <div className="flex items-center gap-3">
-                  <Plus className="size-4 shrink-0" />
-                  <span className="text-sm font-medium">New agent</span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
-
         {/* Private Section */}
         <SidebarGroup className="p-0 mb-4">
           <SidebarGroupLabel className="px-3 h-8 text-xs font-bold text-foreground/30 uppercase tracking-tight">
             Private
           </SidebarGroupLabel>
-          <SidebarMenu className="gap-1">
-            {privateItems.map((item) => (
-              <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pageId === item.id}
-                  className="h-9 rounded-md px-3 hover:bg-white/5 data-[active=true]:bg-white/10 text-foreground/70 hover:text-foreground transition-none group"
-                >
-                  <Link to={item.url} onClick={onClose} className="flex items-center gap-3 w-full">
-                    <item.icon className="size-4 text-foreground/30 shrink-0 group-hover:text-foreground/50" />
-                    <span className="text-sm font-medium truncate flex-1">{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+          <SidebarMenu className="gap-0.5">
+            {rootPages.map((item) => (
+              <SidebarPageItem
+                key={item.id}
+                item={item}
+                pageId={pageId}
+                onClose={onClose}
+                onDelete={handleDeletePage}
+                onAddSubpage={handleAddPage}
+              />
             ))}
           </SidebarMenu>
+        </SidebarGroup>
+
+        {/* Trash Section */}
+        <SidebarGroup className="p-0 mb-4">
+          <button
+            onClick={() => setTrashOpen(!trashOpen)}
+            className="flex items-center gap-2 px-3 h-8 w-full text-xs font-bold text-foreground/30 hover:text-foreground/50 uppercase tracking-tight transition-colors"
+          >
+            {trashOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+            Trash
+          </button>
+          {trashOpen && (
+            <SidebarMenu className="gap-0.5 mt-1">
+              {trashPages.length > 0 ? (
+                trashPages.map((item) => (
+                  <SidebarMenuItem key={item.id}>
+                    <div className="flex items-center group/trash w-full px-3 h-8 hover:bg-white/5 rounded-md">
+                      <FileText className="size-3.5 text-foreground/20 shrink-0 mr-3" />
+                      <span className="text-xs font-medium text-foreground/40 truncate flex-1 italic line-through">
+                        {item.title}
+                      </span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover/trash:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 hover:bg-white/10 text-muted-foreground hover:text-primary transition-all"
+                          onClick={() => handleRestorePage(item.id)}
+                          title="Restore"
+                        >
+                          <RotateCcw className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 hover:bg-white/10 text-muted-foreground hover:text-destructive transition-all"
+                          onClick={() => handlePermanentDelete(item.id)}
+                          title="Delete permanently"
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </SidebarMenuItem>
+                ))
+              ) : (
+                <div className="px-8 py-2 text-[10px] text-muted-foreground/30 italic">
+                  Trash is empty
+                </div>
+              )}
+            </SidebarMenu>
+          )}
         </SidebarGroup>
       </SidebarContent>
 
@@ -201,17 +319,11 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         <SidebarMenu className="gap-1">
           <SidebarMenuItem>
             <SidebarMenuButton
-              onClick={handleAddPage}
+              onClick={() => handleAddPage()}
               className="h-9 rounded-md px-3 hover:bg-white/5 text-foreground/50 hover:text-foreground transition-none"
             >
               <Plus className="size-4" />
               <span className="text-sm font-medium">Add a page</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="h-9 rounded-md px-3 hover:bg-white/5 text-foreground/50 hover:text-foreground transition-none">
-              <div className="size-4 flex items-center justify-center text-xs">?</div>
-              <span className="text-sm font-medium">Help</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

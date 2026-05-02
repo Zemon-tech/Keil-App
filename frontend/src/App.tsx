@@ -10,6 +10,7 @@ import { InvitePage } from "./components/workspace/InvitePage";
 
 import { MotionPage } from "./components/motion/MotionPage";
 import { MotionHome } from "./components/motion/MotionHome";
+import { MotionProfile } from "./components/motion/MotionProfile";
 
 /**
  * Main application component.
@@ -49,6 +50,14 @@ function App() {
           element={
             <Layout>
               <MotionHome />
+            </Layout>
+          }
+        />
+        <Route
+          path="/motion/profile"
+          element={
+            <Layout>
+              <MotionProfile />
             </Layout>
           }
         />
