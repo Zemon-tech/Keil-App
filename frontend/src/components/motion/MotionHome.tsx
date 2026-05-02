@@ -1,19 +1,16 @@
-import { useState } from "react";
 import {
   Menu,
   MoreHorizontal,
   Clock,
-  BookOpen,
-  Calendar,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MotionSidebar } from "./MotionSidebar";
-import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
+import { useMotionStore } from "@/store/useMotionStore";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 
 export function MotionHome() {

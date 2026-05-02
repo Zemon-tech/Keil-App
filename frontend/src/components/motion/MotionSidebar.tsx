@@ -11,10 +11,7 @@ import {
 import {
   Search,
   Home,
-  Calendar,
-  Sparkles,
   Inbox,
-  Library,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -25,7 +22,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 
@@ -142,6 +139,10 @@ function SidebarPageItem({
     </div>
   );
 }
+
+type MotionSidebarProps = {
+  onClose?: () => void;
+};
 
 export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const { user } = useAuth();

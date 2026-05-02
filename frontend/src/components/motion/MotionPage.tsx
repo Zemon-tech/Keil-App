@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Menu, MoreHorizontal, Trash2, FileText, Plus, ChevronRight } from "lucide-react";
+import { Menu, MoreHorizontal, Trash2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
-import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
+import { useMotionStore } from "@/store/useMotionStore";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import throttle from "lodash.throttle";
 
@@ -19,7 +19,6 @@ export function MotionPage() {
     updatePage, 
     deletePage, 
     getPageById, 
-    getSubpages,
     sidebarOpen,
     setSidebarOpen
   } = useMotionStore();
@@ -34,10 +33,6 @@ export function MotionPage() {
     return getPageById(page.parentId);
   }, [page?.parentId, pages, getPageById]);
 
-  const subpages = useMemo(() => {
-    if (!pageId) return [];
-    return getSubpages(pageId);
-  }, [pageId, pages, getSubpages]);
 
   useEffect(() => {
     if (!pageId || !page) {

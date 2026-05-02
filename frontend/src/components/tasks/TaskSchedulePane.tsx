@@ -464,7 +464,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
 
       if (isAllDayDrop) {
         const safeEndDate = ensureAllDayDropEndDate(startDate, endDate);
-        const range = normalizeAllDayRangeLocal(startDate, safeEndDate);
+        const range = normalizeAllDayRangeLocal(startDate, safeEndDate.end);
         const { startISO, endISO } = normalizeAllDayRangeForUpdate(range);
         if (onTaskSchedule) {
           onTaskSchedule(taskId, startISO, endISO);

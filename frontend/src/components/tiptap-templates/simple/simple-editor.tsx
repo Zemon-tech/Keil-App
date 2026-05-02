@@ -20,7 +20,6 @@ import { TableRow } from "@tiptap/extension-table-row"
 import { TableCell } from "@tiptap/extension-table-cell"
 import { TableHeader } from "@tiptap/extension-table-header"
 import { Placeholder } from "@tiptap/extension-placeholder"
-import { Underline } from "@tiptap/extension-underline"
 import { Link } from "@tiptap/extension-link"
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight"
 import { common, createLowlight } from "lowlight"
@@ -37,10 +36,8 @@ import {
   Code,
   Minus,
   Table as TableIcon,
-  Plus,
   Trash2,
   FileText,
-  ChevronLast,
   ChevronDown as ChevronDownIcon,
   ChevronRight,
   ChevronLeft,
@@ -381,7 +378,7 @@ export function SimpleEditor({
           <BubbleMenu
             editor={editor}
             shouldShow={({ editor }) => editor.isActive("table")}
-            tippyOptions={{ duration: 100, maxWidth: "none" }}
+            options={{ placement: 'top' }}
           >
             <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
               <Button
