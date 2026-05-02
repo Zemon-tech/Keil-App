@@ -273,9 +273,9 @@ export function TasksPage() {
   }, []);
 
   // Handle task scheduling from calendar (org mode only — personal tasks use simpler update)
-  const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string) => {
+  const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string, isAllDay: boolean) => {
     // In personal mode fall back to a regular update (same fields exist on PersonalTaskDTO)
-    handleUpdateTask(taskId, { start_date: startISO, due_date: endISO });
+    handleUpdateTask(taskId, { start_date: startISO, due_date: endISO, is_all_day: isAllDay });
   }, [handleUpdateTask]);
 
   const containerClassName = cn(
