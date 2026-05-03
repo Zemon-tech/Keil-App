@@ -96,6 +96,24 @@ type BlockTarget = {
   to: number
 }
 
+const DRAG_HANDLE_WIDTH = 44
+const DRAG_HANDLE_GAP = 8
+const BLOCK_HOVER_SELECTOR = [
+  "li",
+  "p",
+  "pre",
+  "blockquote",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "hr",
+  "table",
+  '[data-type="details"]',
+].join(", ")
+
 function getTextBeforeCursorInParent(editor: NonNullable<ReturnType<typeof useEditor>>) {
   const { selection } = editor.state
   const $from = selection.$from
@@ -129,6 +147,9 @@ export function SimpleEditor({
     target: BlockTarget | null
   } | null>(null)
   const virtualSlashStartRef = useRef<number | null>(null)
+  const currentBlockTargetRef = useRef<BlockTarget | null>(null)
+  const blockMenuOpenRef = useRef(false)
+  const hideHandleTimerRef = useRef<number | null>(null)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -145,7 +166,7 @@ export function SimpleEditor({
       BlockIdExtension,
       EnforceFinalBlockExtension,
       GlobalDragHandle.configure({
-        dragHandleWidth: 46,
+        dragHandleWidth: DRAG_HANDLE_WIDTH,
         scrollTreshold: 100,
         customNodes: ['taskItem', 'listItem'],
       }),
@@ -219,6 +240,70 @@ export function SimpleEditor({
     setSlashDeleteRange(null)
   }, [])
 
+  useEffect(() => {
+    blockMenuOpenRef.current = Boolean(blockMenu)
+  }, [blockMenu])
+
+  const getDragHandle = useCallback(
+    () => wrapperRef.current?.querySelector<HTMLElement>(".drag-handle") ?? null,
+    []
+  )
+
+  const clearScheduledHandleHide = useCallback(() => {
+    if (hideHandleTimerRef.current === null) return
+
+    window.clearTimeout(hideHandleTimerRef.current)
+    hideHandleTimerRef.current = null
+  }, [])
+
+  const showDragHandle = useCallback(
+    (handle: HTMLElement, pinned = false) => {
+      clearScheduledHandleHide()
+      handle.dataset.show = "true"
+      if (pinned) handle.dataset.pinned = "true"
+      handle.classList.remove("hide")
+    },
+    [clearScheduledHandleHide]
+  )
+
+  const hasSelectedBlock = useCallback(() => {
+    return editor?.state.selection instanceof NodeSelection
+  }, [editor])
+
+  const hideDragHandle = useCallback(
+    (force = false) => {
+      const handle = getDragHandle()
+      if (!handle) return
+
+      if (
+        !force &&
+        (blockMenuOpenRef.current ||
+          handle.matches(":hover") ||
+          hasSelectedBlock())
+      ) {
+        showDragHandle(handle, blockMenuOpenRef.current || hasSelectedBlock())
+        return
+      }
+
+      currentBlockTargetRef.current = null
+      handle.removeAttribute("data-show")
+      handle.removeAttribute("data-pinned")
+      handle.classList.add("hide")
+    },
+    [getDragHandle, hasSelectedBlock, showDragHandle]
+  )
+
+  const scheduleHandleHide = useCallback(
+    (delay = 120) => {
+      clearScheduledHandleHide()
+      hideHandleTimerRef.current = window.setTimeout(() => {
+        hideHandleTimerRef.current = null
+        hideDragHandle()
+      }, delay)
+    },
+    [clearScheduledHandleHide, hideDragHandle]
+  )
+
   const openSlashMenuAtSelection = useCallback(
     (deleteRange: BlockTarget | null = null) => {
       if (!editor) return
@@ -241,13 +326,14 @@ export function SimpleEditor({
 
   const getTargetFromDragHandle = useCallback((): BlockTarget | null => {
     if (!editor) return null
+    if (currentBlockTargetRef.current) return currentBlockTargetRef.current
 
     const handle = wrapperRef.current?.querySelector<HTMLElement>(".drag-handle")
     if (!handle) return null
 
     const rect = handle.getBoundingClientRect()
     const pos = editor.view.posAtCoords({
-      left: rect.right + 12,
+      left: rect.right + DRAG_HANDLE_GAP + 8,
       top: rect.top + rect.height / 2,
     })
     if (!pos) return null
@@ -269,6 +355,101 @@ export function SimpleEditor({
 
     return null
   }, [editor])
+
+  const getBlockTargetFromElement = useCallback(
+    (element: HTMLElement): BlockTarget | null => {
+      if (!editor) return null
+
+      const rect = element.getBoundingClientRect()
+      const pos = editor.view.posAtCoords({
+        left: Math.min(rect.left + 8, rect.right - 1),
+        top: rect.top + Math.min(12, Math.max(1, rect.height / 2)),
+      })
+      if (!pos) return null
+
+      const $pos = editor.state.doc.resolve(pos.pos)
+
+      for (let depth = $pos.depth; depth > 0; depth -= 1) {
+        const node = $pos.node(depth)
+        if (node.type.name === "listItem" || node.type.name === "taskItem") {
+          return { from: $pos.before(depth), to: $pos.after(depth) }
+        }
+      }
+
+      for (let depth = $pos.depth; depth > 0; depth -= 1) {
+        const node = $pos.node(depth)
+        if (node.isBlock) {
+          return { from: $pos.before(depth), to: $pos.after(depth) }
+        }
+      }
+
+      return null
+    },
+    [editor]
+  )
+
+  const getBlockElementAtPoint = useCallback(
+    (clientX: number, clientY: number): HTMLElement | null => {
+      if (!editor) return null
+
+      const editorDom = editor.view.dom
+      const findCandidate = (x: number, y: number) => {
+        const elements = document.elementsFromPoint(x, y)
+
+        for (const element of elements) {
+          if (!(element instanceof HTMLElement)) continue
+          if (!editorDom.contains(element)) continue
+
+          const listItem = element.closest<HTMLElement>("li")
+          if (listItem && editorDom.contains(listItem)) return listItem
+
+          const details = element.closest<HTMLElement>('[data-type="details"]')
+          if (details && editorDom.contains(details)) return details
+
+          const block = element.closest<HTMLElement>(BLOCK_HOVER_SELECTOR)
+          if (block && editorDom.contains(block)) return block
+        }
+
+        return null
+      }
+
+      const blockAtCursor = findCandidate(clientX, clientY)
+      if (blockAtCursor) return blockAtCursor
+
+      const editorRect = editorDom.getBoundingClientRect()
+      const inEditorRow = clientY >= editorRect.top && clientY <= editorRect.bottom
+      const inLeftGutter =
+        clientX >= editorRect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP - 16 &&
+        clientX < editorRect.left
+
+      if (inEditorRow && inLeftGutter) {
+        return findCandidate(editorRect.left + 8, clientY)
+      }
+
+      return null
+    },
+    [editor]
+  )
+
+  const positionDragHandleForBlock = useCallback((block: HTMLElement) => {
+    const handle = getDragHandle()
+    if (!handle) return
+
+    const rect = block.getBoundingClientRect()
+    const style = window.getComputedStyle(block)
+    const parsedLineHeight = Number.parseFloat(style.lineHeight)
+    const parsedFontSize = Number.parseFloat(style.fontSize)
+    const lineHeight = Number.isFinite(parsedLineHeight)
+      ? parsedLineHeight
+      : parsedFontSize * 1.2
+    const paddingTop = Number.parseFloat(style.paddingTop) || 0
+    const top = rect.top + paddingTop + (lineHeight - 24) / 2
+    const left = rect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP
+
+    handle.style.left = `${Math.round(left)}px`
+    handle.style.top = `${Math.round(top)}px`
+    showDragHandle(handle)
+  }, [getDragHandle, showDragHandle])
 
   const selectBlockTarget = useCallback(
     (target: BlockTarget | null) => {
@@ -316,6 +497,8 @@ export function SimpleEditor({
 
     let handle: HTMLElement | null = null
     let plusButton: HTMLButtonElement | null = null
+    let keepHandleVisible: (() => void) | null = null
+    let releaseHandle: ((event: PointerEvent) => void) | null = null
 
     const openBlockMenu = (event: MouseEvent) => {
       if (!handle || plusButton?.contains(event.target as Node)) return
@@ -325,6 +508,7 @@ export function SimpleEditor({
 
       const target = getTargetFromDragHandle()
       selectBlockTarget(target)
+      showDragHandle(handle, true)
 
       const rect = handle.getBoundingClientRect()
       const wrapperRect = wrapperRef.current?.getBoundingClientRect()
@@ -343,6 +527,8 @@ export function SimpleEditor({
       event.stopPropagation()
 
       setBlockMenu(null)
+      const handle = getDragHandle()
+      if (handle) showDragHandle(handle, true)
       insertParagraphAfterTarget(getTargetFromDragHandle())
     }
 
@@ -352,6 +538,12 @@ export function SimpleEditor({
       if (!nextHandle || nextHandle === handle) return
 
       handle?.removeEventListener("click", openBlockMenu)
+      if (keepHandleVisible) {
+        handle?.removeEventListener("pointerenter", keepHandleVisible)
+      }
+      if (releaseHandle) {
+        handle?.removeEventListener("pointerleave", releaseHandle)
+      }
       plusButton?.removeEventListener("click", addBlockFromHandle)
 
       handle = nextHandle
@@ -368,7 +560,22 @@ export function SimpleEditor({
       handle.querySelector(".plus-button")?.remove()
       handle.prepend(plusButton)
 
+      keepHandleVisible = () => showDragHandle(handle!)
+      releaseHandle = (event: PointerEvent) => {
+        const relatedTarget = event.relatedTarget as Element | null
+        if (
+          relatedTarget?.closest(".motion-block-menu") ||
+          relatedTarget?.closest(".drag-handle")
+        ) {
+          return
+        }
+
+        scheduleHandleHide()
+      }
+
       handle.addEventListener("click", openBlockMenu)
+      handle.addEventListener("pointerenter", keepHandleVisible)
+      handle.addEventListener("pointerleave", releaseHandle)
       plusButton.addEventListener("click", addBlockFromHandle)
     }
 
@@ -377,19 +584,98 @@ export function SimpleEditor({
     if (wrapperRef.current) {
       observer.observe(wrapperRef.current, { childList: true, subtree: true })
     }
+    const editorParent = editor.view.dom.parentElement
+    const keepExtensionFromHidingHandle = (event: MouseEvent) => {
+      const relatedTarget = event.relatedTarget as Element | null
+      if (
+        relatedTarget?.closest(".drag-handle") ||
+        relatedTarget?.closest(".motion-block-menu")
+      ) {
+        event.stopImmediatePropagation()
+      }
+    }
+    editorParent?.addEventListener("mouseout", keepExtensionFromHidingHandle, true)
 
     return () => {
       window.cancelAnimationFrame(frame)
       observer.disconnect()
+      clearScheduledHandleHide()
+      editorParent?.removeEventListener(
+        "mouseout",
+        keepExtensionFromHidingHandle,
+        true
+      )
       handle?.removeEventListener("click", openBlockMenu)
+      if (keepHandleVisible) {
+        handle?.removeEventListener("pointerenter", keepHandleVisible)
+      }
+      if (releaseHandle) {
+        handle?.removeEventListener("pointerleave", releaseHandle)
+      }
       plusButton?.removeEventListener("click", addBlockFromHandle)
     }
   }, [
     closeSlashMenu,
+    clearScheduledHandleHide,
     editor,
+    getDragHandle,
     getTargetFromDragHandle,
     insertParagraphAfterTarget,
+    scheduleHandleHide,
     selectBlockTarget,
+    showDragHandle,
+  ])
+
+  useEffect(() => {
+    if (!editor) return
+
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+
+    const onPointerMove = (event: PointerEvent) => {
+      const target = event.target as Element | null
+      if (target?.closest(".motion-block-menu") || target?.closest(".drag-handle")) {
+        clearScheduledHandleHide()
+        return
+      }
+
+      const block = getBlockElementAtPoint(event.clientX, event.clientY)
+      if (!block) {
+        scheduleHandleHide()
+        return
+      }
+
+      currentBlockTargetRef.current = getBlockTargetFromElement(block)
+      positionDragHandleForBlock(block)
+    }
+
+    const onPointerLeave = (event: PointerEvent) => {
+      const relatedTarget = event.relatedTarget as Element | null
+      if (
+        relatedTarget?.closest(".drag-handle") ||
+        relatedTarget?.closest(".motion-block-menu")
+      ) {
+        return
+      }
+
+      if (!blockMenu) scheduleHandleHide()
+    }
+
+    wrapper.addEventListener("pointermove", onPointerMove)
+    wrapper.addEventListener("pointerleave", onPointerLeave)
+
+    return () => {
+      wrapper.removeEventListener("pointermove", onPointerMove)
+      wrapper.removeEventListener("pointerleave", onPointerLeave)
+    }
+  }, [
+    blockMenu,
+    clearScheduledHandleHide,
+    editor,
+    getBlockElementAtPoint,
+    getBlockTargetFromElement,
+    positionDragHandleForBlock,
+    scheduleHandleHide,
   ])
 
 
