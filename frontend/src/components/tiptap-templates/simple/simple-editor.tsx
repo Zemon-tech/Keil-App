@@ -1,11 +1,11 @@
 "use client"
 
 import type { JSONContent } from "@tiptap/core"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EditorContent, EditorContext, useEditor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import type { Editor } from "@tiptap/core"
-import type { EditorState } from "@tiptap/pm/state"
+import { NodeSelection, type EditorState } from "@tiptap/pm/state"
 
 // --- Tiptap Core Extensions ---
 import { StarterKit } from "@tiptap/starter-kit"
@@ -41,6 +41,8 @@ import {
   Code,
   Minus,
   Table as TableIcon,
+  Copy,
+  Plus,
   Trash2,
   FileText,
   ChevronDown as ChevronDownIcon,
@@ -89,6 +91,11 @@ type SlashItem = {
   run: () => void
 }
 
+type BlockTarget = {
+  from: number
+  to: number
+}
+
 function getTextBeforeCursorInParent(editor: NonNullable<ReturnType<typeof useEditor>>) {
   const { selection } = editor.state
   const $from = selection.$from
@@ -116,6 +123,12 @@ export function SimpleEditor({
     from: number
     to: number
   } | null>(null)
+  const [blockMenu, setBlockMenu] = useState<{
+    left: number
+    top: number
+    target: BlockTarget | null
+  } | null>(null)
+  const virtualSlashStartRef = useRef<number | null>(null)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -132,7 +145,7 @@ export function SimpleEditor({
       BlockIdExtension,
       EnforceFinalBlockExtension,
       GlobalDragHandle.configure({
-        dragHandleWidth: 52,
+        dragHandleWidth: 46,
         scrollTreshold: 100,
         customNodes: ['taskItem', 'listItem'],
       }),
@@ -198,52 +211,186 @@ export function SimpleEditor({
     },
   })
 
-  useEffect(() => {
-    if (!editor) return
-    onReady?.(editor)
+  const closeSlashMenu = useCallback(() => {
+    virtualSlashStartRef.current = null
+    setSlashOpen(false)
+    setSlashQuery("")
+    setSlashPos(null)
+    setSlashDeleteRange(null)
+  }, [])
 
-    // Inject + button into global drag handle
-    const injectPlusButton = () => {
-      const handle = document.querySelector('.drag-handle')
-      if (handle && !handle.querySelector('.plus-button')) {
-        const btn = document.createElement('button')
-        btn.innerHTML = '+'
-        btn.className = 'plus-button'
-        btn.title = 'Click to add a block below'
-        
-        btn.onclick = (e) => {
-          e.stopPropagation()
-          e.preventDefault()
-          
-          const rect = handle.getBoundingClientRect()
-          // Look slightly to the right of the handle to find the node
-          const pos = editor.view.posAtCoords({ 
-            left: rect.right + 20, 
-            top: rect.top + (rect.height / 2) 
-          })
-          
-          if (pos) {
-            // Find the end of the current node to insert after it
-            const $pos = editor.state.doc.resolve(pos.pos)
-            const nodeEnd = $pos.after()
-            
-            editor.chain()
-              .focus()
-              .insertContentAt(nodeEnd, { type: 'paragraph' })
-              .run()
-          } else {
-            // Fallback: just append at the end
-            editor.chain().focus().insertContent({ type: 'paragraph' }).run()
-          }
-        }
-        
-        handle.prepend(btn)
+  const openSlashMenuAtSelection = useCallback(
+    (deleteRange: BlockTarget | null = null) => {
+      if (!editor) return
+
+      const { from } = editor.state.selection
+      const coords = editor.view.coordsAtPos(from)
+      const wrapperRect = wrapperRef.current?.getBoundingClientRect()
+      if (!wrapperRect) return
+
+      setSlashOpen(true)
+      setSlashQuery("")
+      setSlashDeleteRange(deleteRange)
+      setSlashPos({
+        left: coords.left - wrapperRect.left,
+        top: coords.bottom - wrapperRect.top + 8,
+      })
+    },
+    [editor]
+  )
+
+  const getTargetFromDragHandle = useCallback((): BlockTarget | null => {
+    if (!editor) return null
+
+    const handle = wrapperRef.current?.querySelector<HTMLElement>(".drag-handle")
+    if (!handle) return null
+
+    const rect = handle.getBoundingClientRect()
+    const pos = editor.view.posAtCoords({
+      left: rect.right + 12,
+      top: rect.top + rect.height / 2,
+    })
+    if (!pos) return null
+
+    const $pos = editor.state.doc.resolve(pos.pos)
+    for (let depth = $pos.depth; depth > 0; depth -= 1) {
+      const node = $pos.node(depth)
+      if (node.type.name === "listItem" || node.type.name === "taskItem") {
+        return { from: $pos.before(depth), to: $pos.after(depth) }
       }
     }
 
-    const interval = setInterval(injectPlusButton, 1000)
-    return () => clearInterval(interval)
+    for (let depth = $pos.depth; depth > 0; depth -= 1) {
+      const node = $pos.node(depth)
+      if (node.isBlock) {
+        return { from: $pos.before(depth), to: $pos.after(depth) }
+      }
+    }
+
+    return null
+  }, [editor])
+
+  const selectBlockTarget = useCallback(
+    (target: BlockTarget | null) => {
+      if (!editor || !target) return false
+
+      try {
+        const selection = NodeSelection.create(editor.state.doc, target.from)
+        editor.view.dispatch(editor.state.tr.setSelection(selection))
+        editor.view.focus()
+        return true
+      } catch {
+        editor.chain().focus().setTextSelection(target.from).run()
+        return false
+      }
+    },
+    [editor]
+  )
+
+  const insertParagraphAfterTarget = useCallback(
+    (target: BlockTarget | null) => {
+      if (!editor) return
+
+      const insertAt = target?.to ?? editor.state.doc.content.size
+
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(insertAt, { type: "paragraph" })
+        .setTextSelection(insertAt + 1)
+        .run()
+
+      virtualSlashStartRef.current = insertAt + 1
+      openSlashMenuAtSelection()
+    },
+    [editor, openSlashMenuAtSelection]
+  )
+
+  useEffect(() => {
+    if (!editor) return
+    onReady?.(editor)
   }, [editor, onReady])
+
+  useEffect(() => {
+    if (!editor) return
+
+    let handle: HTMLElement | null = null
+    let plusButton: HTMLButtonElement | null = null
+
+    const openBlockMenu = (event: MouseEvent) => {
+      if (!handle || plusButton?.contains(event.target as Node)) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const target = getTargetFromDragHandle()
+      selectBlockTarget(target)
+
+      const rect = handle.getBoundingClientRect()
+      const wrapperRect = wrapperRef.current?.getBoundingClientRect()
+      if (!wrapperRect) return
+
+      setBlockMenu({
+        left: rect.right - wrapperRect.left + 6,
+        top: rect.top - wrapperRect.top - 4,
+        target,
+      })
+      closeSlashMenu()
+    }
+
+    const addBlockFromHandle = (event: MouseEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      setBlockMenu(null)
+      insertParagraphAfterTarget(getTargetFromDragHandle())
+    }
+
+    const wireHandle = () => {
+      const nextHandle =
+        wrapperRef.current?.querySelector<HTMLElement>(".drag-handle") ?? null
+      if (!nextHandle || nextHandle === handle) return
+
+      handle?.removeEventListener("click", openBlockMenu)
+      plusButton?.removeEventListener("click", addBlockFromHandle)
+
+      handle = nextHandle
+      handle.setAttribute("aria-label", "Open block actions")
+      handle.setAttribute("title", "Click for actions. Drag to move.")
+
+      plusButton = document.createElement("button")
+      plusButton.type = "button"
+      plusButton.innerHTML = "+"
+      plusButton.className = "plus-button"
+      plusButton.title = "Add a block below"
+      plusButton.setAttribute("aria-label", "Add a block below")
+
+      handle.querySelector(".plus-button")?.remove()
+      handle.prepend(plusButton)
+
+      handle.addEventListener("click", openBlockMenu)
+      plusButton.addEventListener("click", addBlockFromHandle)
+    }
+
+    const frame = window.requestAnimationFrame(wireHandle)
+    const observer = new MutationObserver(wireHandle)
+    if (wrapperRef.current) {
+      observer.observe(wrapperRef.current, { childList: true, subtree: true })
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      handle?.removeEventListener("click", openBlockMenu)
+      plusButton?.removeEventListener("click", addBlockFromHandle)
+    }
+  }, [
+    closeSlashMenu,
+    editor,
+    getTargetFromDragHandle,
+    insertParagraphAfterTarget,
+    selectBlockTarget,
+  ])
 
 
 
@@ -362,13 +509,39 @@ export function SimpleEditor({
 
       const match = before.match(/(?:^|\s)\/(\S*)$/)
       if (!match) {
-        setSlashOpen(false)
-        setSlashQuery("")
-        setSlashPos(null)
-        setSlashDeleteRange(null)
+        const virtualStart = virtualSlashStartRef.current
+        const { selection } = editor.state
+
+        if (virtualStart !== null && selection.empty && selection.from >= virtualStart) {
+          const query = editor.state.doc.textBetween(virtualStart, selection.from, "\n")
+          const sameTextblock =
+            editor.state.doc.resolve(virtualStart).parent === selection.$from.parent
+
+          if (sameTextblock && !query.includes("\n")) {
+            const coords = editor.view.coordsAtPos(selection.from)
+            const wrapperRect = wrapperRef.current?.getBoundingClientRect()
+            if (!wrapperRect) return
+
+            setSlashOpen(true)
+            setSlashQuery(query)
+            setSlashDeleteRange(
+              selection.from > virtualStart
+                ? { from: virtualStart, to: selection.from }
+                : null
+            )
+            setSlashPos({
+              left: coords.left - wrapperRect.left,
+              top: coords.bottom - wrapperRect.top + 8,
+            })
+            return
+          }
+        }
+
+        closeSlashMenu()
         return
       }
 
+      virtualSlashStartRef.current = null
       const query = match[1] ?? ""
 
       const { from } = editor.state.selection
@@ -397,20 +570,44 @@ export function SimpleEditor({
       editor.off("update", updateSlash)
       editor.off("selectionUpdate", updateSlash)
     }
-  }, [editor])
+  }, [closeSlashMenu, editor])
 
   useEffect(() => {
     if (!slashOpen) return
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setSlashOpen(false)
+        closeSlashMenu()
       }
     }
 
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [slashOpen])
+  }, [closeSlashMenu, slashOpen])
+
+  useEffect(() => {
+    if (!blockMenu) return
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null
+      if (target?.closest(".motion-block-menu") || target?.closest(".drag-handle")) {
+        return
+      }
+      setBlockMenu(null)
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBlockMenu(null)
+    }
+
+    window.addEventListener("pointerdown", onPointerDown)
+    window.addEventListener("keydown", onKeyDown)
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown)
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [blockMenu])
 
   const runSlashItem = (item: SlashItem) => {
     if (!editor) return
@@ -422,7 +619,35 @@ export function SimpleEditor({
         .run()
     }
     item.run()
-    setSlashOpen(false)
+    closeSlashMenu()
+  }
+
+  const deleteBlockTarget = (target: BlockTarget | null) => {
+    if (!editor || !target) return
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: target.from, to: target.to })
+      .run()
+    setBlockMenu(null)
+    closeSlashMenu()
+  }
+
+  const duplicateBlockTarget = (target: BlockTarget | null) => {
+    if (!editor || !target) return
+    const slice = editor.state.doc.slice(target.from, target.to)
+    editor.view.dispatch(editor.state.tr.insert(target.to, slice.content))
+    editor.view.focus()
+    setBlockMenu(null)
+    closeSlashMenu()
+  }
+
+  const copyBlockTarget = (target: BlockTarget | null) => {
+    if (!editor || !target) return
+    const text = editor.state.doc.textBetween(target.from, target.to, "\n\n")
+    navigator.clipboard?.writeText(text).catch(() => undefined)
+    setBlockMenu(null)
+    closeSlashMenu()
   }
 
   return (
@@ -568,6 +793,47 @@ export function SimpleEditor({
             Type <span className="text-muted-foreground">/</span> for commands
           </div>
         )} */}
+
+        {blockMenu && (
+          <div
+            className="motion-block-menu absolute z-50 w-[220px] rounded-lg border bg-popover p-1 text-popover-foreground shadow-2xl"
+            style={{ left: blockMenu.left, top: blockMenu.top }}
+          >
+            <button
+              type="button"
+              className="motion-block-menu__item"
+              onClick={() => insertParagraphAfterTarget(blockMenu.target)}
+            >
+              <Plus className="size-4" />
+              <span>Add below</span>
+            </button>
+            <button
+              type="button"
+              className="motion-block-menu__item"
+              onClick={() => duplicateBlockTarget(blockMenu.target)}
+            >
+              <Copy className="size-4" />
+              <span>Duplicate</span>
+            </button>
+            <button
+              type="button"
+              className="motion-block-menu__item"
+              onClick={() => copyBlockTarget(blockMenu.target)}
+            >
+              <FileText className="size-4" />
+              <span>Copy text</span>
+            </button>
+            <div className="my-1 h-px bg-border" />
+            <button
+              type="button"
+              className="motion-block-menu__item motion-block-menu__item--danger"
+              onClick={() => deleteBlockTarget(blockMenu.target)}
+            >
+              <Trash2 className="size-4" />
+              <span>Delete</span>
+            </button>
+          </div>
+        )}
 
         {slashOpen && slashPos && editor && (
           <div
