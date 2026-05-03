@@ -1,9 +1,5 @@
 import { Router } from "express";
-import workspaceRoutes from "./workspace.routes";
-import taskRoutes from "./task.routes";
-import commentRoutes from "./comment.routes";
 import activityRoutes from "./activity.routes";
-import chatRoutes from "./chat.routes";
 import personalTaskRoutes from "./personal-task.routes";
 import orgRoutes from "./org.routes";
 import orgTaskRoutes from "./org-task.routes";
@@ -13,18 +9,21 @@ import integrationRoutes from "./integration.routes";
 
 const router = Router();
 
-router.use("/workspaces", workspaceRoutes);
-router.use("/tasks", taskRoutes);
-router.use("/comments", commentRoutes);
-router.use("/chat", chatRoutes);
+// ── Personal tasks ────────────────────────────────────────────────────────────
 router.use("/personal", personalTaskRoutes);
+
+// ── Organisation / space routes ───────────────────────────────────────────────
 router.use("/orgs", orgRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId/tasks", orgTaskRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId/chat", orgChatRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId", orgActivityRoutes);
+
+// ── Integrations ──────────────────────────────────────────────────────────────
 router.use("/integrations", integrationRoutes);
 
-// Activity and Dashboard routes (using /api/v1 prefix)
+// ── Legacy: dashboard + activity (kept for personal mode dashboard) ───────────
+// v1/dashboard is still used by Dashboard.tsx in personal mode.
+// Remove once personal mode has its own dashboard endpoint.
 router.use("/", activityRoutes);
 
 export default router;

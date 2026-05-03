@@ -42,8 +42,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
-import { useCreateTask, useUpdateTask } from "@/hooks/api/useTasks";
+import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
 import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
+import { useAppContext } from "@/contexts/AppContext";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -88,8 +89,9 @@ export function CreateTaskDialog({
   parentTaskTitle,
   isPersonalMode = false,
 }: CreateTaskDialogProps) {
-  const createOrgTask = useCreateTask();
-  const updateOrgTask = useUpdateTask();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const createOrgTask = useCreateOrgTask(activeOrgId, activeSpaceId);
+  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
   const createPersonalTask = useCreatePersonalTask();
   const updatePersonalTask = useUpdatePersonalTask();
 

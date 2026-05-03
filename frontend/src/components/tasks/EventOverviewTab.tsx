@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { EditableTextarea } from "@/components/ui/editable-text";
 
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
-import { useAssignUser, useRemoveAssignee } from "@/hooks/api/useTasks";
+import { useAssignOrgUser, useRemoveOrgAssignee } from "@/hooks/api/useTasks";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
 
@@ -37,8 +37,8 @@ export const EventOverviewTab = ({
     isOrgMode ? activeOrgId : null,
     isOrgMode ? activeSpaceId : null
   );
-  const assignUser = useAssignUser();
-  const removeAssignee = useRemoveAssignee();
+  const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
+  const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
   const handleAssignUser = (userId: string) => {
     assignUser.mutate({ id: event.id, userId });

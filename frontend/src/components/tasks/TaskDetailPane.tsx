@@ -13,8 +13,9 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 
 import type { ContextItem } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
-import { useTask, useUpdateTask, useDeleteTask } from "@/hooks/api/useTasks";
+import { useOrgTask, useUpdateOrgTask, useDeleteOrgTask } from "@/hooks/api/useTasks";
 import { useUpdatePersonalTask, useDeletePersonalTask } from "@/hooks/api/usePersonalTasks";
+import { useAppContext } from "@/contexts/AppContext";
 
 import { TaskDetailHeader } from "./TaskDetailHeader";
 import { OverviewTab } from "./OverviewTab";
@@ -81,12 +82,18 @@ export function TaskDetailPane({
     setActiveTab("overview");
   }, [task?.id]);
 
-  // Fetch fresh server data whenever a task is selected
-  const { data: freshTask } = useTask(task?.id ?? "");
+  const { activeOrgId, activeSpaceId } = useAppContext();
+
+  // Fetch fresh server data — org mode uses org-scoped route, personal mode uses personal route
+  const { data: freshTask } = useOrgTask(
+    isPersonalMode ? null : activeOrgId,
+    isPersonalMode ? null : activeSpaceId,
+    task?.id ?? ""
+  );
 
   // Mutations — personal mode routes to personal task endpoints
-  const updateOrgTask = useUpdateTask();
-  const deleteOrgTask = useDeleteTask();
+  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
+  const deleteOrgTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
   const updatePersonalTask = useUpdatePersonalTask();
   const deletePersonalTask = useDeletePersonalTask();
 

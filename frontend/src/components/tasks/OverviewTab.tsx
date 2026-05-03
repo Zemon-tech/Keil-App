@@ -20,9 +20,9 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import {
-  useSubtasks,
-  useAssignUser,
-  useRemoveAssignee,
+  useOrgSubtasks,
+  useAssignOrgUser,
+  useRemoveOrgAssignee,
 } from "@/hooks/api/useTasks";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
@@ -54,12 +54,14 @@ export const OverviewTab = ({
     isOrgMode ? activeOrgId : null,
     isOrgMode ? activeSpaceId : null
   );
-  const assignUser = useAssignUser();
-  const removeAssignee = useRemoveAssignee();
+  const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
+  const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
-  // Fetch real subtasks from API
+  // Fetch real subtasks from API — only in org mode
   const isTopLevelTask = !task.parent_task_id;
-  const { data: subtasks = [], isLoading: subtasksLoading } = useSubtasks(
+  const { data: subtasks = [], isLoading: subtasksLoading } = useOrgSubtasks(
+    isOrgMode ? activeOrgId : null,
+    isOrgMode ? activeSpaceId : null,
     isTopLevelTask ? task.id : ""
   );
 

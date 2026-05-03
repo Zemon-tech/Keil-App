@@ -14,12 +14,12 @@ import { integrationKeys } from "@/hooks/api/useGoogleCalendar";
 
 import type { TaskPriority, AnyStatus } from "../types/task";
 import {
-  useTasks,
-  useTask,
-  useUpdateTask,
-  useDeleteTask,
-  useAssignUser,
-  useRemoveAssignee,
+  useOrgTasks,
+  useOrgTask,
+  useUpdateOrgTask,
+  useDeleteOrgTask,
+  useAssignOrgUser,
+  useRemoveOrgAssignee,
   type TaskFilters,
   type SortBy,
   type SortOrder,
@@ -120,8 +120,10 @@ export function TasksPage() {
   const { mode, activeOrgId, activeSpaceId } = useAppContext();
   const isPersonalMode = mode === "personal";
 
-  // ── Org tasks (legacy route — active in organisation mode) ──
-  const { data: orgTasks, isLoading: orgLoading, isFetching: orgFetching } = useTasks(
+  // ── Org tasks (org/space-scoped route) ──
+  const { data: orgTasks, isLoading: orgLoading, isFetching: orgFetching } = useOrgTasks(
+    isPersonalMode ? null : activeOrgId,
+    isPersonalMode ? null : activeSpaceId,
     isPersonalMode ? {} : serverFilters
   );
 
@@ -186,10 +188,10 @@ export function TasksPage() {
   }, []);
 
   // ── Org task mutations ─────────────────────────────────────────
-  const updateOrgTask = useUpdateTask();
-  const deleteOrgTask = useDeleteTask();
-  const assignUser = useAssignUser();
-  const removeAssignee = useRemoveAssignee();
+  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
+  const deleteOrgTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
+  const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
+  const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
   // Personal task mutations
   const updatePersonalTask = useUpdatePersonalTask();
@@ -249,7 +251,11 @@ export function TasksPage() {
   );
 
   // Fetch full task data for the selected task (handles subtask detail too)
-  const { data: selectedTaskDetail } = useTask(selectedTaskId);
+  const { data: selectedTaskDetail } = useOrgTask(
+    isPersonalMode ? null : activeOrgId,
+    isPersonalMode ? null : activeSpaceId,
+    selectedTaskId
+  );
 
   // The parentTask for breadcrumb (top of the navigation stack)
   const parentTask = parentTaskStack.length > 0

@@ -15,7 +15,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 import type { ActivityLogEntry } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
-import { useTaskActivity } from "@/hooks/api/useActivity";
+import { useOrgTaskActivity } from "@/hooks/api/useActivity";
+import { useAppContext } from "@/contexts/AppContext";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,8 @@ function formatActionLabel(entry: ActivityLogEntry): string {
 // ─── HistoryTab ───────────────────────────────────────────────────────────────
 
 export function HistoryTab({ task }: { task: TaskDTO }) {
-  const { data: entries, isPending } = useTaskActivity(task.id);
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: entries, isPending } = useOrgTaskActivity(activeOrgId, activeSpaceId, task.id);
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 

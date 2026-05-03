@@ -13,7 +13,8 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 
 import type { ContextItem } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
-import { useTask, useUpdateTask, useDeleteTask } from "@/hooks/api/useTasks";
+import { useOrgTask, useUpdateOrgTask, useDeleteOrgTask } from "@/hooks/api/useTasks";
+import { useAppContext } from "@/contexts/AppContext";
 
 import { EventDetailHeader } from "./EventDetailHeader";
 import { EventOverviewTab } from "./EventOverviewTab";
@@ -54,10 +55,11 @@ export function EventDetailPane({
     setActiveTab("overview");
   }, [event?.id]);
 
-  const { data: freshEvent } = useTask(event?.id ?? "");
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: freshEvent } = useOrgTask(activeOrgId, activeSpaceId, event?.id ?? "");
 
-  const updateTask = useUpdateTask();
-  const deleteTask = useDeleteTask();
+  const updateTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
+  const deleteTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
 
   const displayEvent = freshEvent ?? event;
 

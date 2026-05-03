@@ -3,7 +3,7 @@ import { catchAsync } from "../utils/catchAsync";
 import { ApiError } from "../utils/ApiError";
 import { ApiResponse } from "../utils/ApiResponse";
 import * as orgTaskService from "../services/org-task.service";
-import { createComment, getThreadedComments } from "../services/comment.service";
+import { createComment, getThreadedComments, hardDeleteComment } from "../services/comment.service";
 import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
 
@@ -256,4 +256,20 @@ export const addTaskComment = catchAsync(async (req: Request, res: Response) => 
   );
 
   res.status(201).json(new ApiResponse(201, comment, "Comment added successfully"));
+});
+
+export const deleteTaskComment = catchAsync(async (req: Request, res: Response) => {
+  const context = getTaskContext(req);
+  const userId = (req as any).user?.id as string;
+
+  // Verify the task belongs to this org/space before allowing comment deletion
+  await assertTaskInSpace(req, asString(req.params.id));
+
+  await hardDeleteComment(asString(req.params.commentId), userId, {
+    workspace_id: context.workspaceId,
+    org_id: context.orgId,
+    space_id: context.spaceId,
+  });
+
+  res.status(200).json(new ApiResponse(200, {}, "Comment deleted successfully"));
 });

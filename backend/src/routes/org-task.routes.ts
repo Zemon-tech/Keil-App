@@ -8,6 +8,7 @@ import {
   changeTaskStatus,
   createTask,
   deleteTask,
+  deleteTaskComment,
   getSubtasks,
   getTaskById,
   getTaskComments,
@@ -35,5 +36,6 @@ router.delete("/:id/dependencies/:blockedByTaskId", removeDependency);
 router.get("/:id/subtasks", getSubtasks);
 router.get("/:id/comments", getTaskComments);
 router.post("/:id/comments", addTaskComment);
+router.delete("/:id/comments/:commentId", deleteTaskComment);
 
 export default router;

@@ -21,7 +21,10 @@ export interface TaskDTO {
   due_date?: string;
   start_date?: string;
   parent_task_id?: string;
-  workspace_id: string;
+  /** @deprecated — will be removed once all routes are org/space-scoped */
+  workspace_id?: string;
+  org_id?: string;
+  space_id?: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -109,6 +112,21 @@ export const taskKeys = {
   subtasks: (parentId: string) => [...taskKeys.all, "subtasks", parentId] as const,
 };
 
+// ─── Org-scoped query key factory ─────────────────────────────────────────────
+// Keys include orgId + spaceId so switching spaces auto-invalidates caches.
+
+export const orgTaskKeys = {
+  all: ["org-tasks"] as const,
+  lists: (orgId: string, spaceId: string) =>
+    [...orgTaskKeys.all, orgId, spaceId, "list"] as const,
+  list: (orgId: string, spaceId: string, filters: object) =>
+    [...orgTaskKeys.lists(orgId, spaceId), filters] as const,
+  detail: (orgId: string, spaceId: string, id: string) =>
+    [...orgTaskKeys.all, orgId, spaceId, "detail", id] as const,
+  subtasks: (orgId: string, spaceId: string, parentId: string) =>
+    [...orgTaskKeys.all, orgId, spaceId, "subtasks", parentId] as const,
+};
+
 // ─── Helper: strip client-only filter fields before sending to backend ────────
 
 function toApiParams(filters: TaskFilters = {}): Record<string, string> {
@@ -124,96 +142,104 @@ function toApiParams(filters: TaskFilters = {}): Record<string, string> {
   return params;
 }
 
-// ─── useTasks ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// ORG/SPACE-SCOPED HOOKS
+// All hooks below call the new /orgs/:orgId/spaces/:spaceId/tasks routes.
+// They are disabled (not erroring) when orgId or spaceId is null.
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Fetches the task list for the current workspace.
- * Pass filters to narrow results — the query key includes all filters so
- * changing any filter automatically triggers a refetch.
- */
-export function useTasks(filters: TaskFilters = {}) {
-  // Exclude client-only `query` field from the query key used for caching
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+const noRetryOn401 = (failureCount: number, error: unknown) => {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 401 || status === 403 || status === 404) return false;
+  return failureCount < 1;
+};
+
+// ─── useOrgTasks ──────────────────────────────────────────────────────────────
+
+export function useOrgTasks(
+  orgId: string | null,
+  spaceId: string | null,
+  filters: TaskFilters = {}
+) {
   const { query: _q, ...serverFilters } = filters;
 
   return useQuery<TaskDTO[]>({
-    queryKey: taskKeys.list(serverFilters),
+    queryKey: orgTaskKeys.list(orgId ?? "", spaceId ?? "", serverFilters),
     queryFn: async () => {
-      const res = await api.get<{ data: TaskDTO[] }>("v1/tasks", {
-        params: toApiParams(filters),
-      });
+      const res = await api.get<{ data: TaskDTO[] }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks`,
+        { params: toApiParams(filters) }
+      );
       return res.data.data;
     },
-    // Don't retry on 401/403 — auth issue
-    retry: (failureCount, error: unknown) => {
-      const status = (error as { response?: { status?: number } })?.response
-        ?.status;
-      if (status === 401 || status === 403) return false;
-      return failureCount < 1;
-    },
+    enabled: !!orgId && !!spaceId,
+    retry: noRetryOn401,
   });
 }
 
-// ─── useTask ──────────────────────────────────────────────────────────────────
+// ─── useOrgTask ───────────────────────────────────────────────────────────────
 
-/**
- * Fetches a single task by ID including its full assignees array.
- * Enabled only when taskId is non-empty.
- */
-export function useTask(taskId: string) {
+export function useOrgTask(
+  orgId: string | null,
+  spaceId: string | null,
+  taskId: string
+) {
   return useQuery<TaskDTO>({
-    queryKey: taskKeys.detail(taskId),
+    queryKey: orgTaskKeys.detail(orgId ?? "", spaceId ?? "", taskId),
     queryFn: async () => {
-      const res = await api.get<{ data: TaskDTO }>(`v1/tasks/${taskId}`);
+      const res = await api.get<{ data: TaskDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}`
+      );
       return res.data.data;
     },
-    enabled: !!taskId,
-    retry: (failureCount, error: unknown) => {
-      const status = (error as { response?: { status?: number } })?.response
-        ?.status;
-      if (status === 401 || status === 403 || status === 404) return false;
-      return failureCount < 1;
-    },
+    enabled: !!orgId && !!spaceId && !!taskId,
+    retry: noRetryOn401,
   });
 }
 
-// ─── useSubtasks ──────────────────────────────────────────────────────────────
+// ─── useOrgSubtasks ───────────────────────────────────────────────────────────
 
-/**
- * Fetches subtasks of a parent task via GET /api/v1/tasks/:id/subtasks.
- * Enabled only when parentTaskId is non-empty.
- */
-export function useSubtasks(parentTaskId: string) {
+export function useOrgSubtasks(
+  orgId: string | null,
+  spaceId: string | null,
+  parentTaskId: string
+) {
   return useQuery<TaskDTO[]>({
-    queryKey: taskKeys.subtasks(parentTaskId),
+    queryKey: orgTaskKeys.subtasks(orgId ?? "", spaceId ?? "", parentTaskId),
     queryFn: async () => {
-      const res = await api.get<{ data: TaskDTO[] }>(`v1/tasks/${parentTaskId}/subtasks`);
+      const res = await api.get<{ data: TaskDTO[] }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${parentTaskId}/subtasks`
+      );
       return res.data.data;
     },
-    enabled: !!parentTaskId,
+    enabled: !!orgId && !!spaceId && !!parentTaskId,
+    retry: noRetryOn401,
   });
 }
 
-// ─── useCreateTask ────────────────────────────────────────────────────────────
+// ─── useCreateOrgTask ─────────────────────────────────────────────────────────
 
-/**
- * Creates a new task. On success, invalidates the task list cache so the
- * new task appears immediately without a manual refresh.
- */
-export function useCreateTask() {
+export function useCreateOrgTask(orgId: string | null, spaceId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation<TaskDTO, Error, CreateTaskInput>({
     mutationFn: async (input) => {
-      const res = await api.post<{ data: TaskDTO }>("v1/tasks", input);
+      const res = await api.post<{ data: TaskDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks`,
+        input
+      );
       return res.data.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-      // If this was a subtask, invalidate the parent's subtask list + detail (subtask_count)
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       if (data.parent_task_id) {
-        queryClient.invalidateQueries({ queryKey: taskKeys.subtasks(data.parent_task_id) });
-        queryClient.invalidateQueries({ queryKey: taskKeys.detail(data.parent_task_id) });
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.parent_task_id),
+        });
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.detail(orgId, spaceId, data.parent_task_id),
+        });
       }
     },
     onError: () => {
@@ -222,30 +248,25 @@ export function useCreateTask() {
   });
 }
 
-// ─── useUpdateTask ────────────────────────────────────────────────────────────
+// ─── useUpdateOrgTask ─────────────────────────────────────────────────────────
 
-/**
- * Updates task fields (title, description, objective, etc.).
- * Invalidates both the list and the specific task detail cache on success.
- */
-export function useUpdateTask() {
+export function useUpdateOrgTask(orgId: string | null, spaceId: string | null) {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    TaskDTO,
-    Error,
-    { id: string; updates: UpdateTaskInput }
-  >({
+  return useMutation<TaskDTO, Error, { id: string; updates: UpdateTaskInput }>({
     mutationFn: async ({ id, updates }) => {
       const res = await api.patch<{ data: TaskDTO }>(
-        `v1/tasks/${id}`,
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}`,
         updates
       );
       return res.data.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(data.id) });
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
+      });
     },
     onError: () => {
       toast.error("Failed to update task. Please try again.");
@@ -253,24 +274,21 @@ export function useUpdateTask() {
   });
 }
 
-// ─── useDeleteTask ────────────────────────────────────────────────────────────
+// ─── useDeleteOrgTask ─────────────────────────────────────────────────────────
 
-/**
- * Deletes a task. On success, invalidates the task list.
- * The caller is responsible for clearing any selected-task state if the
- * deleted task was selected.
- */
-export function useDeleteTask() {
+export function useDeleteOrgTask(orgId: string | null, spaceId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation<void, Error, string>({
     mutationFn: async (taskId) => {
-      await api.delete(`v1/tasks/${taskId}`);
+      await api.delete(`v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}`);
     },
     onSuccess: (_data, taskId) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-      // Remove from detail cache so stale data isn't shown if re-selected
-      queryClient.removeQueries({ queryKey: taskKeys.detail(taskId) });
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.removeQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, taskId),
+      });
     },
     onError: () => {
       toast.error("Failed to delete task. Please try again.");
@@ -278,13 +296,12 @@ export function useDeleteTask() {
   });
 }
 
-// ─── useChangeTaskStatus ──────────────────────────────────────────────────────
+// ─── useChangeOrgTaskStatus ───────────────────────────────────────────────────
 
-/**
- * Changes only the status of a task via PATCH /api/v1/tasks/:id/status.
- * Handles the 400 "blocked by dependencies" case with an error toast.
- */
-export function useChangeTaskStatus() {
+export function useChangeOrgTaskStatus(
+  orgId: string | null,
+  spaceId: string | null
+) {
   const queryClient = useQueryClient();
 
   return useMutation<
@@ -294,21 +311,22 @@ export function useChangeTaskStatus() {
   >({
     mutationFn: async ({ id, status }) => {
       const res = await api.patch<{ data: TaskDTO }>(
-        `v1/tasks/${id}/status`,
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/status`,
         { status }
       );
       return res.data.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(data.id) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
     },
     onError: (error, { id }) => {
       const httpStatus = error?.response?.status;
       const message = error?.response?.data?.message;
-
       if (httpStatus === 400) {
-        // Blocked by incomplete dependencies
         toast.error(
           message ??
             "Cannot mark as done — this task has incomplete dependencies. Complete them first.",
@@ -317,30 +335,34 @@ export function useChangeTaskStatus() {
       } else {
         toast.error("Failed to update status. Please try again.");
       }
-
-      // Refetch to ensure UI shows the real (server) status
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      if (orgId && spaceId) {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+        });
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      }
     },
   });
 }
 
-// ─── Assignees & Dependencies ──────────────────────────────────────────────────
+// ─── useAssignOrgUser ─────────────────────────────────────────────────────────
 
-export function useAssignUser() {
+export function useAssignOrgUser(orgId: string | null, spaceId: string | null) {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    void,
-    Error,
-    { id: string; userId: string }
-  >({
+  return useMutation<void, Error, { id: string; userId: string }>({
     mutationFn: async ({ id, userId }) => {
-      await api.post(`v1/tasks/${id}/assignees`, { user_id: userId });
+      await api.post(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/assignees`,
+        { user_id: userId }
+      );
     },
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Assignee added");
     },
     onError: () => {
@@ -349,20 +371,26 @@ export function useAssignUser() {
   });
 }
 
-export function useRemoveAssignee() {
+// ─── useRemoveOrgAssignee ─────────────────────────────────────────────────────
+
+export function useRemoveOrgAssignee(
+  orgId: string | null,
+  spaceId: string | null
+) {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    void,
-    Error,
-    { id: string; userId: string }
-  >({
+  return useMutation<void, Error, { id: string; userId: string }>({
     mutationFn: async ({ id, userId }) => {
-      await api.delete(`v1/tasks/${id}/assignees/${userId}`);
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/assignees/${userId}`
+      );
     },
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Assignee removed");
     },
     onError: () => {
@@ -371,7 +399,12 @@ export function useRemoveAssignee() {
   });
 }
 
-export function useAddDependency() {
+// ─── useAddOrgDependency ──────────────────────────────────────────────────────
+
+export function useAddOrgDependency(
+  orgId: string | null,
+  spaceId: string | null
+) {
   const queryClient = useQueryClient();
 
   return useMutation<
@@ -380,17 +413,22 @@ export function useAddDependency() {
     { id: string; dependsOnTaskId: string }
   >({
     mutationFn: async ({ id, dependsOnTaskId }) => {
-      await api.post(`v1/tasks/${id}/dependencies`, { depends_on_task_id: dependsOnTaskId });
+      await api.post(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/dependencies`,
+        { depends_on_task_id: dependsOnTaskId }
+      );
     },
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Dependency added");
     },
     onError: (error) => {
       const httpStatus = error?.response?.status;
       const message = error?.response?.data?.message;
-
       if (httpStatus === 400) {
         toast.error(message ?? "Cannot add circular dependency.");
       } else {
@@ -400,20 +438,26 @@ export function useAddDependency() {
   });
 }
 
-export function useRemoveDependency() {
+// ─── useRemoveOrgDependency ───────────────────────────────────────────────────
+
+export function useRemoveOrgDependency(
+  orgId: string | null,
+  spaceId: string | null
+) {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    void,
-    Error,
-    { id: string; blockedByTaskId: string }
-  >({
+  return useMutation<void, Error, { id: string; blockedByTaskId: string }>({
     mutationFn: async ({ id, blockedByTaskId }) => {
-      await api.delete(`v1/tasks/${id}/dependencies/${blockedByTaskId}`);
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/dependencies/${blockedByTaskId}`
+      );
     },
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Dependency removed");
     },
     onError: () => {

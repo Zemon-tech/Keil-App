@@ -37,7 +37,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Task, AnyStatus, TaskPriority } from "@/types/task";
-import { type TaskDTO, type SortBy, type SortOrder, useSubtasks } from "@/hooks/api/useTasks";
+import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hooks/api/useTasks";
+import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, STATUS_COLOR } from "./task-detail-shared";
 
@@ -94,7 +95,8 @@ function SubtaskList({
   onSelectTask: (id: string) => void;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
 }) {
-  const { data: subtasks = [], isLoading } = useSubtasks(parentTaskId);
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: subtasks = [], isLoading } = useOrgSubtasks(activeOrgId, activeSpaceId, parentTaskId);
 
   if (isLoading) {
     return (

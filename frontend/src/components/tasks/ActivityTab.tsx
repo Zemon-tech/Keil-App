@@ -28,10 +28,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import type { TaskDTO } from "@/hooks/api/useTasks";
-import { useTasks } from "@/hooks/api/useTasks";
+import { useOrgTasks } from "@/hooks/api/useTasks";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
-import { useTaskComments, useCreateComment, useDeleteComment } from "@/hooks/api/useComments";
+import { useOrgTaskComments, useCreateOrgComment, useDeleteOrgComment } from "@/hooks/api/useComments";
 import type { Comment } from "@/types/task";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -57,8 +57,9 @@ function CommentNode({
   const [isReplying, setIsReplying] = useState(false);
   const [replyInput, setReplyInput] = useState("");
   const [repliesExpanded, setRepliesExpanded] = useState(false);
-  const createComment = useCreateComment();
-  const deleteComment = useDeleteComment();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const createComment = useCreateOrgComment(activeOrgId, activeSpaceId);
+  const deleteComment = useDeleteOrgComment(activeOrgId, activeSpaceId);
   const { user } = useAuth();
 
   // Close reply box when clicking outside it.
@@ -221,18 +222,18 @@ function CommentNode({
 
 export function ActivityTab({ task }: { task: TaskDTO }) {
   const [input, setInput] = useState("");
-  const { data: comments, isPending } = useTaskComments(task.id);
-  const createComment = useCreateComment();
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const isOrgMode = mode === "organisation";
+  const { data: comments, isPending } = useOrgTaskComments(activeOrgId, activeSpaceId, task.id);
+  const createComment = useCreateOrgComment(activeOrgId, activeSpaceId);
 
   const [activePicker, setActivePicker] = useState<"user" | "task" | "event" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
-  const isOrgMode = mode === "organisation";
   const { data: members = [] } = useSpaceMembers(
     isOrgMode ? activeOrgId : null,
     isOrgMode ? activeSpaceId : null
   );
-  const { data: allTasks = [] } = useTasks();
+  const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-trigger picker on special characters

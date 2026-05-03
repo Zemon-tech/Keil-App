@@ -42,11 +42,12 @@ import {
 } from "@/components/ui/tooltip";
 
 import { 
-  useTask, 
-  useUpdateTask, 
-  useDeleteTask,
-  useChangeTaskStatus 
+  useOrgTask, 
+  useUpdateOrgTask, 
+  useDeleteOrgTask,
+  useChangeOrgTaskStatus 
 } from "@/hooks/api/useTasks";
+import { useAppContext } from "@/contexts/AppContext";
 import { STATUS_COLOR } from "./task-detail-shared";
 import type { TaskStatus } from "@/types/task";
 
@@ -104,10 +105,11 @@ export function TaskPreviewDialog({
   position,
 }: TaskPreviewDialogProps) {
   const navigate = useNavigate();
-  const { data: task, isLoading } = useTask(taskId);
-  const updateTask = useUpdateTask();
-  const deleteTask = useDeleteTask();
-  const changeTaskStatus = useChangeTaskStatus();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: task, isLoading } = useOrgTask(activeOrgId, activeSpaceId, taskId);
+  const updateTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
+  const deleteTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
+  const changeTaskStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
 
   const [descExpanded, setDescExpanded] = useState(false);
 

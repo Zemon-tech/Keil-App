@@ -42,7 +42,8 @@ import { EditableText } from "@/components/ui/editable-text";
 
 import type { TaskPriority, TaskStatus, AnyStatus } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
-import { useChangeTaskStatus } from "@/hooks/api/useTasks";
+import { useChangeOrgTaskStatus } from "@/hooks/api/useTasks";
+import { useAppContext } from "@/contexts/AppContext";
 
 import {
   STATUS_OPTIONS,
@@ -194,7 +195,8 @@ export function TaskDetailHeader({
   parentTask?: { id: string; title: string } | null;
   onNavigateToParent?: (parentTaskId: string) => void;
 }) {
-  const changeStatus = useChangeTaskStatus();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const changeStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleStatusChange = (newStatus: TaskStatus) => {

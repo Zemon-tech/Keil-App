@@ -13,57 +13,41 @@ type ActivityResponse = {
 
 export const activityKeys = {
     all: ["activity"] as const,
-    task: (taskId: string) => [...activityKeys.all, "task", taskId] as const,
-    workspace: (workspaceId?: string, options?: { limit?: number; offset?: number }) =>
-        [...activityKeys.all, "workspace", workspaceId, options] as const,
+    orgTask: (orgId: string, spaceId: string, taskId: string) =>
+        [...activityKeys.all, "org", orgId, spaceId, "task", taskId] as const,
 };
 
-// ─── useTaskActivity ──────────────────────────────────────────────────────────
+// ─── useOrgTaskActivity ───────────────────────────────────────────────────────
 
 /**
- * Fetches the full activity log for a specific task.
- * Calls: GET /api/v1/activity?entity_type=task&entity_id=<taskId>
- * Enabled only when taskId is truthy.
+ * Fetches the activity log for a specific task scoped to an org/space.
+ * Calls: GET /api/v1/orgs/:orgId/spaces/:spaceId/activity?entity_type=task&entity_id=<taskId>
+ * Enabled only when all three params are truthy.
  */
-export function useTaskActivity(taskId?: string) {
-    return useQuery<ActivityLogEntry[]>({
-        queryKey: activityKeys.task(taskId ?? ""),
-        queryFn: async () => {
-            const res = await api.get<ActivityResponse>("v1/activity", {
-                params: {
-                    entity_type: "task",
-                    entity_id: taskId,
-                },
-            });
-            return res.data.data;
-        },
-        enabled: !!taskId,
-    });
-}
-
-// ─── useWorkspaceActivity ─────────────────────────────────────────────────────
-
-/**
- * Fetches the workspace-level activity feed (paginated).
- * Calls: GET /api/v1/activity?limit=<n>&offset=<n>
- * Intended for the future dashboard (Module 5) — wired here for completeness.
- * Enabled only when workspaceId is truthy.
- */
-export function useWorkspaceActivity(
-    workspaceId?: string,
-    options?: { limit?: number; offset?: number }
+export function useOrgTaskActivity(
+    orgId: string | null,
+    spaceId: string | null,
+    taskId?: string
 ) {
     return useQuery<ActivityLogEntry[]>({
-        queryKey: activityKeys.workspace(workspaceId, options),
+        queryKey: activityKeys.orgTask(orgId ?? "", spaceId ?? "", taskId ?? ""),
         queryFn: async () => {
-            const res = await api.get<ActivityResponse>("v1/activity", {
-                params: {
-                    limit: options?.limit ?? 20,
-                    offset: options?.offset ?? 0,
-                },
-            });
+            const res = await api.get<ActivityResponse>(
+                `v1/orgs/${orgId}/spaces/${spaceId}/activity`,
+                {
+                    params: {
+                        entity_type: "task",
+                        entity_id: taskId,
+                    },
+                }
+            );
             return res.data.data;
         },
-        enabled: !!workspaceId,
+        enabled: !!orgId && !!spaceId && !!taskId,
+        retry: (failureCount, error: unknown) => {
+            const status = (error as { response?: { status?: number } })?.response?.status;
+            if (status === 401 || status === 403) return false;
+            return failureCount < 1;
+        },
     });
 }

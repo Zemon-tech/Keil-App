@@ -41,7 +41,8 @@ import { EditableText } from "@/components/ui/editable-text";
 
 import type { AnyStatus, EventStatus } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
-import { useChangeTaskStatus } from "@/hooks/api/useTasks";
+import { useChangeOrgTaskStatus } from "@/hooks/api/useTasks";
+import { useAppContext } from "@/contexts/AppContext";
 
 import {
   EVENT_STATUS_OPTIONS,
@@ -134,7 +135,8 @@ export function EventDetailHeader({
   onClose?: () => void;
   onEditTask?: () => void;
 }) {
-  const changeStatus = useChangeTaskStatus();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const changeStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleStatusChange = (newStatus: EventStatus) => {

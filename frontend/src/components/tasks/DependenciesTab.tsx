@@ -11,7 +11,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 import type { TaskPriority, TaskStatus, Dependency } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
-import { useTasks, useAddDependency, useRemoveDependency } from "@/hooks/api/useTasks";
+import { useOrgTasks, useAddOrgDependency, useRemoveOrgDependency } from "@/hooks/api/useTasks";
+import { useAppContext } from "@/contexts/AppContext";
 
 import { STATUS_COLOR, PRIORITY_CONFIG } from "./task-detail-shared";
 
@@ -61,9 +62,10 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
-  const addDependency = useAddDependency();
-  const removeDependency = useRemoveDependency();
-  const { data: allTasks, isPending: isLoadingTasks } = useTasks();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const addDependency = useAddOrgDependency(activeOrgId, activeSpaceId);
+  const removeDependency = useRemoveOrgDependency(activeOrgId, activeSpaceId);
+  const { data: allTasks, isPending: isLoadingTasks } = useOrgTasks(activeOrgId, activeSpaceId);
 
   // Get existing dependency IDs
   const existingDepIds = useMemo(() => {
