@@ -11,9 +11,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
+# Note: package-lock.json is intentionally NOT ignored so Docker builds work in CI
 
 # Build outputs
 dist/
