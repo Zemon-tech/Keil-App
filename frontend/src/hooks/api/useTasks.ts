@@ -100,6 +100,27 @@ export interface UpdateTaskInput {
   time_estimate?: number;
 }
 
+const EVENT_STATUSES = new Set<AnyStatus>([
+  "confirmed",
+  "tentative",
+  "cancelled",
+  "completed",
+]);
+
+function normalizeTaskDTO(dto: TaskDTO): TaskDTO {
+  const raw = dto as unknown as { type?: unknown; status?: AnyStatus; event_type?: EventType | null };
+  const type = raw.type;
+  if (type === "task" || type === "event") {
+    return dto;
+  }
+  const inferred: "task" | "event" =
+    !!raw.event_type || (raw.status ? EVENT_STATUSES.has(raw.status) : false) ? "event" : "task";
+  return {
+    ...dto,
+    type: inferred,
+  };
+}
+
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
 export const taskKeys = {
@@ -170,7 +191,7 @@ export function useOrgTasks(
         `v1/orgs/${orgId}/spaces/${spaceId}/tasks`,
         { params: toApiParams(filters) }
       );
-      return res.data.data;
+      return res.data.data.map(normalizeTaskDTO);
     },
     enabled: !!orgId && !!spaceId,
     retry: noRetryOn401,
@@ -190,7 +211,7 @@ export function useOrgTask(
       const res = await api.get<{ data: TaskDTO }>(
         `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}`
       );
-      return res.data.data;
+      return normalizeTaskDTO(res.data.data);
     },
     enabled: !!orgId && !!spaceId && !!taskId,
     retry: noRetryOn401,
@@ -210,7 +231,7 @@ export function useOrgSubtasks(
       const res = await api.get<{ data: TaskDTO[] }>(
         `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${parentTaskId}/subtasks`
       );
-      return res.data.data;
+      return res.data.data.map(normalizeTaskDTO);
     },
     enabled: !!orgId && !!spaceId && !!parentTaskId,
     retry: noRetryOn401,
@@ -228,7 +249,7 @@ export function useCreateOrgTask(orgId: string | null, spaceId: string | null) {
         `v1/orgs/${orgId}/spaces/${spaceId}/tasks`,
         input
       );
-      return res.data.data;
+      return normalizeTaskDTO(res.data.data);
     },
     onSuccess: (data) => {
       if (!orgId || !spaceId) return;
@@ -259,7 +280,7 @@ export function useUpdateOrgTask(orgId: string | null, spaceId: string | null) {
         `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}`,
         updates
       );
-      return res.data.data;
+      return normalizeTaskDTO(res.data.data);
     },
     onSuccess: (data) => {
       if (!orgId || !spaceId) return;
@@ -314,7 +335,7 @@ export function useChangeOrgTaskStatus(
         `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/status`,
         { status }
       );
-      return res.data.data;
+      return normalizeTaskDTO(res.data.data);
     },
     onSuccess: (data) => {
       if (!orgId || !spaceId) return;

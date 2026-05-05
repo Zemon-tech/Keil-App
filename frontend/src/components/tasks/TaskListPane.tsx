@@ -125,7 +125,6 @@ function SubtaskList({
         const active = sub.id === selectedTaskId;
         const isDone = sub.status === "done";
         const displayDate = sub.due_date || (sub as any).dueDateISO;
-        const isHighPriority = sub.priority === "high" || sub.priority === "urgent";
 
         return (
           <div
@@ -133,7 +132,7 @@ function SubtaskList({
             onClick={() => onSelectTask(sub.id)}
             className={cn(
               "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
-              active ? "bg-accent" : "hover:bg-accent/50",
+              active ? "bg-[#EEF2FF] dark:bg-[#1E1B4B]" : "hover:bg-[#F4F4F5] dark:hover:bg-[#18181B]",
               isDone && "opacity-50"
             )}
           >
@@ -177,11 +176,13 @@ function SubtaskList({
             {/* Right block: Badge and Date */}
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
               {(sub as any).type === "event" && (
-                <span className="text-[9px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
+                <span className="text-[9px] bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE] font-medium leading-none px-1 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
                   event
                 </span>
               )}
-              {isHighPriority && <Flag className="w-2.5 h-2.5 text-orange-400 shrink-0" />}
+              {(sub as any).type !== "event" && displayDate && (
+                <Calendar className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+              )}
               <span className="tabular-nums whitespace-nowrap">
                 {displayDate
                   ? new Date(displayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })
@@ -541,8 +542,6 @@ export function TaskListPane({
             const active = t.id === selectedTaskId;
             const isChecked = selectedTaskIds.has(t.id);
             const isDone = t.status === "done" || t.status === "completed";
-            const isHighPriority =
-              t.priority === "high" || t.priority === "urgent";
             const isDraggable = t.status !== "done" && t.status !== "completed";
             // Use backend date field, falling back to dueDateISO for compat
             const displayDate = t.due_date || t.dueDateISO;
@@ -558,8 +557,8 @@ export function TaskListPane({
                   className={cn(
                     "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
                     active && !isMultiSelecting
-                      ? "bg-accent"
-                      : "hover:bg-accent/50",
+                      ? "bg-[#EEF2FF] dark:bg-[#1E1B4B]"
+                      : "hover:bg-[#F4F4F5] dark:hover:bg-[#18181B]",
                     isDone && "opacity-50",
                     isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
                   )}
@@ -657,32 +656,27 @@ export function TaskListPane({
                     {/* Badges & Icons */}
                     <div className="flex items-center gap-1.5">
                       {t.type === "event" ? (
-                        <span className="text-[10px] bg-indigo-500/10 text-indigo-500 font-medium leading-none px-1.5 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
+                        <span className="text-[10px] bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE] font-medium leading-none px-1.5 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
                           event
-                        </span>
-                      ) : displayDate ? (
-                        <span className="text-[10px] text-muted-foreground/70 font-medium leading-none whitespace-nowrap">
-                          scheduled
                         </span>
                       ) : null}
                       
                       {isBlocked && (
                         <Zap className="w-3 h-3 text-yellow-400 shrink-0" />
                       )}
-                      {isHighPriority && (
-                        <Flag className="w-3 h-3 text-orange-400 shrink-0" />
-                      )}
                     </div>
                     
                     {/* Date / Action Menu */}
                     <div className="relative flex items-center justify-end min-w-[45px]">
                       <span className="tabular-nums transition-opacity group-hover/item:opacity-0 whitespace-nowrap">
-                        {displayDate
-                          ? new Date(displayDate).toLocaleDateString(
-                            undefined,
-                            { month: "short", day: "numeric" }
-                          )
-                          : "\u2014"}
+                        {displayDate ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+                            {new Date(displayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          </span>
+                        ) : (
+                          "\u2014"
+                        )}
                       </span>
                       
                       <div className="absolute right-0 opacity-0 group-hover/item:opacity-100 transition-opacity">

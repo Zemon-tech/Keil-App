@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CheckSquare,
   Flag,
   Focus,
   Timer,
@@ -41,6 +42,8 @@ import { EventPreviewDialog } from "./EventPreviewDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
+import { STATUS_COLOR } from "./task-detail-shared";
+import type { AnyStatus } from "@/types/task";
 
 type Props = {
   tasks: TaskDTO[];
@@ -57,37 +60,37 @@ const typeMeta: Record<CalendarBlockType, { label: string; icon: any; pill: stri
   meeting: {
     label: "Meeting",
     icon: CalendarClock,
-    pill: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/25",
-    bg: "bg-sky-500/15",
-    border: "border-sky-500/30",
+    pill: "bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE] border-[#E4E4E7] dark:border-[#27272A]",
+    bg: "bg-[#EEF2FF] dark:bg-[#1E1B4B]",
+    border: "border-[#3730A3]/30 dark:border-[#C7D2FE]/25",
   },
   focus_block: {
     label: "Focus block",
     icon: Focus,
-    pill: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25",
-    bg: "bg-emerald-500/15",
-    border: "border-emerald-500/30",
+    pill: "bg-[#F0FDF4] text-[#166534] dark:bg-[#052E16] dark:text-[#86EFAC] border-[#E4E4E7] dark:border-[#27272A]",
+    bg: "bg-[#F0FDF4] dark:bg-[#052E16]",
+    border: "border-[#166534]/30 dark:border-[#86EFAC]/25",
   },
   task_slot: {
     label: "Task slot",
     icon: Timer,
-    pill: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/25",
-    bg: "bg-violet-500/15",
-    border: "border-violet-500/30",
+    pill: "bg-[#F5F3FF] text-[#5B21B6] dark:bg-[#2E1065] dark:text-[#DDD6FE] border-[#E4E4E7] dark:border-[#27272A]",
+    bg: "bg-[#F5F3FF] dark:bg-[#2E1065]",
+    border: "border-[#5B21B6]/30 dark:border-[#DDD6FE]/25",
   },
   deadline_marker: {
     label: "Deadline",
     icon: Flag,
-    pill: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/25",
-    bg: "bg-orange-500/15",
-    border: "border-orange-500/30",
+    pill: "bg-[#FFFBEB] text-[#92400E] dark:bg-[#451A03] dark:text-[#FCD34D] border-[#E4E4E7] dark:border-[#27272A]",
+    bg: "bg-[#FFFBEB] dark:bg-[#451A03]",
+    border: "border-[#92400E]/30 dark:border-[#FCD34D]/25",
   },
   reminder: {
     label: "Reminder",
     icon: Bell,
-    pill: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/25",
-    bg: "bg-rose-500/15",
-    border: "border-rose-500/30",
+    pill: "bg-[#FDF2F8] text-[#9D174D] dark:bg-[#4A044E] dark:text-[#F5D0FE] border-[#E4E4E7] dark:border-[#27272A]",
+    bg: "bg-[#FDF2F8] dark:bg-[#4A044E]",
+    border: "border-[#9D174D]/30 dark:border-[#F5D0FE]/25",
   },
 };
 
@@ -97,9 +100,9 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
     title: block.title,
     start: block.startISO,
     end: block.endISO,
-    backgroundColor: "#5ba66d",
+    backgroundColor: "transparent",
     borderColor: "transparent",
-    textColor: "#111827",
+    textColor: "inherit",
     extendedProps: {
       type: block.type,
       taskId: block.taskId,
@@ -134,22 +137,43 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
   };
 }
 
-function getPriorityColor(priority: TaskDTO["priority"]): string {
-  const colorMap = {
-    urgent: "#ef4444",
-    high: "#f97316",
-    medium: "#eab308",
-    low: "#22c55e",
-  };
-  return colorMap[priority] || "#5ba66d";
-}
-
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
   const isScheduledTask = arg.event.extendedProps.isScheduledTask;
+  const taskType = arg.event.extendedProps.taskType as string | undefined;
+  const taskStatus = arg.event.extendedProps.taskStatus as AnyStatus | undefined;
   const isMonthView = arg.view.type === "dayGridMonth";
 
+  const statusIconClass = (() => {
+    if (!taskStatus) return "text-muted-foreground";
+    const bg = STATUS_COLOR[taskStatus];
+    if (!bg) return "text-muted-foreground";
+    return bg.replace(/^bg-/, "text-");
+  })();
+
   if (isMonthView) {
+    if (isScheduledTask) {
+      const isEvent = taskType === "event";
+
+      return (
+        <div
+          className={cn(
+            "w-full truncate text-[12px] font-medium px-2 py-1 rounded-md inline-flex items-center gap-1.5",
+            isEvent
+              ? "bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE]"
+              : "bg-[#FFFFFF] text-[#18181B] dark:bg-[#09090B] dark:text-[#FAFAFA] border border-[#E4E4E7] dark:border-[#27272A]"
+          )}
+        >
+          {isEvent ? (
+            <CalendarClock className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
+          ) : (
+            <CheckSquare className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
+          )}
+          <span className="truncate">{arg.event.title}</span>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5" style={{ color: arg.textColor || "inherit" }}>
         {arg.event.title}
@@ -159,9 +183,29 @@ function renderEventContent(arg: EventContentArg) {
 
   // Handle scheduled tasks (no type metadata)
   if (isScheduledTask) {
+    const isEvent = taskType === "event";
     return (
-      <div className="h-full w-full p-2 overflow-hidden flex items-center gap-2">
-        <div className="text-[11px] font-bold leading-tight truncate flex-1">{arg.event.title}</div>
+      <div
+        className={cn(
+          "h-full w-full overflow-hidden flex items-center gap-2 rounded-md px-2.5 py-1.5",
+          isEvent
+            ? "bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE]"
+            : "bg-[#FFFFFF] text-[#18181B] dark:bg-[#09090B] dark:text-[#FAFAFA] border border-[#E4E4E7] dark:border-[#27272A]"
+        )}
+      >
+        {isEvent ? (
+          <CalendarClock className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
+        ) : (
+          <CheckSquare className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold leading-tight truncate">{arg.event.title}</div>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-widest opacity-70">
+              {isEvent ? "Event" : "Task"}
+            </span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -257,15 +301,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           end: t.due_date!,
           allDay: isAllDay,
           display: "block",
-          backgroundColor: t.type === "event" ? "#6366f1" : getPriorityColor(t.priority),
+          backgroundColor: "transparent",
           borderColor: "transparent",
-          classNames: t.type === "event" ? ["task-event-block"] : [`task-priority-${t.priority}`],
+          classNames: ["task-event", "scheduled-task"],
           extendedProps: {
             taskId: t.id,
             taskTitle: t.title,
             projectTitle: t.projectTitle,
             taskStatus: t.status,
             taskPriority: t.priority,
+            taskType: t.type,
             isScheduledTask: true,
           },
           editable: t.status !== "done" && t.status !== "completed",

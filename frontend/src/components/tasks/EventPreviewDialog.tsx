@@ -80,10 +80,14 @@ function formatTimeCompact(startISO?: string | null, endISO?: string | null, isA
 const getEventIcon = (type?: string | null, eventType?: string | null) => {
   if (type === "task") return <CheckSquare className="w-4 h-4 text-primary shrink-0" />;
   switch (eventType) {
-    case "meeting": return <Users className="w-4 h-4 text-blue-500 shrink-0" />;
-    case "call": return <Phone className="w-4 h-4 text-green-500 shrink-0" />;
-    case "focus": return <Brain className="w-4 h-4 text-purple-500 shrink-0" />;
-    default: return <Calendar className="w-4 h-4 text-orange-500 shrink-0" />;
+    case "meeting":
+      return <Users className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
+    case "call":
+      return <Phone className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
+    case "focus":
+      return <Brain className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
+    default:
+      return <Calendar className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
   }
 };
 
