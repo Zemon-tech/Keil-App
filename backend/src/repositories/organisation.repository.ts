@@ -108,5 +108,32 @@ export class OrganisationRepository extends BaseRepository<Organisation> {
       [orgId, userId, role],
     );
   }
-}
 
+  async updateMemberRole(
+    orgId: string,
+    userId: string,
+    role: string,
+    client?: PoolClient,
+  ): Promise<void> {
+    const executor = client || this.pool;
+    await executor.query(
+      `UPDATE public.organisation_members
+       SET role = $3
+       WHERE org_id = $1 AND user_id = $2`,
+      [orgId, userId, role],
+    );
+  }
+
+  async removeMember(
+    orgId: string,
+    userId: string,
+    client?: PoolClient,
+  ): Promise<void> {
+    const executor = client || this.pool;
+    await executor.query(
+      `DELETE FROM public.organisation_members
+       WHERE org_id = $1 AND user_id = $2`,
+      [orgId, userId],
+    );
+  }
+}

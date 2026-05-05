@@ -128,6 +128,84 @@ export function useCreateOrgInvite() {
   });
 }
 
+// ─── useRenameOrganisation ───────────────────────────────────────────────────
+
+export function useRenameOrganisation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { org: Organisation },
+    Error,
+    { orgId: string; name: string }
+  >({
+    mutationFn: async ({ orgId, name }) => {
+      const res = await api.patch<{ data: { org: Organisation } }>(
+        `v1/orgs/${orgId}`,
+        { name }
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orgKeys.list() });
+    },
+  });
+}
+
+// ─── useDeleteOrganisation ───────────────────────────────────────────────────
+
+export function useDeleteOrganisation() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: async (orgId) => {
+      await api.delete(`v1/orgs/${orgId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orgKeys.list() });
+    },
+  });
+}
+
+// ─── useUpdateOrgMemberRole ──────────────────────────────────────────────────
+
+export function useUpdateOrgMemberRole(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    Error,
+    { userId: string; role: "admin" | "member" }
+  >({
+    mutationFn: async ({ userId, role }) => {
+      await api.patch(`v1/orgs/${orgId}/members/${userId}`, { role });
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: orgKeys.members(orgId) });
+        queryClient.invalidateQueries({ queryKey: orgKeys.list() });
+      }
+    },
+  });
+}
+
+// ─── useRemoveOrgMember ──────────────────────────────────────────────────────
+
+export function useRemoveOrgMember(orgId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, string>({
+    mutationFn: async (userId) => {
+      await api.delete(`v1/orgs/${orgId}/members/${userId}`);
+    },
+    onSuccess: () => {
+      if (orgId) {
+        queryClient.invalidateQueries({ queryKey: orgKeys.members(orgId) });
+        queryClient.invalidateQueries({ queryKey: orgKeys.list() });
+      }
+    },
+  });
+}
+
 // ─── useJoinOrganisation ──────────────────────────────────────────────────────
 
 /**

@@ -4,9 +4,13 @@ import { requireOrgMember, requireSpaceMember } from "../middlewares/org-context
 import {
   createOrganisation,
   createOrgInvite,
+  deleteOrganisation,
   getOrgMembers,
   getOrganisations,
   joinOrg,
+  removeOrgMember,
+  renameOrganisation,
+  updateOrgMemberRole,
 } from "../controllers/organisation.controller";
 import {
   addSpaceMember,
@@ -33,8 +37,12 @@ router.post("/", createOrganisation);
 router.post("/join", joinOrg);
 
 // ── Org-scoped routes (membership required) ───────────────────────────────────
+router.patch("/:orgId", requireOrgMember, renameOrganisation);
+router.delete("/:orgId", requireOrgMember, deleteOrganisation);
 router.get("/:orgId/members", requireOrgMember, getOrgMembers);
 router.post("/:orgId/invite", requireOrgMember, createOrgInvite);
+router.patch("/:orgId/members/:userId", requireOrgMember, updateOrgMemberRole);
+router.delete("/:orgId/members/:userId", requireOrgMember, removeOrgMember);
 
 // ── Space routes ──────────────────────────────────────────────────────────────
 // NOTE: /deleted must be registered before /:spaceId to avoid Express treating

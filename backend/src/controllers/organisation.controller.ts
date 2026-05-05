@@ -66,3 +66,58 @@ export const getOrgMembers = catchAsync(async (req: Request, res: Response) => {
     .json(new ApiResponse(200, { members }, "Organisation members retrieved successfully"));
 });
 
+export const renameOrganisation = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const orgId = asString(req.params.orgId);
+  const { name } = req.body;
+
+  if (!name || typeof name !== "string" || name.trim() === "") {
+    throw new ApiError(400, "Organisation name is required");
+  }
+
+  const org = await organisationService.renameOrganisation(orgId, userId, name);
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, { org }, "Organisation renamed successfully"));
+});
+
+export const deleteOrganisation = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const orgId = asString(req.params.orgId);
+
+  await organisationService.deleteOrganisation(orgId, userId);
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Organisation deleted successfully"));
+});
+
+export const updateOrgMemberRole = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const orgId = asString(req.params.orgId);
+  const targetUserId = asString(req.params.userId);
+  const { role } = req.body;
+
+  if (role !== "admin" && role !== "member") {
+    throw new ApiError(400, "Role must be admin or member");
+  }
+
+  await organisationService.updateOrgMemberRole(orgId, userId, targetUserId, role);
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Member role updated successfully"));
+});
+
+export const removeOrgMember = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const orgId = asString(req.params.orgId);
+  const targetUserId = asString(req.params.userId);
+
+  await organisationService.removeOrgMember(orgId, userId, targetUserId);
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Member removed successfully"));
+});

@@ -134,3 +134,79 @@ export const getOrgMembers = async (orgId: string): Promise<OrgMemberDTO[]> => {
   return organisationRepository.findMembers(orgId);
 };
 
+const requireOrgAdmin = async (orgId: string, userId: string): Promise<string> => {
+  const role = await organisationRepository.getMemberRole(orgId, userId);
+  if (role !== "owner" && role !== "admin") {
+    throw new ApiError(403, "Only organisation admins and owners can perform this action");
+  }
+  return role;
+};
+
+export const renameOrganisation = async (
+  orgId: string,
+  userId: string,
+  name: string,
+): Promise<OrganisationDTO> => {
+  await requireOrgAdmin(orgId, userId);
+
+  const org = await organisationRepository.update(orgId, { name: name.trim() } as any);
+  if (!org) {
+    throw new ApiError(404, "Organisation not found");
+  }
+
+  const role = await organisationRepository.getMemberRole(orgId, userId);
+  return toDTO({ ...org, membership_role: role });
+};
+
+export const deleteOrganisation = async (
+  orgId: string,
+  userId: string,
+): Promise<void> => {
+  const role = await organisationRepository.getMemberRole(orgId, userId);
+  if (role !== "owner") {
+    throw new ApiError(403, "Only the organisation owner can delete this organisation");
+  }
+
+  await organisationRepository.softDelete(orgId);
+};
+
+export const updateOrgMemberRole = async (
+  orgId: string,
+  actorUserId: string,
+  targetUserId: string,
+  role: "admin" | "member",
+): Promise<void> => {
+  await requireOrgAdmin(orgId, actorUserId);
+
+  const targetRole = await organisationRepository.getMemberRole(orgId, targetUserId);
+  if (!targetRole) {
+    throw new ApiError(404, "Member not found");
+  }
+  if (targetRole === "owner") {
+    throw new ApiError(400, "The organisation owner role cannot be changed here");
+  }
+
+  await organisationRepository.updateMemberRole(orgId, targetUserId, role);
+};
+
+export const removeOrgMember = async (
+  orgId: string,
+  actorUserId: string,
+  targetUserId: string,
+): Promise<void> => {
+  await requireOrgAdmin(orgId, actorUserId);
+
+  if (actorUserId === targetUserId) {
+    throw new ApiError(400, "You cannot remove yourself from the organisation");
+  }
+
+  const targetRole = await organisationRepository.getMemberRole(orgId, targetUserId);
+  if (!targetRole) {
+    throw new ApiError(404, "Member not found");
+  }
+  if (targetRole === "owner") {
+    throw new ApiError(400, "The organisation owner cannot be removed");
+  }
+
+  await organisationRepository.removeMember(orgId, targetUserId);
+};

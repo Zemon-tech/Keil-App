@@ -97,7 +97,9 @@ function OrgSpaceSubmenu({
           </div>
           <span className="text-sm font-medium truncate">{org.name}</span>
         </div>
-        {isActiveOrg && <Check className="h-4 w-4 text-primary shrink-0 mr-1" />}
+        {isActiveOrg && (
+          <Check className="h-4 w-4 text-primary shrink-0 mr-1" />
+        )}
       </DropdownMenuSubTrigger>
 
       <DropdownMenuSubContent className="w-48 rounded-xl p-1">
@@ -137,6 +139,9 @@ export function AppSidebar() {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<
+    "account" | "org-general"
+  >("account");
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [joinOrgOpen, setJoinOrgOpen] = useState(false);
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
@@ -178,7 +183,7 @@ export function AppSidebar() {
   const currentSpaceLabel =
     mode === "personal"
       ? `${userDisplayName.split("@")[0]}'s Personal Space`
-      : activeSpace?.name ?? activeOrg?.name ?? "Organisation";
+      : (activeSpace?.name ?? activeOrg?.name ?? "Organisation");
 
   return (
     <>
@@ -351,15 +356,15 @@ export function AppSidebar() {
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
+                        size="icon"
+                        className="h-6 w-6 hover:bg-muted-foreground/10"
+                        title="Create organisation"
                         onClick={(e) => {
                           e.stopPropagation();
                           setCreateOrgOpen(true);
                         }}
                       >
                         <Plus className="h-3 w-3" />
-                        Create
                       </Button>
                     </div>
                   </DropdownMenuLabel>
@@ -388,7 +393,10 @@ export function AppSidebar() {
                   {/* ── Settings / Billing / Help ── */}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={() => setSettingsOpen(true)}
+                    onSelect={() => {
+                      setSettingsInitialTab("account");
+                      setSettingsOpen(true);
+                    }}
                   >
                     <Settings className="h-4 w-4 text-muted-foreground" />
                     Settings
@@ -430,7 +438,11 @@ export function AppSidebar() {
         open={joinOrgOpen}
         onOpenChange={setJoinOrgOpen}
       />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        initialTab={settingsInitialTab}
+      />
       <ChatDialog open={chatDialogOpen} onOpenChange={setChatDialogOpen} />
       <NotificationDrawer
         open={notificationDrawerOpen}
