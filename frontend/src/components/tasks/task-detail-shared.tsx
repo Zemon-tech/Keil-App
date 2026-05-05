@@ -8,7 +8,7 @@ export const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in-progress", "
 export const EVENT_STATUS_OPTIONS: EventStatus[] = ["confirmed", "tentative", "cancelled", "completed"];
 
 export const STATUS_COLOR: Record<AnyStatus, string> = {
-  done: "bg-emerald-500",
+  done: "bg-[#86EFAC]",
   "in-progress": "bg-blue-500",
   "in-review": "bg-violet-500",
   backlog: "bg-zinc-500",
@@ -16,7 +16,7 @@ export const STATUS_COLOR: Record<AnyStatus, string> = {
   confirmed: "bg-blue-500",
   tentative: "bg-yellow-500",
   cancelled: "bg-red-500",
-  completed: "bg-emerald-500"
+  completed: "bg-[#86EFAC]"
 };
 
 export const PRIORITY_OPTIONS: TaskPriority[] = ["low", "medium", "high", "urgent"];

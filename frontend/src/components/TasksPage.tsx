@@ -46,8 +46,8 @@ export function TasksPage() {
   // ── Filter / search / sort state ──
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [sortBy, setSortBy] = useState<SortBy>("created_at");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [sortBy, setSortBy] = useState<SortBy>("due_date");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [selectedTaskId, setSelectedTaskId] = useState<string>(() => {
     // Pre-select from URL on first render
     return searchParams.get("taskId") ?? "";
@@ -229,19 +229,65 @@ export function TasksPage() {
   // ── Client-side text filter on top of server results ──
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return taskList.filter((t) => {
+    const list = taskList.filter((t) => {
       // "Blocked" is a derived filter — not sent to backend
       if (statusFilter === "Blocked") {
         const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
         if (!isBlocked) return false;
       }
+      
+      // Type filters (client-side only)
+      if (statusFilter === "Task" && t.type !== "task") return false;
+      if (statusFilter === "Event" && t.type !== "event") return false;
+
       if (!q) return true;
       return (
         t.title.toLowerCase().includes(q) ||
         (t.objective && t.objective.toLowerCase().includes(q))
       );
     });
-  }, [query, taskList, statusFilter]);
+
+    // Client-side sort implementation
+    return [...list].sort((a, b) => {
+      // 1. Completion status - always at bottom
+      const isDoneA = a.status === "done" || a.status === "completed";
+      const isDoneB = b.status === "done" || b.status === "completed";
+      if (isDoneA !== isDoneB) return isDoneA ? 1 : -1;
+
+      // 2. Main sort field
+      if (sortBy === "due_date") {
+        const dateA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+        const dateB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+        
+        if (dateA !== dateB) {
+          return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+        }
+      } else if (sortBy === "created_at") {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (dateA !== dateB) {
+          return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+        }
+      } else if (sortBy === "priority") {
+        const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+        const pA = a.priority ? priorityOrder[a.priority] ?? 4 : 4;
+        const pB = b.priority ? priorityOrder[b.priority] ?? 4 : 4;
+        if (pA !== pB) {
+          return sortOrder === "asc" ? pA - pB : pB - pA;
+        }
+      }
+
+      // 3. Priority Tiebreaker (only for due_date or created_at)
+      if (sortBy !== "priority") {
+        const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+        const pA = a.priority ? priorityOrder[a.priority] ?? 4 : 4;
+        const pB = b.priority ? priorityOrder[b.priority] ?? 4 : 4;
+        if (pA !== pB) return pA - pB;
+      }
+
+      return 0;
+    });
+  }, [query, taskList, statusFilter, sortBy, sortOrder]);
 
   // ── Selected task ──
   const selected = useMemo(
