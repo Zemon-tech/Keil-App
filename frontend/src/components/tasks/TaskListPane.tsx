@@ -520,7 +520,7 @@ export function TaskListPane({
               </DropdownMenuSub>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onStatusFilterChange("Blocked")}>Blocked</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStatusFilterChange("High Priority")}>High Priority</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onStatusFilterChange("Highest Priority")}>Highest Priority</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

@@ -46,6 +46,7 @@ export function TasksPage() {
   // ── Filter / search / sort state ──
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [sortBy, setSortBy] = useState<SortBy>("due_date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [selectedTaskId, setSelectedTaskId] = useState<string>(() => {
@@ -110,8 +111,8 @@ export function TasksPage() {
       statusFilter === "completed"
     ) {
       filters.status = statusFilter as AnyStatus;
-    } else if (statusFilter === "High Priority") {
-      filters.priority = "high" as TaskPriority;
+    } else if (statusFilter === "Highest Priority") {
+      // Handled client-side to show both high and urgent
     }
     return filters;
   }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
@@ -236,9 +237,31 @@ export function TasksPage() {
         if (!isBlocked) return false;
       }
       
+      if (statusFilter === "Highest Priority" && t.priority !== "high" && t.priority !== "urgent") return false;
+      
       // Type filters (client-side only)
       if (statusFilter === "Task" && t.type !== "task") return false;
       if (statusFilter === "Event" && t.type !== "event") return false;
+
+      // Filter by currently viewed calendar month
+      if (!t.start_date && !t.due_date) {
+        // No due date tasks always appear
+      } else {
+        let tStart = t.start_date ? new Date(t.start_date) : null;
+        let tEnd = t.due_date ? new Date(t.due_date) : null;
+        
+        if (!tStart && tEnd) tStart = tEnd;
+        if (!tEnd && tStart) tEnd = tStart;
+        
+        if (tStart && tEnd) {
+           const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+           const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+           
+           if (tStart > monthEnd || tEnd < monthStart) {
+              return false;
+           }
+        }
+      }
 
       if (!q) return true;
       return (
@@ -287,7 +310,7 @@ export function TasksPage() {
 
       return 0;
     });
-  }, [query, taskList, statusFilter, sortBy, sortOrder]);
+  }, [query, taskList, statusFilter, sortBy, sortOrder, calendarMonth]);
 
   // ── Selected task ──
   const selected = useMemo(
@@ -421,6 +444,8 @@ export function TasksPage() {
                 tasks={taskList as any}
                 blocks={[] as any}
                 selectedTask={null as any}
+                statusFilter={statusFilter}
+                onDateChange={setCalendarMonth}
                 onTaskSchedule={handleTaskSchedule}
               />
             )}

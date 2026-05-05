@@ -56,6 +56,7 @@ type Props = {
   selectedTask: TaskDTO | null;
   statusFilter?: string;
   onViewChange?: (view: string) => void;
+  onDateChange?: (date: Date) => void;
   onTaskSchedule?: (taskId: string, startISO: string, endISO: string, isAllDay: boolean) => void;
 };
 
@@ -466,7 +467,7 @@ function QuickNavPopover({ currentViewDate, calendarApi }: { currentViewDate: Da
 
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "All", onViewChange, onTaskSchedule }: Props) {
+export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "All", onViewChange, onDateChange, onTaskSchedule }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [dialogPosition, setDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -1028,6 +1029,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                 setCurrentViewType(view);
                 setCurrentViewDate(dateInfo.view.currentStart);
                 if (onViewChange) onViewChange(view);
+                if (onDateChange) onDateChange(dateInfo.view.currentStart);
               }}
               eventReceive={handleEventReceive}
               eventResize={handleEventResize}

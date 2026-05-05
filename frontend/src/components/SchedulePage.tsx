@@ -54,6 +54,7 @@ export function SchedulePage() {
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [sortBy, setSortBy] = useState<any>("created_at");
   const [sortOrder, setSortOrder] = useState<any>("desc");
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
@@ -87,7 +88,31 @@ export function SchedulePage() {
         const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
         if (!isBlocked) return false;
       }
-      if (statusFilter === "High Priority" && t.priority !== "high" && t.priority !== "urgent") return false;
+      if (statusFilter === "Highest Priority" && t.priority !== "high" && t.priority !== "urgent") return false;
+
+      // Filter by currently viewed calendar month
+      const startDateStr = t.start_date || (t as any).plannedStartISO;
+      const dueDateStr = t.due_date || (t as any).plannedEndISO || (t as any).dueDateISO;
+
+      if (!startDateStr && !dueDateStr) {
+        // No due date tasks always appear
+      } else {
+        let tStart = startDateStr ? new Date(startDateStr) : null;
+        let tEnd = dueDateStr ? new Date(dueDateStr) : null;
+        
+        if (!tStart && tEnd) tStart = tEnd;
+        if (!tEnd && tStart) tEnd = tStart;
+        
+        if (tStart && tEnd) {
+           const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+           const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+           
+           if (tStart > monthEnd || tEnd < monthStart) {
+              return false;
+           }
+        }
+      }
+
       if (!q) return true;
       return (
         t.title.toLowerCase().includes(q) ||
@@ -95,7 +120,7 @@ export function SchedulePage() {
         (t.objective && t.objective.toLowerCase().includes(q))
       );
     });
-  }, [query, statusFilter, tasks]);
+  }, [query, statusFilter, tasks, calendarMonth]);
 
   const selectedTask = useMemo(
     () => tasks.find((t) => t.id === selectedTaskId) ?? null,
@@ -154,6 +179,8 @@ export function SchedulePage() {
                     tasks={tasks as any}
                     blocks={mockCalendarBlocks as any}
                     selectedTask={selectedTask as any}
+                    statusFilter={statusFilter}
+                    onDateChange={setCalendarMonth}
                     onViewChange={(view) => {
                       console.log('📅 Calendar view changed to:', view);
                     }}
