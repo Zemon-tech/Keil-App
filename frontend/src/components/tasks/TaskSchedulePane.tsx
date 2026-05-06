@@ -25,7 +25,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CheckSquare,
   Flag,
   Focus,
   Square,
@@ -50,8 +49,6 @@ import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
-import { STATUS_COLOR } from "./task-detail-shared";
-import type { AnyStatus } from "@/types/task";
 
 type Props = {
   tasks: TaskDTO[];
@@ -165,16 +162,7 @@ function getChipStyles(type?: string, priority?: string, isDone?: boolean) {
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
   const isScheduledTask = arg.event.extendedProps.isScheduledTask;
-  const taskType = arg.event.extendedProps.taskType as string | undefined;
-  const taskStatus = arg.event.extendedProps.taskStatus as AnyStatus | undefined;
   const isMonthView = arg.view.type === "dayGridMonth";
-
-  const statusIconClass = (() => {
-    if (!taskStatus) return "text-muted-foreground";
-    const bg = STATUS_COLOR[taskStatus];
-    if (!bg) return "text-muted-foreground";
-    return bg.replace(/^bg-/, "text-");
-  })();
 
   if (isMonthView) {
     const taskType = arg.event.extendedProps.taskType;
@@ -550,7 +538,6 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
             taskPriority: t.priority,
             taskType: t.type,
             isScheduledTask: true,
-            taskType: t.type,
           },
           editable: !isDone,
         } satisfies EventInput;

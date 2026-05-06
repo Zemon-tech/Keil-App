@@ -143,7 +143,7 @@ function SubtaskList({
       {subtasks.map((sub) => {
         const active = sub.id === selectedTaskId;
         const isDone = sub.status === "done";
-        const displayDate = sub.due_date || (sub as any).dueDateISO;
+        const isHighPriority = sub.priority === "high" || sub.priority === "urgent";
 
         return (
           <div
@@ -587,8 +587,6 @@ export function TaskListPane({
             const isChecked = selectedTaskIds.has(t.id);
             const isDone = t.status === "done" || t.status === "completed";
             const isDraggable = t.status !== "done" && t.status !== "completed";
-            // Use backend date field, falling back to dueDateISO for compat
-            const displayDate = t.due_date || t.dueDateISO;
             const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
 
             return (

@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { integrationKeys } from "@/hooks/api/useGoogleCalendar";
 
-import type { TaskPriority, AnyStatus } from "../types/task";
+import type { AnyStatus } from "../types/task";
 import {
   useOrgTasks,
   useOrgTask,

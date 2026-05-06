@@ -91,8 +91,8 @@ export function SchedulePage() {
       if (statusFilter === "Highest Priority" && t.priority !== "high" && t.priority !== "urgent") return false;
 
       // Filter by currently viewed calendar month
-      const startDateStr = t.start_date || (t as any).plannedStartISO;
-      const dueDateStr = t.due_date || (t as any).plannedEndISO || (t as any).dueDateISO;
+      const startDateStr = (t as any).plannedStartISO;
+      const dueDateStr = (t as any).plannedEndISO || t.dueDateISO;
 
       if (!startDateStr && !dueDateStr) {
         // No due date tasks always appear
