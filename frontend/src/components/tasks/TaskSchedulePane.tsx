@@ -6,7 +6,7 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventReceiveArg, EventResizeDoneArg } from "@fullcalendar/interaction";
 import type { EventContentArg, EventInput } from "@fullcalendar/core";
-import { format, parseISO, isPast, addMinutes } from "date-fns";
+import { format, parseISO, isPast, addMinutes, addMonths, setMonth, setYear } from "date-fns";
 import {
   isAllDayRangeLocal,
   normalizeAllDayRangeLocal,
@@ -18,14 +18,19 @@ import {
 } from "@/lib/date-utils";
 import {
   Bell,
+  Calendar,
+  CalendarCheck,
   CalendarClock,
+  CheckSquare,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CheckSquare,
   Flag,
   Focus,
+  Square,
   Timer,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -37,9 +42,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import { EventPreviewDialog } from "./EventPreviewDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
+import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 import { STATUS_COLOR } from "./task-detail-shared";
@@ -49,7 +57,9 @@ type Props = {
   tasks: TaskDTO[];
   blocks: CalendarBlock[];
   selectedTask: TaskDTO | null;
+  statusFilter?: string;
   onViewChange?: (view: string) => void;
+  onDateChange?: (date: Date) => void;
   onTaskSchedule?: (taskId: string, startISO: string, endISO: string, isAllDay: boolean) => void;
 };
 
@@ -137,6 +147,21 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
   };
 }
 
+function getChipStyles(type?: string, priority?: string, isDone?: boolean) {
+  if (isDone) {
+    return { bg: "#DCFCE7", text: "#166534", border: "#BBF7D0" };
+  }
+  if (type === "event") {
+    return { bg: "#E0F2FE", text: "#0369A1", border: "#BAE6FD" };
+  }
+  const styles: Record<string, { bg: string; text: string; border: string }> = {
+    urgent: { bg: "#FECACA", text: "#991B1B", border: "#FCA5A5" },
+    high: { bg: "#FED7AA", text: "#9A3412", border: "#FDBA74" },
+    medium: { bg: "#FEF9C3", text: "#A16207", border: "#FEF08A" },
+    low: { bg: "#F3F4F6", text: "#6B7280", border: "#E5E7EB" },
+  };
+  return styles[priority || "low"] || styles.low;
+}
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
   const isScheduledTask = arg.event.extendedProps.isScheduledTask;
@@ -152,60 +177,39 @@ function renderEventContent(arg: EventContentArg) {
   })();
 
   if (isMonthView) {
-    if (isScheduledTask) {
-      const isEvent = taskType === "event";
-
-      return (
-        <div
-          className={cn(
-            "w-full truncate text-[12px] font-medium px-2 py-1 rounded-md inline-flex items-center gap-1.5",
-            isEvent
-              ? "bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE]"
-              : "bg-[#FFFFFF] text-[#18181B] dark:bg-[#09090B] dark:text-[#FAFAFA] border border-[#E4E4E7] dark:border-[#27272A]"
-          )}
-        >
-          {isEvent ? (
-            <CalendarClock className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
-          ) : (
-            <CheckSquare className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
-          )}
-          <span className="truncate">{arg.event.title}</span>
-        </div>
-      );
-    }
-
+    const taskType = arg.event.extendedProps.taskType;
+    const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
     return (
-      <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5" style={{ color: arg.textColor || "inherit" }}>
-        {arg.event.title}
+      <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
+        {isScheduledTask && (
+          taskType === "event"
+            ? isDone
+              ? <CalendarCheck className="h-3 w-3 shrink-0 opacity-70" />
+              : <Calendar className="h-3 w-3 shrink-0 opacity-70" />
+            : isDone
+              ? <CheckSquare className="h-3 w-3 shrink-0 opacity-70" />
+              : <Square className="h-3 w-3 shrink-0 opacity-70" />
+        )}
+        <span className={cn("truncate", isDone && "line-through italic opacity-70")}>{arg.event.title}</span>
       </div>
     );
   }
 
   // Handle scheduled tasks (no type metadata)
   if (isScheduledTask) {
-    const isEvent = taskType === "event";
+    const taskType = arg.event.extendedProps.taskType;
+    const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
     return (
-      <div
-        className={cn(
-          "h-full w-full overflow-hidden flex items-center gap-2 rounded-md px-2.5 py-1.5",
-          isEvent
-            ? "bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE]"
-            : "bg-[#FFFFFF] text-[#18181B] dark:bg-[#09090B] dark:text-[#FAFAFA] border border-[#E4E4E7] dark:border-[#27272A]"
-        )}
-      >
-        {isEvent ? (
-          <CalendarClock className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
-        ) : (
-          <CheckSquare className={cn("h-3.5 w-3.5 shrink-0", statusIconClass)} />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold leading-tight truncate">{arg.event.title}</div>
-          <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-widest opacity-70">
-              {isEvent ? "Event" : "Task"}
-            </span>
-          </div>
-        </div>
+      <div className="h-full w-full p-2 overflow-hidden flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
+        {taskType === "event"
+          ? isDone
+            ? <CalendarCheck className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            : <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
+          : isDone
+            ? <CheckSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            : <Square className="h-3.5 w-3.5 shrink-0 opacity-70" />
+        }
+        <div className={cn("text-[11px] font-bold leading-tight truncate flex-1", isDone && "line-through italic opacity-70")}>{arg.event.title}</div>
       </div>
     );
   }
@@ -251,9 +255,230 @@ function renderEventContent(arg: EventContentArg) {
   );
 }
 
+function QuickNavPopover({ currentViewDate, calendarApi }: { currentViewDate: Date; calendarApi: any }) {
+  const [navDate, setNavDate] = useState(currentViewDate);
+  const [view, setView] = useState<"days" | "months" | "years">("days");
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const isCancelledRef = useRef(false);
+  const selectedDateRef = useRef<Date | undefined>(undefined);
+
+  // Sync navDate when popover opens
+  useEffect(() => {
+    if (isOpen) {
+      setNavDate(currentViewDate);
+      setView("days");
+      setSelectedDate(undefined);
+      selectedDateRef.current = undefined;
+      isCancelledRef.current = false;
+    }
+  }, [isOpen, currentViewDate]);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open && !isCancelledRef.current && calendarApi) {
+      if (selectedDateRef.current) {
+        calendarApi.gotoDate(selectedDateRef.current);
+      } else {
+        // If the user browsed to a different month/year but didn't pick a day, 
+        // still navigate to that period on close.
+        calendarApi.gotoDate(navDate);
+      }
+    }
+    setIsOpen(open);
+  };
+
+  const handleDaySelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date);
+      selectedDateRef.current = date;
+      setIsOpen(false);
+    }
+  };
+
+  const handleCancel = () => {
+    isCancelledRef.current = true;
+    setIsOpen(false);
+  };
+
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+
+  const handleMonthSelect = (monthIndex: number) => {
+    setNavDate(setMonth(navDate, monthIndex));
+    setView("days");
+  };
+
+  const handleYearSelect = (year: number) => {
+    setNavDate(setYear(navDate, year));
+    setView("months");
+  };
+
+  const years = useMemo(() => {
+    const currentYear = navDate.getFullYear();
+    const startYear = currentYear - 5;
+    return Array.from({ length: 12 }, (_, i) => startYear + i);
+  }, [navDate]);
+
+  return (
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 hover:bg-muted transition-colors"
+          title="Quick Navigation"
+        >
+          <Calendar className="h-4.5 w-4.5 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto p-3 rounded-xl shadow-xl border-border/60"
+        align="end"
+        sideOffset={8}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            isCancelledRef.current = true;
+          }
+        }}
+      >
+        {view === "days" && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md hover:bg-accent"
+                  onClick={handleCancel}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-sm font-bold hover:bg-accent rounded-md"
+                  onClick={() => setView("months")}
+                >
+                  {format(navDate, "MMMM")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-sm font-bold hover:bg-accent rounded-md"
+                  onClick={() => setView("years")}
+                >
+                  {format(navDate, "yyyy")}
+                </Button>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={() => setNavDate(addMonths(navDate, -1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={() => setNavDate(addMonths(navDate, 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <CalendarUI
+              mode="single"
+              selected={selectedDate || currentViewDate}
+              onSelect={handleDaySelect}
+              month={navDate}
+              onMonthChange={setNavDate}
+              initialFocus
+              className="p-0"
+              classNames={{
+                nav: "hidden",
+                month_caption: "hidden",
+                today: "bg-primary text-primary-foreground rounded-full",
+                selected: "bg-accent text-accent-foreground rounded-md"
+              }}
+            />
+          </div>
+        )}
+
+        {view === "months" && (
+          <div className="space-y-4 w-[240px]">
+            <div className="flex items-center justify-center pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-sm font-bold hover:bg-accent rounded-md"
+                onClick={() => setView("years")}
+              >
+                {navDate.getFullYear()}
+              </Button>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {months.map((m, i) => (
+                <Button
+                  key={m}
+                  variant={navDate.getMonth() === i ? "default" : "ghost"}
+                  size="sm"
+                  className={cn(
+                    "h-9 text-xs font-medium rounded-md",
+                    navDate.getMonth() === i ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                  )}
+                  onClick={() => handleMonthSelect(i)}
+                >
+                  {m}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {view === "years" && (
+          <div className="space-y-4 w-[240px]">
+            <div className="flex items-center justify-between px-1 pt-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md"
+                onClick={() => setNavDate(setYear(navDate, navDate.getFullYear() - 12))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-bold tabular-nums">
+                {years[0]} - {years[years.length - 1]}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md"
+                onClick={() => setNavDate(setYear(navDate, navDate.getFullYear() + 12))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {years.map((y) => (
+                <Button
+                  key={y}
+                  variant={navDate.getFullYear() === y ? "default" : "ghost"}
+                  size="sm"
+                  className={cn(
+                    "h-9 text-xs font-medium rounded-md",
+                    navDate.getFullYear() === y ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                  )}
+                  onClick={() => handleYearSelect(y)}
+                >
+                  {y}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, onTaskSchedule }: Props) {
+export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "All", onViewChange, onDateChange, onTaskSchedule }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [dialogPosition, setDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -272,8 +497,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
     const blockEvents = blocks.map((block) => makeEventInput(block));
 
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+    // Determine if we are filtering by type (Status sub-filters also count as type filtering)
+    const isTaskFiltered = statusFilter === "Task" || STATUS_OPTIONS.includes(statusFilter as any);
+    const isEventFiltered = statusFilter === "Event" || EVENT_STATUS_OPTIONS.includes(statusFilter as any);
+
     const taskEvents = tasks
-      .filter((t) => t.start_date && t.due_date && t.status !== "done" && t.status !== "completed" && !unscheduledTaskIds.current.has(t.id))
+      .filter((t) => {
+        if (!t.start_date || !t.due_date || unscheduledTaskIds.current.has(t.id)) return false;
+        if (isTaskFiltered) return t.type === "task";
+        if (isEventFiltered) return t.type === "event";
+        return true;
+      })
       .sort((a, b) => {
         const priorityA = priorityOrder[a.priority] ?? 4;
         const priorityB = priorityOrder[b.priority] ?? 4;
@@ -294,6 +528,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           isAllDay,
         });
 
+        const isDone = t.status === "done" || t.status === "completed";
+        const chipStyles = getChipStyles(t.type, t.priority, isDone);
+
         return {
           id: t.id,
           title: t.title,
@@ -301,9 +538,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
           end: t.due_date!,
           allDay: isAllDay,
           display: "block",
-          backgroundColor: "transparent",
-          borderColor: "transparent",
-          classNames: ["task-event", "scheduled-task"],
+          backgroundColor: chipStyles.bg,
+          borderColor: chipStyles.border,
+          textColor: chipStyles.text,
+          classNames: t.type === "event" ? ["task-event-block"] : [`task-priority-${t.priority}`],
           extendedProps: {
             taskId: t.id,
             taskTitle: t.title,
@@ -312,15 +550,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
             taskPriority: t.priority,
             taskType: t.type,
             isScheduledTask: true,
+            taskType: t.type,
           },
-          editable: t.status !== "done" && t.status !== "completed",
+          editable: !isDone,
         } satisfies EventInput;
       });
 
     const allEvents = [...blockEvents, ...taskEvents];
     console.log("✅ Events state updated:", allEvents.length);
     setEvents(allEvents);
-  }, [tasks, blocks]);
+  }, [tasks, blocks, statusFilter]);
 
   // Handle unschedule - remove task from local events state
   const handleTaskUnschedule = (taskId: string) => {
@@ -341,11 +580,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   // Handle status change - remove task from events if status becomes "done"
   const handleStatusChange = (taskId: string, newStatus: string) => {
     console.log("📊 Status change:", taskId, newStatus);
-    if (newStatus === "done" || newStatus === "completed") {
-      console.log("🗑️ Removing completed task from calendar:", taskId);
-      setEvents(prev => prev.filter(e => e.id !== taskId));
-      console.log("✅ Completed task removed from state:", taskId);
-    }
+    // Completed tasks stay on the calendar now.
   };
 
   // Scroll to 1 hour before current time so the now-indicator sits lower in the viewport
@@ -359,28 +594,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
   const handleEventReceive = (info: EventReceiveArg) => {
     try {
       const taskId = info.event.extendedProps.taskId;
-      const taskStatus = info.event.extendedProps.taskStatus;
       const startDate = info.event.start;
       const endDate = info.event.end;
       const viewType = info.view.type;
 
       console.log("🎯 Task dropped on calendar:", {
         taskId,
-        taskStatus,
         start: startDate,
         end: endDate,
         viewType,
       });
-
-      // Validation: Check if task is completed
-      if (taskStatus === "done" || taskStatus === "completed") {
-        console.error("❌ Cannot schedule completed tasks/events");
-        toast.error("Cannot schedule completed tasks", {
-          description: "This task is already marked as done.",
-        });
-        info.revert();
-        return;
-      }
 
       // Validation: Check if scheduled in the past
       if (startDate && isPast(startDate)) {
@@ -453,17 +676,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
         newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
       });
 
-        if (onTaskSchedule) {
-          const isAllDay = !!(info.event as any).allDay;
-          if (isAllDay) {
-            const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
-            onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString(), true);
-          } else {
-            const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
-            onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
-          }
-          toast.success("Task duration updated");
+      if (onTaskSchedule) {
+        const isAllDay = !!(info.event as any).allDay;
+        if (isAllDay) {
+          const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
+          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString(), true);
+        } else {
+          const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
+          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
         }
+        toast.success("Task duration updated");
+      }
     } catch (error) {
       console.error("❌ Error in handleEventResize:", error);
       toast.error("Failed to resize task");
@@ -673,6 +896,13 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              <QuickNavPopover
+                currentViewDate={currentViewDate}
+                calendarApi={calendarRef.current?.getApi()}
+              />
+            </div>
           </div>
         </div>
 
@@ -718,10 +948,11 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 return priorityA - priorityB;
               }}
               eventContent={renderEventContent}
-              eventClassNames={(arg) => {
+              eventClassNames={(arg: any) => {
                 const type = arg.event.extendedProps.type as CalendarBlockType;
                 if (arg.event.extendedProps.isScheduledTask) {
-                  return ["task-event", "scheduled-task"];
+                  const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
+                  return ["task-event", "scheduled-task", isDone ? "is-done" : ""].filter(Boolean);
                 }
                 if (!type) return ["task-event"];
                 return [`fc-type-${type}`, "task-event"];
@@ -733,7 +964,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                   // Capture position for dialog relative to the date cell if possible, fallback to event pill
                   const cellEl = (arg.el as HTMLElement).closest('.fc-daygrid-day, .fc-timegrid-col') as HTMLElement | null;
                   const rect = (cellEl || arg.el).getBoundingClientRect();
-                  
+
                   const screenWidth = window.innerWidth;
                   const screenHeight = window.innerHeight;
                   const dialogWidth = 340; // match new max-w-[340px]
@@ -810,6 +1041,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, onViewChange, on
                 setCurrentViewType(view);
                 setCurrentViewDate(dateInfo.view.currentStart);
                 if (onViewChange) onViewChange(view);
+                if (onDateChange) onDateChange(dateInfo.view.currentStart);
               }}
               eventReceive={handleEventReceive}
               eventResize={handleEventResize}

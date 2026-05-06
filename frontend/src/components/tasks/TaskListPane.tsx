@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { format, isSameDay, isSameMonth, isSameYear } from "date-fns";
 import { Draggable } from "@fullcalendar/interaction";
 import { Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User, AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,24 @@ type Props = {
   /** When true, CreateTaskDialog uses personal task endpoints */
   isPersonalMode?: boolean;
 };
+
+function formatTaskDateRange(start?: string, end?: string) {
+  if (!end) return start ? format(new Date(start), "MMM d") : "\u2014";
+  if (!start) return format(new Date(end), "MMM d");
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  
+  if (isSameDay(startDate, endDate)) {
+    return format(startDate, "MMM d");
+  }
+
+  if (isSameMonth(startDate, endDate) && isSameYear(startDate, endDate)) {
+    return `${format(startDate, "MMM d")}–${format(endDate, "d")}`;
+  }
+
+  return `${format(startDate, "MMM d")} – ${format(endDate, "MMM d")}`;
+}
 
 // Using STATUS_COLOR from task-detail-shared
 
@@ -165,9 +184,11 @@ function SubtaskList({
                 </PopoverContent>
               </Popover>
 
-              {/* Title Area */}
               <div className="task-name-container">
-                <span className="task-name-scroll text-[13px] font-medium leading-snug">
+                <span className={cn(
+                  "task-name-scroll text-[13px] font-medium leading-snug",
+                  isDone && "line-through opacity-60"
+                )}>
                   {sub.title}
                 </span>
               </div>
@@ -180,13 +201,9 @@ function SubtaskList({
                   event
                 </span>
               )}
-              {(sub as any).type !== "event" && displayDate && (
-                <Calendar className="w-3 h-3 text-muted-foreground/70 shrink-0" />
-              )}
-              <span className="tabular-nums whitespace-nowrap">
-                {displayDate
-                  ? new Date(displayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-                  : ""}
+              {isHighPriority && <Flag className="w-2.5 h-2.5 text-orange-400 shrink-0" />}
+              <span className="tabular-nums text-right leading-tight">
+                {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined)}
               </span>
             </div>
           </div>
@@ -340,7 +357,13 @@ export function TaskListPane({
 
   const handleBulkDueDateChange = (dueDate: string) => {
     if (onUpdateTask) {
-      selectedTaskIds.forEach((id) => onUpdateTask(id, { dueDateISO: dueDate }));
+      selectedTaskIds.forEach((id) => {
+        const task = tasks.find((t) => t.id === id);
+        const isDone = task?.status === "done" || task?.status === "completed";
+        if (!isDone) {
+          onUpdateTask(id, { dueDateISO: dueDate });
+        }
+      });
     }
     setSelectedTaskIds(new Set());
   };
@@ -454,7 +477,17 @@ export function TaskListPane({
               <DropdownMenuItem onClick={() => onStatusFilterChange("Mine")}>Mine</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger>Task Status</DropdownMenuSubTrigger>
+                <div className="flex items-center w-full px-1 py-0.5">
+                  <DropdownMenuItem 
+                    className="flex-1 rounded-r-none focus:bg-accent cursor-pointer"
+                    onClick={() => onStatusFilterChange("Task")}
+                  >
+                    Task
+                  </DropdownMenuItem>
+                  <DropdownMenuSubTrigger 
+                    className="w-8 h-8 p-0 rounded-l-none border-l border-border/40 justify-center focus:bg-accent data-[state=open]:bg-accent [&>svg]:ml-0"
+                  />
+                </div>
                 <DropdownMenuSubContent>
                   {TASK_STATUS_OPTIONS.map(s => (
                     <DropdownMenuItem key={s} onClick={() => onStatusFilterChange(s)} className="capitalize">
@@ -464,8 +497,19 @@ export function TaskListPane({
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger>Event Status</DropdownMenuSubTrigger>
+                <div className="flex items-center w-full px-1 py-0.5">
+                  <DropdownMenuItem 
+                    className="flex-1 rounded-r-none focus:bg-accent cursor-pointer"
+                    onClick={() => onStatusFilterChange("Event")}
+                  >
+                    Event
+                  </DropdownMenuItem>
+                  <DropdownMenuSubTrigger 
+                    className="w-8 h-8 p-0 rounded-l-none border-l border-border/40 justify-center focus:bg-accent data-[state=open]:bg-accent [&>svg]:ml-0"
+                  />
+                </div>
                 <DropdownMenuSubContent>
                   {EVENT_STATUS_OPTIONS.map(s => (
                     <DropdownMenuItem key={s} onClick={() => onStatusFilterChange(s)} className="capitalize">
@@ -477,7 +521,7 @@ export function TaskListPane({
               </DropdownMenuSub>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onStatusFilterChange("Blocked")}>Blocked</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStatusFilterChange("High Priority")}>High Priority</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onStatusFilterChange("Highest Priority")}>Highest Priority</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -643,9 +687,11 @@ export function TaskListPane({
                       </button>
                     </div>
 
-                    {/* Title Area */}
                     <div className="task-name-container">
-                      <span className="task-name-scroll text-sm font-medium leading-snug">
+                      <span className={cn(
+                        "task-name-scroll text-sm font-medium leading-snug",
+                        isDone && "line-through opacity-60"
+                      )}>
                         {t.title}
                       </span>
                     </div>
@@ -667,16 +713,12 @@ export function TaskListPane({
                     </div>
                     
                     {/* Date / Action Menu */}
-                    <div className="relative flex items-center justify-end min-w-[45px]">
-                      <span className="tabular-nums transition-opacity group-hover/item:opacity-0 whitespace-nowrap">
-                        {displayDate ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <Calendar className="w-3 h-3 text-muted-foreground/70 shrink-0" />
-                            {new Date(displayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                          </span>
-                        ) : (
-                          "\u2014"
-                        )}
+                    <div className="relative flex items-center justify-end min-w-fit ml-2">
+                      <span className={cn(
+                        "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight",
+                        isDone && "opacity-40"
+                      )}>
+                        {formatTaskDateRange(t.start_date, t.due_date)}
                       </span>
                       
                       <div className="absolute right-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
