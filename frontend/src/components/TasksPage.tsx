@@ -34,6 +34,7 @@ import {
 } from "../hooks/api/usePersonalTasks";
 
 const PAGE_SIZE = 20;
+const INITIAL_LIMIT = 10000; // Load all tasks within current month without pagination
 
 export function TasksPage() {
   const { state } = useSidebar();
@@ -91,7 +92,7 @@ export function TasksPage() {
   }, []);
 
   // ── Pagination: just increase the limit to fetch more ──
-  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [limit, setLimit] = useState(INITIAL_LIMIT);
 
   // ── Build server-side filter params ──
   const serverFilters = useMemo((): TaskFilters => {
@@ -179,13 +180,13 @@ export function TasksPage() {
   // Reset limit when filter or sort changes
   const handleStatusFilterChange = useCallback((value: string) => {
     setStatusFilter(value);
-    setLimit(PAGE_SIZE);
+    setLimit(INITIAL_LIMIT);
   }, []);
 
   const handleSortChange = useCallback((by: SortBy, order: SortOrder) => {
     setSortBy(by);
     setSortOrder(order);
-    setLimit(PAGE_SIZE);
+    setLimit(INITIAL_LIMIT);
   }, []);
 
   // ── Org task mutations ─────────────────────────────────────────
