@@ -315,17 +315,47 @@ export function CreateTaskDialog({
                   <PopoverTrigger asChild>
                     <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors text-[11px] font-bold text-primary">
                       <CalendarIcon className="size-3.5" />
-                      {date ? format(date, "MMM d, yyyy") : "Set date"}
+                      {date ? (
+                        isAllDay 
+                          ? format(date, "MMM d, yyyy") 
+                          : format(date, "MMM d, h:mm a")
+                      ) : "Set date"}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="p-0 w-auto bg-background border-border shadow-xl">
-                    <Calendar
-                      mode="single"
-                      selected={date}
-                      onSelect={setDate}
-                      initialFocus
-                      className="bg-background"
-                    />
+                  <PopoverContent className="p-0 w-auto bg-background border-border shadow-xl" align="end">
+                    <div className="flex flex-col">
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={(newDate) => {
+                          if (newDate && date && !isAllDay) {
+                            newDate.setHours(date.getHours(), date.getMinutes());
+                          }
+                          setDate(newDate);
+                        }}
+                        initialFocus
+                        className="bg-background"
+                      />
+                      {!isAllDay && (
+                        <div className="p-3 border-t border-border flex items-center justify-between gap-3 bg-muted/20">
+                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                            <Clock className="size-3.5" />
+                            <span>Time</span>
+                          </div>
+                          <Input
+                            type="time"
+                            className="h-8 w-[100px] text-xs bg-background border-border focus-visible:ring-primary/20"
+                            value={date ? format(date, "HH:mm") : ""}
+                            onChange={(e) => {
+                              const [h, m] = e.target.value.split(':');
+                              const newDate = date ? new Date(date) : new Date();
+                              newDate.setHours(parseInt(h), parseInt(m));
+                              setDate(newDate);
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>

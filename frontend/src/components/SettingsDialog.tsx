@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/lib/supabase";
 import {
   ArrowLeft,
   User,
@@ -58,6 +59,8 @@ import {
   UserPlus,
   Hash,
   Archive,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
@@ -800,25 +803,231 @@ function SpaceMembersPanel({
 
 function AccountTab() {
   const { user, signOut } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Profile info states
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(user?.user_metadata?.full_name || "");
+
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState(
+    user?.user_metadata?.username || user?.email?.split("@")[0] || ""
+  );
+
+  // Password states
+  const [passwordFlow, setPasswordFlow] = useState<"none" | "set" | "change">(
+    "none"
+  );
+  const [oldPassword, setOldPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+
+  // Avatar states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const userDisplayName =
     user?.user_metadata?.full_name || user?.email || "User";
   const userEmail = user?.email || "";
+  const username =
+    user?.user_metadata?.username || user?.email?.split("@")[0] || "";
+  const avatarUrl = user?.user_metadata?.avatar_url;
+
+  // Determine if user logged in with Google
+  const isGoogleUser = user?.app_metadata?.provider === "google" || 
+                       user?.identities?.some(id => id.provider === "google");
+  
+  // Check if they have a password (this is a bit tricky with Supabase, 
+  // but usually email provider means they have a password).
+  // If they have a password, we show "Change password", else "Set password".
+  const hasPassword = user?.app_metadata?.provider === "email" || 
+                      user?.identities?.some(id => id.provider === "email") ||
+                      user?.user_metadata?.password_set === true;
+
   const userInitials =
-    user?.user_metadata?.full_name
+    userDisplayName
       ?.split(" ")
       .map((n: string) => n[0])
       .join("")
-      .toUpperCase() ||
-    user?.email?.[0].toUpperCase() ||
-    "U";
+      .toUpperCase()
+      .substring(0, 2) || "U";
+
+  useEffect(() => {
+    if (success || error) {
+      const timer = setTimeout(() => {
+        setSuccess(null);
+        setError(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, error]);
+
+  const handleUpdateName = async () => {
+    if (!newName.trim() || newName === userDisplayName) {
+      setIsEditingName(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { full_name: newName.trim() },
+      });
+      if (error) throw error;
+      setSuccess("Name updated successfully");
+      setIsEditingName(false);
+    } catch (err: any) {
+      setError(err.message || "Failed to update name");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateUsername = async () => {
+    if (!newUsername.trim() || newUsername === username) {
+      setIsEditingUsername(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { username: newUsername.trim() },
+      });
+      if (error) throw error;
+      setSuccess("Username updated successfully");
+      setIsEditingUsername(false);
+    } catch (err: any) {
+      setError(err.message || "Failed to update username");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size and type
+    if (file.size > 2 * 1024 * 1024) {
+      setError("File size must be less than 2MB");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      // Upload to 'avatars' bucket
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file);
+
+      if (uploadError) {
+        // If bucket doesn't exist, we might get an error.
+        // For "dummy features working", we'll simulate success if it's a "bucket not found" error
+        // but tell the user it's a dummy for now if it fails.
+        if (uploadError.message.includes("not found")) {
+           // Fallback: just update metadata with a blob URL for local preview or just dummy success
+           const { error: metaError } = await supabase.auth.updateUser({
+             data: { avatar_url: URL.createObjectURL(file) }
+           });
+           if (metaError) throw metaError;
+           setSuccess("Avatar updated (locally)");
+        } else {
+          throw uploadError;
+        }
+      } else {
+        const { data: { publicUrl } } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(filePath);
+
+        const { error: metaError } = await supabase.auth.updateUser({
+          data: { avatar_url: publicUrl },
+        });
+        if (metaError) throw metaError;
+        setSuccess("Avatar updated successfully");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to update avatar");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordAction = async () => {
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      if (passwordFlow === "change") {
+        // Verify old password by attempting a sign-in
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email: userEmail,
+          password: oldPassword,
+        });
+
+        if (authError) {
+          throw new Error("Invalid old password");
+        }
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: password,
+        data: { password_set: true }
+      });
+
+      if (error) throw error;
+      setSuccess(passwordFlow === "set" ? "Password set successfully" : "Password changes successfully");
+      setPasswordFlow("none");
+      setOldPassword("");
+      setPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      setError(err.message || "Failed to update password");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Account</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage your account information and security settings.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Account</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage your account information and security settings.
+          </p>
+        </div>
+        {(success || error) && (
+          <div className={cn(
+            "text-xs px-3 py-1 rounded-full animate-in fade-in slide-in-from-top-1 duration-300",
+            success ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : 
+                      "bg-red-500/10 text-red-500 border border-red-500/20"
+          )}>
+            {success || error}
+          </div>
+        )}
       </div>
 
       <Separator />
@@ -826,10 +1035,14 @@ function AccountTab() {
       {/* Profile Section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Avatar className="h-14 w-14 rounded-full">
-            <AvatarFallback className="rounded-full bg-emerald-600 text-white text-lg font-semibold">
-              {userInitials}
-            </AvatarFallback>
+          <Avatar className="h-14 w-14 rounded-full ring-2 ring-background shadow-sm">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={userDisplayName} className="h-full w-full object-cover rounded-full" />
+            ) : (
+              <AvatarFallback className="rounded-full bg-emerald-600 text-white text-lg font-semibold">
+                {userInitials}
+              </AvatarFallback>
+            )}
           </Avatar>
           <div>
             <p className="text-sm font-semibold text-foreground">
@@ -838,39 +1051,105 @@ function AccountTab() {
             <p className="text-xs text-muted-foreground">{userEmail}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="text-xs rounded-lg">
-          Change avatar
-        </Button>
+        <div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*"
+            onChange={handleFileChange}
+          />
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs rounded-lg"
+            onClick={handleAvatarClick}
+            disabled={loading}
+          >
+            {loading ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+            Change avatar
+          </Button>
+        </div>
       </div>
 
       <Separator />
 
       {/* Full Name */}
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex-1 mr-4">
           <p className="text-sm font-medium text-foreground">Full Name</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {userDisplayName}
-          </p>
+          {isEditingName ? (
+            <div className="mt-1.5 flex items-center gap-2">
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="h-8 text-xs rounded-lg max-w-[200px]"
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleUpdateName()}
+              />
+              <Button size="sm" className="h-8 px-3 text-[10px] rounded-lg" onClick={handleUpdateName} disabled={loading}>
+                Save
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 px-3 text-[10px] rounded-lg" onClick={() => setIsEditingName(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {userDisplayName}
+            </p>
+          )}
         </div>
-        <Button variant="outline" size="sm" className="text-xs rounded-lg">
-          Change full name
-        </Button>
+        {!isEditingName && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs rounded-lg"
+            onClick={() => setIsEditingName(true)}
+          >
+            Change full name
+          </Button>
+        )}
       </div>
 
       <Separator />
 
       {/* Username */}
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex-1 mr-4">
           <p className="text-sm font-medium text-foreground">Username</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {userEmail?.split("@")[0]}
-          </p>
+          {isEditingUsername ? (
+            <div className="mt-1.5 flex items-center gap-2">
+              <Input
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                className="h-8 text-xs rounded-lg max-w-[200px]"
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleUpdateUsername()}
+              />
+              <Button size="sm" className="h-8 px-3 text-[10px] rounded-lg" onClick={handleUpdateUsername} disabled={loading}>
+                Save
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 px-3 text-[10px] rounded-lg" onClick={() => setIsEditingUsername(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {username}
+            </p>
+          )}
         </div>
-        <Button variant="outline" size="sm" className="text-xs rounded-lg">
-          Change username
-        </Button>
+        {!isEditingUsername && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="text-xs rounded-lg"
+            onClick={() => setIsEditingUsername(true)}
+          >
+            Change username
+          </Button>
+        )}
       </div>
 
       <Separator />
@@ -881,6 +1160,11 @@ function AccountTab() {
           <p className="text-sm font-medium text-foreground">Email</p>
           <p className="text-xs text-muted-foreground mt-0.5">{userEmail}</p>
         </div>
+        {isGoogleUser && (
+          <Badge variant="secondary" className="text-[10px] bg-blue-500/10 text-blue-500 border-blue-500/20">
+            Google Auth
+          </Badge>
+        )}
       </div>
 
       <Separator />
@@ -892,17 +1176,119 @@ function AccountTab() {
           Security
         </h3>
         <div className="mt-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">Password</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Set a password or change your existing one
-              </p>
+          <div className={cn(
+            "space-y-4 p-4 rounded-xl border border-border transition-all duration-300",
+            passwordFlow !== "none" ? "bg-muted/30" : "bg-transparent"
+          )}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Password</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {hasPassword ? "Change your existing password" : "Set a password for your account"}
+                </p>
+              </div>
+              {passwordFlow === "none" && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-xs rounded-lg"
+                  onClick={() => setPasswordFlow(hasPassword ? "change" : "set")}
+                >
+                  {hasPassword ? "Change password" : "Set password"}
+                </Button>
+              )}
             </div>
-            <Button variant="outline" size="sm" className="text-xs rounded-lg">
-              Change password
-            </Button>
+
+            {passwordFlow !== "none" && (
+              <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                {passwordFlow === "change" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Current Password
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showPasswords ? "text" : "password"}
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                        className="h-9 text-xs rounded-lg pr-10"
+                        placeholder="Enter current password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords(!showPasswords)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showPasswords ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                    <button 
+                      type="button"
+                      className="text-[10px] text-primary hover:underline"
+                      onClick={() => {}} // Dummy as requested
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {passwordFlow === "set" ? "New Password" : "New Password"}
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showPasswords ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="h-9 text-xs rounded-lg pr-10"
+                        placeholder="Minimum 6 characters"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Confirm Password
+                    </Label>
+                    <Input
+                      type={showPasswords ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="h-9 text-xs rounded-lg"
+                      placeholder="Re-enter password"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button 
+                    size="sm" 
+                    className="h-9 px-4 rounded-lg text-xs" 
+                    onClick={handlePasswordAction}
+                    disabled={loading || !password || !confirmPassword || (passwordFlow === 'change' && !oldPassword)}
+                  >
+                    {loading && <Loader2 className="h-3 w-3 animate-spin mr-2" />}
+                    Confirm
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-9 px-4 rounded-lg text-xs" 
+                    onClick={() => {
+                      setPasswordFlow("none");
+                      setOldPassword("");
+                      setPassword("");
+                      setConfirmPassword("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
+
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">
