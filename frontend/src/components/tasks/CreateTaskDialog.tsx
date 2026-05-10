@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/command";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { toast } from "sonner";
 
 import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
 import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
@@ -213,6 +214,32 @@ export function CreateTaskDialog({
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!title.trim()) return;
+
+    // Validation: Block creation in the past
+    if (mode === "create" && date) {
+      const now = new Date();
+      if (isAllDay) {
+        // For all-day tasks, we only block if the date is strictly before today
+        const today = startOfToday();
+        const selectedDateOnly = new Date(date);
+        selectedDateOnly.setHours(0, 0, 0, 0);
+        
+        if (selectedDateOnly < today) {
+          toast.error("Cannot create in the past", {
+            description: "Please select a future time slot.",
+          });
+          return;
+        }
+      } else {
+        // For timed tasks, we block if it's even one minute in the past
+        if (date < now) {
+          toast.error("Cannot create in the past", {
+            description: "Please select a future time slot.",
+          });
+          return;
+        }
+      }
+    }
 
     const input: CreateTaskInput = {
       title: title.trim(),
