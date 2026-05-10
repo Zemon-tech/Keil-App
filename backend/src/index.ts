@@ -4,6 +4,7 @@ import pool from "./config/pg";
 import "./config/supabase";
 import http from "http";
 import { initSocket } from "./socket";
+import { taskOverdueWorkerService } from "./services/task-overdue-worker.service";
 
 const port = config.port;
 
@@ -20,6 +21,9 @@ const startServer = async () => {
 
         // Initialize Socket.io (auth middleware + event handlers live in socket.ts)
         initSocket(server);
+
+        // Start background worker for overdue tasks
+        taskOverdueWorkerService.start();
     } catch (error) {
         console.error("Failed to start server:", error);
         process.exit(1);

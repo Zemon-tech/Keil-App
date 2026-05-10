@@ -247,6 +247,9 @@ export function EventPreviewDialog({
                 </div>
                 <h3 className="font-semibold text-[15px] leading-tight text-foreground line-clamp-2">
                   {event.title || "Untitled event"}
+                  {event.status === "backlog" && (
+                    <span className="ml-2 text-red-600 font-bold whitespace-nowrap">Backlog</span>
+                  )}
                 </h3>
               </div>
 

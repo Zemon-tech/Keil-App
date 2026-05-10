@@ -731,6 +731,18 @@ html,
     font-size: 0.75rem !important;
 }
 
+/* Allow red dot visibility for backlog tasks */
+.fc-event.is-backlog {
+    overflow: visible !important;
+}
+.is-backlog .fc-event-main {
+    overflow: visible !important;
+}
+.is-backlog .fc-daygrid-event-harness {
+    overflow: visible !important;
+    z-index: 5 !important;
+}
+
 /* Priority color classes */
 .task-priority-urgent {
     background-color: #FECACA;

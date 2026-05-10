@@ -116,8 +116,11 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
       notes: block.notes,
       taskTitle: task?.title,
       projectTitle: task?.projectTitle,
+      taskStatus: task?.status,
     },
   } satisfies EventInput;
+
+  const isBacklog = task?.status === "backlog";
 
   if (block.type === "deadline_marker") {
     return {
@@ -126,7 +129,7 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
       start: block.startISO,
       end: new Date(new Date(block.startISO).getTime() + 10 * 60000).toISOString(),
       display: "auto",
-      classNames: ["task-deadline"],
+      classNames: ["task-deadline", isBacklog ? "is-backlog" : ""].filter(Boolean),
     };
   }
 
@@ -134,13 +137,13 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
     return {
       ...base,
       display: "background",
-      classNames: ["task-focus-bg"],
+      classNames: ["task-focus-bg", isBacklog ? "is-backlog" : ""].filter(Boolean),
     };
   }
 
   return {
     ...base,
-    classNames: ["task-event"],
+    classNames: ["task-event", isBacklog ? "is-backlog" : ""].filter(Boolean),
   };
 }
 
@@ -163,22 +166,33 @@ function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
   const isScheduledTask = arg.event.extendedProps.isScheduledTask;
   const isMonthView = arg.view.type === "dayGridMonth";
+  const isBacklog = arg.event.extendedProps.taskStatus === "backlog";
+
+  const BacklogDot = () => (
+    <div 
+      className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#FF0000] rounded-full z-50 pointer-events-none"
+      style={{ transform: "translate(50%, -50%)" }}
+    />
+  );
 
   if (isMonthView) {
     const taskType = arg.event.extendedProps.taskType;
     const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
     return (
-      <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
-        {isScheduledTask && (
-          taskType === "event"
-            ? isDone
-              ? <CalendarCheck className="h-3 w-3 shrink-0 opacity-70" />
-              : <Calendar className="h-3 w-3 shrink-0 opacity-70" />
-            : isDone
-              ? <CheckSquare className="h-3 w-3 shrink-0 opacity-70" />
-              : <Square className="h-3 w-3 shrink-0 opacity-70" />
-        )}
-        <span className={cn("truncate", isDone && "line-through italic opacity-70")}>{arg.event.title}</span>
+      <div className="relative w-full h-full overflow-visible">
+        {isBacklog && <BacklogDot />}
+        <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
+          {isScheduledTask && (
+            taskType === "event"
+              ? isDone
+                ? <CalendarCheck className="h-3 w-3 shrink-0 opacity-70" />
+                : <Calendar className="h-3 w-3 shrink-0 opacity-70" />
+              : isDone
+                ? <CheckSquare className="h-3 w-3 shrink-0 opacity-70" />
+                : <Square className="h-3 w-3 shrink-0 opacity-70" />
+          )}
+          <span className={cn("truncate", isDone && "line-through italic opacity-70")}>{arg.event.title}</span>
+        </div>
       </div>
     );
   }
@@ -188,23 +202,31 @@ function renderEventContent(arg: EventContentArg) {
     const taskType = arg.event.extendedProps.taskType;
     const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
     return (
-      <div className="h-full w-full p-2 overflow-hidden flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
-        {taskType === "event"
-          ? isDone
-            ? <CalendarCheck className="h-3.5 w-3.5 shrink-0 opacity-70" />
-            : <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
-          : isDone
-            ? <CheckSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
-            : <Square className="h-3.5 w-3.5 shrink-0 opacity-70" />
-        }
-        <div className={cn("text-[11px] font-bold leading-tight truncate flex-1", isDone && "line-through italic opacity-70")}>{arg.event.title}</div>
+      <div className="relative h-full w-full overflow-visible">
+        {isBacklog && <BacklogDot />}
+        <div className="h-full w-full p-2 overflow-hidden flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
+          {taskType === "event"
+            ? isDone
+              ? <CalendarCheck className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              : <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            : isDone
+              ? <CheckSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              : <Square className="h-3.5 w-3.5 shrink-0 opacity-70" />
+          }
+          <div className={cn("text-[11px] font-bold leading-tight truncate flex-1", isDone && "line-through italic opacity-70")}>{arg.event.title}</div>
+        </div>
       </div>
     );
   }
 
   // Handle calendar blocks with type metadata
   if (!type || !typeMeta[type]) {
-    return <div className="p-2 text-xs">{arg.event.title}</div>;
+    return (
+      <div className="relative h-full w-full overflow-visible">
+        {isBacklog && <BacklogDot />}
+        <div className="p-2 text-xs overflow-hidden">{arg.event.title}</div>
+      </div>
+    );
   }
 
   const meta = typeMeta[type];
@@ -213,31 +235,37 @@ function renderEventContent(arg: EventContentArg) {
 
   if (isBg) {
     return (
-      <div className="h-full w-full px-2 py-1.5 opacity-40">
-        <div className="flex items-center gap-2">
-          <Icon className="h-3 w-3" />
-          <span className="text-[10px] font-bold uppercase tracking-wider truncate">{arg.event.title}</span>
+      <div className="relative h-full w-full overflow-visible">
+        {isBacklog && <BacklogDot />}
+        <div className="h-full w-full px-2 py-1.5 opacity-40 overflow-hidden">
+          <div className="flex items-center gap-2">
+            <Icon className="h-3 w-3" />
+            <span className="text-[10px] font-bold uppercase tracking-wider truncate">{arg.event.title}</span>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn(
-      "h-full w-full p-2 border-l-4 overflow-hidden",
-      meta.bg,
-      meta.border.replace("border-", "border-l-")
-    )}>
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
-          <div className="mt-1 flex items-center gap-1.5">
-            <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
-              {meta.label}
-            </span>
+    <div className="relative h-full w-full overflow-visible">
+      {isBacklog && <BacklogDot />}
+      <div className={cn(
+        "h-full w-full p-2 border-l-4 overflow-hidden",
+        meta.bg,
+        meta.border.replace("border-", "border-l-")
+      )}>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
+                {meta.label}
+              </span>
+            </div>
           </div>
+          <Icon className="h-3.5 w-3.5 opacity-40" />
         </div>
-        <Icon className="h-3.5 w-3.5 opacity-40" />
       </div>
     </div>
   );
@@ -482,7 +510,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
   useEffect(() => {
     console.log("🔄 Syncing events state with props", { tasks: tasks.length, blocks: blocks.length, unscheduledIds: unscheduledTaskIds.current.size });
 
-    const blockEvents = blocks.map((block) => makeEventInput(block));
+    const blockEvents = blocks.map((block) => {
+      const task = tasks.find(t => t.id === block.taskId);
+      return makeEventInput(block, task);
+    });
 
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
     // Determine if we are filtering by type (Status sub-filters also count as type filtering)
@@ -529,7 +560,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
           backgroundColor: chipStyles.bg,
           borderColor: chipStyles.border,
           textColor: chipStyles.text,
-          classNames: t.type === "event" ? ["task-event-block"] : [`task-priority-${t.priority}`],
+          classNames: [
+            t.type === "event" ? "task-event-block" : `task-priority-${t.priority}`,
+            t.status === "backlog" ? "is-backlog" : ""
+          ].filter(Boolean),
           extendedProps: {
             taskId: t.id,
             taskTitle: t.title,

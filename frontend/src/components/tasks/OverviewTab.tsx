@@ -83,7 +83,7 @@ export const OverviewTab = ({
   const statusColorMap: Record<string, string> = {
     "in-progress": "bg-blue-500",
     done: "bg-emerald-500",
-    backlog: "bg-zinc-500",
+    backlog: "bg-red-500",
     todo: "bg-violet-500",
   };
 

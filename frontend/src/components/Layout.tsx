@@ -15,6 +15,7 @@ import {
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
+import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
 
 
 
@@ -27,6 +28,9 @@ type LayoutProps = {
 export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const location = useLocation();
+  
+  // Activate automatic task overdue refresh logic
+  useTaskOverdueAutoRefresh();
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {

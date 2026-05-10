@@ -11,7 +11,7 @@ export const STATUS_COLOR: Record<AnyStatus, string> = {
   done: "bg-[#86EFAC]",
   "in-progress": "bg-blue-500",
   "in-review": "bg-violet-500",
-  backlog: "bg-zinc-500",
+  backlog: "bg-red-500",
   todo: "bg-violet-500",
   confirmed: "bg-blue-500",
   tentative: "bg-yellow-500",
