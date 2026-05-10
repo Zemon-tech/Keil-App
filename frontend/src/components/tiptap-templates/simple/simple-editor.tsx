@@ -141,6 +141,12 @@ export function SimpleEditor({
     from: number
     to: number
   } | null>(null)
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
+
+  useEffect(() => {
+    setSlashSelectedIndex(0)
+  }, [slashQuery])
+
   const [blockMenu, setBlockMenu] = useState<{
     left: number
     top: number
@@ -858,18 +864,54 @@ export function SimpleEditor({
     }
   }, [closeSlashMenu, editor])
 
+  const runSlashItem = useCallback((item: SlashItem) => {
+    if (!editor) return
+    if (slashDeleteRange) {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: slashDeleteRange.from, to: slashDeleteRange.to })
+        .run()
+    }
+    item.run()
+    closeSlashMenu()
+  }, [editor, slashDeleteRange, closeSlashMenu])
+
   useEffect(() => {
     if (!slashOpen) return
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault()
         closeSlashMenu()
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault()
+        if (filteredSlashItems.length > 0) {
+          setSlashSelectedIndex((prev) =>
+            prev > 0 ? prev - 1 : filteredSlashItems.length - 1
+          )
+        }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault()
+        if (filteredSlashItems.length > 0) {
+          setSlashSelectedIndex((prev) =>
+            prev < filteredSlashItems.length - 1 ? prev + 1 : 0
+          )
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault()
+        if (filteredSlashItems.length > 0) {
+          const item = filteredSlashItems[slashSelectedIndex]
+          if (item) {
+            runSlashItem(item)
+          }
+        }
       }
     }
 
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [closeSlashMenu, slashOpen])
+    window.addEventListener("keydown", onKeyDown, true)
+    return () => window.removeEventListener("keydown", onKeyDown, true)
+  }, [closeSlashMenu, slashOpen, filteredSlashItems, slashSelectedIndex, runSlashItem])
 
   useEffect(() => {
     if (!blockMenu) return
@@ -894,19 +936,6 @@ export function SimpleEditor({
       window.removeEventListener("keydown", onKeyDown)
     }
   }, [blockMenu])
-
-  const runSlashItem = (item: SlashItem) => {
-    if (!editor) return
-    if (slashDeleteRange) {
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: slashDeleteRange.from, to: slashDeleteRange.to })
-        .run()
-    }
-    item.run()
-    closeSlashMenu()
-  }
 
   const deleteBlockTarget = (target: BlockTarget | null) => {
     if (!editor || !target) return
@@ -1126,23 +1155,28 @@ export function SimpleEditor({
             className="absolute z-50"
             style={{ left: slashPos.left, top: slashPos.top }}
           >
-            <Command className="w-[320px] rounded-lg border bg-popover text-popover-foreground shadow-2xl overflow-hidden">
-              <CommandList className="max-h-[260px]">
-                <CommandEmpty className="px-3 py-2 text-xs text-muted-foreground">
-                  No results
-                </CommandEmpty>
-                {filteredSlashItems.map((item) => (
-                  <CommandItem
+            <div className="w-[320px] rounded-lg border bg-popover text-popover-foreground shadow-2xl overflow-hidden flex flex-col">
+              <div className="max-h-[260px] overflow-y-auto p-1">
+                {filteredSlashItems.length === 0 && (
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    No results found.
+                  </div>
+                )}
+                {filteredSlashItems.map((item, index) => (
+                  <div
                     key={item.title}
-                    value={item.title}
-                    onSelect={() => runSlashItem(item)}
-                    className="px-3 py-2 flex items-center gap-3"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => runSlashItem(item)}
+                    className={`px-3 py-2 flex items-center gap-3 cursor-pointer rounded-sm select-none outline-none ${
+                      index === slashSelectedIndex ? "bg-accent text-accent-foreground" : "text-foreground"
+                    }`}
+                    onMouseEnter={() => setSlashSelectedIndex(index)}
                   >
-                    <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
+                    <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0 text-foreground">
                       {item.icon}
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <div className="text-sm font-medium text-foreground">
+                      <div className="text-sm font-medium">
                         {item.title}
                       </div>
                       {item.subtitle && (
@@ -1151,10 +1185,10 @@ export function SimpleEditor({
                         </div>
                       )}
                     </div>
-                  </CommandItem>
+                  </div>
                 ))}
-              </CommandList>
-            </Command>
+              </div>
+            </div>
           </div>
         )}
       </EditorContext.Provider>
