@@ -125,8 +125,8 @@ export function EventPreviewDialog({
   };
 
   const handleDelete = () => {
-    if (confirm("Are you sure you want to delete this event?")) {
-      deleteTask.mutate(eventId);
+    if (event && confirm("Are you sure you want to delete this event?")) {
+      deleteTask.mutate({ id: eventId, title: event.title, type: event.type });
       onOpenChange(false);
     }
   };

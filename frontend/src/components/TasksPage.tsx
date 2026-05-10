@@ -209,13 +209,16 @@ export function TasksPage() {
   }, [isPersonalMode, updatePersonalTask, updateOrgTask]);
 
   const handleDeleteTask = useCallback((id: string) => {
+    const taskToDelete = taskList.find(t => t.id === id);
+    if (!taskToDelete) return;
+
     if (isPersonalMode) {
-      deletePersonalTask.mutate(id);
+      deletePersonalTask.mutate({ id, title: taskToDelete.title });
     } else {
-      deleteOrgTask.mutate(id);
+      deleteOrgTask.mutate({ id, title: taskToDelete.title, type: taskToDelete.type });
     }
     if (id === selectedTaskId) setSelectedTaskId("");
-  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId]);
+  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId, taskList]);
 
   // ── Space members for assignee picker (org mode only) ─────────────
   // In personal mode, assignees don't exist — pass null so the hook is disabled.

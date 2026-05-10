@@ -132,8 +132,8 @@ export function TaskPreviewDialog({
   };
 
   const handleDelete = () => {
-    if (confirm("Are you sure you want to delete this task?")) {
-      deleteTask.mutate(taskId);
+    if (task && confirm("Are you sure you want to delete this task?")) {
+      deleteTask.mutate({ id: taskId, title: task.title, type: task.type });
       onOpenChange(false);
     }
   };

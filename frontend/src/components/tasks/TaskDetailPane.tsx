@@ -136,14 +136,11 @@ export function TaskDetailPane({
   const handleDelete = () => {
     if (!displayTask) return;
     if (isPersonalMode) {
-      deletePersonalTask.mutate(displayTask.id, {
-        onSuccess: () => onTaskDeleted?.(displayTask.id),
-      });
+      deletePersonalTask.mutate({ id: displayTask.id, title: displayTask.title });
     } else {
-      deleteOrgTask.mutate(displayTask.id, {
-        onSuccess: () => onTaskDeleted?.(displayTask.id),
-      });
+      deleteOrgTask.mutate({ id: displayTask.id, title: displayTask.title, type: displayTask.type });
     }
+    onTaskDeleted?.(displayTask.id);
   };
 
   if (!displayTask) {

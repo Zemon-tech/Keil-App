@@ -300,19 +300,81 @@ export function useUpdateOrgTask(orgId: string | null, spaceId: string | null) {
 export function useDeleteOrgTask(orgId: string | null, spaceId: string | null) {
   const queryClient = useQueryClient();
 
-  return useMutation<void, Error, string>({
-    mutationFn: async (taskId) => {
-      await api.delete(`v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}`);
+  return useMutation<void, Error, { id: string; title: string; type: "task" | "event" }, { previousTasksQueries?: [import("@tanstack/react-query").QueryKey, TaskDTO[] | undefined][]; previousDetail?: TaskDTO }>({
+    onMutate: async ({ id: taskId }) => {
+      if (!orgId || !spaceId) return {};
+
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      await queryClient.cancelQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, taskId) });
+
+      // Snapshot the previous value
+      const previousTasksQueries = queryClient.getQueriesData<TaskDTO[]>({
+        queryKey: orgTaskKeys.lists(orgId, spaceId)
+      });
+      const previousDetail = queryClient.getQueryData<TaskDTO>(
+        orgTaskKeys.detail(orgId, spaceId, taskId)
+      );
+
+      // Optimistically remove from list
+      queryClient.setQueriesData<TaskDTO[]>(
+        { queryKey: orgTaskKeys.lists(orgId, spaceId) },
+        (old) => old ? old.filter((t) => t.id !== taskId) : old
+      );
+
+      return { previousTasksQueries, previousDetail };
     },
-    onSuccess: (_data, taskId) => {
+    mutationFn: async ({ id: taskId, title, type }) => {
+      return new Promise((resolve, reject) => {
+        let isUndone = false;
+
+        const timerId = setTimeout(async () => {
+          if (!isUndone) {
+            try {
+              await api.delete(`v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}`);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          }
+        }, 3000);
+
+        toast(`${title} (${type}) deleted`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              isUndone = true;
+              clearTimeout(timerId);
+              reject(new Error("UNDONE"));
+            }
+          },
+          duration: 3000,
+        });
+      });
+    },
+    onSuccess: (_data, { id: taskId }) => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       queryClient.removeQueries({
         queryKey: orgTaskKeys.detail(orgId, spaceId, taskId),
       });
     },
-    onError: () => {
-      toast.error("Failed to delete task. Please try again.");
+    onError: (err, { id: taskId }, context) => {
+      if (context?.previousTasksQueries) {
+        context.previousTasksQueries.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+      if (context?.previousDetail && orgId && spaceId) {
+        queryClient.setQueryData(
+          orgTaskKeys.detail(orgId, spaceId, taskId),
+          context.previousDetail
+        );
+      }
+      
+      if (err.message !== "UNDONE") {
+        toast.error("Failed to delete task. Please try again.");
+      }
     },
   });
 }

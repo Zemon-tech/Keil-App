@@ -91,9 +91,8 @@ export function EventDetailPane({
 
   const handleDelete = () => {
     if (!displayEvent) return;
-    deleteTask.mutate(displayEvent.id, {
-      onSuccess: () => onEventDeleted?.(displayEvent.id),
-    });
+    deleteTask.mutate({ id: displayEvent.id, title: displayEvent.title, type: displayEvent.type });
+    onEventDeleted?.(displayEvent.id);
   };
 
   if (!displayEvent) {

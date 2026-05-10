@@ -234,16 +234,73 @@ export function useUpdatePersonalTask() {
 export function useDeletePersonalTask() {
   const queryClient = useQueryClient();
 
-  return useMutation<void, Error, string>({
-    mutationFn: async (taskId) => {
-      await api.delete(`v1/personal/tasks/${taskId}`);
+  return useMutation<void, Error, { id: string; title: string }, { previousTasksQueries?: [import("@tanstack/react-query").QueryKey, PersonalTaskDTO[] | undefined][]; previousDetail?: PersonalTaskDTO }>({
+    onMutate: async ({ id: taskId }) => {
+      await queryClient.cancelQueries({ queryKey: personalTaskKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: personalTaskKeys.detail(taskId) });
+
+      const previousTasksQueries = queryClient.getQueriesData<PersonalTaskDTO[]>({
+        queryKey: personalTaskKeys.lists()
+      });
+      const previousDetail = queryClient.getQueryData<PersonalTaskDTO>(
+        personalTaskKeys.detail(taskId)
+      );
+
+      queryClient.setQueriesData<PersonalTaskDTO[]>(
+        { queryKey: personalTaskKeys.lists() },
+        (old) => old ? old.filter((t) => t.id !== taskId) : old
+      );
+
+      return { previousTasksQueries, previousDetail };
     },
-    onSuccess: (_data, taskId) => {
+    mutationFn: async ({ id: taskId, title }) => {
+      return new Promise((resolve, reject) => {
+        let isUndone = false;
+
+        const timerId = setTimeout(async () => {
+          if (!isUndone) {
+            try {
+              await api.delete(`v1/personal/tasks/${taskId}`);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          }
+        }, 3000);
+
+        toast(`${title} (task) deleted`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              isUndone = true;
+              clearTimeout(timerId);
+              reject(new Error("UNDONE"));
+            }
+          },
+          duration: 3000,
+        });
+      });
+    },
+    onSuccess: (_data, { id: taskId }) => {
       queryClient.invalidateQueries({ queryKey: personalTaskKeys.lists() });
       queryClient.removeQueries({ queryKey: personalTaskKeys.detail(taskId) });
     },
-    onError: () => {
-      toast.error("Failed to delete personal task. Please try again.");
+    onError: (err, { id: taskId }, context) => {
+      if (context?.previousTasksQueries) {
+        context.previousTasksQueries.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+      if (context?.previousDetail) {
+        queryClient.setQueryData(
+          personalTaskKeys.detail(taskId),
+          context.previousDetail
+        );
+      }
+      
+      if (err.message !== "UNDONE") {
+        toast.error("Failed to delete personal task. Please try again.");
+      }
     },
   });
 }
