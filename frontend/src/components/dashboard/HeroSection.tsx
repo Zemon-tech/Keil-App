@@ -1,9 +1,11 @@
 import { HeroPromptInput } from "./HeroPromptInput";
+import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
-export function HeroSection() {
-  const handlePromptSubmit = (message: { text: string; files: unknown[] }) => {
-    console.log("Hero Submit:", message);
-  };
+interface HeroSectionProps {
+  isChatStarted?: boolean;
+  onSubmit?: (message: PromptInputMessage) => void;
+}
 
-  return <HeroPromptInput onSubmit={handlePromptSubmit} />;
+export function HeroSection({ isChatStarted = false, onSubmit }: HeroSectionProps) {
+  return <HeroPromptInput isChatStarted={isChatStarted} onSubmit={onSubmit} />;
 }

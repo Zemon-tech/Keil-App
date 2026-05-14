@@ -143,6 +143,7 @@ const PromptInputAttachmentsDisplay = () => {
 };
 
 interface HeroPromptSurfaceProps {
+  isChatStarted: boolean;
   model: string;
   onSuggestionClick: (suggestion: (typeof suggestions)[number]) => void;
   setModel: (value: string) => void;
@@ -154,6 +155,7 @@ interface HeroPromptSurfaceProps {
 }
 
 function HeroPromptSurface({
+  isChatStarted,
   model,
   onSuggestionClick,
   setModel,
@@ -180,12 +182,14 @@ function HeroPromptSurface({
           <PromptInputTextarea
             className={cn(
               "bg-transparent border-none px-0 text-foreground placeholder:text-muted-foreground/55 focus-visible:ring-0 resize-none font-normal transition-all duration-200",
-              hasAttachments
-                ? "min-h-[5rem] pt-3 pb-2 text-base sm:text-lg max-h-48 overflow-y-auto"
-                : "min-h-[5rem] pt-3 pb-2 text-[1rem] sm:text-[1.05rem] max-h-48 overflow-y-auto"
+              isChatStarted
+                ? "min-h-[3.25rem] pt-3 pb-1 text-[0.95rem] max-h-36 overflow-y-auto"
+                : hasAttachments
+                  ? "min-h-[5rem] pt-3 pb-2 text-base sm:text-lg max-h-48 overflow-y-auto"
+                  : "min-h-[5rem] pt-3 pb-2 text-[1rem] sm:text-[1.05rem] max-h-48 overflow-y-auto"
             )}
             onChange={valueChanged}
-            placeholder="How can I help you today?"
+            placeholder={isChatStarted ? "Write a message..." : "How can I help you today?"}
             value={text}
           />
 
@@ -305,10 +309,11 @@ function HeroPromptSurface({
 }
 
 interface HeroPromptInputProps {
+  isChatStarted?: boolean;
   onSubmit?: (message: PromptInputMessage) => void;
 }
 
-export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
+export function HeroPromptInput({ isChatStarted = false, onSubmit }: HeroPromptInputProps) {
   const { user } = useAuth();
   const [text, setText] = useState("");
   const [model, setModel] = useState(models[0].id);
@@ -345,25 +350,42 @@ export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
   };
 
   return (
-    <section className="relative flex w-full max-w-4xl flex-col items-center gap-6 px-4 pt-12 sm:gap-7 sm:pt-14">
-      <div className="fixed top-6 right-6 text-muted-foreground/55 transition-colors hover:text-foreground">
-        <Ghost className="h-6 w-6" />
-      </div>
+    <section
+      className={cn(
+        "relative flex w-full max-w-4xl flex-col items-center px-4",
+        isChatStarted
+          ? "gap-0 py-4"
+          : "gap-6 pt-12 sm:gap-7 sm:pt-14"
+      )}
+    >
+      {!isChatStarted && (
+        <div className="fixed top-6 right-6 text-muted-foreground/55 transition-colors hover:text-foreground">
+          <Ghost className="h-6 w-6" />
+        </div>
+      )}
 
-      <div className="flex items-center gap-5 text-center">
-        <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl">
-          Hey, {userName}
-        </h1>
-      </div>
+      {!isChatStarted && (
+        <div className="flex items-center gap-5 text-center">
+          <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl">
+            Hey, {userName}
+          </h1>
+        </div>
+      )}
 
       <div className="w-full max-w-[54rem]">
         <PromptInput
           className={cn(
             "w-full overflow-visible bg-transparent",
             "[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:overflow-visible",
-            "[&_[data-slot=input-group]]:rounded-[1.25rem] [&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
+            isChatStarted
+              ? "[&_[data-slot=input-group]]:rounded-[1.35rem]"
+              : "[&_[data-slot=input-group]]:rounded-[1.25rem]",
+            "[&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
             "[&_[data-slot=input-group]]:bg-background/88",
-            "[&_[data-slot=input-group]]:shadow-[0_26px_70px_-42px_rgba(15,23,42,0.28)] [&_[data-slot=input-group]]:backdrop-blur-xl",
+            isChatStarted
+              ? "[&_[data-slot=input-group]]:shadow-[0_18px_55px_-36px_rgba(15,23,42,0.4)]"
+              : "[&_[data-slot=input-group]]:shadow-[0_26px_70px_-42px_rgba(15,23,42,0.28)]",
+            "[&_[data-slot=input-group]]:backdrop-blur-xl",
             "transition-all duration-300 dark:shadow-[0_30px_80px_-42px_rgba(0,0,0,0.65)]",
             "[&_[data-slot=input-group]]:before:pointer-events-none [&_[data-slot=input-group]]:before:absolute [&_[data-slot=input-group]]:before:inset-x-6 [&_[data-slot=input-group]]:before:top-0 [&_[data-slot=input-group]]:before:h-px [&_[data-slot=input-group]]:before:bg-white/10 [&_[data-slot=input-group]]:before:content-['']"
           )}
@@ -372,6 +394,7 @@ export function HeroPromptInput({ onSubmit }: HeroPromptInputProps) {
           onSubmit={handleSubmit}
         >
           <HeroPromptSurface
+            isChatStarted={isChatStarted}
             model={model}
             onSuggestionClick={handleSuggestionClick}
             setModel={setModel}
