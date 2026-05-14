@@ -197,14 +197,14 @@ function OrgGeneralTab() {
       <div>
         <h2 className="text-xl font-semibold text-foreground">General</h2>
         <p className="text-sm text-muted-foreground mt-1.5">
-          Manage your workspace identity and core settings.
+          Manage your organisation identity and core settings.
         </p>
       </div>
 
       <div className="space-y-6">
         <div className="space-y-2">
           <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Workspace Name
+            Organisation Name
           </Label>
           <div className="flex items-center gap-4">
             {isAdmin ? (
@@ -221,7 +221,7 @@ function OrgGeneralTab() {
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            This is how your workspace will appear to members.
+            This is how your organisation will appear to members.
           </p>
         </div>
 
@@ -274,7 +274,7 @@ function OrgGeneralTab() {
                 ) : (
                   <Archive className="h-4 w-4 mr-2" />
                 )}
-                Delete Workspace
+                Delete Organisation
               </Button>
             </div>
           </div>
@@ -314,7 +314,7 @@ function OrgMembersTab() {
         <div>
           <h2 className="text-xl font-semibold text-foreground">Members</h2>
           <p className="text-sm text-muted-foreground mt-1.5">
-            Manage who has access to this workspace and their roles.
+            Manage who has access to this organisation and their roles.
           </p>
         </div>
         {isAdmin && (
@@ -493,7 +493,7 @@ function OrgMembersTab() {
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        Remove from Workspace
+                        Remove from Organisation
                       </button>
                     </PopoverContent>
                   </Popover>
@@ -1937,7 +1937,7 @@ function EnterpriseTab() {
         <div>
           <p className="text-sm font-medium text-foreground">Team Members</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Manage who has access to your workspace
+            Manage who has access to your organisation
           </p>
         </div>
         <Button variant="outline" size="sm" className="text-xs rounded-lg">
@@ -2043,10 +2043,10 @@ export function SettingsDialog({
                         </div>
                         <div className="flex flex-col items-start min-w-0 text-left">
                           <span className="text-sm font-semibold truncate w-full">
-                            {selectedOrg?.name || "Select Workspace"}
+                            {selectedOrg?.name || "Select Organisation"}
                           </span>
                           <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">
-                            Workspace
+                            Organisation
                           </span>
                         </div>
                       </div>
@@ -2101,14 +2101,14 @@ export function SettingsDialog({
               {mode === "account" && (
                 <div>
                   <p className="px-2 mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                    Workspace
+                    Organisation
                   </p>
                   <button
                     onClick={() => setMode("workspace")}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/60"
                   >
                     <Building2 className="h-4 w-4 shrink-0" />
-                    Workspace
+                    Organisation
                   </button>
                 </div>
               )}
