@@ -14,7 +14,7 @@ export class ActivityRepository extends BaseRepository<ActivityLog> {
    */
   async log(
     data: {
-      workspace_id: string;
+      workspace_id?: string | null;
       org_id?: string | null;
       space_id?: string | null;
       user_id: string | null;
@@ -35,7 +35,7 @@ export class ActivityRepository extends BaseRepository<ActivityLog> {
 
     const executor = client || this.pool;
     const result = await executor.query(query, [
-      data.workspace_id,
+      data.workspace_id ?? null,
       data.org_id ?? null,
       data.space_id ?? null,
       data.user_id,

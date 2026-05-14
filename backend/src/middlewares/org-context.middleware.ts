@@ -81,8 +81,7 @@ export const requireSpaceMember = async (
       `
         SELECT
           s.*,
-          sm.role as membership_role,
-          COALESCE(s.workspace_id, o.source_workspace_id) as compatibility_workspace_id
+          sm.role as membership_role
         FROM public.spaces s
         INNER JOIN public.space_members sm
           ON sm.space_id = s.id

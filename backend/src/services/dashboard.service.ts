@@ -10,7 +10,7 @@ import { TaskStatus, TaskPriority } from '../types/enums';
 // DTOs for dashboard responses
 export interface TaskDTO {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   parent_task_id: string | null;
   title: string;
   description: string | null;

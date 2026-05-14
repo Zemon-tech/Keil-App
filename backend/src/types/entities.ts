@@ -66,7 +66,7 @@ export interface SpaceMember {
 
 export interface Task {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   org_id?: string | null;
   space_id?: string | null;
   parent_task_id: string | null;
@@ -116,7 +116,7 @@ export interface Comment {
 
 export interface ActivityLog {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   org_id?: string | null;
   space_id?: string | null;
   user_id: string | null;
