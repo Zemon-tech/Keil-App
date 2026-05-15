@@ -25,6 +25,9 @@ import {
   Settings,
   UserPlus,
   Check,
+  MessageSquare,
+  Sparkles,
+  SquarePen,
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -40,10 +43,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const mainNav = [
-  { title: "Search", icon: Search, url: "#" },
-  { title: "Home", icon: Home, url: "/motion" },
-  { title: "Inbox", icon: Inbox, url: "#" },
+const navTabs = [
+  { id: "home", title: "Home", icon: Home, url: "/motion" },
+  { id: "search", title: "Search", icon: Search, url: "#search" },
+  { id: "inbox", title: "Inbox", icon: Inbox, url: "#inbox" },
 ];
 
 function SidebarPageItem({
@@ -96,8 +99,8 @@ function SidebarPageItem({
       <SidebarMenuItem>
         <div
           className={cn(
-            "group/item relative flex min-h-8 w-full items-center rounded-md py-1.5 text-muted-foreground transition-colors",
-            isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 hover:text-foreground"
+            "group/item relative flex min-h-9 w-full items-center rounded-lg py-1 text-muted-foreground transition-all duration-200 ease-in-out",
+            isActive ? "bg-accent/60 text-accent-foreground font-medium shadow-sm" : "hover:bg-accent/30 hover:text-foreground"
           )}
           style={{ paddingLeft: `${itemPadding}px` }}
         >
@@ -116,7 +119,7 @@ function SidebarPageItem({
                     setIsRenaming(false);
                   }
                 }}
-                className="h-6 min-w-0 flex-1 rounded-md border border-border bg-background px-1.5 text-sm font-medium text-foreground outline-none"
+                className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background/50 px-2 text-[13px] font-medium text-foreground outline-none ring-1 ring-ring/20 focus:ring-ring/40 transition-all"
               />
             </div>
           ) : (
@@ -151,7 +154,7 @@ function SidebarPageItem({
               <Link
                 to={`/motion/${item.id}`}
                 onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}
-                className="min-w-0 flex-1 truncate text-sm font-medium leading-snug"
+                className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground"
               >
                 {item.title}
               </Link>
@@ -164,7 +167,7 @@ function SidebarPageItem({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                  className="h-7 w-7 rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
                   onClick={(e) => e.stopPropagation()}
                   aria-label={`Open ${item.title} menu`}
                 >
@@ -210,7 +213,7 @@ function SidebarPageItem({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+              className="h-7 w-7 rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -243,10 +246,10 @@ function SidebarPageItem({
           </div>
         ) : (
           <div
-            className="h-7 px-2 text-xs font-medium italic leading-7 text-muted-foreground"
-            style={{ marginLeft: `${itemPadding + 26}px` }}
+            className="h-7 px-4 text-[11px] font-medium tracking-wide text-muted-foreground/40"
+            style={{ marginLeft: `${itemPadding + 20}px` }}
           >
-            No sub-pages
+            Empty
           </div>
         )
       )}
@@ -319,140 +322,48 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   return (
     <Sidebar collapsible="none" className="w-full h-full border-r border-border/50 bg-card flex flex-col select-none">
       {/* Header - User / Workspace switcher */}
-      <SidebarHeader className="px-3 py-2 border-b border-border/50">
-        <div className="group/workspace flex h-8 items-center gap-2.5 rounded-lg px-1 text-foreground transition-colors hover:bg-accent/50">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-            {initial}
-          </div>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight">
-            {workspaceName}
-          </span>
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/workspace:opacity-100">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                  aria-label="Open workspace menu"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={8} className="w-72 rounded-xl p-1">
-                <div className="px-2 py-1.5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-                      {initial}
-                    </div>
-                    <div className="grid min-w-0 text-left text-sm leading-tight">
-                      <div className="truncate text-xs font-semibold text-foreground">
-                        {workspaceName}
-                      </div>
-                      <div className="truncate text-[10px] text-muted-foreground">
-                        Free Plan · 1 member
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-8 justify-start gap-2 bg-transparent text-xs"
-                      onClick={() => navigate("/motion/profile")}
-                    >
-                      <Settings className="h-4 w-4" />
-                      Settings
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-8 justify-start gap-2 bg-transparent text-xs"
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Invite members
-                    </Button>
-                  </div>
-                </div>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  {user?.email || "Motion workspace"}
-                </div>
-                <DropdownMenuItem
-                  onClick={() => navigate("/motion")}
-                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                >
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-medium text-primary-foreground">
-                    {initial}
-                  </div>
-                  <span className="min-w-0 flex-1 truncate">{workspaceName}</span>
-                  <Check className="h-4 w-4 text-primary" />
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => navigate("/motion/profile")}
-                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                >
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
-                    M
-                  </div>
-                  <span className="min-w-0 flex-1 truncate">Motion settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-primary focus:text-primary">
-                  <Plus className="h-4 w-4" />
-                  New workspace
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">Add another account</DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">Log out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-              onClick={onClose}
-              aria-label="Collapse sidebar"
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-          </div>
-          {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 md:hidden text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+      <SidebarHeader className="p-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {navTabs.map((tab) => {
+            const isActive = location.pathname === tab.url || 
+                           location.hash === tab.url || 
+                           (tab.id === 'home' && location.pathname === '/motion');
+            return (
+              <Button
+                key={tab.id}
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-9 px-3 shrink-0 rounded-full transition-all duration-200",
+                  isActive 
+                    ? "bg-accent/80 text-foreground font-semibold shadow-sm hover:bg-accent" 
+                    : "text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+                )}
+                asChild
+              >
+                <Link to={tab.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}>
+                  <tab.icon className={cn("size-4", tab.id === 'home' && "mr-2")} />
+                  {tab.id === 'home' && <span>Home</span>}
+                </Link>
+              </Button>
+            );
+          })}
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-        {/* Main Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarMenu>
-            {mainNav.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === item.url}
-                  className="text-sm font-medium"
-                >
-                  <Link to={item.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}>
-                    <item.icon />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
+      <SidebarContent className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-2 space-y-4">
 
         {/* Recents Section */}
-        <SidebarGroup>
-          <div className="group/section flex h-8 items-center justify-between">
+        <SidebarGroup className="p-0">
+          <div className="flex items-center px-3 mb-1">
             <button
               type="button"
               onClick={() => setRecentsOpen(!recentsOpen)}
-              className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="flex flex-1 items-center gap-2 text-[11px] font-semibold tracking-wider uppercase text-muted-foreground/60 transition-colors hover:text-foreground/80"
             >
-              {recentsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              <div className={cn("transition-transform duration-200", !recentsOpen && "-rotate-90")}>
+                <ChevronDown className="h-3 w-3" />
+              </div>
               Recents
             </button>
           </div>
@@ -480,24 +391,26 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         </SidebarGroup>
 
         {/* Private Section */}
-        <SidebarGroup>
-          <div className="group/section flex h-8 items-center justify-between">
+        <SidebarGroup className="p-0">
+          <div className="flex items-center px-3 mb-1 group/section">
             <button
               type="button"
               onClick={() => setPrivateOpen(!privateOpen)}
-              className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="flex flex-1 items-center gap-2 text-[11px] font-semibold tracking-wider uppercase text-muted-foreground/60 transition-colors hover:text-foreground/80"
             >
-              {privateOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              <div className={cn("transition-transform duration-200", !privateOpen && "-rotate-90")}>
+                <ChevronDown className="h-3 w-3" />
+              </div>
               Private
             </button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
+              className="h-5 w-5 opacity-0 text-muted-foreground/50 hover:bg-accent/50 hover:text-foreground group-hover/section:opacity-100 transition-all rounded"
               onClick={() => handleAddPage()}
               aria-label="Add private page"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3 w-3" />
             </Button>
           </div>
           {privateOpen && (
@@ -518,14 +431,19 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         </SidebarGroup>
 
         {/* Trash Section */}
-        <SidebarGroup>
-          <button
-            onClick={() => setTrashOpen(!trashOpen)}
-            className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-          >
-            {trashOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Trash
-          </button>
+        <SidebarGroup className="p-0">
+          <div className="px-1">
+            <button
+              onClick={() => setTrashOpen(!trashOpen)}
+              className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-muted-foreground transition-all hover:bg-accent/30 hover:text-foreground"
+            >
+              <div className={cn("transition-transform duration-200", !trashOpen && "-rotate-90")}>
+                <ChevronDown className="h-3.5 w-3.5" />
+              </div>
+              <Trash2 className="h-4 w-4 opacity-70" />
+              Trash
+            </button>
+          </div>
           {trashOpen && (
             <SidebarMenu className="mt-1">
               {trashPages.length > 0 ? (
@@ -569,23 +487,40 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer Tools */}
-      <div className="p-2 border-t border-border/50">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={() => handleAddPage()}
-              className="text-sm font-medium"
-            >
-              <Plus />
-              <span>Add a page</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <div className="p-4 mt-auto flex items-center gap-2">
+        <Button
+          onClick={() => handleAddPage()}
+          variant="secondary"
+          className="flex-1 h-12 justify-between px-4 py-2 bg-accent/30 border border-border/50 hover:bg-accent/50 hover:border-border transition-all rounded-full group"
+        >
+          <div className="flex items-center gap-3">
+            <Sparkles className="size-4.5 text-primary group-hover:scale-110 transition-transform" />
+            <span className="text-[15px] font-semibold text-foreground/90">New chat</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-muted-foreground/50 bg-background/50 px-1.5 py-0.5 rounded border border-border/50">
+            <span className="text-[9px]">⌘</span>
+            <span>O</span>
+          </div>
+        </Button>
+        <Button
+          onClick={() => handleAddPage()}
+          variant="ghost"
+          size="icon"
+          className="size-12 shrink-0 bg-accent/30 border border-border/50 hover:bg-accent/50 hover:border-border transition-all rounded-full"
+        >
+          <SquarePen className="size-5 text-foreground/80" />
+        </Button>
       </div>
 
       <style dangerouslySetInnerHTML={{
         __html: `
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
         }
