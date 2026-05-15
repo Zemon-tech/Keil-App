@@ -11,7 +11,7 @@ import { ActivityQueryOptions } from "../types/repository";
 // DTOs (Data Transfer Objects) for API responses
 export interface ActivityLogDTO {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   user_id: string | null;
   entity_type: LogEntityType;
   entity_id: string;

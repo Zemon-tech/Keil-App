@@ -40,7 +40,7 @@ export interface CreateCommentData {
 }
 
 export interface CommentActivityContext {
-  workspace_id: string;
+  workspace_id?: string | null;
   org_id?: string | null;
   space_id?: string | null;
 }

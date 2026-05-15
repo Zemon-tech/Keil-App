@@ -34,7 +34,7 @@ export interface DependencyDTO {
 
 export interface TaskDTO {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   parent_task_id: string | null;
   type: 'task' | 'event';
   event_type?: string | null;

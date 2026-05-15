@@ -27,15 +27,10 @@ const asString = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] : (value ?? "");
 
 const getTaskContext = (req: Request): orgTaskService.OrgTaskContext => {
-  const orgId = asString(req.params.orgId);
-  const spaceId = asString(req.params.spaceId);
-  const workspaceId = (req as any).space?.compatibility_workspace_id as string | undefined;
-
-  if (!workspaceId) {
-    throw new ApiError(500, "Compatibility workspace is missing for this space");
-  }
-
-  return { orgId, spaceId, workspaceId };
+  return {
+    orgId: asString(req.params.orgId),
+    spaceId: asString(req.params.spaceId),
+  };
 };
 
 const assertTaskInSpace = async (req: Request, taskId: string) => {
@@ -69,7 +64,6 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
   }
 
   const task = await orgTaskService.createTask(context, {
-    workspace_id: context.workspaceId,
     org_id: context.orgId,
     space_id: context.spaceId,
     created_by: userId,
@@ -249,7 +243,6 @@ export const addTaskComment = catchAsync(async (req: Request, res: Response) => 
       parent_comment_id: parent_comment_id || undefined,
     },
     {
-      workspace_id: context.workspaceId,
       org_id: context.orgId,
       space_id: context.spaceId,
     },
@@ -266,7 +259,6 @@ export const deleteTaskComment = catchAsync(async (req: Request, res: Response) 
   await assertTaskInSpace(req, asString(req.params.id));
 
   await hardDeleteComment(asString(req.params.commentId), userId, {
-    workspace_id: context.workspaceId,
     org_id: context.orgId,
     space_id: context.spaceId,
   });

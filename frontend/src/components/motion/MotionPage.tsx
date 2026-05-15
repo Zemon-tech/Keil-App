@@ -171,6 +171,7 @@ export function MotionPage() {
 
               <div className="pt-6">
                 <SimpleEditor
+                  key={pageId}
                   content={page.content}
                   onContentChange={(json) => saveContent(pageId, json)}
                   onReady={(editor) => setPageEditor(editor)}

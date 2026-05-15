@@ -47,8 +47,8 @@ const mockNotifications = [
     {
         id: "4",
         type: "system",
-        title: "Workspace updated",
-        description: "Your workspace settings have been updated",
+        title: "Organisation updated",
+        description: "Your organisation settings have been updated",
         time: "3 hours ago",
         read: true,
         user: null

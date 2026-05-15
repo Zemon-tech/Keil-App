@@ -3,7 +3,7 @@ import { LogEntityType } from "../types/enums";
 
 export interface SpaceActivityLogDTO {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   org_id: string | null;
   space_id: string | null;
   user_id: string | null;

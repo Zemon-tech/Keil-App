@@ -12,7 +12,7 @@ import { ApiError } from "../utils/ApiError";
 
 export interface OrgTaskDTO {
   id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   org_id: string | null;
   space_id: string | null;
   parent_task_id: string | null;
@@ -35,13 +35,11 @@ export interface OrgTaskDTO {
 }
 
 export interface OrgTaskContext {
-  workspaceId: string;
   orgId: string;
   spaceId: string;
 }
 
 export interface CreateOrgTaskInput {
-  workspace_id: string;
   org_id: string;
   space_id: string;
   parent_task_id?: string | null;
@@ -111,7 +109,6 @@ const logSpaceActivity = async (
 ): Promise<void> => {
   await activityRepository.log(
     {
-      workspace_id: context.workspaceId,
       org_id: context.orgId,
       space_id: context.spaceId,
       user_id: userId,

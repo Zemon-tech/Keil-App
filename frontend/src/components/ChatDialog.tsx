@@ -443,7 +443,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                 <div className="h-24 w-24 bg-primary/10 rounded-3xl flex items-center justify-center mb-6 ring-4 ring-background shadow-xs relative z-10 transition-transform duration-500 group-hover:scale-105">
                                     <MessageCircle className="h-10 w-10 text-primary opacity-80" />
                                 </div>
-                                <h3 className="text-xl font-bold text-foreground relative z-10 mb-2">Smart Workspace Comms</h3>
+                                <h3 className="text-xl font-bold text-foreground relative z-10 mb-2">Smart Organisation Comms</h3>
                                 <p className="text-sm max-w-[320px] mb-8 relative z-10">
                                     Select any channel or team member from the directory to initiate encrypted collaboration instantly.
                                 </p>
