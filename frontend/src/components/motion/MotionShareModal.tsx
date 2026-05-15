@@ -33,7 +33,6 @@ import {
   type MotionPermission,
 } from "@/hooks/api/useMotionPages";
 import { formatDistanceToNow } from "date-fns";
-import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -211,7 +210,7 @@ function SpaceShareSection({
   const createShare = useCreateMotionPageShare(orgId, spaceId, pageId);
   const revokeShare = useRevokeMotionPageShare(orgId, spaceId, pageId);
 
-  const { organisations, activeOrgId } = useAppContext();
+  const { organisations } = useAppContext();
   const [targetOrgId, setTargetOrgId] = useState<string>(
     organisations[0]?.id ?? ""
   );

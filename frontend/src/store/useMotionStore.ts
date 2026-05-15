@@ -16,7 +16,6 @@
  */
 
 import { create } from 'zustand';
-import type { JSONContent } from '@tiptap/core';
 import type { MotionPageDTO } from '@/hooks/api/useMotionPages';
 
 // Re-export the DTO type under the legacy name so existing component
