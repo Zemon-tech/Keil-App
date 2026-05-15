@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -48,8 +48,7 @@ import {
   Building2,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import { useTheme } from "next-themes";
-import { SettingsDialog } from "@/components/SettingsDialog";
+import { useTheme } from "next-themes";import { SettingsDialog } from "@/components/SettingsDialog";
 import { ChatDialog } from "@/components/ChatDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
@@ -165,7 +164,32 @@ export function AppSidebar() {
     "U";
 
   const { state } = useSidebar();
+  const { setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
+
+  // ── Auto-collapse on /motion/* routes (Option A1) ──────────────────────
+  // When the user navigates into Motion, the AppSidebar collapses so the
+  // MotionSidebar can take the full left panel without two sidebars competing.
+  // When leaving /motion, the previous open state is restored.
+  const wasOpenBeforeMotion = useRef<boolean | null>(null);
+  const isMotionRoute = location.pathname.startsWith("/motion");
+
+  useEffect(() => {
+    if (isMotionRoute) {
+      // Save current open state before collapsing
+      if (wasOpenBeforeMotion.current === null) {
+        wasOpenBeforeMotion.current = state === "expanded";
+      }
+      setOpen(false);
+    } else {
+      // Restore previous state when leaving /motion
+      if (wasOpenBeforeMotion.current !== null) {
+        setOpen(wasOpenBeforeMotion.current);
+        wasOpenBeforeMotion.current = null;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMotionRoute]);
 
   // ── App context ────────────────────────────────────────────────────────
   const {

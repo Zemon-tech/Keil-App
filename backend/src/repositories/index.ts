@@ -12,6 +12,7 @@ import { SpaceRepository } from './space.repository';
 import { PersonalTaskRepository } from './personal-task.repository';
 import { OrgTaskRepository } from './org-task.repository';
 import { IntegrationRepository } from './integration.repository';
+import { MotionPageRepository, MotionPageShareRepository } from './motion-page.repository';
 
 // Instantiate repositories with the shared pool
 export const userRepository = new UserRepository();
@@ -26,6 +27,8 @@ export const spaceRepository = new SpaceRepository();
 export const personalTaskRepository = new PersonalTaskRepository();
 export const orgTaskRepository = new OrgTaskRepository();
 export const integrationRepository = new IntegrationRepository();
+export const motionPageRepository = new MotionPageRepository();
+export const motionPageShareRepository = new MotionPageShareRepository();
 
 // Export repository classes for testing/mocking
 export {
@@ -40,5 +43,7 @@ export {
   SpaceRepository,
   PersonalTaskRepository,
   OrgTaskRepository,
-  IntegrationRepository
+  IntegrationRepository,
+  MotionPageRepository,
+  MotionPageShareRepository,
 };

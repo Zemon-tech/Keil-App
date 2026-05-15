@@ -56,3 +56,13 @@ export enum LogActionType {
   TITLE_UPDATED = 'title_updated',
   DESCRIPTION_UPDATED = 'description_updated'
 }
+
+export enum MotionShareType {
+  PUBLIC_LINK = 'public_link',
+  SPACE = 'space',
+}
+
+export enum MotionPermission {
+  VIEW = 'view',
+  EDIT = 'edit',
+}

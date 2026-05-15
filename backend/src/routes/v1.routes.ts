@@ -6,6 +6,8 @@ import orgTaskRoutes from "./org-task.routes";
 import orgChatRoutes from "./org-chat.routes";
 import orgActivityRoutes from "./org-activity.routes";
 import integrationRoutes from "./integration.routes";
+import motionPageRoutes from "./motion-page.routes";
+import motionPublicRoutes from "./motion-public.routes";
 
 const router = Router();
 
@@ -15,11 +17,16 @@ router.use("/personal", personalTaskRoutes);
 // ── Organisation / space routes ───────────────────────────────────────────────
 router.use("/orgs", orgRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId/tasks", orgTaskRoutes);
+router.use("/orgs/:orgId/spaces/:spaceId/notes", motionPageRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId/chat", orgChatRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId", orgActivityRoutes);
 
 // ── Integrations ──────────────────────────────────────────────────────────────
 router.use("/integrations", integrationRoutes);
+
+// ── Motion public links (no auth) ─────────────────────────────────────────────
+// Must be registered before the catch-all activityRoutes below.
+router.use("/", motionPublicRoutes);
 
 // ── Legacy: dashboard + activity (kept for personal mode dashboard) ───────────
 // v1/dashboard is still used by Dashboard.tsx in personal mode.

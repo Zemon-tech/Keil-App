@@ -1,5 +1,5 @@
 // Database entity interfaces matching PostgreSQL schema
-import { TaskStatus, TaskPriority, MemberRole, LogEntityType, LogActionType } from './enums';
+import { TaskStatus, TaskPriority, MemberRole, LogEntityType, LogActionType, MotionShareType, MotionPermission } from './enums';
 
 export interface User {
   id: string;
@@ -156,4 +156,33 @@ export interface UserIntegration {
   calendar_id: string;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface MotionPage {
+  id: string;
+  org_id: string;
+  space_id: string;
+  created_by: string;
+  parent_id: string | null;
+  title: string;
+  content: Record<string, any>; // Tiptap JSONContent
+  icon: string | null;
+  cover_image: string | null;
+  position: number;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+}
+
+export interface MotionPageShare {
+  id: string;
+  page_id: string;
+  share_type: MotionShareType;
+  target_org_id: string | null;
+  target_space_id: string | null;
+  share_token: string | null;
+  permission: MotionPermission;
+  created_by: string;
+  created_at: Date;
+  expires_at: Date | null;
 }

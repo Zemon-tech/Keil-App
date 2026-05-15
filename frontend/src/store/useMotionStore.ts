@@ -1,111 +1,159 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import type { JSONContent } from '@tiptap/core';
+/**
+ * useMotionStore — in-memory optimistic layer for Motion pages.
+ *
+ * Role after backend integration:
+ * - NOT persisted to localStorage (no more persist middleware)
+ * - Seeded from the API response via hydratePages()
+ * - Acts as the working copy while editing (instant UI, no latency)
+ * - dirtyPageIds tracks pages with unsaved content changes
+ * - sidebarOpen is pure UI state (no backend involvement)
+ *
+ * The TanStack Query cache (useMotionPages hook) is the source of truth
+ * for server state. This store is only used for:
+ *   1. Optimistic in-editor content (before the debounced save fires)
+ *   2. Sidebar open/close state
+ *   3. Dirty tracking for the save indicator
+ */
 
+import { create } from 'zustand';
+import type { JSONContent } from '@tiptap/core';
+import type { MotionPageDTO } from '@/hooks/api/useMotionPages';
+
+// Re-export the DTO type under the legacy name so existing component
+// imports of MotionPageRecord continue to work during the migration.
+export type MotionPageRecord = MotionPageDTO;
 export type MotionPageId = string;
 
-export interface MotionPageRecord {
-  id: MotionPageId;
-  parentId?: MotionPageId;
-  title: string;
-  icon?: string;
-  coverImage?: string;
-  content: JSONContent;
-  createdAt: number;
-  updatedAt: number;
-  isDeleted?: boolean;
-}
-
 interface MotionStore {
+  // ── Working copy ────────────────────────────────────────────────────────────
+  /** In-memory page map. Seeded from API, updated optimistically while editing. */
   pages: MotionPageRecord[];
+
+  /** Set of page ids that have unsaved content changes. */
+  dirtyPageIds: Set<string>;
+
+  // ── UI state ─────────────────────────────────────────────────────────────────
   sidebarOpen: boolean;
-  
-  // Actions
-  addPage: (partial?: Partial<MotionPageRecord>) => MotionPageRecord;
-  updatePage: (id: MotionPageId, updates: Partial<MotionPageRecord>) => void;
-  deletePage: (id: MotionPageId) => void;
-  restorePage: (id: MotionPageId) => void;
-  permanentlyDeletePage: (id: MotionPageId) => void;
-  setSidebarOpen: (open: boolean) => void;
-  
-  // Helpers (as selectors)
+
+  // ── Actions ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Seeds the store from the API response.
+   * Called after useMotionPages resolves. Replaces the current page list.
+   */
+  hydratePages: (pages: MotionPageRecord[]) => void;
+
+  /**
+   * Optimistically updates a page in the working copy.
+   * Does NOT call the API — the component is responsible for debounced saves.
+   */
+  updatePageLocally: (id: MotionPageId, updates: Partial<MotionPageRecord>) => void;
+
+  /**
+   * Optimistically adds a page to the working copy.
+   * Called after useCreateMotionPage succeeds (with the server-returned page).
+   */
+  addPageLocally: (page: MotionPageRecord) => void;
+
+  /**
+   * Removes a page (and its descendants) from the working copy.
+   * Called after soft-delete or hard-delete succeeds.
+   */
+  removePageLocally: (id: MotionPageId) => void;
+
+  // ── Dirty tracking ────────────────────────────────────────────────────────────
+  setDirty: (id: MotionPageId) => void;
+  clearDirty: (id: MotionPageId) => void;
+  isDirty: (id: MotionPageId) => boolean;
+
+  // ── Selectors ─────────────────────────────────────────────────────────────────
   getPageById: (id: MotionPageId) => MotionPageRecord | undefined;
   getRootPages: () => MotionPageRecord[];
   getSubpages: (parentId: MotionPageId) => MotionPageRecord[];
   getTrashPages: () => MotionPageRecord[];
+
+  // ── UI ────────────────────────────────────────────────────────────────────────
+  setSidebarOpen: (open: boolean) => void;
 }
 
-const getEmptyDoc = (): JSONContent => ({
-  type: 'doc',
-  content: [{ type: 'paragraph' }],
-});
+export const useMotionStore = create<MotionStore>()((set, get) => ({
+  pages: [],
+  dirtyPageIds: new Set<string>(),
+  sidebarOpen: true,
 
-const createId = (): MotionPageId => 
-  `mp_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
+  // ── Hydration ─────────────────────────────────────────────────────────────────
 
-export const useMotionStore = create<MotionStore>()(
-  persist(
-    (set, get) => ({
-      pages: [],
-      sidebarOpen: true,
+  hydratePages: (pages) => {
+    // Guard: only update the store if the content actually changed.
+    // Compare by serialising id+updated_at of each page. This prevents
+    // the infinite loop caused by TanStack Query returning a new array
+    // reference on every render even when the data is identical.
+    const current = get().pages;
+    const incomingKey = pages.map((p) => `${p.id}:${p.updated_at}`).join(',');
+    const currentKey = current.map((p) => `${p.id}:${p.updated_at}`).join(',');
+    if (incomingKey === currentKey) return; // nothing changed — skip set()
+    set({ pages });
+  },
 
-      addPage: (partial) => {
-        const now = Date.now();
-        const newPage: MotionPageRecord = {
-          id: createId(),
-          title: 'Untitled',
-          content: getEmptyDoc(),
-          createdAt: now,
-          updatedAt: now,
-          ...partial,
-        };
-        set((state) => ({ pages: [newPage, ...state.pages] }));
-        return newPage;
-      },
+  // ── Local optimistic mutations ────────────────────────────────────────────────
 
-      updatePage: (id, updates) => {
-        set((state) => ({
-          pages: state.pages.map((p) => 
-            p.id === id ? { ...p, ...updates, updatedAt: Date.now() } : p
-          ),
-        }));
-      },
+  updatePageLocally: (id, updates) =>
+    set((state) => ({
+      pages: state.pages.map((p) =>
+        p.id === id
+          ? { ...p, ...updates, updated_at: new Date().toISOString() }
+          : p
+      ),
+    })),
 
-      deletePage: (id) => {
-        set((state) => ({
-          pages: state.pages.map((p) => 
-            p.id === id ? { ...p, isDeleted: true, updatedAt: Date.now() } : p
-          ),
-        }));
-      },
+  addPageLocally: (page) =>
+    set((state) => ({
+      // Prepend — new pages appear at the top of the list
+      pages: [page, ...state.pages.filter((p) => p.id !== page.id)],
+    })),
 
-      restorePage: (id) => {
-        set((state) => ({
-          pages: state.pages.map((p) => 
-            p.id === id ? { ...p, isDeleted: false, updatedAt: Date.now() } : p
-          ),
-        }));
-      },
+  removePageLocally: (id) =>
+    set((state) => ({
+      // Remove the page and all its descendants
+      pages: state.pages.filter((p) => p.id !== id && p.parent_id !== id),
+      dirtyPageIds: new Set(
+        [...state.dirtyPageIds].filter((dirtyId) => dirtyId !== id)
+      ),
+    })),
 
-      permanentlyDeletePage: (id) => {
-        set((state) => ({
-          pages: state.pages.filter((p) => p.id !== id),
-        }));
-      },
+  // ── Dirty tracking ────────────────────────────────────────────────────────────
 
-      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  setDirty: (id) =>
+    set((state) => ({
+      dirtyPageIds: new Set([...state.dirtyPageIds, id]),
+    })),
 
-      getPageById: (id) => get().pages.find((p) => p.id === id),
-      
-      getRootPages: () => get().pages.filter((p) => !p.parentId && !p.isDeleted),
-      
-      getSubpages: (parentId) => get().pages.filter((p) => p.parentId === parentId && !p.isDeleted),
-      
-      getTrashPages: () => get().pages.filter((p) => p.isDeleted),
+  clearDirty: (id) =>
+    set((state) => {
+      const next = new Set(state.dirtyPageIds);
+      next.delete(id);
+      return { dirtyPageIds: next };
     }),
-    {
-      name: 'motion-storage',
-      storage: createJSONStorage(() => localStorage),
-    }
-  )
-);
+
+  isDirty: (id) => get().dirtyPageIds.has(id),
+
+  // ── Selectors ─────────────────────────────────────────────────────────────────
+
+  getPageById: (id) => get().pages.find((p) => p.id === id),
+
+  getRootPages: () =>
+    get()
+      .pages.filter((p) => !p.parent_id && !p.deleted_at)
+      .sort((a, b) => a.position - b.position),
+
+  getSubpages: (parentId) =>
+    get()
+      .pages.filter((p) => p.parent_id === parentId && !p.deleted_at)
+      .sort((a, b) => a.position - b.position),
+
+  getTrashPages: () => get().pages.filter((p) => !!p.deleted_at),
+
+  // ── UI ────────────────────────────────────────────────────────────────────────
+
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+}));

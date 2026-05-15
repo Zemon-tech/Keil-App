@@ -19,13 +19,22 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMotionStore } from "@/store/useMotionStore";
+import { useAppContext } from "@/contexts/AppContext";
+import { useMotionPages } from "@/hooks/api/useMotionPages";
 import { cn } from "@/lib/utils";
 
 export function MotionProfile() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const { pages, sidebarOpen, setSidebarOpen } = useMotionStore();
-  const pageCount = useMemo(() => pages.filter(p => !p.isDeleted).length, [pages]);
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { sidebarOpen, setSidebarOpen } = useMotionStore();
+
+  // Page count from API (falls back to 0 while loading or no context)
+  const { data: pages = [] } = useMotionPages(activeOrgId, activeSpaceId);
+  const pageCount = useMemo(
+    () => pages.filter((p) => !p.deleted_at).length,
+    [pages]
+  );
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
