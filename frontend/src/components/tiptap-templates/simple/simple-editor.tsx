@@ -29,6 +29,56 @@ import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-detai
 import { BlockIdExtension } from "@/extensions/BlockIdExtension"
 import { EnforceFinalBlockExtension } from "@/extensions/EnforceFinalBlockExtension"
 import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
+import Paragraph from '@tiptap/extension-paragraph'
+import Heading from '@tiptap/extension-heading'
+
+const CustomParagraph = Paragraph.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      color: {
+        default: null,
+        parseHTML: element => element.style.color,
+        renderHTML: attributes => {
+          if (!attributes.color) return {}
+          return { style: `color: ${attributes.color}` }
+        }
+      },
+      backgroundColor: {
+        default: null,
+        parseHTML: element => element.style.backgroundColor,
+        renderHTML: attributes => {
+          if (!attributes.backgroundColor) return {}
+          return { style: `background-color: ${attributes.backgroundColor}` }
+        }
+      }
+    }
+  }
+})
+
+const CustomHeading = Heading.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      color: {
+        default: null,
+        parseHTML: element => element.style.color,
+        renderHTML: attributes => {
+          if (!attributes.color) return {}
+          return { style: `color: ${attributes.color}` }
+        }
+      },
+      backgroundColor: {
+        default: null,
+        parseHTML: element => element.style.backgroundColor,
+        renderHTML: attributes => {
+          if (!attributes.backgroundColor) return {}
+          return { style: `background-color: ${attributes.backgroundColor}` }
+        }
+      }
+    }
+  }
+})
 
 import {
   Heading1,
@@ -196,10 +246,14 @@ export function SimpleEditor({
         customNodes: ['taskItem', 'listItem'],
       }),
       StarterKit.configure({
+        paragraph: false,
+        heading: false,
         horizontalRule: false,
         codeBlock: false,
         link: false,
       }),
+      CustomParagraph,
+      CustomHeading,
       HorizontalRule,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TaskList,
@@ -531,7 +585,9 @@ export function SimpleEditor({
       event.preventDefault()
       event.stopPropagation()
 
-      const target = getTargetFromDragHandle()
+      const target = currentBlockTargetRef.current
+      if (!target) return
+
       selectBlockTarget(target)
       showDragHandle(handle, true)
 
@@ -557,7 +613,7 @@ export function SimpleEditor({
       setBlockMenu(null)
       const handle = getDragHandle()
       if (handle) showDragHandle(handle, true)
-      insertParagraphAfterTarget(getTargetFromDragHandle())
+      insertParagraphAfterTarget(currentBlockTargetRef.current)
     }
 
     const wireHandle = () => {
@@ -973,8 +1029,9 @@ export function SimpleEditor({
     }
   }, [blockMenu])
 
-  const deleteBlockTarget = (target: BlockTarget | null) => {
+  const deleteBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
+    console.log("Deleting block at", target)
     editor
       .chain()
       .focus()
@@ -982,24 +1039,141 @@ export function SimpleEditor({
       .run()
     setBlockMenu(null)
     closeSlashMenu()
-  }
+  }, [editor, closeSlashMenu])
 
-  const duplicateBlockTarget = (target: BlockTarget | null) => {
+  const duplicateBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
-    const slice = editor.state.doc.slice(target.from, target.to)
-    editor.view.dispatch(editor.state.tr.insert(target.to, slice.content))
-    editor.view.focus()
+    console.log("Duplicating block at", target)
+    const { from, to } = target
+    const node = editor.state.doc.nodeAt(from)
+    if (!node) return
+
+    // Clone the node content
+    const content = node.content.toJSON()
+    
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(to, {
+        type: node.type.name,
+        attrs: { ...node.attrs, id: undefined }, // Let extension generate new ID
+        content: content
+      })
+      .run()
+      
     setBlockMenu(null)
     closeSlashMenu()
-  }
+  }, [editor, closeSlashMenu])
 
-  const copyBlockTarget = (target: BlockTarget | null) => {
+  const copyBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
-    const text = editor.state.doc.textBetween(target.from, target.to, "\n\n")
-    navigator.clipboard?.writeText(text).catch(() => undefined)
+    const node = editor.state.doc.nodeAt(target.from)
+    const blockId = node?.attrs.id
+    const url = blockId 
+      ? `${window.location.origin}${window.location.pathname}#${blockId}`
+      : window.location.href
+    
+    navigator.clipboard?.writeText(url).then(() => {
+      // Small feedback
+      console.log("Link copied:", url)
+    }).catch(() => undefined)
     setBlockMenu(null)
     closeSlashMenu()
-  }
+  }, [editor, closeSlashMenu])
+
+  const commentOnBlock = useCallback((target: BlockTarget | null) => {
+    if (!editor || !target) return
+    alert("Comment feature coming soon!")
+    setBlockMenu(null)
+  }, [editor])
+
+  const moveToBlock = useCallback((target: BlockTarget | null) => {
+    if (!editor || !target) return
+    setActiveSubmenu('move-to')
+  }, [])
+
+  const executeMoveTo = useCallback((position: 'top' | 'bottom') => {
+    if (!editor || !blockMenu?.target) return
+    const target = blockMenu.target
+    const node = editor.state.doc.nodeAt(target.from)
+    if (!node) return
+
+    const nodeJSON = node.toJSON()
+    
+    if (position === 'top') {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: target.from, to: target.to })
+        .insertContentAt(0, nodeJSON)
+        .run()
+    } else {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: target.from, to: target.to })
+        .command(({ tr }) => {
+          tr.insert(tr.doc.content.size, editor.schema.nodeFromJSON(nodeJSON))
+          return true
+        })
+        .run()
+    }
+      
+    setBlockMenu(null)
+  }, [editor, blockMenu])
+
+  const suggestOnBlock = useCallback((target: BlockTarget | null) => {
+    if (!editor || !target) return
+    alert("Suggest edits feature coming soon!")
+    setBlockMenu(null)
+  }, [editor])
+
+  // Global Keyboard Shortcuts for selected blocks
+  useEffect(() => {
+    if (!editor) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Only handle if a block is selected (NodeSelection)
+      const { selection } = editor.state
+      if (!(selection instanceof NodeSelection)) return
+
+      const target = { from: selection.from, to: selection.to }
+
+      // Duplicate: Ctrl+D
+      if (e.ctrlKey && e.key === "d") {
+        e.preventDefault()
+        duplicateBlockTarget(target)
+      }
+      // Delete: Del
+      if (e.key === "Delete") {
+        e.preventDefault()
+        deleteBlockTarget(target)
+      }
+      // Copy Link: Alt+Shift+L
+      if (e.altKey && e.shiftKey && e.key === "L") {
+        e.preventDefault()
+        copyBlockTarget(target)
+      }
+      // Comment: Ctrl+Shift+M
+      if (e.ctrlKey && e.shiftKey && e.key === "M") {
+        e.preventDefault()
+        commentOnBlock(target)
+      }
+      // Move to: Ctrl+Shift+P
+      if (e.ctrlKey && e.shiftKey && e.key === "P") {
+        e.preventDefault()
+        moveToBlock(target)
+      }
+      // Suggest edits: Ctrl+Alt+X
+      if (e.ctrlKey && e.altKey && e.key === "x") {
+        e.preventDefault()
+        suggestOnBlock(target)
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [editor, duplicateBlockTarget, deleteBlockTarget, copyBlockTarget, commentOnBlock, moveToBlock, suggestOnBlock])
 
   return (
     <div ref={wrapperRef} className="simple-editor-wrapper relative">
@@ -1209,12 +1383,16 @@ export function SimpleEditor({
                 <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+D</span>
               </button>
 
-              <button className="motion-block-menu__item justify-between">
+              <button 
+                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'move-to' && "bg-accent")}
+                onMouseEnter={() => setActiveSubmenu('move-to')}
+                onClick={() => moveToBlock(blockMenu.target)}
+              >
                 <div className="flex items-center gap-2.5">
                   <ArrowRight className="size-4" />
                   <span>Move to</span>
                 </div>
-                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+⇧+P</span>
+                <ChevronRight className="size-3.5 text-muted-foreground/50" />
               </button>
 
               <button className="motion-block-menu__item motion-block-menu__item--danger justify-between" onClick={() => deleteBlockTarget(blockMenu.target)}>
@@ -1227,7 +1405,7 @@ export function SimpleEditor({
 
               <div className="my-1.5 h-px bg-border/50" />
 
-              <button className="motion-block-menu__item justify-between">
+              <button className="motion-block-menu__item justify-between" onClick={() => commentOnBlock(blockMenu.target)}>
                 <div className="flex items-center gap-2.5">
                   <MessageSquare className="size-4" />
                   <span>Comment</span>
@@ -1235,7 +1413,7 @@ export function SimpleEditor({
                 <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+⇧+M</span>
               </button>
 
-              <button className="motion-block-menu__item justify-between">
+              <button className="motion-block-menu__item justify-between" onClick={() => suggestOnBlock(blockMenu.target)}>
                 <div className="flex items-center gap-2.5">
                   <PencilLine className="size-4" />
                   <span>Suggest edits</span>
@@ -1303,6 +1481,24 @@ export function SimpleEditor({
               </div>
             )}
 
+            {/* Move To Submenu */}
+            {activeSubmenu === 'move-to' && (
+              <div className="motion-block-menu w-[200px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150">
+                <button className="motion-block-menu__item" onClick={() => executeMoveTo('top')}>
+                  <ChevronUp className="size-4" />
+                  <span>Move to top</span>
+                </button>
+                <button className="motion-block-menu__item" onClick={() => executeMoveTo('bottom')}>
+                  <ChevronDownIcon className="size-4" />
+                  <span>Move to bottom</span>
+                </button>
+                <div className="my-1 h-px bg-border/50" />
+                <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground/50 italic leading-tight">
+                  Search pages feature coming soon...
+                </div>
+              </div>
+            )}
+
             {/* Color Submenu */}
             {activeSubmenu === 'color' && (
               <div className="motion-block-menu w-[220px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150 h-fit max-h-[400px] overflow-y-auto custom-scrollbar">
@@ -1314,7 +1510,15 @@ export function SimpleEditor({
                     key={`text-${c.name}`}
                     className="motion-block-menu__item gap-2.5"
                     onClick={() => {
-                      editor?.chain().focus().updateAttributes(blockMenu.type, { color: c.color }).run();
+                      const { from } = blockMenu.target;
+                      const node = editor.state.doc.nodeAt(from);
+                      if (node) {
+                        editor.chain()
+                          .focus()
+                          .setNodeSelection(from)
+                          .updateAttributes(node.type.name, { color: c.color })
+                          .run();
+                      }
                       setBlockMenu(null);
                     }}
                   >
@@ -1322,6 +1526,10 @@ export function SimpleEditor({
                       A
                     </div>
                     <span>{c.name}</span>
+                    {(() => {
+                      const attrs = editor.getAttributes(editor.state.doc.nodeAt(blockMenu.target.from)?.type.name || 'paragraph');
+                      return attrs.color === c.color && <Check className="size-3 ml-auto text-primary" />;
+                    })()}
                   </button>
                 ))}
                 <div className="my-1 h-px bg-border/50" />
@@ -1333,12 +1541,24 @@ export function SimpleEditor({
                     key={`bg-${c.name}`}
                     className="motion-block-menu__item gap-2.5"
                     onClick={() => {
-                      editor?.chain().focus().updateAttributes(blockMenu.type, { backgroundColor: c.bg }).run();
+                      const { from } = blockMenu.target;
+                      const node = editor.state.doc.nodeAt(from);
+                      if (node) {
+                        editor.chain()
+                          .focus()
+                          .setNodeSelection(from)
+                          .updateAttributes(node.type.name, { backgroundColor: c.bg })
+                          .run();
+                      }
                       setBlockMenu(null);
                     }}
                   >
                     <div className="size-5 rounded border border-border/50" style={{ backgroundColor: c.bg }} />
                     <span>{c.name} background</span>
+                    {(() => {
+                      const attrs = editor.getAttributes(editor.state.doc.nodeAt(blockMenu.target.from)?.type.name || 'paragraph');
+                      return attrs.backgroundColor === c.bg && <Check className="size-3 ml-auto text-primary" />;
+                    })()}
                   </button>
                 ))}
               </div>

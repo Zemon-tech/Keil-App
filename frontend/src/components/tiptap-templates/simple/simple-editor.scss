@@ -306,17 +306,27 @@ body,
   justify-content: flex-end;
   width: 56px;
   height: 24px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 14' width='10' height='14'%3E%3Cpath d='M3 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm6-10a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z' fill='rgba(155, 155, 155, 0.5)'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: center right 8px;
-  background-size: 10px 14px;
-  opacity: 0 !important;
-  cursor: grab;
-  margin-left: 0;
-  color: var(--muted-foreground);
-  transition: opacity 0.1s ease;
-  border-radius: 4px;
-  pointer-events: auto;
+  pointer-events: none;
+  
+  .plus-button,
+  &::before {
+    pointer-events: auto;
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 14' width='10' height='14'%3E%3Cpath d='M3 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm6-10a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z' fill='rgba(155, 155, 155, 0.5)'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    cursor: grab;
+  }
 
   &.hide {
     opacity: 0 !important;
