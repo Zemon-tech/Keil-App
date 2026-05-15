@@ -6,7 +6,7 @@ import http from "http";
 import { initSocket } from "./socket";
 import { taskOverdueWorkerService } from "./services/task-overdue-worker.service";
 
-const port = config.port;
+const port = Number(config.port);
 
 const server = http.createServer(app);
 
@@ -15,8 +15,8 @@ const startServer = async () => {
         // Verify PostgreSQL connection before accepting traffic
         await pool.query('SELECT NOW()');
 
-        server.listen(port, () => {
-            console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
+        server.listen(5001, '0.0.0.0', () => {
+            console.log(`⚡️[server]: Server is running at http://localhost:5001`);
         });
 
         // Initialize Socket.io (auth middleware + event handlers live in socket.ts)

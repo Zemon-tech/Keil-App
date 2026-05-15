@@ -52,9 +52,19 @@ import {
   Bold,
   Italic,
   Strikethrough,
+  RotateCcw,
+  Link as LinkIcon,
+  ArrowRight,
+  MessageSquare,
+  PencilLine,
+  Sparkles,
+  Check,
+  SquareTerminal,
+  Sigma,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 // --- Tiptap Node ---
 import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
@@ -88,13 +98,14 @@ type BlockTarget = {
   to: number
 }
 
-const DRAG_HANDLE_WIDTH = 44
-const DRAG_HANDLE_GAP = 8
+const DRAG_HANDLE_WIDTH = 56
+const DRAG_HANDLE_GAP = 48
 const BLOCK_HOVER_SELECTOR = [
   "li",
   "p",
   "pre",
   "blockquote",
+  ".callout",
   "h1",
   "h2",
   "h3",
@@ -143,7 +154,10 @@ export function SimpleEditor({
     left: number
     top: number
     target: BlockTarget | null
+    type: string
   } | null>(null)
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'turn-into' | 'color'>('none')
+  const [menuSearch, setMenuSearch] = useState("")
   const virtualSlashStartRef = useRef<number | null>(null)
   const currentBlockTargetRef = useRef<BlockTarget | null>(null)
   const blockMenuOpenRef = useRef(false)
@@ -441,7 +455,7 @@ export function SimpleEditor({
       ? parsedLineHeight
       : parsedFontSize * 1.2
     const paddingTop = Number.parseFloat(style.paddingTop) || 0
-    const top = rect.top + paddingTop + (lineHeight - 24) / 2
+    const top = rect.top + paddingTop + (lineHeight - 20) / 2
     const left = rect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP
 
     handle.style.left = `${Math.round(left)}px`
@@ -513,10 +527,13 @@ export function SimpleEditor({
       if (!wrapperRect) return
 
       setBlockMenu({
-        left: rect.right - wrapperRect.left + 6,
-        top: rect.top - wrapperRect.top - 4,
+        left: rect.right + 12,
+        top: rect.top - 8,
         target,
+        type: editor.state.doc.nodeAt(target.from)?.type.name || "text"
       })
+      setActiveSubmenu('none')
+      setMenuSearch("")
       closeSlashMenu()
     }
 
@@ -710,6 +727,13 @@ export function SimpleEditor({
         run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
       },
       {
+        title: "Heading 4",
+        subtitle: "Extra small heading",
+        icon: <Heading3 className="size-4" />, // Reusing Heading3 icon or similar
+        keywords: ["h4", "heading"],
+        run: () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
+      },
+      {
         title: "Bullet list",
         subtitle: "Create a bulleted list",
         icon: <List className="size-4" />,
@@ -770,6 +794,13 @@ export function SimpleEditor({
         keywords: ["toggle", "details", "expand"],
         run: () => editor.chain().focus().setDetails().run(),
       },
+      {
+        title: "Callout",
+        subtitle: "Make it stand out",
+        icon: <Sparkles className="size-4" />,
+        keywords: ["callout", "info", "notice"],
+        run: () => editor.chain().focus().toggleBlockquote().run(), // Fallback to blockquote for now, will style it
+      },
     ]
   }, [editor, onAddSubpage])
 
@@ -814,8 +845,8 @@ export function SimpleEditor({
                 : null
             )
             setSlashPos({
-              left: coords.left - wrapperRect.left,
-              top: coords.bottom - wrapperRect.top + 8,
+              left: coords.left,
+              top: coords.bottom + 8,
             })
             return
           }
@@ -840,8 +871,8 @@ export function SimpleEditor({
       setSlashQuery(query)
       setSlashDeleteRange({ from: deleteFrom, to: deleteTo })
       setSlashPos({
-        left: coords.left - wrapperRect.left,
-        top: coords.bottom - wrapperRect.top + 8,
+        left: coords.left,
+        top: coords.bottom + 8,
       })
     }
 
@@ -1102,77 +1133,199 @@ export function SimpleEditor({
         )} */}
 
         {blockMenu && (
-          <div
-            className="motion-block-menu absolute z-50 w-[220px] rounded-lg border bg-popover p-1 text-popover-foreground shadow-2xl"
-            style={{ left: blockMenu.left, top: blockMenu.top }}
-          >
-            <button
-              type="button"
-              className="motion-block-menu__item"
-              onClick={() => insertParagraphAfterTarget(blockMenu.target)}
+          <div className="fixed z-[100] flex gap-1" style={{ left: blockMenu.left, top: blockMenu.top }}>
+            {/* Main Block Menu */}
+            <div
+              className="motion-block-menu w-[260px] rounded-xl border bg-background p-1.5 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in zoom-in-95 duration-100"
             >
-              <Plus className="size-4" />
-              <span>Add below</span>
-            </button>
-            <button
-              type="button"
-              className="motion-block-menu__item"
-              onClick={() => duplicateBlockTarget(blockMenu.target)}
-            >
-              <Copy className="size-4" />
-              <span>Duplicate</span>
-            </button>
-            <button
-              type="button"
-              className="motion-block-menu__item"
-              onClick={() => copyBlockTarget(blockMenu.target)}
-            >
-              <FileText className="size-4" />
-              <span>Copy text</span>
-            </button>
-            <div className="my-1 h-px bg-border" />
-            <button
-              type="button"
-              className="motion-block-menu__item motion-block-menu__item--danger"
-              onClick={() => deleteBlockTarget(blockMenu.target)}
-            >
-              <Trash2 className="size-4" />
-              <span>Delete</span>
-            </button>
+              <div className="px-2 pb-2 pt-1">
+                <input 
+                  autoFocus
+                  placeholder="Search actions..."
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                  className="w-full bg-muted/50 rounded-md px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/50 border border-transparent focus:border-border/50"
+                />
+              </div>
+
+              <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-tight">
+                {blockMenu.type.replace(/([A-Z])/g, ' $1').trim()}
+              </div>
+
+              <button
+                type="button"
+                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'turn-into' && "bg-accent")}
+                onMouseEnter={() => setActiveSubmenu('turn-into')}
+              >
+                <div className="flex items-center gap-2.5">
+                  <RotateCcw className="size-4" />
+                  <span>Turn into</span>
+                </div>
+                <ChevronRight className="size-3.5 text-muted-foreground/50" />
+              </button>
+
+              <button
+                type="button"
+                className="motion-block-menu__item justify-between"
+                onMouseEnter={() => setActiveSubmenu('none')}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="size-4 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
+                    <div className="size-2 rounded-full bg-primary/40" />
+                  </div>
+                  <span>Color</span>
+                </div>
+                <ChevronRight className="size-3.5 text-muted-foreground/50" />
+              </button>
+
+              <div className="my-1.5 h-px bg-border/50" />
+
+              <button className="motion-block-menu__item justify-between" onClick={() => copyBlockTarget(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <LinkIcon className="size-4" />
+                  <span>Copy link to block</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Alt+⇧+L</span>
+              </button>
+
+              <button className="motion-block-menu__item justify-between" onClick={() => duplicateBlockTarget(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <Copy className="size-4" />
+                  <span>Duplicate</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+D</span>
+              </button>
+
+              <button className="motion-block-menu__item justify-between">
+                <div className="flex items-center gap-2.5">
+                  <ArrowRight className="size-4" />
+                  <span>Move to</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+⇧+P</span>
+              </button>
+
+              <button className="motion-block-menu__item motion-block-menu__item--danger justify-between" onClick={() => deleteBlockTarget(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <Trash2 className="size-4" />
+                  <span>Delete</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Del</span>
+              </button>
+
+              <div className="my-1.5 h-px bg-border/50" />
+
+              <button className="motion-block-menu__item justify-between">
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="size-4" />
+                  <span>Comment</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+⇧+M</span>
+              </button>
+
+              <button className="motion-block-menu__item justify-between">
+                <div className="flex items-center gap-2.5">
+                  <PencilLine className="size-4" />
+                  <span>Suggest edits</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+Alt+X</span>
+              </button>
+
+              <div className="my-1.5 h-px bg-border/50" />
+
+              <button className="motion-block-menu__item justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="size-4 text-primary" />
+                  <span>Ask AI</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+J</span>
+              </button>
+
+              <div className="mt-2 px-2.5 py-2 border-t border-border/40 text-[10px] text-muted-foreground/50 leading-relaxed">
+                Last edited by Rohan Vashist<br />
+                May 15, 2026, 7:55 PM
+              </div>
+            </div>
+
+            {/* Turn Into Submenu */}
+            {activeSubmenu === 'turn-into' && (
+              <div className="motion-block-menu w-[220px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150 h-fit max-h-[400px] overflow-y-auto custom-scrollbar">
+                {[
+                  { id: 'paragraph', title: 'Text', icon: <FileText className="size-4" />, run: () => editor?.chain().focus().setParagraph().run() },
+                  { id: 'heading1', title: 'Heading 1', icon: <Heading1 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 1 }).run() },
+                  { id: 'heading2', title: 'Heading 2', icon: <Heading2 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 2 }).run() },
+                  { id: 'heading3', title: 'Heading 3', icon: <Heading3 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 3 }).run() },
+                  { id: 'heading4', title: 'Heading 4', icon: <Heading3 className="size-4 opacity-70" />, run: () => editor?.chain().focus().toggleHeading({ level: 4 }).run() },
+                  { id: 'page', title: 'Page', icon: <FileText className="size-4" />, run: () => onAddSubpage?.() },
+                  { id: 'page_in', title: 'Page in', icon: <FileText className="size-4" />, run: () => {}, hasSub: true },
+                  { id: 'bulletList', title: 'Bulleted list', icon: <List className="size-4" />, run: () => editor?.chain().focus().toggleBulletList().run() },
+                  { id: 'orderedList', title: 'Numbered list', icon: <ListOrdered className="size-4" />, run: () => editor?.chain().focus().toggleOrderedList().run() },
+                  { id: 'taskList', title: 'To-do list', icon: <CheckSquare className="size-4" />, run: () => editor?.chain().focus().toggleTaskList().run() },
+                  { id: 'details', title: 'Toggle list', icon: <ChevronRight className="size-4" />, run: () => editor?.chain().focus().setDetails().run() },
+                  { id: 'codeBlock', title: 'Code', icon: <Code className="size-4" />, run: () => editor?.chain().focus().toggleCodeBlock().run() },
+                  { id: 'blockquote', title: 'Quote', icon: <Quote className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
+                  { id: 'callout', title: 'Callout', icon: <SquareTerminal className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
+                  { id: 'equation', title: 'Block equation', icon: <Sigma className="size-4" />, run: () => {} },
+                  { id: 'synced', title: 'Synced block', icon: <RotateCcw className="size-4" />, run: () => {} },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    className="motion-block-menu__item justify-between"
+                    onClick={() => {
+                      if (!item.hasSub) {
+                        item.run();
+                        setBlockMenu(null);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {item.icon}
+                      <span>{item.title}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {blockMenu.type.toLowerCase().includes(item.id.toLowerCase()) && <Check className="size-3.5 text-primary" />}
+                      {item.hasSub && <ChevronRight className="size-3.5 text-muted-foreground/30" />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {slashOpen && slashPos && editor && (
           <div
-            className="absolute z-50"
+            className="fixed z-[100]"
             style={{ left: slashPos.left, top: slashPos.top }}
           >
-            <div className="w-[320px] rounded-lg border bg-popover text-popover-foreground shadow-2xl overflow-hidden flex flex-col">
-              <div className="max-h-[260px] overflow-y-auto p-1">
+            <div className="w-[320px] rounded-xl border bg-popover/95 backdrop-blur-md text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.2)] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="max-h-[320px] overflow-y-auto p-1.5 custom-scrollbar">
                 {filteredSlashItems.length === 0 && (
-                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground/60 italic">
                     No results found.
                   </div>
                 )}
+                <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Basic blocks
+                </div>
                 {filteredSlashItems.map((item, index) => (
                   <div
                     key={item.title}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => runSlashItem(item)}
-                    className={`px-3 py-2 flex items-center gap-3 cursor-pointer rounded-sm select-none outline-none ${
-                      index === slashSelectedIndex ? "bg-accent text-accent-foreground" : "text-foreground"
+                    className={`px-3 py-2 flex items-center gap-3 cursor-pointer rounded-lg select-none outline-none transition-colors ${
+                      index === slashSelectedIndex ? "bg-accent text-accent-foreground shadow-sm" : "text-foreground/80 hover:bg-accent/50"
                     }`}
                     onMouseEnter={() => setSlashSelectedIndex(index)}
                   >
-                    <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0 text-foreground">
+                    <div className="size-9 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40 text-muted-foreground shadow-sm transition-transform duration-200 group-hover:scale-105">
                       {item.icon}
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <div className="text-sm font-medium">
+                      <div className="text-[13.5px] font-semibold tracking-tight">
                         {item.title}
                       </div>
                       {item.subtitle && (
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-[11px] text-muted-foreground leading-none">
                           {item.subtitle}
                         </div>
                       )}

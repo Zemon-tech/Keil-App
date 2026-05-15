@@ -1,37 +1,49 @@
 .tiptap.ProseMirror {
-  --blockquote-bg-color: var(--tt-gray-light-900);
+  --blockquote-bg-color: var(--muted);
+  --callout-bg-color: var(--accent);
+  --callout-border-color: var(--primary);
 
-  .dark & {
-    --blockquote-bg-color: var(--tt-gray-dark-900);
-  }
-}
-
-/* =====================
-     BLOCKQUOTE
-     ===================== */
-.tiptap.ProseMirror {
   blockquote {
     position: relative;
-    padding-left: 1em;
-    padding-top: 0.375em;
-    padding-bottom: 0.375em;
+    padding: 0.75rem 1rem 0.75rem 1.5rem;
     margin: 1.5rem 0;
+    font-style: italic;
+    background: var(--blockquote-bg-color);
+    border-radius: 0 8px 8px 0;
+    color: var(--foreground);
+    opacity: 0.9;
 
-    p {
-      margin-top: 0;
-    }
-
-    &::before,
-    &.is-empty::before {
+    &::before {
       position: absolute;
-      bottom: 0;
       left: 0;
       top: 0;
-      height: 100%;
-      width: 0.25em;
-      background-color: var(--blockquote-bg-color);
+      bottom: 0;
+      width: 4px;
+      background-color: var(--primary);
       content: "";
-      border-radius: 0;
+      opacity: 0.6;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.6;
+    }
+  }
+
+  /* Callout Style */
+  .callout {
+    padding: 1rem;
+    margin: 1.5rem 0;
+    background: var(--callout-bg-color);
+    border-left: 4px solid var(--callout-border-color);
+    border-radius: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+
+    &::before {
+      content: "💡";
+      font-size: 1.25rem;
     }
   }
 }
