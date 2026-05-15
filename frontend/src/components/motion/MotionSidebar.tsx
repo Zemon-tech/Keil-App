@@ -20,6 +20,7 @@ import {
   Pencil,
   Sparkles,
   SquarePen,
+  Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -145,9 +146,21 @@ function SidebarPageItem({
               <Link
                 to={`/motion/${item.id}`}
                 onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}
-                className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground"
+                className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex items-center gap-2"
               >
-                {item.title}
+                <span className="shrink-0 flex items-center justify-center size-4">
+                  {item.icon?.startsWith("lucide:") ? (
+                    (() => {
+                      const iconName = item.icon.split(":")[1];
+                      const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
+                      const Icon = icons[iconName] || FileText;
+                      return <Icon className="size-3.5" />;
+                    })()
+                  ) : (
+                    item.icon || "📄"
+                  )}
+                </span>
+                <span className="truncate">{item.title}</span>
               </Link>
             </div>
           )}

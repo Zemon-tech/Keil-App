@@ -100,6 +100,19 @@ type BlockTarget = {
 
 const DRAG_HANDLE_WIDTH = 56
 const DRAG_HANDLE_GAP = 48
+
+const NOTION_COLORS = [
+  { name: 'Default', color: 'inherit', bg: 'transparent' },
+  { name: 'Gray', color: '#9B9A97', bg: '#EBeced' },
+  { name: 'Brown', color: '#64473A', bg: '#E9E5E3' },
+  { name: 'Orange', color: '#D9730D', bg: '#FAEBDD' },
+  { name: 'Yellow', color: '#DFAB01', bg: '#FBF3DB' },
+  { name: 'Green', color: '#0F7B6C', bg: '#DDEDEA' },
+  { name: 'Blue', color: '#0B6E99', bg: '#DDEBF1' },
+  { name: 'Purple', color: '#6940A5', bg: '#EAE4F2' },
+  { name: 'Pink', color: '#AD1A72', bg: '#F4DFEB' },
+  { name: 'Red', color: '#E03E3E', bg: '#FBE4E4' },
+]
 const BLOCK_HOVER_SELECTOR = [
   "li",
   "p",
@@ -1166,8 +1179,8 @@ export function SimpleEditor({
 
               <button
                 type="button"
-                className="motion-block-menu__item justify-between"
-                onMouseEnter={() => setActiveSubmenu('none')}
+                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'color' && "bg-accent")}
+                onMouseEnter={() => setActiveSubmenu('color')}
               >
                 <div className="flex items-center gap-2.5">
                   <div className="size-4 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
@@ -1285,6 +1298,47 @@ export function SimpleEditor({
                       {blockMenu.type.toLowerCase().includes(item.id.toLowerCase()) && <Check className="size-3.5 text-primary" />}
                       {item.hasSub && <ChevronRight className="size-3.5 text-muted-foreground/30" />}
                     </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Color Submenu */}
+            {activeSubmenu === 'color' && (
+              <div className="motion-block-menu w-[220px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150 h-fit max-h-[400px] overflow-y-auto custom-scrollbar">
+                <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Color
+                </div>
+                {NOTION_COLORS.map((c) => (
+                  <button
+                    key={`text-${c.name}`}
+                    className="motion-block-menu__item gap-2.5"
+                    onClick={() => {
+                      editor?.chain().focus().updateAttributes(blockMenu.type, { color: c.color }).run();
+                      setBlockMenu(null);
+                    }}
+                  >
+                    <div className="size-5 rounded border border-border/50 flex items-center justify-center text-[11px] font-bold" style={{ color: c.color }}>
+                      A
+                    </div>
+                    <span>{c.name}</span>
+                  </button>
+                ))}
+                <div className="my-1 h-px bg-border/50" />
+                <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Background
+                </div>
+                {NOTION_COLORS.slice(1).map((c) => (
+                  <button
+                    key={`bg-${c.name}`}
+                    className="motion-block-menu__item gap-2.5"
+                    onClick={() => {
+                      editor?.chain().focus().updateAttributes(blockMenu.type, { backgroundColor: c.bg }).run();
+                      setBlockMenu(null);
+                    }}
+                  >
+                    <div className="size-5 rounded border border-border/50" style={{ backgroundColor: c.bg }} />
+                    <span>{c.name} background</span>
                   </button>
                 ))}
               </div>
