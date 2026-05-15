@@ -2,10 +2,8 @@ import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import {
@@ -16,23 +14,16 @@ import {
   ChevronRight,
   Plus,
   FileText,
-  X,
   Trash2,
   RotateCcw,
   MoreHorizontal,
   Pencil,
-  ChevronsLeft,
-  Settings,
-  UserPlus,
-  Check,
-  MessageSquare,
   Sparkles,
   SquarePen,
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 import { cn } from "@/lib/utils";
 import {
@@ -262,7 +253,6 @@ type MotionSidebarProps = {
 };
 
 export function MotionSidebar({ onClose }: MotionSidebarProps) {
-  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { pageId } = useParams();
@@ -277,10 +267,6 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
     restorePage, 
     permanentlyDeletePage 
   } = useMotionStore();
-
-  const displayName = user?.user_metadata?.full_name || user?.email || "User";
-  const initial = displayName.charAt(0).toUpperCase();
-  const workspaceName = `${displayName}'s workspace`;
 
   const rootPages = getRootPages();
   const recentPages = [...pages]
