@@ -283,7 +283,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
 
   const rootPages = getRootPages();
   const recentPages = [...pages]
-    .filter((page) => !page.isDeleted)
+    .filter((page) => !page.isDeleted && !page.parentId)
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 8);
   const trashPages = getTrashPages();

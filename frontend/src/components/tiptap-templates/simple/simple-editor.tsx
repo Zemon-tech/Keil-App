@@ -16,7 +16,6 @@ import { Typography } from "@tiptap/extension-typography"
 import { Highlight } from "@tiptap/extension-highlight"
 import { Subscript } from "@tiptap/extension-subscript"
 import { Superscript } from "@tiptap/extension-superscript"
-import { Selection } from "@tiptap/extensions"
 import { Table } from "@tiptap/extension-table"
 import { TableRow } from "@tiptap/extension-table-row"
 import { TableCell } from "@tiptap/extension-table-cell"
@@ -28,9 +27,31 @@ import { common, createLowlight } from "lowlight"
 import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-details"
 import { BlockIdExtension } from "@/extensions/BlockIdExtension"
 import { EnforceFinalBlockExtension } from "@/extensions/EnforceFinalBlockExtension"
+import { SubpageExtension } from "@/extensions/SubpageExtension"
 import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
 import Paragraph from '@tiptap/extension-paragraph'
 import Heading from '@tiptap/extension-heading'
+import Blockquote from '@tiptap/extension-blockquote'
+
+const CustomBlockquote = Blockquote.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      type: {
+        default: 'quote',
+        parseHTML: element => element.getAttribute('data-type') || 'quote',
+        renderHTML: attributes => ({ 'data-type': attributes.type })
+      }
+    }
+  }
+})
+import { Underline } from "@tiptap/extension-underline"
+import { TextStyle } from "@tiptap/extension-text-style"
+import { Color } from "@tiptap/extension-color"
+import { FontFamily } from "@tiptap/extension-font-family"
+import { CharacterCount } from "@tiptap/extension-character-count"
+import { Youtube } from "@tiptap/extension-youtube"
+import { Mention } from "@tiptap/extension-mention"
 
 const CustomParagraph = Paragraph.extend({
   addAttributes() {
@@ -81,6 +102,11 @@ const CustomHeading = Heading.extend({
 })
 
 import {
+  Bold,
+  Italic,
+  Strikethrough,
+  Code,
+  Link as LinkIcon,
   Heading1,
   Heading2,
   Heading3,
@@ -88,29 +114,33 @@ import {
   ListOrdered,
   CheckSquare,
   Quote,
-  Code,
   Minus,
   Table as TableIcon,
-  Copy,
-  Plus,
-  Trash2,
+  Sparkles,
+  Smile,
   FileText,
-  ChevronDown as ChevronDownIcon,
+  Youtube as YoutubeIcon,
   ChevronRight,
-  ChevronLeft,
-  ChevronUp,
-  Bold,
-  Italic,
-  Strikethrough,
-  RotateCcw,
-  Link as LinkIcon,
+  Trash2,
+  Copy,
+  ChevronDown,
+  Palette,
+  Check,
+  Search,
+  Underline as UnderlineIcon,
   ArrowRight,
+  ChevronUp,
+  ChevronLeft,
+  RotateCcw,
   MessageSquare,
   PencilLine,
-  Sparkles,
-  Check,
   SquareTerminal,
   Sigma,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Subscript as SubscriptIcon,
+  Superscript as SuperscriptIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -195,7 +225,7 @@ export function SimpleEditor({
   content?: JSONContent
   onContentChange?: (content: JSONContent) => void
   onReady?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void
-  onAddSubpage?: () => void
+  onAddSubpage?: () => any
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [slashOpen, setSlashOpen] = useState(false)
@@ -209,6 +239,17 @@ export function SimpleEditor({
   } | null>(null)
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
 
+  // Use refs for callbacks to keep them stable in useEditor while always using latest logic
+  const onContentChangeRef = useRef(onContentChange)
+  useEffect(() => {
+    onContentChangeRef.current = onContentChange
+  }, [onContentChange])
+
+  const onAddSubpageRef = useRef(onAddSubpage)
+  useEffect(() => {
+    onAddSubpageRef.current = onAddSubpage
+  }, [onAddSubpage])
+
   useEffect(() => {
     setSlashSelectedIndex(0)
   }, [slashQuery])
@@ -219,12 +260,116 @@ export function SimpleEditor({
     target: BlockTarget | null
     type: string
   } | null>(null)
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'turn-into' | 'color'>('none')
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'turn-into' | 'color' | 'move-to'>('none')
   const [menuSearch, setMenuSearch] = useState("")
   const virtualSlashStartRef = useRef<number | null>(null)
   const currentBlockTargetRef = useRef<BlockTarget | null>(null)
   const blockMenuOpenRef = useRef(false)
   const hideHandleTimerRef = useRef<number | null>(null)
+
+  const [editorEmojiPicker, setEditorEmojiPicker] = useState<{
+    left: number
+    top: number
+    pos: number
+  } | null>(null)
+  const [editorEmojiSearch, setEditorEmojiSearch] = useState("")
+
+  const extensions = useMemo(() => [
+    BlockIdExtension,
+    EnforceFinalBlockExtension,
+    GlobalDragHandle.configure({
+      dragHandleWidth: DRAG_HANDLE_WIDTH,
+      scrollTreshold: 100,
+      customNodes: ['taskItem', 'listItem', 'subpage'],
+    }),
+    StarterKit.configure({
+      paragraph: false,
+      heading: false,
+      blockquote: false,
+      horizontalRule: false,
+      codeBlock: false,
+      link: false,
+    }),
+    CustomParagraph,
+    CustomHeading,
+    CustomBlockquote,
+    TextAlign.configure({ types: ["heading", "paragraph"] }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Highlight.configure({ multicolor: true }),
+    Image,
+    Typography,
+    Superscript,
+    Subscript,
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: {
+        class: "text-primary underline underline-offset-4 cursor-pointer",
+      },
+    }),
+    Placeholder.configure({
+      placeholder: ({ node }) => {
+        if (node.type.name === "heading") {
+          return `Heading ${node.attrs.level}`
+        }
+        if (node.type.name === "detailsSummary") {
+          return "Toggle"
+        }
+        return "Type '/' for commands..."
+      },
+    }),
+    Table.configure({
+      resizable: true,
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    CodeBlockLowlight.configure({
+      lowlight,
+    }),
+    ImageUploadNode.configure({
+      accept: "image/*",
+      maxSize: MAX_FILE_SIZE,
+      limit: 3,
+      upload: handleImageUpload,
+      onError: (error) => console.error("Upload failed:", error),
+    }),
+    Details.configure({
+      HTMLAttributes: {
+        class: "details",
+      },
+    }),
+    DetailsSummary,
+    DetailsContent,
+    TextStyle,
+    Color,
+    FontFamily,
+    CharacterCount.configure({
+      limit: 10000,
+    }),
+    Youtube.configure({
+      inline: false,
+      width: 640,
+      height: 480,
+    }),
+    Mention.configure({
+      HTMLAttributes: {
+        class: "mention",
+      },
+    }),
+    SubpageExtension,
+  ], [lowlight]) // Removed onAddSubpage from deps
+
+  // Deduplicate extensions by name to prevent Tiptap warnings
+  const uniqueExtensions = useMemo(() => {
+    const seen = new Set<string>()
+    return extensions.filter(ext => {
+      if (!ext.name) return true
+      if (seen.has(ext.name)) return false
+      seen.add(ext.name)
+      return true
+    })
+  }, [extensions])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -237,77 +382,10 @@ export function SimpleEditor({
         class: "tiptap simple-editor",
       },
     },
-    extensions: [
-      BlockIdExtension,
-      EnforceFinalBlockExtension,
-      GlobalDragHandle.configure({
-        dragHandleWidth: DRAG_HANDLE_WIDTH,
-        scrollTreshold: 100,
-        customNodes: ['taskItem', 'listItem'],
-      }),
-      StarterKit.configure({
-        paragraph: false,
-        heading: false,
-        horizontalRule: false,
-        codeBlock: false,
-        link: false,
-      }),
-      CustomParagraph,
-      CustomHeading,
-      HorizontalRule,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Highlight.configure({ multicolor: true }),
-      Image,
-      Typography,
-      Superscript,
-      Subscript,
-      Selection,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "text-primary underline underline-offset-4 cursor-pointer",
-        },
-      }),
-      Placeholder.configure({
-        placeholder: ({ node }) => {
-          if (node.type.name === "heading") {
-            return `Heading ${node.attrs.level}`
-          }
-          if (node.type.name === "detailsSummary") {
-            return "Toggle"
-          }
-          return "Type '/' for commands..."
-        },
-      }),
-      Table.configure({
-        resizable: true,
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      CodeBlockLowlight.configure({
-        lowlight,
-      }),
-      ImageUploadNode.configure({
-        accept: "image/*",
-        maxSize: MAX_FILE_SIZE,
-        limit: 3,
-        upload: handleImageUpload,
-        onError: (error) => console.error("Upload failed:", error),
-      }),
-      Details.configure({
-        HTMLAttributes: {
-          class: "details",
-        },
-      }),
-      DetailsSummary,
-      DetailsContent,
-    ],
+    extensions: uniqueExtensions,
     content,
     onUpdate: ({ editor }) => {
-      onContentChange?.(editor.getJSON())
+      onContentChangeRef.current?.(editor.getJSON())
     },
   })
 
@@ -768,11 +846,23 @@ export function SimpleEditor({
     if (!editor) return []
     return [
       {
-        title: "Subpage",
-        subtitle: "Create a nested page",
+        title: "Sub-page",
+        subtitle: "Embed a sub-page",
         icon: <FileText className="size-4" />,
-        keywords: ["sub", "page", "child", "nested"],
-        run: () => onAddSubpage?.(),
+        keywords: ["page", "subpage", "nested"],
+        run: () => {
+          const newPage = onAddSubpageRef.current?.()
+          if (newPage && editor) {
+            editor.chain().focus().insertContent({
+              type: "subpage",
+              attrs: {
+                id: (newPage as any).id,
+                title: (newPage as any).title || "Untitled",
+                icon: (newPage as any).icon
+              }
+            }).run()
+          }
+        },
       },
       {
         title: "Heading 1",
@@ -868,10 +958,41 @@ export function SimpleEditor({
         subtitle: "Make it stand out",
         icon: <Sparkles className="size-4" />,
         keywords: ["callout", "info", "notice"],
-        run: () => editor.chain().focus().toggleBlockquote().run(), // Fallback to blockquote for now, will style it
+        run: () => editor.chain().focus().toggleBlockquote().updateAttributes('blockquote', { type: 'callout' }).run(),
+      },
+      {
+        title: "YouTube",
+        subtitle: "Embed a video",
+        icon: <YoutubeIcon className="size-4" />,
+        keywords: ["youtube", "video", "embed"],
+        run: () => {
+          const url = prompt("Enter YouTube URL")
+          if (url) {
+            editor.chain().focus().setYoutubeVideo({ src: url }).run()
+          }
+        },
+      },
+      {
+        title: "Emoji",
+        subtitle: "Insert an emoji",
+        icon: <Smile className="size-4" />,
+        keywords: ["emoji", "face", "smile"],
+        run: () => {
+          const { from } = editor.state.selection
+          const coords = editor.view.coordsAtPos(from)
+          const wrapperRect = wrapperRef.current?.getBoundingClientRect()
+          if (!wrapperRect) return
+          
+          setEditorEmojiPicker({
+            left: coords.left,
+            top: coords.bottom + 8,
+            pos: from
+          })
+        },
       },
     ]
   }, [editor, onAddSubpage])
+
 
 
   const filteredSlashItems = useMemo(() => {
@@ -1028,6 +1149,28 @@ export function SimpleEditor({
       window.removeEventListener("keydown", onKeyDown)
     }
   }, [blockMenu])
+
+  useEffect(() => {
+    if (!editorEmojiPicker) return
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null
+      if (target?.closest(".emoji-picker-dialog")) return
+      setEditorEmojiPicker(null)
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEditorEmojiPicker(null)
+    }
+
+    window.addEventListener("pointerdown", onPointerDown)
+    window.addEventListener("keydown", onKeyDown)
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown)
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [editorEmojiPicker])
 
   const deleteBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
@@ -1220,7 +1363,7 @@ export function SimpleEditor({
                 onClick={() => editor.chain().focus().addRowAfter().run()}
                 title="Add row after"
               >
-                <ChevronDownIcon className="size-3.5" />
+                <ChevronDown className="size-3.5" />
               </Button>
               <div className="w-px h-4 bg-border mx-1" />
               <Button
@@ -1263,7 +1406,7 @@ export function SimpleEditor({
               const { selection } = state
               const { empty } = selection
               
-              if (empty || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
+              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
                 return false
               }
               return true
@@ -1290,6 +1433,14 @@ export function SimpleEditor({
               <Button
                 variant="ghost"
                 size="icon"
+                className={`size-7 ${editor.isActive('underline') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleUnderline().run()}
+              >
+                <UnderlineIcon className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className={`size-7 ${editor.isActive('strike') ? 'bg-muted' : ''}`}
                 onClick={() => editor.chain().focus().toggleStrike().run()}
               >
@@ -1303,6 +1454,94 @@ export function SimpleEditor({
               >
                 <Code className="size-3.5" />
               </Button>
+              <div className="w-px h-4 bg-border mx-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('subscript') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleSubscript().run()}
+              >
+                <SubscriptIcon className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('superscript') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleSuperscript().run()}
+              >
+                <SuperscriptIcon className="size-3.5" />
+              </Button>
+              <div className="w-px h-4 bg-border mx-1" />
+              
+              {/* Font Family Selector (Simple) */}
+              <select 
+                className="bg-transparent text-[11px] outline-none cursor-pointer px-1 hover:bg-muted rounded"
+                onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+                value={editor.getAttributes('textStyle').fontFamily || ''}
+              >
+                <option value="">Default</option>
+                <option value="Inter">Inter</option>
+                <option value="DM Sans">DM Sans</option>
+                <option value="monospace">Monospace</option>
+                <option value="serif">Serif</option>
+              </select>
+
+              <div className="w-px h-4 bg-border mx-1" />
+              
+              {/* Color Selection (Simplified) */}
+              <div className="flex items-center gap-0.5 px-1">
+                {['inherit', '#ff0000', '#00ff00', '#0000ff', '#f59e0b', '#8b5cf6', '#ec4899'].map(c => (
+                  <button
+                    key={c}
+                    className="size-3.5 rounded-full border border-border/50 transition-transform hover:scale-125"
+                    style={{ backgroundColor: c === 'inherit' ? 'transparent' : c }}
+                    onClick={() => editor.chain().focus().setColor(c === 'inherit' ? '' : c).run()}
+                    title={c === 'inherit' ? 'Default' : c}
+                  />
+                ))}
+              </div>
+              
+              <div className="w-px h-4 bg-border mx-1" />
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('highlight') ? 'bg-muted text-primary' : ''}`}
+                onClick={() => {
+                  const current = editor.getAttributes('highlight').color
+                  if (current) editor.chain().focus().unsetHighlight().run()
+                  else editor.chain().focus().setHighlight({ color: '#fef08a' }).run()
+                }}
+                title="Highlight"
+              >
+                <Palette className="size-3.5" />
+              </Button>
+
+              <div className="w-px h-4 bg-border mx-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive({ textAlign: 'left' }) ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().setTextAlign('left').run()}
+              >
+                <AlignLeft className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive({ textAlign: 'center' }) ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().setTextAlign('center').run()}
+              >
+                <AlignCenter className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive({ textAlign: 'right' }) ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().setTextAlign('right').run()}
+              >
+                <AlignRight className="size-3.5" />
+              </Button>
             </div>
           </BubbleMenu>
         )}
@@ -1312,6 +1551,12 @@ export function SimpleEditor({
           role="presentation"
           className="simple-editor-content"
         />
+
+        {editor && (
+          <div className="max-w-[900px] mx-auto w-full flex justify-end px-4 py-2 text-[10px] text-muted-foreground/40 font-mono select-none">
+            {editor.storage.characterCount.characters()} characters / {editor.storage.characterCount.words()} words
+          </div>
+        )}
 
         {/* {isEmpty && (
           <div className="pointer-events-none max-w-[900px] mx-auto w-full text-muted-foreground/50 text-sm pt-2">
@@ -1489,7 +1734,7 @@ export function SimpleEditor({
                   <span>Move to top</span>
                 </button>
                 <button className="motion-block-menu__item" onClick={() => executeMoveTo('bottom')}>
-                  <ChevronDownIcon className="size-4" />
+                  <ChevronDown className="size-4" />
                   <span>Move to bottom</span>
                 </button>
                 <div className="my-1 h-px bg-border/50" />
@@ -1510,16 +1755,18 @@ export function SimpleEditor({
                     key={`text-${c.name}`}
                     className="motion-block-menu__item gap-2.5"
                     onClick={() => {
-                      const { from } = blockMenu.target;
-                      const node = editor.state.doc.nodeAt(from);
-                      if (node) {
-                        editor.chain()
-                          .focus()
-                          .setNodeSelection(from)
-                          .updateAttributes(node.type.name, { color: c.color })
-                          .run();
+                      if (blockMenu?.target && editor) {
+                        const { from } = blockMenu.target;
+                        const node = editor.state.doc.nodeAt(from);
+                        if (node) {
+                          editor.chain()
+                            .focus()
+                            .setNodeSelection(from)
+                            .updateAttributes(node.type.name, { color: c.color })
+                            .run();
+                        }
+                        setBlockMenu(null);
                       }
-                      setBlockMenu(null);
                     }}
                   >
                     <div className="size-5 rounded border border-border/50 flex items-center justify-center text-[11px] font-bold" style={{ color: c.color }}>
@@ -1527,7 +1774,9 @@ export function SimpleEditor({
                     </div>
                     <span>{c.name}</span>
                     {(() => {
-                      const attrs = editor.getAttributes(editor.state.doc.nodeAt(blockMenu.target.from)?.type.name || 'paragraph');
+                      if (!editor || !blockMenu?.target) return null;
+                      const node = editor.state.doc.nodeAt(blockMenu.target.from);
+                      const attrs = editor.getAttributes(node?.type.name || 'paragraph');
                       return attrs.color === c.color && <Check className="size-3 ml-auto text-primary" />;
                     })()}
                   </button>
@@ -1541,22 +1790,26 @@ export function SimpleEditor({
                     key={`bg-${c.name}`}
                     className="motion-block-menu__item gap-2.5"
                     onClick={() => {
-                      const { from } = blockMenu.target;
-                      const node = editor.state.doc.nodeAt(from);
-                      if (node) {
-                        editor.chain()
-                          .focus()
-                          .setNodeSelection(from)
-                          .updateAttributes(node.type.name, { backgroundColor: c.bg })
-                          .run();
+                      if (blockMenu?.target && editor) {
+                        const { from } = blockMenu.target;
+                        const node = editor.state.doc.nodeAt(from);
+                        if (node) {
+                          editor.chain()
+                            .focus()
+                            .setNodeSelection(from)
+                            .updateAttributes(node.type.name, { backgroundColor: c.bg })
+                            .run();
+                        }
+                        setBlockMenu(null);
                       }
-                      setBlockMenu(null);
                     }}
                   >
                     <div className="size-5 rounded border border-border/50" style={{ backgroundColor: c.bg }} />
                     <span>{c.name} background</span>
                     {(() => {
-                      const attrs = editor.getAttributes(editor.state.doc.nodeAt(blockMenu.target.from)?.type.name || 'paragraph');
+                      if (!editor || !blockMenu?.target) return null;
+                      const node = editor.state.doc.nodeAt(blockMenu.target.from);
+                      const attrs = editor.getAttributes(node?.type.name || 'paragraph');
                       return attrs.backgroundColor === c.bg && <Check className="size-3 ml-auto text-primary" />;
                     })()}
                   </button>
@@ -1606,6 +1859,43 @@ export function SimpleEditor({
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editorEmojiPicker && editor && (
+          <div
+            className="fixed z-[100] emoji-picker-dialog"
+            style={{ left: editorEmojiPicker.left, top: editorEmojiPicker.top }}
+          >
+            <div className="w-[320px] bg-popover rounded-xl border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden flex flex-col">
+              <div className="p-3 flex flex-col max-h-[320px]">
+                <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
+                  <Search className="size-3.5 text-muted-foreground" />
+                  <input 
+                    placeholder="Search emojis..." 
+                    className="bg-transparent border-none outline-none text-[13px] w-full"
+                    value={editorEmojiSearch}
+                    onChange={(e) => setEditorEmojiSearch(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
+                  {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢", "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾", "👋", "🤚", "🖐", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾", "🦵", "🦿", "🦶", "👣", "👂", "🦻", "👃", "🫀", "🫁", "🧠", "🦷", "🦴", "👀", "👁", "👅", "👄", "💋", "🩸"]
+                  .filter(e => e.includes(editorEmojiSearch) || editorEmojiSearch === "").map(emoji => (
+                    <button
+                      key={emoji}
+                      className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
+                      onClick={() => {
+                        editor.chain().focus().insertContent(emoji).run()
+                        setEditorEmojiPicker(null)
+                        setEditorEmojiSearch("")
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

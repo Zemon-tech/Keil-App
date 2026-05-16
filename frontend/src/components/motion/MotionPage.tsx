@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Menu, MoreHorizontal, Trash2, ChevronRight, Search, Upload, ImageIcon, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Search as SearchIcon, Image as ImageLucide, Zap, Sparkles } from "lucide-react";
+import { Menu, MoreHorizontal, Trash2, ChevronRight, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
@@ -59,11 +59,15 @@ export function MotionPage() {
     [updatePage]
   );
 
-  const handleAddSubpage = () => {
+  const handleContentChange = useCallback((json: any) => {
+    if (pageId) saveContent(pageId, json);
+  }, [pageId, saveContent]);
+
+  const handleAddSubpage = useCallback(() => {
     if (!pageId) return;
     const newPage = addPage({ parentId: pageId });
-    navigate(`/motion/${newPage.id}`);
-  };
+    return newPage;
+  }, [pageId, addPage]);
 
   useEffect(() => {
     return () => {
@@ -222,7 +226,7 @@ export function MotionPage() {
 
             <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16">
               {/* Icon Overlay */}
-              {page.icon && (
+              {(page.icon || showEmojiPicker) && (
                 <div className="absolute -top-[52px] left-12 lg:left-16 group/icon z-20">
                   <div 
                     className="text-[72px] leading-none hover:bg-muted/20 rounded-2xl p-2 transition-colors select-none cursor-pointer flex items-center justify-center bg-background shadow-sm border border-border/10 overflow-hidden shrink-0"
@@ -237,8 +241,10 @@ export function MotionPage() {
                         const Icon = icons[iconName] || FileText;
                         return <Icon className="size-[64px] text-foreground/80" />;
                       })()
-                    ) : (
+                    ) : page.icon ? (
                       page.icon
+                    ) : (
+                      <Smile className="size-[64px] text-muted-foreground/30" />
                     )}
                   </div>
                   
@@ -421,7 +427,7 @@ export function MotionPage() {
                   <button 
                     className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
                     onClick={() => {
-                      updatePage(pageId, { icon: "✨" });
+                      setShowEmojiPicker(true);
                     }}
                   >
                     Add icon
@@ -461,7 +467,7 @@ export function MotionPage() {
                 <SimpleEditor
                   key={pageId}
                   content={page.content}
-                  onContentChange={(json) => saveContent(pageId, json)}
+                  onContentChange={handleContentChange}
                   onReady={(editor) => setPageEditor(editor)}
                   onAddSubpage={handleAddSubpage}
                 />
