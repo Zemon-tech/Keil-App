@@ -1550,11 +1550,6 @@ export function SimpleEditor({
           className="simple-editor-content"
         />
 
-        {editor && (
-          <div className="max-w-[900px] mx-auto w-full flex justify-end px-4 py-2 text-[10px] text-muted-foreground/40 font-mono select-none">
-            {editor.storage.characterCount.characters()} characters / {editor.storage.characterCount.words()} words
-          </div>
-        )}
 
         {/* {isEmpty && (
           <div className="pointer-events-none max-w-[900px] mx-auto w-full text-muted-foreground/50 text-sm pt-2">

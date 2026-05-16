@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { 
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile 
+import {
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile
 } from "lucide-react";
 import { MotionShareModal } from "./MotionShareModal";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
@@ -48,7 +54,9 @@ export function MotionPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [activeEmojiTab, setActiveEmojiTab] = useState<'Emoji' | 'Icons' | 'Upload'>('Emoji');
+  const [activeCoverTab, setActiveCoverTab] = useState<'Gallery' | 'Upload' | 'Link' | 'Unsplash'>('Gallery');
   const [emojiSearch, setEmojiSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -307,17 +315,17 @@ export function MotionPage() {
         <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20 group/page">
           <div className="w-full pt-0 relative">
             {displayPage.cover_image ? (
-              <div className="h-[280px] w-full overflow-hidden relative group/cover">
+              <div className="h-[220px] w-full relative group/cover">
                 <img
                   src={displayPage.cover_image}
                   alt="cover"
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
-                  <input 
-                    type="file" 
-                    ref={coverInputRef} 
-                    className="hidden" 
+                  <input
+                    type="file"
+                    ref={coverInputRef}
+                    className="hidden"
                     accept="image/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -334,94 +342,166 @@ export function MotionPage() {
                     variant="secondary"
                     size="sm"
                     className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
-                    onClick={() => coverInputRef.current?.click()}
+                    onClick={() => setShowCoverPicker(true)}
                   >
-                    Upload cover
+                    Change
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
                     className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
                     onClick={() => {
-                      const covers = [
-                        "https://images.unsplash.com/photo-1518837695005-2083093ee35b",
-                        "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b",
-                        "https://images.unsplash.com/photo-1501785888041-af3ef285b470",
-                        "https://images.unsplash.com/photo-1470770841072-f978cf4d019e",
-                        "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
-                      ];
-                      const random = covers[Math.floor(Math.random() * covers.length)] + "?q=80&w=1600&auto=format&fit=crop";
-                      if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: random } });
+                      if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: null } });
                     }}
                   >
-                    Random cover
+                    Remove
                   </Button>
                 </div>
-              </div>
-            ) : (
-              <div className="h-24 w-full bg-background group-hover/page:bg-muted/10 transition-colors" />
-            )}
 
-            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16">
-              {/* Icon Overlay */}
-              {(displayPage.icon || showEmojiPicker) && (
-                <div className="absolute -top-[52px] left-12 lg:left-16 group/icon z-20">
-                  <div 
-                    className="text-[72px] leading-none hover:bg-muted/20 rounded-2xl p-2 transition-colors select-none cursor-pointer flex items-center justify-center bg-background shadow-sm border border-border/10 overflow-hidden shrink-0"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  >
-                    {displayPage.icon?.startsWith("data:image") ? (
-                      <img src={displayPage.icon} alt="icon" className="size-full object-cover rounded-xl" />
-                    ) : displayPage.icon?.startsWith("lucide:") ? (
-                      (() => {
-                        const iconName = displayPage.icon!.split(":")[1];
-                        const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
-                        const Icon = icons[iconName] || FileText;
-                        return <Icon className="size-[64px] text-foreground/80" />;
-                      })()
-                    ) : displayPage.icon ? (
-                      displayPage.icon
-                    ) : (
-                      <Smile className="size-[64px] text-muted-foreground/30" />
-                    )}
-                  </div>
-                  
-                  {showEmojiPicker && (
-                    <div className="absolute top-full left-0 mt-2 z-[110] w-[360px] bg-popover rounded-xl border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden flex flex-col">
-                      <div className="flex items-center gap-4 px-4 pt-3 border-b border-border/50 relative">
-                        {['Emoji', 'Icons', 'Upload'].map(tab => (
+                <Dialog open={showCoverPicker} onOpenChange={setShowCoverPicker}>
+                  <DialogContent showCloseButton={false} className="max-w-[540px] p-0 overflow-hidden bg-popover border-border shadow-2xl">
+                    <DialogTitle className="sr-only">Choose Cover Image</DialogTitle>
+                    <DialogHeader className="px-4 pt-3 pb-0 border-b border-border/50 relative flex-row items-center">
+                      <div className="flex items-center gap-4 flex-1">
+                        {['Gallery', 'Upload', 'Link', 'Unsplash'].map(tab => (
                           <button 
                             key={tab} 
-                            onClick={() => setActiveEmojiTab(tab as any)}
+                            onClick={() => setActiveCoverTab(tab as any)}
                             className={cn(
                               "pb-2 text-[13px] font-medium transition-colors border-b-2 relative -bottom-[1px]",
-                              activeEmojiTab === tab ? "text-foreground border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
+                              activeCoverTab === tab ? "text-foreground border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
                             )}
                           >
                             {tab}
                           </button>
                         ))}
-                        <div className="ml-auto flex items-center gap-2 pb-2">
+                      </div>
+                      <button 
+                        className="pb-2 text-[13px] text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => {
+                          if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: null } });
+                          setShowCoverPicker(false);
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </DialogHeader>
+
+                    <div className="p-4 max-h-[420px] overflow-y-auto custom-scrollbar">
+                      {activeCoverTab === 'Gallery' && (
+                        <div className="space-y-4">
+                          <div>
+                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Color & Gradient</span>
+                            <div className="grid grid-cols-4 gap-2 mt-2">
+                              {['#eb5757', '#f2994a', '#f2c94c', '#27ae60', '#2d9cdb', '#9b51e0', '#4a4a4a', '#6b7280'].map(color => (
+                                <button 
+                                  key={color}
+                                  className="h-14 rounded-md transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1" 
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => {
+                                    if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: color } });
+                                    setShowCoverPicker(false);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Hudson River School</span>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                              {[
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_theOxbow.jpg",
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_springLandscape.jpg",
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_aegeanSea.jpg",
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_catskillEarlyAutumn.jpg",
+                                "https://www.notion.so/images/page-cover/met_frederic_edwin_church_1871.jpg",
+                                "https://www.notion.so/images/page-cover/rijksmuseum_avercamp_1620.jpg",
+                              ].map(url => (
+                                <button 
+                                  key={url}
+                                  className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
+                                  style={{ backgroundImage: `url(${url})` }}
+                                  onClick={() => {
+                                    if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    setShowCoverPicker(false);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Art & Illustration</span>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                              {[
+                                "https://www.notion.so/images/page-cover/nationalMuseumOfAsianArt_sparrowsFeedingTheirYoung.jpg",
+                                "https://www.notion.so/images/page-cover/usda_pear.png",
+                                "https://www.notion.so/images/page-cover/met_vincent_van_gogh_ginoux.jpg",
+                              ].map(url => (
+                                <button 
+                                  key={url}
+                                  className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
+                                  style={{ backgroundImage: `url(${url})` }}
+                                  onClick={() => {
+                                    if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    setShowCoverPicker(false);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            ) : (
+              <div className="h-20 w-full bg-background" />
+            )}
+
+            {/* Icon — straddles the cover/content boundary */}
+            {(displayPage.icon || showEmojiPicker) && (
+              <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16">
+                <div className="relative group/icon pl-4" style={{ marginTop: displayPage.cover_image ? '-40px' : '16px', marginBottom: '12px', width: 'fit-content' }}>
+                    <div
+                      className="text-[78px] leading-none select-none cursor-pointer flex items-center justify-center shrink-0"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    >
+                      {displayPage.icon?.startsWith("data:image") ? (
+                        <img src={displayPage.icon} alt="icon" className="size-full object-cover rounded-xl" />
+                      ) : displayPage.icon?.startsWith("lucide:") ? (
+                        (() => {
+                          const iconName = displayPage.icon!.split(":")[1];
+                          const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
+                          const Icon = icons[iconName] || FileText;
+                          return <Icon className="size-16 text-foreground/80" />;
+                        })()
+                      ) : displayPage.icon ? (
+                        displayPage.icon
+                      ) : (
+                        <Smile className="size-16 text-muted-foreground/30" />
+                      )}
+                    </div>
+                    <Dialog open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                      <DialogContent showCloseButton={false} className="max-w-[360px] p-0 overflow-hidden bg-popover border-border shadow-2xl">
+                        <DialogTitle className="sr-only">Choose Icon</DialogTitle>
+                        <DialogHeader className="px-4 pt-3 pb-0 border-b border-border/50 flex-row items-center">
+                          <div className="flex items-center gap-4 flex-1">
+                            {['Emoji', 'Icons', 'Upload'].map(tab => (
+                              <button 
+                                key={tab} 
+                                onClick={() => setActiveEmojiTab(tab as any)}
+                                className={cn(
+                                  "pb-2 text-[13px] font-medium transition-colors border-b-2 relative -bottom-[1px]",
+                                  activeEmojiTab === tab ? "text-foreground border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
+                                )}
+                              >
+                                {tab}
+                              </button>
+                            ))}
+                          </div>
                           <button 
-                            className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
-                            onClick={() => {
-                              if (activeEmojiTab === 'Emoji') {
-                                const icons = ["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚"];
-                                const random = icons[Math.floor(Math.random() * icons.length)];
-                                if (pageId) updatePage.mutate({ id: pageId, updates: { icon: random } });
-                              } else if (activeEmojiTab === 'Icons') {
-                                const iconNames = ['Plane', 'Heart', 'Star', 'Cloud', 'Moon', 'Sun', 'Bell', 'Camera', 'Gift', 'Coffee', 'Music', 'Code', 'Terminal', 'Database', 'Shield', 'Layout', 'Settings', 'User', 'Users', 'Mail', 'Map', 'Flag', 'Bookmark', 'Calendar', 'CheckCircle', 'HelpCircle', 'Info', 'AlertTriangle', 'AlertCircle', 'XCircle', 'Clock', 'Zap'];
-                                const random = iconNames[Math.floor(Math.random() * iconNames.length)];
-                                if (pageId) updatePage.mutate({ id: pageId, updates: { icon: `lucide:${random}` } });
-                              }
-                            }}
-                            title="Random"
-                          >
-                            <Sparkles className="size-3.5" />
-                          </button>
-                          <div className="size-3.5 rounded-full border border-border bg-muted/50" />
-                          <button 
-                            className="text-[13px] text-muted-foreground hover:text-foreground pl-2"
+                            className="pb-2 text-[13px] text-muted-foreground hover:text-destructive transition-colors"
                             onClick={() => {
                               if (pageId) updatePage.mutate({ id: pageId, updates: { icon: undefined } });
                               setShowEmojiPicker(false);
@@ -429,179 +509,194 @@ export function MotionPage() {
                           >
                             Remove
                           </button>
-                        </div>
-                      </div>
+                        </DialogHeader>
 
-                      <div className="flex-1 overflow-hidden flex flex-col min-h-[360px]">
-                        {activeEmojiTab === 'Emoji' && (
-                          <div className="p-3 flex flex-col h-full">
-                            <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
-                              <Search className="size-3.5 text-muted-foreground" />
-                              <input 
-                                placeholder="Filter..." 
-                                className="bg-transparent border-none outline-none text-[13px] w-full"
-                                value={emojiSearch}
-                                onChange={(e) => setEmojiSearch(e.target.value)}
-                              />
-                            </div>
-                            <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
-                              {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢"].filter(e => e.includes(emojiSearch) || emojiSearch === "").map(emoji => (
-                                <button
-                                  key={emoji}
-                                  className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
-                                  onClick={() => {
-                                    if (pageId) updatePage.mutate({ id: pageId, updates: { icon: emoji } });
-                                    setShowEmojiPicker(false);
-                                  }}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {activeEmojiTab === 'Icons' && (
-                          <div className="p-3 flex flex-col h-full">
-                            <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
-                              <Search className="size-3.5 text-muted-foreground" />
-                              <input 
-                                placeholder="Filter..." 
-                                className="bg-transparent border-none outline-none text-[13px] w-full"
-                                value={emojiSearch}
-                                onChange={(e) => setEmojiSearch(e.target.value)}
-                              />
-                            </div>
-                            <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
-                              {[
-                                { name: 'Plane', icon: Plane }, { name: 'Heart', icon: Heart }, { name: 'Star', icon: Star }, { name: 'Cloud', icon: Cloud }, { name: 'Moon', icon: Moon }, { name: 'Sun', icon: Sun }, { name: 'Bell', icon: Bell }, { name: 'Camera', icon: Camera }, { name: 'Gift', icon: Gift }, { name: 'Coffee', icon: Coffee }, { name: 'Music', icon: Music }, { name: 'Code', icon: Code }, { name: 'Terminal', icon: Terminal }, { name: 'Database', icon: Database }, { name: 'Shield', icon: Shield }, { name: 'Layout', icon: Layout }, { name: 'Settings', icon: Settings }, { name: 'User', icon: User }, { name: 'Users', icon: Users }, { name: 'Mail', icon: Mail }, { name: 'Map', icon: Map }, { name: 'Flag', icon: Flag }, { name: 'Bookmark', icon: Bookmark }, { name: 'Calendar', icon: Calendar }, { name: 'CheckCircle', icon: CheckCircle }, { name: 'HelpCircle', icon: HelpCircle }, { name: 'Info', icon: Info }, { name: 'AlertTriangle', icon: AlertTriangle }, { name: 'AlertCircle', icon: AlertCircle }, { name: 'XCircle', icon: XCircle }, { name: 'Clock', icon: Clock }, { name: 'Zap', icon: Zap }
-                              ].map((item, idx) => (
-                                <button
-                                  key={idx}
-                                  className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
-                                  onClick={() => {
-                                    if (pageId) updatePage.mutate({ id: pageId, updates: { icon: `lucide:${item.name}` } });
-                                    setShowEmojiPicker(false);
-                                  }}
-                                >
-                                  <item.icon className="size-4 text-foreground/70" />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {activeEmojiTab === 'Upload' && (
-                          <div className="p-8 flex flex-col h-full items-center justify-center text-center gap-6">
-                            <input 
-                              type="file" 
-                              ref={fileInputRef} 
-                              className="hidden" 
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    if (pageId) updatePage.mutate({ id: pageId, updates: { icon: reader.result as string } });
-                                    setShowEmojiPicker(false);
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }}
-                            />
-                            <div 
-                              className="w-full h-32 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-3 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer group"
-                              onClick={() => fileInputRef.current?.click()}
-                            >
-                              <div className="size-10 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <ImageLucide className="size-5 text-muted-foreground" />
+                        <div className="flex-1 overflow-hidden flex flex-col min-h-[360px]">
+                          {activeEmojiTab === 'Emoji' && (
+                            <div className="p-3 flex flex-col h-full">
+                              <div className="flex gap-2 items-center bg-muted/50 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
+                                <Search className="size-3.5 text-muted-foreground" />
+                                <input 
+                                  placeholder="Filter..." 
+                                  className="bg-transparent border-none outline-none text-[13px] w-full text-foreground placeholder:text-muted-foreground/50"
+                                  value={emojiSearch}
+                                  onChange={(e) => setEmojiSearch(e.target.value)}
+                                />
+                                <div className="flex items-center gap-1.5 border-l border-border/10 pl-2">
+                                  <button 
+                                    className="p-0.5 hover:bg-accent rounded text-muted-foreground transition-colors"
+                                    onClick={() => {
+                                      if (activeEmojiTab === 'Emoji') {
+                                        const icons = ["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚"];
+                                        const random = icons[Math.floor(Math.random() * icons.length)];
+                                        if (pageId) updatePage.mutate({ id: pageId, updates: { icon: random } });
+                                      } else if (activeEmojiTab === 'Icons') {
+                                        const iconNames = ['Plane', 'Heart', 'Star', 'Cloud', 'Moon', 'Sun', 'Bell', 'Camera', 'Gift', 'Coffee', 'Music', 'Code', 'Terminal', 'Database', 'Shield', 'Layout', 'Settings', 'User', 'Users', 'Mail', 'Map', 'Flag', 'Bookmark', 'Calendar', 'CheckCircle', 'HelpCircle', 'Info', 'AlertTriangle', 'AlertCircle', 'XCircle', 'Clock', 'Zap'];
+                                        const random = iconNames[Math.floor(Math.random() * iconNames.length)];
+                                        if (pageId) updatePage.mutate({ id: pageId, updates: { icon: `lucide:${random}` } });
+                                      }
+                                    }}
+                                    title="Random"
+                                  >
+                                    <Sparkles className="size-3" />
+                                  </button>
+                                  <span className="text-border text-xs font-light">|</span>
+                                  <button className="p-0.5 hover:bg-accent rounded text-muted-foreground transition-colors">
+                                    <Smile className="size-3" />
+                                  </button>
+                                </div>
                               </div>
-                              <span className="text-[13.5px] font-medium text-foreground/70">Upload an image</span>
+                              <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
+                                {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢"].filter(e => e.includes(emojiSearch) || emojiSearch === "").map(emoji => (
+                                  <button
+                                    key={emoji}
+                                    className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
+                                    onClick={() => {
+                                      if (pageId) updatePage.mutate({ id: pageId, updates: { icon: emoji } });
+                                      setShowEmojiPicker(false);
+                                    }}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[12px] text-muted-foreground/60 font-medium">or Ctrl+V to paste an image or link</span>
-                            </div>
-                            <div className="mt-auto w-full flex items-center justify-between pt-4 border-t border-border/40">
-                              <button 
-                                className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-                                onClick={() => setShowEmojiPicker(false)}
-                              >
-                                Cancel
-                              </button>
-                              <Button 
-                                size="sm" 
-                                className="h-8 px-4 text-[13px] font-medium bg-primary/20 text-primary hover:bg-primary/30 border-none"
-                                onClick={() => setShowEmojiPicker(false)}
-                              >
-                                Save
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                          )}
 
-                  <button 
-                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground size-5 rounded-full flex items-center justify-center opacity-0 group-hover/icon:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (pageId) updatePage.mutate({ id: pageId, updates: { icon: undefined } });
-                      setShowEmojiPicker(false);
-                    }}
-                  >
-                    <Trash2 className="size-3" />
+                          {activeEmojiTab === 'Icons' && (
+                            <div className="p-3 flex flex-col h-full">
+                              <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
+                                <Search className="size-3.5 text-muted-foreground" />
+                                <input
+                                  placeholder="Filter..."
+                                  className="bg-transparent border-none outline-none text-[13px] w-full"
+                                  value={emojiSearch}
+                                  onChange={(e) => setEmojiSearch(e.target.value)}
+                                />
+                              </div>
+                              <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
+                                {[
+                                  { name: 'Plane', icon: Plane }, { name: 'Heart', icon: Heart }, { name: 'Star', icon: Star }, { name: 'Cloud', icon: Cloud }, { name: 'Moon', icon: Moon }, { name: 'Sun', icon: Sun }, { name: 'Bell', icon: Bell }, { name: 'Camera', icon: Camera }, { name: 'Gift', icon: Gift }, { name: 'Coffee', icon: Coffee }, { name: 'Music', icon: Music }, { name: 'Code', icon: Code }, { name: 'Terminal', icon: Terminal }, { name: 'Database', icon: Database }, { name: 'Shield', icon: Shield }, { name: 'Layout', icon: Layout }, { name: 'Settings', icon: Settings }, { name: 'User', icon: User }, { name: 'Users', icon: Users }, { name: 'Mail', icon: Mail }, { name: 'Map', icon: Map }, { name: 'Flag', icon: Flag }, { name: 'Bookmark', icon: Bookmark }, { name: 'Calendar', icon: Calendar }, { name: 'CheckCircle', icon: CheckCircle }, { name: 'HelpCircle', icon: HelpCircle }, { name: 'Info', icon: Info }, { name: 'AlertTriangle', icon: AlertTriangle }, { name: 'AlertCircle', icon: AlertCircle }, { name: 'XCircle', icon: XCircle }, { name: 'Clock', icon: Clock }, { name: 'Zap', icon: Zap }
+                                ].map((item, idx) => (
+                                  <button
+                                    key={idx}
+                                    className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
+                                    onClick={() => {
+                                      if (pageId) updatePage.mutate({ id: pageId, updates: { icon: `lucide:${item.name}` } });
+                                      setShowEmojiPicker(false);
+                                    }}
+                                  >
+                                    <item.icon className="size-4 text-foreground/70" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {activeEmojiTab === 'Upload' && (
+                            <div className="p-8 flex flex-col h-full items-center justify-center text-center gap-6">
+                              <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      if (pageId) updatePage.mutate({ id: pageId, updates: { icon: reader.result as string } });
+                                      setShowEmojiPicker(false);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                              <div
+                                className="w-full h-32 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-3 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer group"
+                                onClick={() => fileInputRef.current?.click()}
+                              >
+                                <div className="size-10 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
+                                  <ImageLucide className="size-5 text-muted-foreground" />
+                                </div>
+                                <span className="text-[13.5px] font-medium text-foreground/70">Upload an image</span>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[12px] text-muted-foreground/60 font-medium">or Ctrl+V to paste an image or link</span>
+                              </div>
+                              <div className="mt-auto w-full flex items-center justify-between pt-4 border-t border-border/40">
+                                <button
+                                  className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                                  onClick={() => setShowEmojiPicker(false)}
+                                >
+                                  Cancel
+                                </button>
+                                <Button
+                                  size="sm"
+                                  className="h-8 px-4 text-[13px] font-medium bg-primary/20 text-primary hover:bg-primary/30 border-none"
+                                  onClick={() => setShowEmojiPicker(false)}
+                                >
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </div>
+            )}
+
+            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16">
+              <div className="group/title-area">
+                <div className={cn(
+                  "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
+                  "mt-3 mb-2",
+                  "opacity-0 group-hover/title-area:opacity-100"
+                )}>
+                  {!displayPage.icon && (
+                    <button
+                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                      onClick={() => {
+                        setShowEmojiPicker(true);
+                      }}
+                    >
+                      Add icon
+                    </button>
+                  )}
+                  {!displayPage.cover_image && (
+                    <button
+                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                      onClick={() => {
+                        if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop" } });
+                      }}
+                    >
+                      Add cover
+                    </button>
+                  )}
+                  <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
+                    Add comment
                   </button>
                 </div>
-              )}
 
-              <div className={cn(
-                "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300",
-                displayPage.icon ? "mt-10 mb-4" : "mt-8 mb-4",
-                "opacity-0 group-hover/page:opacity-100"
-              )}>
-                {!displayPage.icon && (
-                  <button 
-                    className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                    onClick={() => {
-                      setShowEmojiPicker(true);
-                    }}
-                  >
-                    Add icon
-                  </button>
-                )}
-                {!displayPage.cover_image && (
-                  <button 
-                    className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                    onClick={() => {
-                      if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop" } });
-                    }}
-                  >
-                    Add cover
-                  </button>
-                )}
-                <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
-                  Add comment
-                </button>
+                {/* Title */}
+                <input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    pageEditor?.commands?.focus?.("start");
+                  }}
+                  onBlur={handleTitleBlur}
+                  className="w-full bg-transparent text-[44px] px-4 leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25"
+                  placeholder="Untitled"
+                />
               </div>
 
-              {/* Title */}
-              <input
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  pageEditor?.commands?.focus?.("start");
-                }}
-                onBlur={handleTitleBlur}
-                className="w-full bg-transparent text-[44px] leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25"
-                placeholder="Untitled"
-              />
-
               {/* Editor */}
-              <div className="pt-6">
+              <div className="pt-0">
                 <SimpleEditor
                   key={pageId}
                   content={displayPage.content}
@@ -632,8 +727,8 @@ export function MotionPage() {
           onOpenChange={setShareModalOpen}
           pageId={pageId!}
           pageTitle={displayPage.title}
-          orgId={activeOrgId}
-          spaceId={activeSpaceId}
+          orgId={activeOrgId!}
+          spaceId={activeSpaceId!}
         />
       )}
     </div>
