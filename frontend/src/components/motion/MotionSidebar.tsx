@@ -2,7 +2,6 @@ import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -21,11 +20,10 @@ import {
   RotateCcw,
   MoreHorizontal,
   Pencil,
-  ChevronsLeft,
   Settings,
   Check,
   Loader2,
-  Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap
+  SquarePen
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -50,12 +48,11 @@ import {
   useHardDeleteMotionPage,
   useUpdateMotionPage,
 } from "@/hooks/api/useMotionPages";
-import { useSpaces } from "@/hooks/api/useSpaces";
 
-const mainNav = [
-  { title: "Home", icon: Home, url: "/motion" },
-  { title: "Search", icon: Search, url: "#" },
-  { title: "Inbox", icon: Inbox, url: "#" },
+const mainTabs = [
+  { id: "home", title: "Home", icon: Home, url: "/motion" },
+  { id: "inbox", title: "Inbox", icon: Inbox, url: "#" },
+  { id: "search", title: "Search", icon: Search, url: "#" },
 ];
 
 // ─── SidebarPageItem ──────────────────────────────────────────────────────────
@@ -170,18 +167,6 @@ function SidebarPageItem({
                 onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}
                 className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex items-center gap-2"
               >
-                <span className="shrink-0 flex items-center justify-center size-4">
-                  {item.icon?.startsWith("lucide:") ? (
-                    (() => {
-                      const iconName = item.icon!.split(":")[1];
-                      const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
-                      const Icon = icons[iconName] || FileText;
-                      return <Icon className="size-3.5" />;
-                    })()
-                  ) : (
-                    item.icon || "📄"
-                  )}
-                </span>
                 <span className="truncate">{item.title}</span>
               </Link>
             </div>
@@ -270,116 +255,6 @@ function SidebarPageItem({
 
 // ─── OrgSpaceSwitcher ─────────────────────────────────────────────────────────
 
-function OrgSpaceSwitcher() {
-  const { organisations, activeOrgId, activeSpaceId, setActiveOrganisation } = useAppContext();
-  const [open, setOpen] = useState(false);
-
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-          aria-label="Switch organisation or space"
-        >
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={8} className="w-72 rounded-xl p-1">
-        {organisations.length === 0 ? (
-          <div className="px-2.5 py-3 text-xs text-muted-foreground text-center">
-            No organisations yet
-          </div>
-        ) : (
-          organisations.map((org) => (
-            <OrgSpaceGroup
-              key={org.id}
-              org={org}
-              activeOrgId={activeOrgId}
-              activeSpaceId={activeSpaceId}
-              onSelectSpace={(orgId, spaceId) => {
-                setActiveOrganisation(orgId, spaceId);
-                setOpen(false);
-              }}
-            />
-          ))
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-          onClick={() => setOpen(false)}
-        >
-          <Settings className="h-3.5 w-3.5" />
-          Motion settings
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function OrgSpaceGroup({
-  org,
-  activeOrgId,
-  activeSpaceId,
-  onSelectSpace,
-}: {
-  org: { id: string; name: string };
-  activeOrgId: string | null;
-  activeSpaceId: string | null;
-  onSelectSpace: (orgId: string, spaceId: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(org.id === activeOrgId);
-  const { data: spaces = [], isLoading } = useSpaces(expanded ? org.id : null);
-  const isActiveOrg = activeOrgId === org.id;
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] hover:bg-accent/50 transition-colors"
-      >
-        <div className="h-5 w-5 rounded bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-          {org.name.charAt(0).toUpperCase()}
-        </div>
-        <span className="flex-1 truncate text-left font-medium">{org.name}</span>
-        {isActiveOrg && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-        <div className={cn("transition-transform duration-200", !expanded && "-rotate-90")}>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="ml-4 mt-0.5 mb-1 border-l border-border/50 pl-2">
-          {isLoading ? (
-            <div className="flex items-center gap-2 py-2 px-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Loading spaces…
-            </div>
-          ) : spaces.length === 0 ? (
-            <div className="py-2 px-2 text-xs text-muted-foreground">No spaces</div>
-          ) : (
-            spaces.map((space) => {
-              const isActive = isActiveOrg && activeSpaceId === space.id;
-              return (
-                <button
-                  key={space.id}
-                  type="button"
-                  onClick={() => onSelectSpace(org.id, space.id)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-accent/50 transition-colors"
-                >
-                  <span className="flex-1 truncate text-left">{space.name}</span>
-                  {isActive && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── MotionSidebar ────────────────────────────────────────────────────────────
 
@@ -392,7 +267,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const navigate = useNavigate();
   const { pageId } = useParams();
 
-  const { activeOrgId, activeSpaceId, activeOrg, activeSpace, mode } = useAppContext();
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
 
   // ── API data ────────────────────────────────────────────────────────────────
   const { data: apiPages = [], isLoading: isPagesLoading } = useMotionPages(activeOrgId, activeSpaceId);
@@ -428,12 +303,6 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const [trashOpen, setTrashOpen] = useState(false);
   const [sharedOpen, setSharedOpen] = useState(false);
 
-  // ── Workspace label ─────────────────────────────────────────────────────────
-  const workspaceLabel =
-    activeSpace?.name && activeOrg?.name
-      ? `${activeOrg.name} · ${activeSpace.name}`
-      : activeOrg?.name ?? "Select a workspace";
-  const workspaceInitial = (activeOrg?.name ?? "?").charAt(0).toUpperCase();
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleAddPage = async (parentId?: string) => {
@@ -467,32 +336,50 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   return (
     <Sidebar collapsible="none" className="w-full h-full border-r border-border/50 bg-card flex flex-col select-none">
       {/* ── Header: workspace switcher ── */}
-      <SidebarHeader className="px-3 py-2 border-b border-border/50">
-        <div className="group/workspace flex h-8 items-center gap-2.5 rounded-lg px-1 text-foreground transition-colors hover:bg-accent/50">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-            {workspaceInitial}
-          </div>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight">
-            {workspaceLabel}
-          </span>
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/workspace:opacity-100">
-            <OrgSpaceSwitcher />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-              onClick={onClose}
-              aria-label="Collapse sidebar"
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-          </div>
+      {/* ── Header: Notion-style Tabs ── */}
+      <SidebarHeader className="px-3 py-3 border-b border-border/40">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {mainTabs.map((tab) => {
+            const isActive = location.pathname === tab.url || (tab.id === 'home' && location.pathname === '/motion');
+            return (
+              <Button
+                key={tab.id}
+                variant="ghost"
+                size="sm"
+                asChild
+                className={cn(
+                  "h-8 px-2.5 rounded-lg transition-all flex items-center gap-2 border border-transparent hover:bg-accent/50",
+                  isActive 
+                    ? "bg-accent/80 text-foreground border-border/50 shadow-sm" 
+                    : "text-muted-foreground"
+                )}
+              >
+                <Link to={tab.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}>
+                  <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
+                  {isActive && <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>}
+                </Link>
+              </Button>
+            );
+          })}
+          <div className="flex-1" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleAddPage()}
+            disabled={createPage.isPending}
+            className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            aria-label="New page"
+          >
+            {createPage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-[18px] w-[18px]" />}
+          </Button>
+          
           {onClose && (
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="h-8 w-8 md:hidden text-muted-foreground hover:text-foreground"
+              className="h-8 w-8 shrink-0 md:hidden text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -507,26 +394,6 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           </div>
         ) : (
           <>
-            {/* ── Main Navigation ── */}
-            <SidebarGroup>
-              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-              <SidebarMenu>
-                {mainNav.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location.pathname === item.url}
-                      className="text-sm font-medium"
-                    >
-                      <Link to={item.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroup>
 
             {/* ── Recents ── */}
             <SidebarGroup>
@@ -707,27 +574,6 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         )}
       </SidebarContent>
 
-      {/* ── Footer: add page ── */}
-      {!noContext && (
-        <div className="p-2 border-t border-border/50">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => handleAddPage()}
-                className="text-sm font-medium"
-                disabled={createPage.isPending}
-              >
-                {createPage.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus />
-                )}
-                <span>Add a page</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </div>
-      )}
 
       <style
         dangerouslySetInnerHTML={{
@@ -735,6 +581,8 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           .custom-scrollbar::-webkit-scrollbar { width: 4px; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
           .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         `,
         }}
       />
