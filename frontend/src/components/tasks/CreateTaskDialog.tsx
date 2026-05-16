@@ -58,7 +58,7 @@ type SimpleAssigneeOption = {
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onTaskCreated?: (newTaskId: string) => void;
+  onTaskCreated?: (newTaskId: string, taskType: "task" | "event") => void;
   allTasks?: TaskDTO[];
   allUsers?: SimpleAssigneeOption[];
   mode?: "create" | "edit";
@@ -266,7 +266,7 @@ export function CreateTaskDialog({
         if (mode === "edit" && taskId) {
           onTaskUpdated?.(taskId);
         } else if (data?.id) {
-          onTaskCreated?.(data.id);
+          onTaskCreated?.(data.id, data.type ?? type);
         }
       }
     };

@@ -39,7 +39,15 @@ function App() {
           }
         />
         <Route
-          path="/tasks"
+          path="/tasks/:taskId?"
+          element={
+            <Layout>
+              <TasksPage />
+            </Layout>
+          }
+        />
+        <Route
+          path="/events/:eventId?"
           element={
             <Layout>
               <TasksPage />

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
@@ -6,7 +7,7 @@ import { TaskDetailPane } from "@/components/tasks/TaskDetailPane";
 import { EventDetailPane } from "@/components/tasks/EventDetailPane";
 import { TaskSchedulePane } from "@/components/tasks/TaskSchedulePane";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -50,28 +51,14 @@ export function TasksPage() {
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [sortBy, setSortBy] = useState<SortBy>("due_date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(() => {
-    // Pre-select from URL on first render
-    return searchParams.get("taskId") ?? "";
-  });
+  const { taskId: urlTaskId, eventId: urlEventId } = useParams<{ taskId?: string, eventId?: string }>();
+  const navigate = useNavigate();
+  const selectedTaskId = urlTaskId ?? urlEventId ?? "";
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // ── Subtask navigation stack ──
   // Tracks the parent task when user navigates into a subtask
   const [parentTaskStack, setParentTaskStack] = useState<Array<{ id: string; title: string }>>([]);
-
-  // When ?taskId appears in the URL (including when already on this page),
-  // select that task and immediately clean the param so the URL stays tidy.
-  useEffect(() => {
-    const taskIdFromUrl = searchParams.get("taskId");
-    if (taskIdFromUrl) {
-      setSelectedTaskId(taskIdFromUrl);
-      setParentTaskStack([]);
-      setSearchParams({}, { replace: true });
-    }
-  // searchParams identity changes on every navigation — this is intentional
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
 
   // Handle Google Calendar OAuth redirect back (?gcal=connected or ?gcal=error)
   // Runs once on mount — cleans the param immediately after showing the toast
@@ -217,8 +204,8 @@ export function TasksPage() {
     } else {
       deleteOrgTask.mutate({ id, title: taskToDelete.title, type: taskToDelete.type });
     }
-    if (id === selectedTaskId) setSelectedTaskId("");
-  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId, taskList]);
+    if (id === selectedTaskId) navigate("/tasks");
+  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId, taskList, navigate]);
 
   // ── Space members for assignee picker (org mode only) ─────────────
   // In personal mode, assignees don't exist — pass null so the hook is disabled.
@@ -324,11 +311,18 @@ export function TasksPage() {
   );
 
   // Fetch full task data for the selected task (handles subtask detail too)
-  const { data: selectedTaskDetail } = useOrgTask(
+  const { 
+    data: selectedTaskDetail, 
+    isLoading: isOrgTaskLoading, 
+    isError: isOrgTaskError 
+  } = useOrgTask(
     isPersonalMode ? null : activeOrgId,
     isPersonalMode ? null : activeSpaceId,
     selectedTaskId
   );
+
+  const isSelectedTaskLoading = isPersonalMode ? false : isOrgTaskLoading;
+  const isSelectedTaskError = isPersonalMode ? false : isOrgTaskError;
 
   // The parentTask for breadcrumb (top of the navigation stack)
   const parentTask = parentTaskStack.length > 0
@@ -341,14 +335,18 @@ export function TasksPage() {
     if (currentTask) {
       setParentTaskStack((prev) => [...prev, { id: currentTask.id, title: currentTask.title }]);
     }
-    setSelectedTaskId(subtaskId);
-  }, [selected, selectedTaskDetail]);
+    const subtask = taskList.find(t => t.id === subtaskId);
+    const routeBase = subtask?.type === "event" ? "events" : "tasks";
+    navigate(`/${routeBase}/${subtaskId}`);
+  }, [selected, selectedTaskDetail, navigate, taskList]);
 
   // Navigate back to parent task (pop the stack)
   const handleNavigateToParent = useCallback((parentId: string) => {
     setParentTaskStack((prev) => prev.slice(0, -1));
-    setSelectedTaskId(parentId);
-  }, []);
+    const parentTask = taskList.find(t => t.id === parentId);
+    const routeBase = parentTask?.type === "event" ? "events" : "tasks";
+    navigate(`/${routeBase}/${parentId}`);
+  }, [navigate, taskList]);
 
   // Handle task scheduling from calendar
   const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string, isAllDay: boolean) => {
@@ -395,13 +393,15 @@ export function TasksPage() {
                 } else {
                   setParentTaskStack([]);
                 }
-                setSelectedTaskId(id);
+                const routeBase = selectedTask?.type === "event" ? "events" : "tasks";
+                navigate(`/${routeBase}/${id}`);
               }}
               createDialogOpen={createDialogOpen}
               onCreateDialogOpenChange={setCreateDialogOpen}
               isLoading={isLoading}
-              onTaskCreated={(newTaskId) => {
-                setSelectedTaskId(newTaskId);
+              onTaskCreated={(newTaskId, taskType) => {
+                const routeBase = taskType === "event" ? "events" : "tasks";
+                navigate(`/${routeBase}/${newTaskId}`);
                 setCreateDialogOpen(false);
               }}
               onUpdateTask={handleUpdateTask}
@@ -420,17 +420,33 @@ export function TasksPage() {
           </div>
 
           <div className="flex-1 min-w-0 bg-background h-full">
-            {selected || selectedTaskDetail ? (
-              (selectedTaskDetail || selected)?.type === "event" ? (
+            {selectedTaskId ? (
+              isSelectedTaskLoading && !selected ? (
+                <div className="flex flex-col items-center justify-center py-6 h-full text-muted-foreground gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Loading task...</span>
+                </div>
+              ) : isSelectedTaskError || (!selected && !selectedTaskDetail) ? (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <p className="text-lg font-medium text-foreground mb-1">Task not found</p>
+                  <p className="text-sm text-muted-foreground mb-4">The task you're looking for doesn't exist or you don't have access.</p>
+                  <button
+                    onClick={() => { navigate("/tasks"); setParentTaskStack([]); }}
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Go back to tasks
+                  </button>
+                </div>
+              ) : (selectedTaskDetail || selected)?.type === "event" ? (
                 <EventDetailPane
                   event={(selectedTaskDetail || selected)!}
                   onUpdateEvent={handleUpdateTask}
                   onEventDeleted={() => {
-                    setSelectedTaskId("");
+                    navigate("/tasks");
                     setParentTaskStack([]);
                   }}
                   onClose={() => {
-                    setSelectedTaskId("");
+                    navigate("/tasks");
                     setParentTaskStack([]);
                   }}
                 />
@@ -440,11 +456,11 @@ export function TasksPage() {
                   isPersonalMode={isPersonalMode}
                   onUpdateTask={handleUpdateTask}
                   onTaskDeleted={() => {
-                    setSelectedTaskId("");
+                    navigate("/tasks");
                     setParentTaskStack([]);
                   }}
                   onClose={() => {
-                    setSelectedTaskId("");
+                    navigate("/tasks");
                     setParentTaskStack([]);
                   }}
                   onNavigateToSubtask={handleNavigateToSubtask}

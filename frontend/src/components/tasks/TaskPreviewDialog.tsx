@@ -119,7 +119,7 @@ export function TaskPreviewDialog({
 
   const handleNavigateToTask = () => {
     onOpenChange(false);
-    navigate(`/tasks?taskId=${taskId}`);
+    navigate(`/tasks/${taskId}`);
   };
 
   const handleUnschedule = () => {

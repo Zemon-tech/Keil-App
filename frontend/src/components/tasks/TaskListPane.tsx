@@ -60,7 +60,7 @@ type Props = {
   createDialogOpen: boolean;
   onCreateDialogOpenChange: (open: boolean) => void;
   /** Called with the new task's id after a successful create */
-  onTaskCreated: (newTaskId: string) => void;
+  onTaskCreated: (newTaskId: string, taskType: "task" | "event") => void;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
   onDeleteTask?: (id: string) => void;
   onAssignUser?: (taskId: string, userId: string) => void;

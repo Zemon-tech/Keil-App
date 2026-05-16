@@ -112,7 +112,7 @@ export function EventPreviewDialog({
 
   const handleNavigateToEvent = () => {
     onOpenChange(false);
-    navigate(`/tasks?taskId=${eventId}`);
+    navigate(`/events/${eventId}`);
   };
 
   const handleUnschedule = () => {
