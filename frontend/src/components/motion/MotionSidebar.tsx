@@ -20,8 +20,6 @@ import {
   RotateCcw,
   MoreHorizontal,
   Pencil,
-  Settings,
-  Check,
   Loader2,
   SquarePen
 } from "lucide-react";
