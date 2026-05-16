@@ -1,33 +1,50 @@
-import {
-  Menu,
-  MoreHorizontal,
-  Clock,
-  Plus,
-} from "lucide-react";
+import { Menu, MoreHorizontal, Clock, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
+import { useAppContext } from "@/contexts/AppContext";
 import { useNavigate } from "react-router-dom";
-import { useMemo } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { useMotionPages, useCreateMotionPage } from "@/hooks/api/useMotionPages";
 
 export function MotionHome() {
   const navigate = useNavigate();
-  const { pages, addPage, sidebarOpen, setSidebarOpen } = useMotionStore();
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { sidebarOpen, setSidebarOpen, hydratePages } = useMotionStore();
 
-  const recentPages = useMemo(() => {
-    return pages.filter((p) => !p.isDeleted).slice(0, 6);
+  const { data: pages = [], isLoading } = useMotionPages(activeOrgId, activeSpaceId);
+  const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
+
+  const hydratePagesRef = useRef(hydratePages);
+  hydratePagesRef.current = hydratePages;
+  useEffect(() => {
+    hydratePagesRef.current(pages);
   }, [pages]);
 
-  const handleCreatePage = () => {
-    const newPage = addPage();
+  const recentPages = useMemo(
+    () =>
+      [...pages]
+        .filter((p) => !p.deleted_at)
+        .sort(
+          (a, b) =>
+            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        )
+        .slice(0, 6),
+    [pages]
+  );
+
+  const handleCreatePage = async () => {
+    const newPage = await createPage.mutateAsync({});
     navigate(`/motion/${newPage.id}`);
   };
 
+  const noContext = mode !== "organisation" || !activeOrgId || !activeSpaceId;
+
   return (
     <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative">
+      {/* Motion sidebar */}
       <div
         className={cn(
           "h-full transition-all duration-300 ease-in-out overflow-hidden border-r border-border",
@@ -48,7 +65,11 @@ export function MotionHome() {
             <Menu className="size-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="text-muted-foreground/50 hover:text-foreground transition-colors">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground/50 hover:text-foreground transition-colors"
+            >
               <MoreHorizontal className="size-5" />
             </Button>
           </div>
@@ -62,52 +83,98 @@ export function MotionHome() {
               </h1>
             </div>
 
-            <section className="mb-10">
-              <div className="flex items-center gap-2 mb-4 text-muted-foreground/60">
-                <Clock className="size-3.5" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider">
-                  Recently visited
-                </span>
+            {noContext ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Select an organisation and space to use Motion.
+                </p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                <Card
-                  onClick={handleCreatePage}
-                  className="bg-muted/50 border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted transition-all cursor-pointer group rounded-2xl p-0 py-0 gap-0"
-                >
-                  <CardContent className="p-3 flex flex-col gap-2 h-full justify-center items-center">
-                    <div className="text-xl h-9 w-9 flex items-center justify-center bg-primary/10 text-primary rounded-xl group-hover:scale-105 transition-transform">
-                      <Plus className="size-5" />
-                    </div>
-                    <h3 className="text-xs font-bold text-center text-foreground/70">New Page</h3>
-                  </CardContent>
-                </Card>
+            ) : (
+              <section className="mb-10">
+                <div className="flex items-center gap-2 mb-4 text-muted-foreground/60">
+                  <Clock className="size-3.5" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wider">
+                    Recently visited
+                  </span>
+                </div>
 
-                {recentPages.map((item) => (
-                  <Card
-                    key={item.id}
-                    onClick={() => navigate(`/motion/${item.id}`)}
-                    className="bg-muted border-none hover:bg-muted/80 transition-colors cursor-pointer group rounded-2xl p-0 py-0 gap-0"
-                  >
-                    <CardContent className="p-3 flex flex-col gap-2">
-                      <div className="text-xl h-9 w-9 flex items-center justify-center bg-muted/40 rounded-xl group-hover:scale-105 transition-transform">
-                        {item.icon || "📄"}
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Loading pages…
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    {/* New page card */}
+                    <div
+                      onClick={handleCreatePage}
+                      className="w-[120px] flex-shrink-0 rounded-xl border border-dashed border-border bg-muted/40 hover:bg-muted hover:border-primary/40 transition-all cursor-pointer group overflow-hidden"
+                    >
+                      {/* Cover area */}
+                      <div className="h-[80px] w-full bg-muted/60 flex items-center justify-center border-b border-dashed border-border group-hover:bg-muted transition-colors">
+                        {createPage.isPending ? (
+                          <Loader2 className="size-5 animate-spin text-muted-foreground/50" />
+                        ) : (
+                          <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <Plus className="size-4 text-primary" />
+                          </div>
+                        )}
                       </div>
-                      <div className="space-y-0.5">
-                        <h3 className="text-xs font-bold truncate leading-none text-foreground/90">
-                          {item.title}
+                      {/* Info area */}
+                      <div className="px-2.5 py-2">
+                        <h3 className="text-xs font-semibold text-foreground/70 truncate">
+                          New Page
                         </h3>
-                        <p className="text-[10px] text-muted-foreground/50 flex items-center gap-1.5 pt-1">
-                          <span className="size-3.5 bg-muted rounded-full flex items-center justify-center text-[7px] font-bold text-muted-foreground">
-                            {item.title.charAt(0).toUpperCase()}
-                          </span>
-                          {formatDistanceToNow(item.updatedAt || Date.now(), { addSuffix: true })}
-                        </p>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </section>
+                    </div>
+
+                    {recentPages.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => navigate(`/motion/${item.id}`)}
+                        className="w-[120px] flex-shrink-0 rounded-xl border border-border bg-muted/50 hover:bg-muted transition-all cursor-pointer group overflow-hidden"
+                      >
+                        {/* Cover image area */}
+                        <div className="h-[52px] w-full overflow-hidden bg-muted relative">
+                          {item.cover_image ? (
+                            <img
+                              src={item.cover_image}
+                              alt=""
+                              className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-muted" />
+                          )}
+                        </div>
+
+                        {/* Info area with overlapping icon */}
+                        <div className="px-2.5 pt-1 pb-2">
+                          {/* Icon overlapping cover */}
+                          <div className="text-xl -mt-4 mb-1 w-7 h-7 flex items-center justify-center leading-none">
+                            <span className="group-hover:scale-110 transition-transform duration-200 drop-shadow-sm">
+                              {item.icon || "📄"}
+                            </span>
+                          </div>
+                          <h3 className="text-xs font-semibold truncate leading-tight text-foreground/90">
+                            {item.title}
+                          </h3>
+                          <p className="text-[10px] text-muted-foreground/50 flex items-center gap-1 mt-1">
+                            <span className="size-3 bg-muted-foreground/20 rounded-full flex items-center justify-center text-[6px] font-bold text-muted-foreground shrink-0">
+                              {item.title.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="truncate">
+                              {formatDistanceToNow(new Date(item.updated_at), {
+                                addSuffix: true,
+                              })}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </main>
         </div>
       </div>
@@ -124,17 +191,10 @@ export function MotionHome() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        .custom-scrollbar-page::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar-page::-webkit-scrollbar-thumb {
-          background: transparent;
-          border-radius: 10px;
-        }
-        .custom-scrollbar-page:hover::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.05);
-        }
-      `,
+          .custom-scrollbar-page::-webkit-scrollbar { width: 6px; }
+          .custom-scrollbar-page::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
+          .custom-scrollbar-page:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); }
+        `,
         }}
       />
     </div>

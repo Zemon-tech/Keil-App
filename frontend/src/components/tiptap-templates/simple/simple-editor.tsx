@@ -16,7 +16,6 @@ import { Typography } from "@tiptap/extension-typography"
 import { Highlight } from "@tiptap/extension-highlight"
 import { Subscript } from "@tiptap/extension-subscript"
 import { Superscript } from "@tiptap/extension-superscript"
-import { Selection } from "@tiptap/extensions"
 import { Table } from "@tiptap/extension-table"
 import { TableRow } from "@tiptap/extension-table-row"
 import { TableCell } from "@tiptap/extension-table-cell"
@@ -28,9 +27,85 @@ import { common, createLowlight } from "lowlight"
 import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-details"
 import { BlockIdExtension } from "@/extensions/BlockIdExtension"
 import { EnforceFinalBlockExtension } from "@/extensions/EnforceFinalBlockExtension"
+import { SubpageExtension } from "@/extensions/SubpageExtension"
 import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
+import Paragraph from '@tiptap/extension-paragraph'
+import Heading from '@tiptap/extension-heading'
+import Blockquote from '@tiptap/extension-blockquote'
+
+const CustomBlockquote = Blockquote.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      type: {
+        default: 'quote',
+        parseHTML: element => element.getAttribute('data-type') || 'quote',
+        renderHTML: attributes => ({ 'data-type': attributes.type })
+      }
+    }
+  }
+})
+import { TextStyle } from "@tiptap/extension-text-style"
+import { Color } from "@tiptap/extension-color"
+import { FontFamily } from "@tiptap/extension-font-family"
+import { CharacterCount } from "@tiptap/extension-character-count"
+import { Youtube } from "@tiptap/extension-youtube"
+import { Mention } from "@tiptap/extension-mention"
+
+const CustomParagraph = Paragraph.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      color: {
+        default: null,
+        parseHTML: element => element.style.color,
+        renderHTML: attributes => {
+          if (!attributes.color) return {}
+          return { style: `color: ${attributes.color}` }
+        }
+      },
+      backgroundColor: {
+        default: null,
+        parseHTML: element => element.style.backgroundColor,
+        renderHTML: attributes => {
+          if (!attributes.backgroundColor) return {}
+          return { style: `background-color: ${attributes.backgroundColor}` }
+        }
+      }
+    }
+  }
+})
+
+const CustomHeading = Heading.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      color: {
+        default: null,
+        parseHTML: element => element.style.color,
+        renderHTML: attributes => {
+          if (!attributes.color) return {}
+          return { style: `color: ${attributes.color}` }
+        }
+      },
+      backgroundColor: {
+        default: null,
+        parseHTML: element => element.style.backgroundColor,
+        renderHTML: attributes => {
+          if (!attributes.backgroundColor) return {}
+          return { style: `background-color: ${attributes.backgroundColor}` }
+        }
+      }
+    }
+  }
+})
 
 import {
+  Bold,
+  Italic,
+  Strikethrough,
+  Code,
+  Link as LinkIcon,
   Heading1,
   Heading2,
   Heading3,
@@ -38,27 +113,40 @@ import {
   ListOrdered,
   CheckSquare,
   Quote,
-  Code,
   Minus,
   Table as TableIcon,
-  Copy,
-  Plus,
-  Trash2,
+  Sparkles,
+  Smile,
   FileText,
-  ChevronDown as ChevronDownIcon,
+  Youtube as YoutubeIcon,
   ChevronRight,
-  ChevronLeft,
+  Trash2,
+  Copy,
+  ChevronDown,
+  Palette,
+  Check,
+  Search,
+  Underline as UnderlineIcon,
+  ArrowRight,
   ChevronUp,
-  Bold,
-  Italic,
-  Strikethrough,
+  ChevronLeft,
+  RotateCcw,
+  MessageSquare,
+  PencilLine,
+  SquareTerminal,
+  Sigma,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Subscript as SubscriptIcon,
+  Superscript as SuperscriptIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 // --- Tiptap Node ---
 import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
-import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
 import "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node.scss"
@@ -88,13 +176,27 @@ type BlockTarget = {
   to: number
 }
 
-const DRAG_HANDLE_WIDTH = 44
-const DRAG_HANDLE_GAP = 8
+const DRAG_HANDLE_WIDTH = 56
+const DRAG_HANDLE_GAP = 48
+
+const NOTION_COLORS = [
+  { name: 'Default', color: 'inherit', bg: 'transparent' },
+  { name: 'Gray', color: '#9B9A97', bg: '#EBeced' },
+  { name: 'Brown', color: '#64473A', bg: '#E9E5E3' },
+  { name: 'Orange', color: '#D9730D', bg: '#FAEBDD' },
+  { name: 'Yellow', color: '#DFAB01', bg: '#FBF3DB' },
+  { name: 'Green', color: '#0F7B6C', bg: '#DDEDEA' },
+  { name: 'Blue', color: '#0B6E99', bg: '#DDEBF1' },
+  { name: 'Purple', color: '#6940A5', bg: '#EAE4F2' },
+  { name: 'Pink', color: '#AD1A72', bg: '#F4DFEB' },
+  { name: 'Red', color: '#E03E3E', bg: '#FBE4E4' },
+]
 const BLOCK_HOVER_SELECTOR = [
   "li",
   "p",
   "pre",
   "blockquote",
+  ".callout",
   "h1",
   "h2",
   "h3",
@@ -121,7 +223,7 @@ export function SimpleEditor({
   content?: JSONContent
   onContentChange?: (content: JSONContent) => void
   onReady?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void
-  onAddSubpage?: () => void
+  onAddSubpage?: () => any
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [slashOpen, setSlashOpen] = useState(false)
@@ -135,6 +237,17 @@ export function SimpleEditor({
   } | null>(null)
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
 
+  // Use refs for callbacks to keep them stable in useEditor while always using latest logic
+  const onContentChangeRef = useRef(onContentChange)
+  useEffect(() => {
+    onContentChangeRef.current = onContentChange
+  }, [onContentChange])
+
+  const onAddSubpageRef = useRef(onAddSubpage)
+  useEffect(() => {
+    onAddSubpageRef.current = onAddSubpage
+  }, [onAddSubpage])
+
   useEffect(() => {
     setSlashSelectedIndex(0)
   }, [slashQuery])
@@ -143,11 +256,118 @@ export function SimpleEditor({
     left: number
     top: number
     target: BlockTarget | null
+    type: string
   } | null>(null)
+  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'turn-into' | 'color' | 'move-to'>('none')
+  const [menuSearch, setMenuSearch] = useState("")
   const virtualSlashStartRef = useRef<number | null>(null)
   const currentBlockTargetRef = useRef<BlockTarget | null>(null)
   const blockMenuOpenRef = useRef(false)
   const hideHandleTimerRef = useRef<number | null>(null)
+
+  const [editorEmojiPicker, setEditorEmojiPicker] = useState<{
+    left: number
+    top: number
+    pos: number
+  } | null>(null)
+  const [editorEmojiSearch, setEditorEmojiSearch] = useState("")
+
+  const extensions = useMemo(() => [
+    BlockIdExtension,
+    EnforceFinalBlockExtension,
+    GlobalDragHandle.configure({
+      dragHandleWidth: DRAG_HANDLE_WIDTH,
+      scrollTreshold: 100,
+      customNodes: ['taskItem', 'listItem', 'subpage'],
+    }),
+    StarterKit.configure({
+      paragraph: false,
+      heading: false,
+      blockquote: false,
+      horizontalRule: false,
+      codeBlock: false,
+      link: false,
+    }),
+    CustomParagraph,
+    CustomHeading,
+    CustomBlockquote,
+    TextAlign.configure({ types: ["heading", "paragraph"] }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Highlight.configure({ multicolor: true }),
+    Image,
+    Typography,
+    Superscript,
+    Subscript,
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: {
+        class: "text-primary underline underline-offset-4 cursor-pointer",
+      },
+    }),
+    Placeholder.configure({
+      placeholder: ({ node }) => {
+        if (node.type.name === "heading") {
+          return `Heading ${node.attrs.level}`
+        }
+        if (node.type.name === "detailsSummary") {
+          return "Toggle"
+        }
+        return "Type '/' for commands..."
+      },
+    }),
+    Table.configure({
+      resizable: true,
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    CodeBlockLowlight.configure({
+      lowlight,
+    }),
+    ImageUploadNode.configure({
+      accept: "image/*",
+      maxSize: MAX_FILE_SIZE,
+      limit: 3,
+      upload: handleImageUpload,
+      onError: (error) => console.error("Upload failed:", error),
+    }),
+    Details.configure({
+      HTMLAttributes: {
+        class: "details",
+      },
+    }),
+    DetailsSummary,
+    DetailsContent,
+    TextStyle,
+    Color,
+    FontFamily,
+    CharacterCount.configure({
+      limit: 10000,
+    }),
+    Youtube.configure({
+      inline: false,
+      width: 640,
+      height: 480,
+    }),
+    Mention.configure({
+      HTMLAttributes: {
+        class: "mention",
+      },
+    }),
+    SubpageExtension,
+  ], [lowlight]) // Removed onAddSubpage from deps
+
+  // Deduplicate extensions by name to prevent Tiptap warnings
+  const uniqueExtensions = useMemo(() => {
+    const seen = new Set<string>()
+    return extensions.filter(ext => {
+      if (!ext.name) return true
+      if (seen.has(ext.name)) return false
+      seen.add(ext.name)
+      return true
+    })
+  }, [extensions])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -160,73 +380,10 @@ export function SimpleEditor({
         class: "tiptap simple-editor",
       },
     },
-    extensions: [
-      BlockIdExtension,
-      EnforceFinalBlockExtension,
-      GlobalDragHandle.configure({
-        dragHandleWidth: DRAG_HANDLE_WIDTH,
-        scrollTreshold: 100,
-        customNodes: ['taskItem', 'listItem'],
-      }),
-      StarterKit.configure({
-        horizontalRule: false,
-        codeBlock: false,
-        link: false,
-      }),
-      HorizontalRule,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Highlight.configure({ multicolor: true }),
-      Image,
-      Typography,
-      Superscript,
-      Subscript,
-      Selection,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "text-primary underline underline-offset-4 cursor-pointer",
-        },
-      }),
-      Placeholder.configure({
-        placeholder: ({ node }) => {
-          if (node.type.name === "heading") {
-            return `Heading ${node.attrs.level}`
-          }
-          if (node.type.name === "detailsSummary") {
-            return "Toggle"
-          }
-          return "Type '/' for commands..."
-        },
-      }),
-      Table.configure({
-        resizable: true,
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      CodeBlockLowlight.configure({
-        lowlight,
-      }),
-      ImageUploadNode.configure({
-        accept: "image/*",
-        maxSize: MAX_FILE_SIZE,
-        limit: 3,
-        upload: handleImageUpload,
-        onError: (error) => console.error("Upload failed:", error),
-      }),
-      Details.configure({
-        HTMLAttributes: {
-          class: "details",
-        },
-      }),
-      DetailsSummary,
-      DetailsContent,
-    ],
+    extensions: uniqueExtensions,
     content,
     onUpdate: ({ editor }) => {
-      onContentChange?.(editor.getJSON())
+      onContentChangeRef.current?.(editor.getJSON())
     },
   })
 
@@ -441,7 +598,7 @@ export function SimpleEditor({
       ? parsedLineHeight
       : parsedFontSize * 1.2
     const paddingTop = Number.parseFloat(style.paddingTop) || 0
-    const top = rect.top + paddingTop + (lineHeight - 24) / 2
+    const top = rect.top + paddingTop + (lineHeight - 20) / 2
     const left = rect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP
 
     handle.style.left = `${Math.round(left)}px`
@@ -504,7 +661,9 @@ export function SimpleEditor({
       event.preventDefault()
       event.stopPropagation()
 
-      const target = getTargetFromDragHandle()
+      const target = currentBlockTargetRef.current
+      if (!target) return
+
       selectBlockTarget(target)
       showDragHandle(handle, true)
 
@@ -513,10 +672,13 @@ export function SimpleEditor({
       if (!wrapperRect) return
 
       setBlockMenu({
-        left: rect.right - wrapperRect.left + 6,
-        top: rect.top - wrapperRect.top - 4,
+        left: rect.right + 12,
+        top: rect.top - 8,
         target,
+        type: editor.state.doc.nodeAt(target.from)?.type.name || "text"
       })
+      setActiveSubmenu('none')
+      setMenuSearch("")
       closeSlashMenu()
     }
 
@@ -527,7 +689,7 @@ export function SimpleEditor({
       setBlockMenu(null)
       const handle = getDragHandle()
       if (handle) showDragHandle(handle, true)
-      insertParagraphAfterTarget(getTargetFromDragHandle())
+      insertParagraphAfterTarget(currentBlockTargetRef.current)
     }
 
     const wireHandle = () => {
@@ -682,11 +844,23 @@ export function SimpleEditor({
     if (!editor) return []
     return [
       {
-        title: "Subpage",
-        subtitle: "Create a nested page",
+        title: "Sub-page",
+        subtitle: "Embed a sub-page",
         icon: <FileText className="size-4" />,
-        keywords: ["sub", "page", "child", "nested"],
-        run: () => onAddSubpage?.(),
+        keywords: ["page", "subpage", "nested"],
+        run: () => {
+          const newPage = onAddSubpageRef.current?.()
+          if (newPage && editor) {
+            editor.chain().focus().insertContent({
+              type: "subpage",
+              attrs: {
+                id: (newPage as any).id,
+                title: (newPage as any).title || "Untitled",
+                icon: (newPage as any).icon
+              }
+            }).run()
+          }
+        },
       },
       {
         title: "Heading 1",
@@ -708,6 +882,13 @@ export function SimpleEditor({
         icon: <Heading3 className="size-4" />,
         keywords: ["h3", "heading"],
         run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+      },
+      {
+        title: "Heading 4",
+        subtitle: "Extra small heading",
+        icon: <Heading3 className="size-4" />, // Reusing Heading3 icon or similar
+        keywords: ["h4", "heading"],
+        run: () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
       },
       {
         title: "Bullet list",
@@ -770,8 +951,46 @@ export function SimpleEditor({
         keywords: ["toggle", "details", "expand"],
         run: () => editor.chain().focus().setDetails().run(),
       },
+      {
+        title: "Callout",
+        subtitle: "Make it stand out",
+        icon: <Sparkles className="size-4" />,
+        keywords: ["callout", "info", "notice"],
+        run: () => editor.chain().focus().toggleBlockquote().updateAttributes('blockquote', { type: 'callout' }).run(),
+      },
+      {
+        title: "YouTube",
+        subtitle: "Embed a video",
+        icon: <YoutubeIcon className="size-4" />,
+        keywords: ["youtube", "video", "embed"],
+        run: () => {
+          const url = prompt("Enter YouTube URL")
+          if (url) {
+            editor.chain().focus().setYoutubeVideo({ src: url }).run()
+          }
+        },
+      },
+      {
+        title: "Emoji",
+        subtitle: "Insert an emoji",
+        icon: <Smile className="size-4" />,
+        keywords: ["emoji", "face", "smile"],
+        run: () => {
+          const { from } = editor.state.selection
+          const coords = editor.view.coordsAtPos(from)
+          const wrapperRect = wrapperRef.current?.getBoundingClientRect()
+          if (!wrapperRect) return
+          
+          setEditorEmojiPicker({
+            left: coords.left,
+            top: coords.bottom + 8,
+            pos: from
+          })
+        },
+      },
     ]
   }, [editor, onAddSubpage])
+
 
 
   const filteredSlashItems = useMemo(() => {
@@ -814,8 +1033,8 @@ export function SimpleEditor({
                 : null
             )
             setSlashPos({
-              left: coords.left - wrapperRect.left,
-              top: coords.bottom - wrapperRect.top + 8,
+              left: coords.left,
+              top: coords.bottom + 8,
             })
             return
           }
@@ -840,8 +1059,8 @@ export function SimpleEditor({
       setSlashQuery(query)
       setSlashDeleteRange({ from: deleteFrom, to: deleteTo })
       setSlashPos({
-        left: coords.left - wrapperRect.left,
-        top: coords.bottom - wrapperRect.top + 8,
+        left: coords.left,
+        top: coords.bottom + 8,
       })
     }
 
@@ -929,8 +1148,31 @@ export function SimpleEditor({
     }
   }, [blockMenu])
 
-  const deleteBlockTarget = (target: BlockTarget | null) => {
+  useEffect(() => {
+    if (!editorEmojiPicker) return
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null
+      if (target?.closest(".emoji-picker-dialog")) return
+      setEditorEmojiPicker(null)
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setEditorEmojiPicker(null)
+    }
+
+    window.addEventListener("pointerdown", onPointerDown)
+    window.addEventListener("keydown", onKeyDown)
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown)
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [editorEmojiPicker])
+
+  const deleteBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
+    console.log("Deleting block at", target)
     editor
       .chain()
       .focus()
@@ -938,24 +1180,141 @@ export function SimpleEditor({
       .run()
     setBlockMenu(null)
     closeSlashMenu()
-  }
+  }, [editor, closeSlashMenu])
 
-  const duplicateBlockTarget = (target: BlockTarget | null) => {
+  const duplicateBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
-    const slice = editor.state.doc.slice(target.from, target.to)
-    editor.view.dispatch(editor.state.tr.insert(target.to, slice.content))
-    editor.view.focus()
+    console.log("Duplicating block at", target)
+    const { from, to } = target
+    const node = editor.state.doc.nodeAt(from)
+    if (!node) return
+
+    // Clone the node content
+    const content = node.content.toJSON()
+    
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(to, {
+        type: node.type.name,
+        attrs: { ...node.attrs, id: undefined }, // Let extension generate new ID
+        content: content
+      })
+      .run()
+      
     setBlockMenu(null)
     closeSlashMenu()
-  }
+  }, [editor, closeSlashMenu])
 
-  const copyBlockTarget = (target: BlockTarget | null) => {
+  const copyBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
-    const text = editor.state.doc.textBetween(target.from, target.to, "\n\n")
-    navigator.clipboard?.writeText(text).catch(() => undefined)
+    const node = editor.state.doc.nodeAt(target.from)
+    const blockId = node?.attrs.id
+    const url = blockId 
+      ? `${window.location.origin}${window.location.pathname}#${blockId}`
+      : window.location.href
+    
+    navigator.clipboard?.writeText(url).then(() => {
+      // Small feedback
+      console.log("Link copied:", url)
+    }).catch(() => undefined)
     setBlockMenu(null)
     closeSlashMenu()
-  }
+  }, [editor, closeSlashMenu])
+
+  const commentOnBlock = useCallback((target: BlockTarget | null) => {
+    if (!editor || !target) return
+    alert("Comment feature coming soon!")
+    setBlockMenu(null)
+  }, [editor])
+
+  const moveToBlock = useCallback((target: BlockTarget | null) => {
+    if (!editor || !target) return
+    setActiveSubmenu('move-to')
+  }, [])
+
+  const executeMoveTo = useCallback((position: 'top' | 'bottom') => {
+    if (!editor || !blockMenu?.target) return
+    const target = blockMenu.target
+    const node = editor.state.doc.nodeAt(target.from)
+    if (!node) return
+
+    const nodeJSON = node.toJSON()
+    
+    if (position === 'top') {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: target.from, to: target.to })
+        .insertContentAt(0, nodeJSON)
+        .run()
+    } else {
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: target.from, to: target.to })
+        .command(({ tr }) => {
+          tr.insert(tr.doc.content.size, editor.schema.nodeFromJSON(nodeJSON))
+          return true
+        })
+        .run()
+    }
+      
+    setBlockMenu(null)
+  }, [editor, blockMenu])
+
+  const suggestOnBlock = useCallback((target: BlockTarget | null) => {
+    if (!editor || !target) return
+    alert("Suggest edits feature coming soon!")
+    setBlockMenu(null)
+  }, [editor])
+
+  // Global Keyboard Shortcuts for selected blocks
+  useEffect(() => {
+    if (!editor) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Only handle if a block is selected (NodeSelection)
+      const { selection } = editor.state
+      if (!(selection instanceof NodeSelection)) return
+
+      const target = { from: selection.from, to: selection.to }
+
+      // Duplicate: Ctrl+D
+      if (e.ctrlKey && e.key === "d") {
+        e.preventDefault()
+        duplicateBlockTarget(target)
+      }
+      // Delete: Del
+      if (e.key === "Delete") {
+        e.preventDefault()
+        deleteBlockTarget(target)
+      }
+      // Copy Link: Alt+Shift+L
+      if (e.altKey && e.shiftKey && e.key === "L") {
+        e.preventDefault()
+        copyBlockTarget(target)
+      }
+      // Comment: Ctrl+Shift+M
+      if (e.ctrlKey && e.shiftKey && e.key === "M") {
+        e.preventDefault()
+        commentOnBlock(target)
+      }
+      // Move to: Ctrl+Shift+P
+      if (e.ctrlKey && e.shiftKey && e.key === "P") {
+        e.preventDefault()
+        moveToBlock(target)
+      }
+      // Suggest edits: Ctrl+Alt+X
+      if (e.ctrlKey && e.altKey && e.key === "x") {
+        e.preventDefault()
+        suggestOnBlock(target)
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [editor, duplicateBlockTarget, deleteBlockTarget, copyBlockTarget, commentOnBlock, moveToBlock, suggestOnBlock])
 
   return (
     <div ref={wrapperRef} className="simple-editor-wrapper relative">
@@ -1002,7 +1361,7 @@ export function SimpleEditor({
                 onClick={() => editor.chain().focus().addRowAfter().run()}
                 title="Add row after"
               >
-                <ChevronDownIcon className="size-3.5" />
+                <ChevronDown className="size-3.5" />
               </Button>
               <div className="w-px h-4 bg-border mx-1" />
               <Button
@@ -1045,7 +1404,7 @@ export function SimpleEditor({
               const { selection } = state
               const { empty } = selection
               
-              if (empty || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
+              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
                 return false
               }
               return true
@@ -1072,6 +1431,14 @@ export function SimpleEditor({
               <Button
                 variant="ghost"
                 size="icon"
+                className={`size-7 ${editor.isActive('underline') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleUnderline().run()}
+              >
+                <UnderlineIcon className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className={`size-7 ${editor.isActive('strike') ? 'bg-muted' : ''}`}
                 onClick={() => editor.chain().focus().toggleStrike().run()}
               >
@@ -1085,6 +1452,94 @@ export function SimpleEditor({
               >
                 <Code className="size-3.5" />
               </Button>
+              <div className="w-px h-4 bg-border mx-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('subscript') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleSubscript().run()}
+              >
+                <SubscriptIcon className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('superscript') ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().toggleSuperscript().run()}
+              >
+                <SuperscriptIcon className="size-3.5" />
+              </Button>
+              <div className="w-px h-4 bg-border mx-1" />
+              
+              {/* Font Family Selector (Simple) */}
+              <select 
+                className="bg-transparent text-[11px] outline-none cursor-pointer px-1 hover:bg-muted rounded"
+                onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+                value={editor.getAttributes('textStyle').fontFamily || ''}
+              >
+                <option value="">Default</option>
+                <option value="Inter">Inter</option>
+                <option value="DM Sans">DM Sans</option>
+                <option value="monospace">Monospace</option>
+                <option value="serif">Serif</option>
+              </select>
+
+              <div className="w-px h-4 bg-border mx-1" />
+              
+              {/* Color Selection (Simplified) */}
+              <div className="flex items-center gap-0.5 px-1">
+                {['inherit', '#ff0000', '#00ff00', '#0000ff', '#f59e0b', '#8b5cf6', '#ec4899'].map(c => (
+                  <button
+                    key={c}
+                    className="size-3.5 rounded-full border border-border/50 transition-transform hover:scale-125"
+                    style={{ backgroundColor: c === 'inherit' ? 'transparent' : c }}
+                    onClick={() => editor.chain().focus().setColor(c === 'inherit' ? '' : c).run()}
+                    title={c === 'inherit' ? 'Default' : c}
+                  />
+                ))}
+              </div>
+              
+              <div className="w-px h-4 bg-border mx-1" />
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive('highlight') ? 'bg-muted text-primary' : ''}`}
+                onClick={() => {
+                  const current = editor.getAttributes('highlight').color
+                  if (current) editor.chain().focus().unsetHighlight().run()
+                  else editor.chain().focus().setHighlight({ color: '#fef08a' }).run()
+                }}
+                title="Highlight"
+              >
+                <Palette className="size-3.5" />
+              </Button>
+
+              <div className="w-px h-4 bg-border mx-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive({ textAlign: 'left' }) ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().setTextAlign('left').run()}
+              >
+                <AlignLeft className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive({ textAlign: 'center' }) ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().setTextAlign('center').run()}
+              >
+                <AlignCenter className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`size-7 ${editor.isActive({ textAlign: 'right' }) ? 'bg-muted' : ''}`}
+                onClick={() => editor.chain().focus().setTextAlign('right').run()}
+              >
+                <AlignRight className="size-3.5" />
+              </Button>
             </div>
           </BubbleMenu>
         )}
@@ -1095,6 +1550,7 @@ export function SimpleEditor({
           className="simple-editor-content"
         />
 
+
         {/* {isEmpty && (
           <div className="pointer-events-none max-w-[900px] mx-auto w-full text-muted-foreground/50 text-sm pt-2">
             Type <span className="text-muted-foreground">/</span> for commands
@@ -1102,83 +1558,337 @@ export function SimpleEditor({
         )} */}
 
         {blockMenu && (
-          <div
-            className="motion-block-menu absolute z-50 w-[220px] rounded-lg border bg-popover p-1 text-popover-foreground shadow-2xl"
-            style={{ left: blockMenu.left, top: blockMenu.top }}
-          >
-            <button
-              type="button"
-              className="motion-block-menu__item"
-              onClick={() => insertParagraphAfterTarget(blockMenu.target)}
+          <div className="fixed z-[100] flex gap-1" style={{ left: blockMenu.left, top: blockMenu.top }}>
+            {/* Main Block Menu */}
+            <div
+              className="motion-block-menu w-[260px] rounded-xl border bg-background p-1.5 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in zoom-in-95 duration-100"
             >
-              <Plus className="size-4" />
-              <span>Add below</span>
-            </button>
-            <button
-              type="button"
-              className="motion-block-menu__item"
-              onClick={() => duplicateBlockTarget(blockMenu.target)}
-            >
-              <Copy className="size-4" />
-              <span>Duplicate</span>
-            </button>
-            <button
-              type="button"
-              className="motion-block-menu__item"
-              onClick={() => copyBlockTarget(blockMenu.target)}
-            >
-              <FileText className="size-4" />
-              <span>Copy text</span>
-            </button>
-            <div className="my-1 h-px bg-border" />
-            <button
-              type="button"
-              className="motion-block-menu__item motion-block-menu__item--danger"
-              onClick={() => deleteBlockTarget(blockMenu.target)}
-            >
-              <Trash2 className="size-4" />
-              <span>Delete</span>
-            </button>
+              <div className="px-2 pb-2 pt-1">
+                <input 
+                  autoFocus
+                  placeholder="Search actions..."
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                  className="w-full bg-muted/50 rounded-md px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/50 border border-transparent focus:border-border/50"
+                />
+              </div>
+
+              <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-tight">
+                {blockMenu.type.replace(/([A-Z])/g, ' $1').trim()}
+              </div>
+
+              <button
+                type="button"
+                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'turn-into' && "bg-accent")}
+                onMouseEnter={() => setActiveSubmenu('turn-into')}
+              >
+                <div className="flex items-center gap-2.5">
+                  <RotateCcw className="size-4" />
+                  <span>Turn into</span>
+                </div>
+                <ChevronRight className="size-3.5 text-muted-foreground/50" />
+              </button>
+
+              <button
+                type="button"
+                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'color' && "bg-accent")}
+                onMouseEnter={() => setActiveSubmenu('color')}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="size-4 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
+                    <div className="size-2 rounded-full bg-primary/40" />
+                  </div>
+                  <span>Color</span>
+                </div>
+                <ChevronRight className="size-3.5 text-muted-foreground/50" />
+              </button>
+
+              <div className="my-1.5 h-px bg-border/50" />
+
+              <button className="motion-block-menu__item justify-between" onClick={() => copyBlockTarget(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <LinkIcon className="size-4" />
+                  <span>Copy link to block</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Alt+⇧+L</span>
+              </button>
+
+              <button className="motion-block-menu__item justify-between" onClick={() => duplicateBlockTarget(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <Copy className="size-4" />
+                  <span>Duplicate</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+D</span>
+              </button>
+
+              <button 
+                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'move-to' && "bg-accent")}
+                onMouseEnter={() => setActiveSubmenu('move-to')}
+                onClick={() => moveToBlock(blockMenu.target)}
+              >
+                <div className="flex items-center gap-2.5">
+                  <ArrowRight className="size-4" />
+                  <span>Move to</span>
+                </div>
+                <ChevronRight className="size-3.5 text-muted-foreground/50" />
+              </button>
+
+              <button className="motion-block-menu__item motion-block-menu__item--danger justify-between" onClick={() => deleteBlockTarget(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <Trash2 className="size-4" />
+                  <span>Delete</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Del</span>
+              </button>
+
+              <div className="my-1.5 h-px bg-border/50" />
+
+              <button className="motion-block-menu__item justify-between" onClick={() => commentOnBlock(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="size-4" />
+                  <span>Comment</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+⇧+M</span>
+              </button>
+
+              <button className="motion-block-menu__item justify-between" onClick={() => suggestOnBlock(blockMenu.target)}>
+                <div className="flex items-center gap-2.5">
+                  <PencilLine className="size-4" />
+                  <span>Suggest edits</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+Alt+X</span>
+              </button>
+
+              <div className="my-1.5 h-px bg-border/50" />
+
+              <button className="motion-block-menu__item justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="size-4 text-primary" />
+                  <span>Ask AI</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+J</span>
+              </button>
+
+              <div className="mt-2 px-2.5 py-2 border-t border-border/40 text-[10px] text-muted-foreground/50 leading-relaxed">
+                Last edited by Rohan Vashist<br />
+                May 15, 2026, 7:55 PM
+              </div>
+            </div>
+
+            {/* Turn Into Submenu */}
+            {activeSubmenu === 'turn-into' && (
+              <div className="motion-block-menu w-[220px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150 h-fit max-h-[400px] overflow-y-auto custom-scrollbar">
+                {[
+                  { id: 'paragraph', title: 'Text', icon: <FileText className="size-4" />, run: () => editor?.chain().focus().setParagraph().run() },
+                  { id: 'heading1', title: 'Heading 1', icon: <Heading1 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 1 }).run() },
+                  { id: 'heading2', title: 'Heading 2', icon: <Heading2 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 2 }).run() },
+                  { id: 'heading3', title: 'Heading 3', icon: <Heading3 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 3 }).run() },
+                  { id: 'heading4', title: 'Heading 4', icon: <Heading3 className="size-4 opacity-70" />, run: () => editor?.chain().focus().toggleHeading({ level: 4 }).run() },
+                  { id: 'page', title: 'Page', icon: <FileText className="size-4" />, run: () => onAddSubpage?.() },
+                  { id: 'page_in', title: 'Page in', icon: <FileText className="size-4" />, run: () => {}, hasSub: true },
+                  { id: 'bulletList', title: 'Bulleted list', icon: <List className="size-4" />, run: () => editor?.chain().focus().toggleBulletList().run() },
+                  { id: 'orderedList', title: 'Numbered list', icon: <ListOrdered className="size-4" />, run: () => editor?.chain().focus().toggleOrderedList().run() },
+                  { id: 'taskList', title: 'To-do list', icon: <CheckSquare className="size-4" />, run: () => editor?.chain().focus().toggleTaskList().run() },
+                  { id: 'details', title: 'Toggle list', icon: <ChevronRight className="size-4" />, run: () => editor?.chain().focus().setDetails().run() },
+                  { id: 'codeBlock', title: 'Code', icon: <Code className="size-4" />, run: () => editor?.chain().focus().toggleCodeBlock().run() },
+                  { id: 'blockquote', title: 'Quote', icon: <Quote className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
+                  { id: 'callout', title: 'Callout', icon: <SquareTerminal className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
+                  { id: 'equation', title: 'Block equation', icon: <Sigma className="size-4" />, run: () => {} },
+                  { id: 'synced', title: 'Synced block', icon: <RotateCcw className="size-4" />, run: () => {} },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    className="motion-block-menu__item justify-between"
+                    onClick={() => {
+                      if (!item.hasSub) {
+                        item.run();
+                        setBlockMenu(null);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {item.icon}
+                      <span>{item.title}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {blockMenu.type.toLowerCase().includes(item.id.toLowerCase()) && <Check className="size-3.5 text-primary" />}
+                      {item.hasSub && <ChevronRight className="size-3.5 text-muted-foreground/30" />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Move To Submenu */}
+            {activeSubmenu === 'move-to' && (
+              <div className="motion-block-menu w-[200px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150">
+                <button className="motion-block-menu__item" onClick={() => executeMoveTo('top')}>
+                  <ChevronUp className="size-4" />
+                  <span>Move to top</span>
+                </button>
+                <button className="motion-block-menu__item" onClick={() => executeMoveTo('bottom')}>
+                  <ChevronDown className="size-4" />
+                  <span>Move to bottom</span>
+                </button>
+                <div className="my-1 h-px bg-border/50" />
+                <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground/50 italic leading-tight">
+                  Search pages feature coming soon...
+                </div>
+              </div>
+            )}
+
+            {/* Color Submenu */}
+            {activeSubmenu === 'color' && (
+              <div className="motion-block-menu w-[220px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150 h-fit max-h-[400px] overflow-y-auto custom-scrollbar">
+                <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Color
+                </div>
+                {NOTION_COLORS.map((c) => (
+                  <button
+                    key={`text-${c.name}`}
+                    className="motion-block-menu__item gap-2.5"
+                    onClick={() => {
+                      if (blockMenu?.target && editor) {
+                        const { from } = blockMenu.target;
+                        const node = editor.state.doc.nodeAt(from);
+                        if (node) {
+                          editor.chain()
+                            .focus()
+                            .setNodeSelection(from)
+                            .updateAttributes(node.type.name, { color: c.color })
+                            .run();
+                        }
+                        setBlockMenu(null);
+                      }
+                    }}
+                  >
+                    <div className="size-5 rounded border border-border/50 flex items-center justify-center text-[11px] font-bold" style={{ color: c.color }}>
+                      A
+                    </div>
+                    <span>{c.name}</span>
+                    {(() => {
+                      if (!editor || !blockMenu?.target) return null;
+                      const node = editor.state.doc.nodeAt(blockMenu.target.from);
+                      const attrs = editor.getAttributes(node?.type.name || 'paragraph');
+                      return attrs.color === c.color && <Check className="size-3 ml-auto text-primary" />;
+                    })()}
+                  </button>
+                ))}
+                <div className="my-1 h-px bg-border/50" />
+                <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Background
+                </div>
+                {NOTION_COLORS.slice(1).map((c) => (
+                  <button
+                    key={`bg-${c.name}`}
+                    className="motion-block-menu__item gap-2.5"
+                    onClick={() => {
+                      if (blockMenu?.target && editor) {
+                        const { from } = blockMenu.target;
+                        const node = editor.state.doc.nodeAt(from);
+                        if (node) {
+                          editor.chain()
+                            .focus()
+                            .setNodeSelection(from)
+                            .updateAttributes(node.type.name, { backgroundColor: c.bg })
+                            .run();
+                        }
+                        setBlockMenu(null);
+                      }
+                    }}
+                  >
+                    <div className="size-5 rounded border border-border/50" style={{ backgroundColor: c.bg }} />
+                    <span>{c.name} background</span>
+                    {(() => {
+                      if (!editor || !blockMenu?.target) return null;
+                      const node = editor.state.doc.nodeAt(blockMenu.target.from);
+                      const attrs = editor.getAttributes(node?.type.name || 'paragraph');
+                      return attrs.backgroundColor === c.bg && <Check className="size-3 ml-auto text-primary" />;
+                    })()}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {slashOpen && slashPos && editor && (
           <div
-            className="absolute z-50"
+            className="fixed z-[100]"
             style={{ left: slashPos.left, top: slashPos.top }}
           >
-            <div className="w-[320px] rounded-lg border bg-popover text-popover-foreground shadow-2xl overflow-hidden flex flex-col">
-              <div className="max-h-[260px] overflow-y-auto p-1">
+            <div className="w-[320px] rounded-xl border bg-popover/95 backdrop-blur-md text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.2)] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="max-h-[320px] overflow-y-auto p-1.5 custom-scrollbar">
                 {filteredSlashItems.length === 0 && (
-                  <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <div className="px-3 py-6 text-center text-sm text-muted-foreground/60 italic">
                     No results found.
                   </div>
                 )}
+                <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  Basic blocks
+                </div>
                 {filteredSlashItems.map((item, index) => (
                   <div
                     key={item.title}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => runSlashItem(item)}
-                    className={`px-3 py-2 flex items-center gap-3 cursor-pointer rounded-sm select-none outline-none ${
-                      index === slashSelectedIndex ? "bg-accent text-accent-foreground" : "text-foreground"
+                    className={`px-3 py-2 flex items-center gap-3 cursor-pointer rounded-lg select-none outline-none transition-colors ${
+                      index === slashSelectedIndex ? "bg-accent text-accent-foreground shadow-sm" : "text-foreground/80 hover:bg-accent/50"
                     }`}
                     onMouseEnter={() => setSlashSelectedIndex(index)}
                   >
-                    <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0 text-foreground">
+                    <div className="size-9 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40 text-muted-foreground shadow-sm transition-transform duration-200 group-hover:scale-105">
                       {item.icon}
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <div className="text-sm font-medium">
+                      <div className="text-[13.5px] font-semibold tracking-tight">
                         {item.title}
                       </div>
                       {item.subtitle && (
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-[11px] text-muted-foreground leading-none">
                           {item.subtitle}
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editorEmojiPicker && editor && (
+          <div
+            className="fixed z-[100] emoji-picker-dialog"
+            style={{ left: editorEmojiPicker.left, top: editorEmojiPicker.top }}
+          >
+            <div className="w-[320px] bg-popover rounded-xl border border-border shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden flex flex-col">
+              <div className="p-3 flex flex-col max-h-[320px]">
+                <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
+                  <Search className="size-3.5 text-muted-foreground" />
+                  <input 
+                    placeholder="Search emojis..." 
+                    className="bg-transparent border-none outline-none text-[13px] w-full"
+                    value={editorEmojiSearch}
+                    onChange={(e) => setEditorEmojiSearch(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
+                  {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢", "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾", "👋", "🤚", "🖐", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾", "🦵", "🦿", "🦶", "👣", "👂", "🦻", "👃", "🫀", "🫁", "🧠", "🦷", "🦴", "👀", "👁", "👅", "👄", "💋", "🩸"]
+                  .filter(e => e.includes(editorEmojiSearch) || editorEmojiSearch === "").map(emoji => (
+                    <button
+                      key={emoji}
+                      className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
+                      onClick={() => {
+                        editor.chain().focus().insertContent(emoji).run()
+                        setEditorEmojiPicker(null)
+                        setEditorEmojiSearch("")
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

@@ -1,79 +1,229 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Menu, MoreHorizontal, Trash2, ChevronRight } from "lucide-react";
+import {
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile
+} from "lucide-react";
+import { MotionShareModal } from "./MotionShareModal";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
+import { useAppContext } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
-import throttle from "lodash.throttle";
+import {
+  useMotionPage,
+  useUpdateMotionPage,
+  useSoftDeleteMotionPage,
+  useCreateMotionPage,
+  useMotionSocketListeners,
+} from "@/hooks/api/useMotionPages";
+import type { JSONContent } from "@tiptap/core";
+
+// ─── Save status indicator ────────────────────────────────────────────────────
+
+type SaveStatus = "saved" | "saving" | "error" | "idle";
+
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  if (status === "idle" || status === "saved") return null;
+  return (
+    <span
+      className={cn(
+        "text-[11px] font-medium transition-opacity",
+        status === "saving" && "text-muted-foreground/60",
+        status === "error" && "text-destructive/70"
+      )}
+    >
+      {status === "saving" ? "Saving…" : "Save failed"}
+    </span>
+  );
+}
+
+// ─── MotionPage ───────────────────────────────────────────────────────────────
+
+const DEBOUNCE_MS = 1500;
 
 export function MotionPage() {
   const navigate = useNavigate();
-  const { pageId } = useParams();
+  const { pageId } = useParams<{ pageId: string }>();
   const [pageEditor, setPageEditor] = useState<any>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCoverPicker, setShowCoverPicker] = useState(false);
+  const [activeEmojiTab, setActiveEmojiTab] = useState<'Emoji' | 'Icons' | 'Upload'>('Emoji');
+  const [activeCoverTab, setActiveCoverTab] = useState<'Gallery' | 'Upload' | 'Link' | 'Unsplash'>('Gallery');
+  const [emojiSearch, setEmojiSearch] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
-  const { 
-    pages, 
-    addPage, 
-    updatePage, 
-    deletePage, 
-    getPageById, 
-    sidebarOpen,
-    setSidebarOpen
-  } = useMotionStore();
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty } =
+    useMotionStore();
 
-  const page = useMemo(() => {
-    if (!pageId) return null;
-    return getPageById(pageId);
-  }, [pageId, pages, getPageById]);
+  // Stable ref so upsertPages is never a useEffect dependency
+  const upsertPagesRef = useRef(upsertPages);
+  upsertPagesRef.current = upsertPages;
 
-  const parentPage = useMemo(() => {
-    if (!page?.parentId) return null;
-    return getPageById(page.parentId);
-  }, [page?.parentId, pages, getPageById]);
+  // ── API hooks ───────────────────────────────────────────────────────────────
+  const { data: serverPage, isLoading } = useMotionPage(
+    activeOrgId,
+    activeSpaceId,
+    pageId ?? null
+  );
+  const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
+  const softDelete = useSoftDeleteMotionPage(activeOrgId, activeSpaceId);
+  const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
 
+  const { user } = useAuth();
+
+  // ── Real-time ──
+  useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
 
   useEffect(() => {
-    if (!pageId || !page) {
-      if (pages.length > 0) navigate("/motion", { replace: true });
-      return;
+    if (serverPage) {
+      upsertPagesRef.current([serverPage]);
     }
-  }, [navigate, page, pageId, pages.length]);
+  }, [serverPage]);
 
-  const [titleDraft, setTitleDraft] = useState("");
+  // ── Working copy from store (optimistic) ───────────────────────────────────
+  const page = useMemo(
+    () => (pageId ? getPageById(pageId) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pageId, serverPage, getPageById]
+  );
+
+  const parentPage = useMemo(
+    () => (page?.parent_id ? getPageById(page.parent_id) : null),
+    [page?.parent_id, getPageById]
+  );
+
+  // ── Redirect if page not found after load ───────────────────────────────────
+  useEffect(() => {
+    if (!isLoading && !serverPage && !page) {
+      navigate("/motion", { replace: true });
+    }
+  }, [isLoading, serverPage, page, navigate]);
+
+  // ── Title draft ─────────────────────────────────────────────────────────────
+  const [titleDraft, setTitleDraft] = useState(page?.title ?? "");
   useEffect(() => {
     setTitleDraft(page?.title ?? "");
   }, [page?.title]);
 
-  const saveContent = useMemo(
-    () =>
-      throttle((id: string, json: any) => {
-        updatePage(id, { content: json });
-      }, 400),
-    [updatePage]
+  // ── Debounced content save ──────────────────────────────────────────────────
+  // We use a ref-based debounce (no lodash.debounce dependency needed).
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingContent = useRef<JSONContent | null>(null);
+
+  const flushSave = useCallback(async () => {
+    if (!pageId || !pendingContent.current) return;
+    const content = pendingContent.current;
+    pendingContent.current = null;
+    setSaveStatus("saving");
+    try {
+      await updatePage.mutateAsync({ id: pageId, updates: { content } });
+      setSaveStatus("saved");
+      clearDirty(pageId);
+      // Reset to idle after a short delay so "Saved" doesn't linger
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch {
+      setSaveStatus("error");
+      // Retry once after 3s
+      setTimeout(() => {
+        if (pendingContent.current === null) {
+          pendingContent.current = content;
+          flushSave();
+        }
+      }, 3000);
+    }
+  }, [pageId, updatePage, clearDirty]);
+
+  const handleContentChange = useCallback(
+    (json: JSONContent) => {
+      if (!pageId) return;
+      pendingContent.current = json;
+      setDirty(pageId);
+      setSaveStatus("saving");
+
+      // Reset debounce timer
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(flushSave, DEBOUNCE_MS);
+    },
+    [pageId, setDirty, flushSave]
   );
 
-  const handleAddSubpage = () => {
+  // Flush on unmount (navigation away)
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      // Fire-and-forget flush — we can't await in cleanup
+      if (pendingContent.current && pageId) {
+        updatePage.mutate({
+          id: pageId,
+          updates: { content: pendingContent.current },
+        });
+        pendingContent.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId]);
+
+  // ── Title save (on blur) ────────────────────────────────────────────────────
+  const handleTitleBlur = () => {
     if (!pageId) return;
-    const newPage = addPage({ parentId: pageId });
+    const trimmed = titleDraft.trim() || "Untitled";
+    if (trimmed !== page?.title) {
+      // Optimistic update in store
+      useMotionStore.getState().updatePageLocally(pageId, { title: trimmed });
+      updatePage.mutate({ id: pageId, updates: { title: trimmed } });
+    }
+  };
+
+  // ── Add subpage ─────────────────────────────────────────────────────────────
+  const handleAddSubpage = async () => {
+    if (!pageId) return;
+    const newPage = await createPage.mutateAsync({ parent_id: pageId });
     navigate(`/motion/${newPage.id}`);
   };
 
-  useEffect(() => {
-    return () => {
-      saveContent.cancel();
-    };
-  }, [saveContent]);
+  // ── Delete ──────────────────────────────────────────────────────────────────
+  const handleDelete = () => {
+    if (!pageId || !page) return;
+    if (confirm("Are you sure you want to delete this page?")) {
+      softDelete.mutate({ id: pageId, title: page.title });
+      navigate("/motion");
+    }
+  };
 
-  if (!pageId || !page) {
+  // ── Guards ──────────────────────────────────────────────────────────────────
+  if (mode !== "organisation" || !activeOrgId || !activeSpaceId) {
+    return (
+      <div className="flex h-dvh w-full items-center justify-center bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">
+          Select an organisation and space to use Motion.
+        </p>
+      </div>
+    );
+  }
+
+  if (isLoading || (!page && !serverPage)) {
     return (
       <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative" />
     );
   }
 
+  const displayPage = page ?? serverPage!;
+
   return (
     <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative">
+      {/* ── Motion sidebar ── */}
       <div
         className={cn(
           "h-full transition-all duration-300 ease-in-out overflow-hidden border-r border-border",
@@ -83,7 +233,9 @@ export function MotionPage() {
         <MotionSidebar onClose={() => setSidebarOpen(false)} />
       </div>
 
+      {/* ── Main content ── */}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+        {/* Header */}
         <header className="flex items-center justify-between px-2 py-1 z-40 shrink-0">
           <div className="flex items-center gap-1">
             <Button
@@ -98,26 +250,63 @@ export function MotionPage() {
               <div className="flex items-center text-xs text-muted-foreground/50">
                 <Link
                   to={`/motion/${parentPage.id}`}
-                  className="hover:text-foreground transition-colors max-w-[100px] truncate"
+                  className="hover:text-foreground transition-colors max-w-[100px] truncate flex items-center gap-1"
                 >
-                  {parentPage.title}
+                  <span className="shrink-0 flex items-center justify-center size-4">
+                    {parentPage.icon?.startsWith("lucide:") ? (
+                      (() => {
+                        const iconName = parentPage.icon.split(":")[1];
+                        const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
+                        const Icon = icons[iconName] || FileText;
+                        return <Icon className="size-3.5" />;
+                      })()
+                    ) : (
+                      parentPage.icon || "📄"
+                    )}
+                  </span>
+                  <span className="truncate">{parentPage.title}</span>
                 </Link>
                 <ChevronRight className="size-3 mx-0.5" />
-                <span className="text-foreground/70 max-w-[100px] truncate">{page.title}</span>
+                <div className="text-foreground/70 max-w-[100px] truncate flex items-center gap-1">
+                  <span className="shrink-0 flex items-center justify-center size-4">
+                    {displayPage.icon?.startsWith("lucide:") ? (
+                      (() => {
+                        const iconName = displayPage.icon.split(":")[1];
+                        const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
+                        const Icon = icons[iconName] || FileText;
+                        return <Icon className="size-3.5" />;
+                      })()
+                    ) : (
+                      displayPage.icon || "📄"
+                    )}
+                  </span>
+                  <span className="truncate">{displayPage.title}</span>
+                </div>
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5">
+            {/* Save status */}
+            <SaveIndicator status={saveStatus} />
+
+            {/* Share button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
+              onClick={() => setShareModalOpen(true)}
+            >
+              <Share2 className="size-3.5" />
+              Share
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
               className="text-muted-foreground/50 hover:text-destructive transition-colors"
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this page?")) {
-                  deletePage(pageId);
-                  navigate("/motion");
-                }
-              }}
+              onClick={handleDelete}
+              disabled={softDelete.isPending}
             >
               <Trash2 className="size-4" />
             </Button>
@@ -131,54 +320,428 @@ export function MotionPage() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20">
-          <div className="w-full pt-0">
-            <div className="h-[240px] w-full overflow-hidden bg-muted">
-              <img
-                src={
-                  page.coverImage ??
-                  "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop"
-                }
-                alt="cover"
-                className="h-full w-full object-cover opacity-80"
-              />
-            </div>
+        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20 group/page">
+          <div className="w-full pt-0 relative">
+            {displayPage.cover_image ? (
+              <div className="h-[220px] w-full relative group/cover">
+                <img
+                  src={displayPage.cover_image}
+                  alt="cover"
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
+                  <input
+                    type="file"
+                    ref={coverInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          const result = reader.result as string;
+                          if (pageId) {
+                            useMotionStore.getState().updatePageLocally(pageId, { cover_image: result });
+                            updatePage.mutate({ id: pageId, updates: { cover_image: result } });
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                    onClick={() => setShowCoverPicker(true)}
+                  >
+                    Change
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                    onClick={() => {
+                      if (pageId) {
+                        useMotionStore.getState().updatePageLocally(pageId, { cover_image: null });
+                        updatePage.mutate({ id: pageId, updates: { cover_image: null } });
+                      }
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
 
-            <main className="max-w-[900px] mx-auto w-full pt-6 px-6">
-              <div className="flex items-center gap-4 text-muted-foreground/60 text-sm mb-4">
-                <button className="hover:text-foreground/70 transition-colors">
-                  Add icon
-                </button>
-                <button className="hover:text-foreground/70 transition-colors">
-                  Add comment
-                </button>
+                <Dialog open={showCoverPicker} onOpenChange={setShowCoverPicker}>
+                  <DialogContent showCloseButton={false} className="max-w-[540px] p-0 overflow-hidden bg-popover border-border shadow-2xl">
+                    <DialogTitle className="sr-only">Choose Cover Image</DialogTitle>
+                    <DialogHeader className="px-4 pt-3 pb-0 border-b border-border/50 relative flex-row items-center">
+                      <div className="flex items-center gap-4 flex-1">
+                        {['Gallery', 'Upload', 'Link', 'Unsplash'].map(tab => (
+                          <button 
+                            key={tab} 
+                            onClick={() => setActiveCoverTab(tab as any)}
+                            className={cn(
+                              "pb-2 text-[13px] font-medium transition-colors border-b-2 relative -bottom-[1px]",
+                              activeCoverTab === tab ? "text-foreground border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
+                            )}
+                          >
+                            {tab}
+                          </button>
+                        ))}
+                      </div>
+                      <button 
+                        className="pb-2 text-[13px] text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => {
+                          if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: null } });
+                          setShowCoverPicker(false);
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </DialogHeader>
+
+                    <div className="p-4 max-h-[420px] overflow-y-auto custom-scrollbar">
+                      {activeCoverTab === 'Gallery' && (
+                        <div className="space-y-4">
+                          <div>
+                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Color & Gradient</span>
+                            <div className="grid grid-cols-4 gap-2 mt-2">
+                              {['#eb5757', '#f2994a', '#f2c94c', '#27ae60', '#2d9cdb', '#9b51e0', '#4a4a4a', '#6b7280'].map(color => (
+                                <button 
+                                  key={color}
+                                  className="h-14 rounded-md transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1" 
+                                  style={{ backgroundColor: color }}
+                                  onClick={() => {
+                                    if (pageId) {
+                                      useMotionStore.getState().updatePageLocally(pageId, { cover_image: color });
+                                      updatePage.mutate({ id: pageId, updates: { cover_image: color } });
+                                    }
+                                    setShowCoverPicker(false);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Hudson River School</span>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                              {[
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_theOxbow.jpg",
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_springLandscape.jpg",
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_aegeanSea.jpg",
+                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_catskillEarlyAutumn.jpg",
+                                "https://www.notion.so/images/page-cover/met_frederic_edwin_church_1871.jpg",
+                                "https://www.notion.so/images/page-cover/rijksmuseum_avercamp_1620.jpg",
+                              ].map(url => (
+                                <button 
+                                  key={url}
+                                  className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
+                                  style={{ backgroundImage: `url(${url})` }}
+                                  onClick={() => {
+                                    if (pageId) {
+                                      useMotionStore.getState().updatePageLocally(pageId, { cover_image: url });
+                                      updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    }
+                                    setShowCoverPicker(false);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Art & Illustration</span>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                              {[
+                                "https://www.notion.so/images/page-cover/nationalMuseumOfAsianArt_sparrowsFeedingTheirYoung.jpg",
+                                "https://www.notion.so/images/page-cover/usda_pear.png",
+                                "https://www.notion.so/images/page-cover/met_vincent_van_gogh_ginoux.jpg",
+                              ].map(url => (
+                                <button 
+                                  key={url}
+                                  className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
+                                  style={{ backgroundImage: `url(${url})` }}
+                                  onClick={() => {
+                                    if (pageId) {
+                                      useMotionStore.getState().updatePageLocally(pageId, { cover_image: url });
+                                      updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    }
+                                    setShowCoverPicker(false);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            ) : (
+              <div className="h-20 w-full bg-background" />
+            )}
+
+            {/* Icon — straddles the cover/content boundary */}
+            {(displayPage.icon || showEmojiPicker) && (
+              <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16">
+                <div className="relative group/icon pl-4" style={{ marginTop: displayPage.cover_image ? '-40px' : '16px', marginBottom: '12px', width: 'fit-content' }}>
+                    <div
+                      className="text-[78px] leading-none select-none cursor-pointer flex items-center justify-center shrink-0"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    >
+                      {displayPage.icon?.startsWith("data:image") ? (
+                        <img src={displayPage.icon} alt="icon" className="size-full object-cover rounded-xl" />
+                      ) : displayPage.icon?.startsWith("lucide:") ? (
+                        (() => {
+                          const iconName = displayPage.icon!.split(":")[1];
+                          const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
+                          const Icon = icons[iconName] || FileText;
+                          return <Icon className="size-16 text-foreground/80" />;
+                        })()
+                      ) : displayPage.icon ? (
+                        displayPage.icon
+                      ) : (
+                        <Smile className="size-16 text-muted-foreground/30" />
+                      )}
+                    </div>
+                    <Dialog open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                      <DialogContent showCloseButton={false} className="max-w-[360px] p-0 overflow-hidden bg-popover border-border shadow-2xl">
+                        <DialogTitle className="sr-only">Choose Icon</DialogTitle>
+                        <DialogHeader className="px-4 pt-3 pb-0 border-b border-border/50 flex-row items-center">
+                          <div className="flex items-center gap-4 flex-1">
+                            {['Emoji', 'Icons', 'Upload'].map(tab => (
+                              <button 
+                                key={tab} 
+                                onClick={() => setActiveEmojiTab(tab as any)}
+                                className={cn(
+                                  "pb-2 text-[13px] font-medium transition-colors border-b-2 relative -bottom-[1px]",
+                                  activeEmojiTab === tab ? "text-foreground border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
+                                )}
+                              >
+                                {tab}
+                              </button>
+                            ))}
+                          </div>
+                          <button 
+                            className="pb-2 text-[13px] text-muted-foreground hover:text-destructive transition-colors"
+                            onClick={() => {
+                              if (pageId) {
+                                useMotionStore.getState().updatePageLocally(pageId, { icon: null });
+                                updatePage.mutate({ id: pageId, updates: { icon: null } });
+                              }
+                              setShowEmojiPicker(false);
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </DialogHeader>
+
+                        <div className="flex-1 overflow-hidden flex flex-col min-h-[360px]">
+                          {activeEmojiTab === 'Emoji' && (
+                            <div className="p-3 flex flex-col h-full">
+                              <div className="flex gap-2 items-center bg-muted/50 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
+                                <Search className="size-3.5 text-muted-foreground" />
+                                <input 
+                                  placeholder="Filter..." 
+                                  className="bg-transparent border-none outline-none text-[13px] w-full text-foreground placeholder:text-muted-foreground/50"
+                                  value={emojiSearch}
+                                  onChange={(e) => setEmojiSearch(e.target.value)}
+                                />
+                                <div className="flex items-center gap-1.5 border-l border-border/10 pl-2">
+                                  <button 
+                                    className="p-0.5 hover:bg-accent rounded text-muted-foreground transition-colors"
+                                    onClick={() => {
+                                      if (activeEmojiTab === 'Emoji') {
+                                        const icons = ["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚"];
+                                        const random = icons[Math.floor(Math.random() * icons.length)];
+                                        if (pageId) updatePage.mutate({ id: pageId, updates: { icon: random } });
+                                      } else if (activeEmojiTab === 'Icons') {
+                                        const iconNames = ['Plane', 'Heart', 'Star', 'Cloud', 'Moon', 'Sun', 'Bell', 'Camera', 'Gift', 'Coffee', 'Music', 'Code', 'Terminal', 'Database', 'Shield', 'Layout', 'Settings', 'User', 'Users', 'Mail', 'Map', 'Flag', 'Bookmark', 'Calendar', 'CheckCircle', 'HelpCircle', 'Info', 'AlertTriangle', 'AlertCircle', 'XCircle', 'Clock', 'Zap'];
+                                        const random = iconNames[Math.floor(Math.random() * iconNames.length)];
+                                        if (pageId) updatePage.mutate({ id: pageId, updates: { icon: `lucide:${random}` } });
+                                      }
+                                    }}
+                                    title="Random"
+                                  >
+                                    <Sparkles className="size-3" />
+                                  </button>
+                                  <span className="text-border text-xs font-light">|</span>
+                                  <button className="p-0.5 hover:bg-accent rounded text-muted-foreground transition-colors">
+                                    <Smile className="size-3" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
+                                {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢"].filter(e => e.includes(emojiSearch) || emojiSearch === "").map(emoji => (
+                                  <button
+                                    key={emoji}
+                                    className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
+                                    onClick={() => {
+                                      if (pageId) {
+                                        useMotionStore.getState().updatePageLocally(pageId, { icon: emoji });
+                                        updatePage.mutate({ id: pageId, updates: { icon: emoji } });
+                                      }
+                                      setShowEmojiPicker(false);
+                                    }}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {activeEmojiTab === 'Icons' && (
+                            <div className="p-3 flex flex-col h-full">
+                              <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
+                                <Search className="size-3.5 text-muted-foreground" />
+                                <input
+                                  placeholder="Filter..."
+                                  className="bg-transparent border-none outline-none text-[13px] w-full"
+                                  value={emojiSearch}
+                                  onChange={(e) => setEmojiSearch(e.target.value)}
+                                />
+                              </div>
+                              <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
+                                {[
+                                  { name: 'Plane', icon: Plane }, { name: 'Heart', icon: Heart }, { name: 'Star', icon: Star }, { name: 'Cloud', icon: Cloud }, { name: 'Moon', icon: Moon }, { name: 'Sun', icon: Sun }, { name: 'Bell', icon: Bell }, { name: 'Camera', icon: Camera }, { name: 'Gift', icon: Gift }, { name: 'Coffee', icon: Coffee }, { name: 'Music', icon: Music }, { name: 'Code', icon: Code }, { name: 'Terminal', icon: Terminal }, { name: 'Database', icon: Database }, { name: 'Shield', icon: Shield }, { name: 'Layout', icon: Layout }, { name: 'Settings', icon: Settings }, { name: 'User', icon: User }, { name: 'Users', icon: Users }, { name: 'Mail', icon: Mail }, { name: 'Map', icon: Map }, { name: 'Flag', icon: Flag }, { name: 'Bookmark', icon: Bookmark }, { name: 'Calendar', icon: Calendar }, { name: 'CheckCircle', icon: CheckCircle }, { name: 'HelpCircle', icon: HelpCircle }, { name: 'Info', icon: Info }, { name: 'AlertTriangle', icon: AlertTriangle }, { name: 'AlertCircle', icon: AlertCircle }, { name: 'XCircle', icon: XCircle }, { name: 'Clock', icon: Clock }, { name: 'Zap', icon: Zap }
+                                ].map((item, idx) => (
+                                  <button
+                                    key={idx}
+                                    className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
+                                    onClick={() => {
+                                      if (pageId) {
+                                        useMotionStore.getState().updatePageLocally(pageId, { icon: `lucide:${item.name}` });
+                                        updatePage.mutate({ id: pageId, updates: { icon: `lucide:${item.name}` } });
+                                      }
+                                      setShowEmojiPicker(false);
+                                    }}
+                                  >
+                                    <item.icon className="size-4 text-foreground/70" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {activeEmojiTab === 'Upload' && (
+                            <div className="p-8 flex flex-col h-full items-center justify-center text-center gap-6">
+                              <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      if (pageId) updatePage.mutate({ id: pageId, updates: { icon: reader.result as string } });
+                                      setShowEmojiPicker(false);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                              <div
+                                className="w-full h-32 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-3 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer group"
+                                onClick={() => fileInputRef.current?.click()}
+                              >
+                                <div className="size-10 rounded-full bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
+                                  <ImageLucide className="size-5 text-muted-foreground" />
+                                </div>
+                                <span className="text-[13.5px] font-medium text-foreground/70">Upload an image</span>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[12px] text-muted-foreground/60 font-medium">or Ctrl+V to paste an image or link</span>
+                              </div>
+                              <div className="mt-auto w-full flex items-center justify-between pt-4 border-t border-border/40">
+                                <button
+                                  className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                                  onClick={() => setShowEmojiPicker(false)}
+                                >
+                                  Cancel
+                                </button>
+                                <Button
+                                  size="sm"
+                                  className="h-8 px-4 text-[13px] font-medium bg-primary/20 text-primary hover:bg-primary/30 border-none"
+                                  onClick={() => setShowEmojiPicker(false)}
+                                >
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </div>
+            )}
+
+            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16">
+              <div className="group/title-area">
+                <div className={cn(
+                  "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
+                  "mt-3 mb-2",
+                  "opacity-0 group-hover/title-area:opacity-100"
+                )}>
+                  {!displayPage.icon && (
+                    <button
+                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                      onClick={() => {
+                        setShowEmojiPicker(true);
+                      }}
+                    >
+                      Add icon
+                    </button>
+                  )}
+                  {!displayPage.cover_image && (
+                    <button
+                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                      onClick={() => {
+                        const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
+                        if (pageId) {
+                          useMotionStore.getState().updatePageLocally(pageId, { cover_image: defaultCover });
+                          updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
+                        }
+                      }}
+                    >
+                      Add cover
+                    </button>
+                  )}
+                  <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
+                    Add comment
+                  </button>
+                </div>
+
+                {/* Title */}
+                <input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    pageEditor?.commands?.focus?.("start");
+                  }}
+                  onBlur={handleTitleBlur}
+                  className="w-full bg-transparent text-[44px] px-4 leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25"
+                  placeholder="Untitled"
+                />
               </div>
 
-              <input
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  pageEditor?.commands?.focus?.("start");
-                }}
-                onBlur={() =>
-                  updatePage(pageId, { title: titleDraft.trim() || "Untitled" })
-                }
-                className="w-full bg-transparent text-[44px] leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25"
-                placeholder="Untitled"
-              />
-
-              <div className="pt-6">
+              {/* Editor */}
+              <div className="pt-0">
                 <SimpleEditor
                   key={pageId}
-                  content={page.content}
-                  onContentChange={(json) => saveContent(pageId, json)}
+                  content={displayPage.content}
+                  onContentChange={handleContentChange}
                   onReady={(editor) => setPageEditor(editor)}
                   onAddSubpage={handleAddSubpage}
                 />
               </div>
-
             </main>
           </div>
         </div>
@@ -187,19 +750,24 @@ export function MotionPage() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        .custom-scrollbar-page::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar-page::-webkit-scrollbar-thumb {
-          background: transparent;
-          border-radius: 10px;
-        }
-        .custom-scrollbar-page:hover::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.05);
-        }
-      `,
+          .custom-scrollbar-page::-webkit-scrollbar { width: 6px; }
+          .custom-scrollbar-page::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
+          .custom-scrollbar-page:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); }
+        `,
         }}
       />
+
+      {/* Share modal — rendered outside the scrollable area */}
+      {activeOrgId && activeSpaceId && (
+        <MotionShareModal
+          open={shareModalOpen}
+          onOpenChange={setShareModalOpen}
+          pageId={pageId!}
+          pageTitle={displayPage.title}
+          orgId={activeOrgId!}
+          spaceId={activeSpaceId!}
+        />
+      )}
     </div>
   );
 }

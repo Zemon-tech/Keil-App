@@ -11,6 +11,7 @@ import { InvitePage } from "./components/workspace/InvitePage";
 import { MotionPage } from "./components/motion/MotionPage";
 import { MotionHome } from "./components/motion/MotionHome";
 import { MotionProfile } from "./components/motion/MotionProfile";
+import { MotionPublicPage } from "./components/motion/MotionPublicPage";
 
 /**
  * Main application component.
@@ -78,6 +79,9 @@ function App() {
         <Route path="/invite/:token" element={<InvitePage />} />
         {/* Add more protected routes here */}
       </Route>
+
+      {/* Public Motion page — no auth, no layout */}
+      <Route path="/notes/public/:token" element={<MotionPublicPage />} />
 
       {/* Catch-all - Redirect to home */}
       <Route path="*" element={<Navigate to="/" replace />} />

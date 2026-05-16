@@ -2,7 +2,6 @@ import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -21,14 +20,13 @@ import {
   RotateCcw,
   MoreHorizontal,
   Pencil,
-  ChevronsLeft,
-  Settings,
-  UserPlus,
-  Check,
+  Loader2,
+  SquarePen
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
+import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 import { cn } from "@/lib/utils";
@@ -39,12 +37,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  useMotionPages,
+  useMotionTrash,
+  useSharedToSpace,
+  useCreateMotionPage,
+  useSoftDeleteMotionPage,
+  useRestoreMotionPage,
+  useHardDeleteMotionPage,
+  useUpdateMotionPage,
+  useMotionSocketListeners,
+} from "@/hooks/api/useMotionPages";
 
-const mainNav = [
-  { title: "Search", icon: Search, url: "#" },
-  { title: "Home", icon: Home, url: "/motion" },
-  { title: "Inbox", icon: Inbox, url: "#" },
+const mainTabs = [
+  { id: "home", title: "Home", icon: Home, url: "/motion" },
+  { id: "inbox", title: "Inbox", icon: Inbox, url: "#" },
+  { id: "search", title: "Search", icon: Search, url: "#" },
 ];
+
+// ─── SidebarPageItem ──────────────────────────────────────────────────────────
 
 function SidebarPageItem({
   item,
@@ -58,7 +69,7 @@ function SidebarPageItem({
   item: MotionPageRecord;
   pageId?: string;
   onClose?: () => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, title: string) => void;
   onAddSubpage: (parentId: string) => void;
   onRename: (id: string, title: string) => void;
   level?: number;
@@ -67,7 +78,8 @@ function SidebarPageItem({
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState(item.title);
   const inputRef = useRef<HTMLInputElement>(null);
-  const getSubpages = useMotionStore((state) => state.getSubpages);
+
+  const getSubpages = useMotionStore((s) => s.getSubpages);
   const subpages = getSubpages(item.id);
   const hasSubpages = subpages.length > 0;
   const isActive = pageId === item.id;
@@ -97,7 +109,9 @@ function SidebarPageItem({
         <div
           className={cn(
             "group/item relative flex min-h-8 w-full items-center rounded-md py-1.5 text-muted-foreground transition-colors",
-            isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/50 hover:text-foreground"
+            isActive
+              ? "bg-accent text-accent-foreground"
+              : "hover:bg-accent/50 hover:text-foreground"
           )}
           style={{ paddingLeft: `${itemPadding}px` }}
         >
@@ -151,9 +165,9 @@ function SidebarPageItem({
               <Link
                 to={`/motion/${item.id}`}
                 onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}
-                className="min-w-0 flex-1 truncate text-sm font-medium leading-snug"
+                className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex items-center gap-2"
               >
-                {item.title}
+                <span className="truncate">{item.title}</span>
               </Link>
             </div>
           )}
@@ -174,21 +188,14 @@ function SidebarPageItem({
               <DropdownMenuContent align="end" className="w-44 rounded-xl p-1">
                 <DropdownMenuItem
                   className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsRenaming(true);
-                  }}
+                  onClick={(e) => { e.preventDefault(); setIsRenaming(true); }}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Rename
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onAddSubpage(item.id);
-                    setIsOpen(true);
-                  }}
+                  onClick={(e) => { e.preventDefault(); onAddSubpage(item.id); setIsOpen(true); }}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add subpage
@@ -196,10 +203,7 @@ function SidebarPageItem({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-destructive focus:text-destructive"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onDelete(item.id);
-                  }}
+                  onClick={(e) => { e.preventDefault(); onDelete(item.id, item.title); }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
@@ -211,12 +215,7 @@ function SidebarPageItem({
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onAddSubpage(item.id);
-                setIsOpen(true);
-              }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAddSubpage(item.id); setIsOpen(true); }}
               aria-label={`Add subpage to ${item.title}`}
             >
               <Plus className="h-4 w-4" />
@@ -254,168 +253,140 @@ function SidebarPageItem({
   );
 }
 
+// ─── OrgSpaceSwitcher ─────────────────────────────────────────────────────────
+
+
+// ─── MotionSidebar ────────────────────────────────────────────────────────────
+
 type MotionSidebarProps = {
   onClose?: () => void;
 };
 
 export function MotionSidebar({ onClose }: MotionSidebarProps) {
-  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { pageId } = useParams();
 
-  const { 
-    pages,
-    getRootPages, 
-    getTrashPages, 
-    addPage, 
-    deletePage, 
-    updatePage,
-    restorePage, 
-    permanentlyDeletePage 
-  } = useMotionStore();
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
 
-  const displayName = user?.user_metadata?.full_name || user?.email || "User";
-  const initial = displayName.charAt(0).toUpperCase();
-  const workspaceName = `${displayName}'s workspace`;
+  // ── API data ────────────────────────────────────────────────────────────────
+  const { data: apiPages = [], isLoading: isPagesLoading } = useMotionPages(activeOrgId, activeSpaceId);
+  const { data: trashPages = [] } = useMotionTrash(activeOrgId, activeSpaceId);
+  const { data: sharedPages = [] } = useSharedToSpace(activeOrgId, activeSpaceId);
 
+  const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
+  const softDelete = useSoftDeleteMotionPage(activeOrgId, activeSpaceId);
+  const restorePage = useRestoreMotionPage(activeOrgId, activeSpaceId);
+  const hardDelete = useHardDeleteMotionPage(activeOrgId, activeSpaceId);
+  const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
+
+  const { user } = useAuth();
+
+  // ── Real-time ─────────────────────────────────────────────────────────────
+  useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
+
+  // ── Zustand store sync ──────────────────────────────────────────────────────
+  const hydratePages = useMotionStore((s) => s.hydratePages);
+  const hydratePagesRef = useRef(hydratePages);
+  hydratePagesRef.current = hydratePages;
+
+  useEffect(() => {
+    hydratePagesRef.current(apiPages);
+  }, [apiPages]);
+
+  // ── Derived data ────────────────────────────────────────────────────────────
+  const getRootPages = useMotionStore((s) => s.getRootPages);
   const rootPages = getRootPages();
-  const recentPages = [...pages]
-    .filter((page) => !page.isDeleted)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+  const recentPages = [...apiPages]
+    .filter((p) => !p.deleted_at)
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .slice(0, 8);
-  const trashPages = getTrashPages();
+
+  // ── UI state ────────────────────────────────────────────────────────────────
   const [recentsOpen, setRecentsOpen] = useState(true);
   const [privateOpen, setPrivateOpen] = useState(true);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [sharedOpen, setSharedOpen] = useState(false);
 
-  const handleAddPage = (parentId?: string) => {
-    const page = addPage({ parentId });
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+  const handleAddPage = async (parentId?: string) => {
+    if (!activeOrgId || !activeSpaceId) return;
+    const page = await createPage.mutateAsync({ parent_id: parentId ?? null });
     navigate(`/motion/${page.id}`);
     if (window.innerWidth < 1024) onClose?.();
   };
 
-  const handleDeletePage = (id: string) => {
-    deletePage(id);
-    if (pageId === id) {
-      navigate("/motion");
-    }
+  const handleDeletePage = (id: string, title: string) => {
+    softDelete.mutate({ id, title });
+    if (pageId === id) navigate("/motion");
   };
 
   const handleRenamePage = (id: string, title: string) => {
-    updatePage(id, { title });
+    useMotionStore.getState().updatePageLocally(id, { title });
+    updatePage.mutate({ id, updates: { title } });
   };
 
   const handleRestorePage = (id: string) => {
-    restorePage(id);
+    restorePage.mutate(id);
   };
 
   const handlePermanentDelete = (id: string) => {
     if (confirm("Permanently delete this page? This cannot be undone.")) {
-      permanentlyDeletePage(id);
+      hardDelete.mutate(id);
     }
   };
 
+  const noContext = mode !== "organisation" || !activeOrgId || !activeSpaceId;
+
   return (
     <Sidebar collapsible="none" className="w-full h-full border-r border-border/50 bg-card flex flex-col select-none">
-      {/* Header - User / Workspace switcher */}
-      <SidebarHeader className="px-3 py-2 border-b border-border/50">
-        <div className="group/workspace flex h-8 items-center gap-2.5 rounded-lg px-1 text-foreground transition-colors hover:bg-accent/50">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-            {initial}
-          </div>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight">
-            {workspaceName}
-          </span>
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/workspace:opacity-100">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                  aria-label="Open workspace menu"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={8} className="w-72 rounded-xl p-1">
-                <div className="px-2 py-1.5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
-                      {initial}
-                    </div>
-                    <div className="grid min-w-0 text-left text-sm leading-tight">
-                      <div className="truncate text-xs font-semibold text-foreground">
-                        {workspaceName}
-                      </div>
-                      <div className="truncate text-[10px] text-muted-foreground">
-                        Free Plan · 1 member
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-8 justify-start gap-2 bg-transparent text-xs"
-                      onClick={() => navigate("/motion/profile")}
-                    >
-                      <Settings className="h-4 w-4" />
-                      Settings
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-8 justify-start gap-2 bg-transparent text-xs"
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Invite members
-                    </Button>
-                  </div>
-                </div>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                  {user?.email || "Motion workspace"}
-                </div>
-                <DropdownMenuItem
-                  onClick={() => navigate("/motion")}
-                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                >
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-medium text-primary-foreground">
-                    {initial}
-                  </div>
-                  <span className="min-w-0 flex-1 truncate">{workspaceName}</span>
-                  <Check className="h-4 w-4 text-primary" />
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => navigate("/motion/profile")}
-                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                >
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
-                    M
-                  </div>
-                  <span className="min-w-0 flex-1 truncate">Motion settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-primary focus:text-primary">
-                  <Plus className="h-4 w-4" />
-                  New workspace
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">Add another account</DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">Log out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+      {/* ── Header: workspace switcher ── */}
+      {/* ── Header: Notion-style Tabs ── */}
+      <SidebarHeader className="px-3 py-3 border-b border-border/40">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {mainTabs.map((tab) => {
+            const isActive = location.pathname === tab.url || (tab.id === 'home' && location.pathname === '/motion');
+            return (
+              <Button
+                key={tab.id}
+                variant="ghost"
+                size="sm"
+                asChild
+                className={cn(
+                  "h-8 px-2.5 rounded-lg transition-all flex items-center gap-2 border border-transparent hover:bg-accent/50",
+                  isActive
+                    ? "bg-accent/80 text-foreground border-border/50 shadow-sm"
+                    : "text-muted-foreground"
+                )}
+              >
+                <Link to={tab.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}>
+                  <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
+                  {isActive && <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>}
+                </Link>
+              </Button>
+            );
+          })}
+          <div className="flex-1" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleAddPage()}
+            disabled={createPage.isPending}
+            className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            aria-label="New page"
+          >
+            {createPage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-[18px] w-[18px]" />}
+          </Button>
+
+          {onClose && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
               onClick={onClose}
-              aria-label="Collapse sidebar"
+              className="h-8 w-8 shrink-0 md:hidden text-muted-foreground hover:text-foreground"
             >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-          </div>
-          {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 md:hidden text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -423,180 +394,204 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-        {/* Main Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarMenu>
-            {mainNav.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location.pathname === item.url}
-                  className="text-sm font-medium"
+        {noContext ? (
+          <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+            Select an organisation and space to use Motion.
+          </div>
+        ) : (
+          <>
+
+            {/* ── Recents ── */}
+            <SidebarGroup>
+              <div className="group/section flex h-8 items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setRecentsOpen((v) => !v)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <Link to={item.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}>
-                    <item.icon />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-
-        {/* Recents Section */}
-        <SidebarGroup>
-          <div className="group/section flex h-8 items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setRecentsOpen(!recentsOpen)}
-              className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {recentsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              Recents
-            </button>
-          </div>
-          {recentsOpen && (
-            <SidebarMenu>
-              {recentPages.length > 0 ? (
-                recentPages.map((item) => (
-                  <SidebarPageItem
-                    key={`recent-${item.id}`}
-                    item={item}
-                    pageId={pageId}
-                    onClose={onClose}
-                    onDelete={handleDeletePage}
-                    onAddSubpage={handleAddPage}
-                    onRename={handleRenamePage}
-                  />
-                ))
-              ) : (
-                <div className="px-2.5 py-2 text-xs text-muted-foreground">
-                  No recent pages
-                </div>
-              )}
-            </SidebarMenu>
-          )}
-        </SidebarGroup>
-
-        {/* Private Section */}
-        <SidebarGroup>
-          <div className="group/section flex h-8 items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setPrivateOpen(!privateOpen)}
-              className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {privateOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              Private
-            </button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
-              onClick={() => handleAddPage()}
-              aria-label="Add private page"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-          {privateOpen && (
-            <SidebarMenu>
-              {rootPages.map((item) => (
-                <SidebarPageItem
-                  key={item.id}
-                  item={item}
-                  pageId={pageId}
-                  onClose={onClose}
-                  onDelete={handleDeletePage}
-                  onAddSubpage={handleAddPage}
-                  onRename={handleRenamePage}
-                />
-              ))}
-            </SidebarMenu>
-          )}
-        </SidebarGroup>
-
-        {/* Trash Section */}
-        <SidebarGroup>
-          <button
-            onClick={() => setTrashOpen(!trashOpen)}
-            className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-          >
-            {trashOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Trash
-          </button>
-          {trashOpen && (
-            <SidebarMenu className="mt-1">
-              {trashPages.length > 0 ? (
-                trashPages.map((item) => (
-                  <SidebarMenuItem key={item.id}>
-                    <div className="group/trash flex min-h-8 w-full items-center rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground">
-                      <FileText className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="flex-1 truncate text-sm font-medium italic line-through">
-                        {item.title}
-                      </span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover/trash:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-primary transition-all"
-                          onClick={() => handleRestorePage(item.id)}
-                          title="Restore"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-destructive transition-all"
-                          onClick={() => handlePermanentDelete(item.id)}
-                          title="Delete permanently"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                  <div className={cn("transition-transform duration-200", !recentsOpen && "-rotate-90")}>
+                    <ChevronDown className="h-3 w-3" />
+                  </div>
+                  Recents
+                </button>
+              </div>
+              {recentsOpen && (
+                <SidebarMenu>
+                  {isPagesLoading ? (
+                    <div className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Loading…
                     </div>
-                  </SidebarMenuItem>
-                ))
-              ) : (
-                <div className="px-2.5 py-2 text-xs text-muted-foreground">
-                  Trash is empty
-                </div>
+                  ) : recentPages.length > 0 ? (
+                    recentPages.map((item) => (
+                      <SidebarPageItem
+                        key={`recent-${item.id}`}
+                        item={item}
+                        pageId={pageId}
+                        onClose={onClose}
+                        onDelete={handleDeletePage}
+                        onAddSubpage={handleAddPage}
+                        onRename={handleRenamePage}
+                      />
+                    ))
+                  ) : (
+                    <div className="px-2.5 py-2 text-xs text-muted-foreground">No recent pages</div>
+                  )}
+                </SidebarMenu>
               )}
-            </SidebarMenu>
-          )}
-        </SidebarGroup>
+            </SidebarGroup>
+
+            {/* ── Pages (tree) ── */}
+            <SidebarGroup>
+              <div className="group/section flex h-8 items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setPrivateOpen((v) => !v)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <div className={cn("transition-transform duration-200", !privateOpen && "-rotate-90")}>
+                    <ChevronDown className="h-3 w-3" />
+                  </div>
+                  Pages
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
+                  onClick={() => handleAddPage()}
+                  aria-label="Add page"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {privateOpen && (
+                <SidebarMenu>
+                  {isPagesLoading ? (
+                    <div className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Loading…
+                    </div>
+                  ) : rootPages.length > 0 ? (
+                    rootPages.map((item) => (
+                      <SidebarPageItem
+                        key={item.id}
+                        item={item}
+                        pageId={pageId}
+                        onClose={onClose}
+                        onDelete={handleDeletePage}
+                        onAddSubpage={handleAddPage}
+                        onRename={handleRenamePage}
+                      />
+                    ))
+                  ) : (
+                    <div className="px-2.5 py-2 text-xs text-muted-foreground">No pages yet</div>
+                  )}
+                </SidebarMenu>
+              )}
+            </SidebarGroup>
+
+            {/* ── Trash ── */}
+            <SidebarGroup>
+              <button
+                onClick={() => setTrashOpen((v) => !v)}
+                className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+              >
+                <div className={cn("transition-transform duration-200", !trashOpen && "-rotate-90")}>
+                  <ChevronDown className="h-3 w-3" />
+                </div>
+                Trash
+              </button>
+              {trashOpen && (
+                <SidebarMenu className="mt-1">
+                  {trashPages.length > 0 ? (
+                    trashPages.map((item) => (
+                      <SidebarMenuItem key={item.id}>
+                        <div className="group/trash flex min-h-8 w-full items-center rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground">
+                          <FileText className="mr-2 h-4 w-4 shrink-0" />
+                          <span className="flex-1 truncate text-sm font-medium italic line-through">
+                            {item.title}
+                          </span>
+                          <div className="flex items-center gap-1 opacity-0 group-hover/trash:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-primary transition-all"
+                              onClick={() => handleRestorePage(item.id)}
+                              title="Restore"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-destructive transition-all"
+                              onClick={() => handlePermanentDelete(item.id)}
+                              title="Delete permanently"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </SidebarMenuItem>
+                    ))
+                  ) : (
+                    <div className="px-2.5 py-2 text-xs text-muted-foreground">Trash is empty</div>
+                  )}
+                </SidebarMenu>
+              )}
+            </SidebarGroup>
+
+            {/* ── Shared with this space ── */}
+            {sharedPages.length > 0 && (
+              <SidebarGroup>
+                <button
+                  onClick={() => setSharedOpen((v) => !v)}
+                  className="flex h-8 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+                >
+                  <div className={cn("transition-transform duration-200", !sharedOpen && "-rotate-90")}>
+                    <ChevronDown className="h-3 w-3" />
+                  </div>
+                  Shared with this space
+                </button>
+                {sharedOpen && (
+                  <SidebarMenu className="mt-1">
+                    {sharedPages.map((item) => (
+                      <SidebarMenuItem key={item.id}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={pageId === item.id}
+                          className="text-sm font-medium"
+                        >
+                          <Link
+                            to={`/motion/${item.id}`}
+                            onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}
+                          >
+                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                )}
+              </SidebarGroup>
+            )}
+          </>
+        )}
       </SidebarContent>
 
-      {/* Footer Tools */}
-      <div className="p-2 border-t border-border/50">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={() => handleAddPage()}
-              className="text-sm font-medium"
-            >
-              <Plus />
-              <span>Add a page</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </div>
 
-      <style dangerouslySetInnerHTML={{
-        __html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: transparent;
-          border-radius: 10px;
-        }
-        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
-        }
-      `}} />
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+          .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
+          .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        `,
+        }}
+      />
     </Sidebar>
   );
 }
