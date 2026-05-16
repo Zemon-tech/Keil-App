@@ -9,8 +9,12 @@ import integrationRoutes from "./integration.routes";
 import motionPageRoutes from "./motion-page.routes";
 import motionPublicRoutes from "./motion-public.routes";
 import taskLocatorRoutes from "./task-locator.routes";
+import publicTaskRoutes from "./public-task.routes";
 
 const router = Router();
+
+// ── Public task read (no auth) — must be first to avoid auth middleware clash ──
+router.use("/public", publicTaskRoutes);
 
 // ── Personal tasks ────────────────────────────────────────────────────────────
 router.use("/personal", personalTaskRoutes);
