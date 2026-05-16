@@ -73,9 +73,16 @@ export const initSocket = (server: HttpServer) => {
             result.rows.forEach(row => {
                 socket.join(`channel:${row.channel_id}`);
             });
-            console.log(`🔌 [socket]: User ${user.id} joined ${result.rows.length} channels`);
+            
+            // Join space rooms
+            const spacesResult = await pool.query('SELECT space_id FROM space_members WHERE user_id = $1', [user.id]);
+            spacesResult.rows.forEach(row => {
+                socket.join(`space:${row.space_id}`);
+            });
+
+            console.log(`🔌 [socket]: User ${user.id} joined ${result.rows.length} channels and ${spacesResult.rows.length} spaces`);
         } catch (err) {
-            console.error(`❌ [socket]: Error joining channel rooms for user ${user.id}`, err);
+            console.error(`❌ [socket]: Error joining rooms for user ${user.id}`, err);
         }
 
         socket.on("send_message", async (payload: { channel_id: string; content: string }) => {
@@ -131,4 +138,9 @@ export const broadcastNewChannel = (memberIds: string[], channel: any) => {
     memberIds.forEach(id => {
         io.to(`user:${id}`).emit("channel_added", channel);
     });
+};
+
+export const broadcastMotionChange = (spaceId: string, payload: { type: string, pageId?: string, page?: any, userId?: string }) => {
+    if (!io) return;
+    io.to(`space:${spaceId}`).emit("motion_change", payload);
 };

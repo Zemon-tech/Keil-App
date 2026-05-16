@@ -27,6 +27,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 import { cn } from "@/lib/utils";
 import {
@@ -45,6 +46,7 @@ import {
   useRestoreMotionPage,
   useHardDeleteMotionPage,
   useUpdateMotionPage,
+  useMotionSocketListeners,
 } from "@/hooks/api/useMotionPages";
 
 const mainTabs = [
@@ -277,6 +279,11 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const restorePage = useRestoreMotionPage(activeOrgId, activeSpaceId);
   const hardDelete = useHardDeleteMotionPage(activeOrgId, activeSpaceId);
   const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
+  
+  const { user } = useAuth();
+  
+  // ── Real-time ─────────────────────────────────────────────────────────────
+  useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
 
   // ── Zustand store sync ──────────────────────────────────────────────────────
   const hydratePages = useMotionStore((s) => s.hydratePages);
@@ -316,6 +323,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   };
 
   const handleRenamePage = (id: string, title: string) => {
+    useMotionStore.getState().updatePageLocally(id, { title });
     updatePage.mutate({ id, updates: { title } });
   };
 

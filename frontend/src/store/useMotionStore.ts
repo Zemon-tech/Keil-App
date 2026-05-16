@@ -43,6 +43,12 @@ interface MotionStore {
   hydratePages: (pages: MotionPageRecord[]) => void;
 
   /**
+   * Merges specific pages into the store.
+   * Updates existing pages by ID and adds new ones. Does NOT remove missing pages.
+   */
+  upsertPages: (pages: MotionPageRecord[]) => void;
+
+  /**
    * Optimistically updates a page in the working copy.
    * Does NOT call the API — the component is responsible for debounced saves.
    */
@@ -84,14 +90,34 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
 
   hydratePages: (pages) => {
     // Guard: only update the store if the content actually changed.
-    // Compare by serialising id+updated_at of each page. This prevents
-    // the infinite loop caused by TanStack Query returning a new array
-    // reference on every render even when the data is identical.
     const current = get().pages;
-    const incomingKey = pages.map((p) => `${p.id}:${p.updated_at}`).join(',');
-    const currentKey = current.map((p) => `${p.id}:${p.updated_at}`).join(',');
-    if (incomingKey === currentKey) return; // nothing changed — skip set()
+    const incomingKey = pages.map((p) => `${p.id}:${p.updated_at}`).join(",");
+    const currentKey = current.map((p) => `${p.id}:${p.updated_at}`).join(",");
+    if (incomingKey === currentKey) return;
     set({ pages });
+  },
+
+  upsertPages: (incoming) => {
+    set((state) => {
+      const nextPages = [...state.pages];
+      incoming.forEach((inPage) => {
+        const idx = nextPages.findIndex((p) => p.id === inPage.id);
+        if (idx > -1) {
+          const current = nextPages[idx];
+          const inTime = new Date(inPage.updated_at).getTime();
+          const curTime = new Date(current.updated_at).getTime();
+
+          // Only update if incoming is newer or we are not in a dirty state.
+          // This prevents older server responses from overwriting newer optimistic updates.
+          if (inTime >= curTime) {
+            nextPages[idx] = { ...current, ...inPage };
+          }
+        } else {
+          nextPages.push(inPage);
+        }
+      });
+      return { pages: nextPages };
+    });
   },
 
   // ── Local optimistic mutations ────────────────────────────────────────────────

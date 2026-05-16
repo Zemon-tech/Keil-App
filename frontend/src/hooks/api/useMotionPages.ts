@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useEffect } from "react";
 import api from "@/lib/api";
+import { getSocket } from "@/lib/socket";
 import type { JSONContent } from "@tiptap/core";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -456,4 +458,90 @@ export function useRevokeMotionPageShare(
       toast.error("Failed to revoke share.");
     },
   });
+}
+
+// ─── Socket Listeners ─────────────────────────────────────────────────────────
+
+export function useMotionSocketListeners(
+  orgId: string | null,
+  spaceId: string | null,
+  currentPageId: string | null,
+  currentUserId: string | null
+) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !orgId || !spaceId) return;
+
+    const handleMotionChange = (payload: { type: string; pageId?: string; page?: MotionPageDTO, userId?: string }) => {
+      const { type, pageId, page, userId } = payload;
+
+      // Skip if this change was made by the current user (optimistic updates already handled it)
+      if (userId === currentUserId) return;
+
+      switch (type) {
+        case "create":
+          if (page) {
+            queryClient.setQueryData<MotionPageDTO[]>(
+              motionPageKeys.lists(orgId, spaceId),
+              (old) => (old ? [page, ...old] : [page])
+            );
+          }
+          break;
+
+        case "update":
+          if (page && pageId) {
+            // Update list cache
+            queryClient.setQueryData<MotionPageDTO[]>(
+              motionPageKeys.lists(orgId, spaceId),
+              (old) => old?.map((p) => (p.id === pageId ? page : p))
+            );
+            
+            // Update detail cache ONLY if it's not the page we are currently editing
+            // Or if it is, we might want to be careful. For now, let's update it
+            // but only if it's not "us". But we don't have a userId here easily.
+            // Let's just update detail if it's the current page.
+            if (pageId === currentPageId) {
+                queryClient.setQueryData(
+                    motionPageKeys.detail(orgId, spaceId, pageId),
+                    page
+                );
+            }
+          }
+          break;
+
+        case "delete":
+        case "hard_delete":
+          if (pageId) {
+            queryClient.setQueryData<MotionPageDTO[]>(
+              motionPageKeys.lists(orgId, spaceId),
+              (old) => old?.filter((p) => p.id !== pageId && p.parent_id !== pageId) ?? []
+            );
+            queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
+
+            if (pageId === currentPageId) {
+              queryClient.setQueryData(motionPageKeys.detail(orgId, spaceId, pageId), undefined);
+            }
+          }
+          break;
+
+        case "restore":
+          if (page) {
+            queryClient.setQueryData<MotionPageDTO[]>(
+              motionPageKeys.lists(orgId, spaceId),
+              (old) => (old ? [...old, page] : [page])
+            );
+            queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
+          }
+          break;
+      }
+    };
+
+    socket.on("motion_change", handleMotionChange);
+
+    return () => {
+      socket.off("motion_change", handleMotionChange);
+    };
+  }, [orgId, spaceId, currentPageId, currentUserId, queryClient]);
 }

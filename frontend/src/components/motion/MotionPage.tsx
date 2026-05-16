@@ -15,12 +15,14 @@ import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import {
   useMotionPage,
   useUpdateMotionPage,
   useSoftDeleteMotionPage,
   useCreateMotionPage,
+  useMotionSocketListeners,
 } from "@/hooks/api/useMotionPages";
 import type { JSONContent } from "@tiptap/core";
 
@@ -62,12 +64,12 @@ export function MotionPage() {
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const { activeOrgId, activeSpaceId, mode } = useAppContext();
-  const { sidebarOpen, setSidebarOpen, getPageById, hydratePages, setDirty, clearDirty } =
+  const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty } =
     useMotionStore();
 
-  // Stable ref so hydratePages is never a useEffect dependency
-  const hydratePagesRef = useRef(hydratePages);
-  hydratePagesRef.current = hydratePages;
+  // Stable ref so upsertPages is never a useEffect dependency
+  const upsertPagesRef = useRef(upsertPages);
+  upsertPagesRef.current = upsertPages;
 
   // ── API hooks ───────────────────────────────────────────────────────────────
   const { data: serverPage, isLoading } = useMotionPage(
@@ -79,10 +81,14 @@ export function MotionPage() {
   const softDelete = useSoftDeleteMotionPage(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
 
-  // Hydrate store when server data arrives — ref avoids infinite loop
+  const { user } = useAuth();
+
+  // ── Real-time ──
+  useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
+
   useEffect(() => {
     if (serverPage) {
-      hydratePagesRef.current([serverPage]);
+      upsertPagesRef.current([serverPage]);
     }
   }, [serverPage]);
 
@@ -174,6 +180,8 @@ export function MotionPage() {
     if (!pageId) return;
     const trimmed = titleDraft.trim() || "Untitled";
     if (trimmed !== page?.title) {
+      // Optimistic update in store
+      useMotionStore.getState().updatePageLocally(pageId, { title: trimmed });
       updatePage.mutate({ id: pageId, updates: { title: trimmed } });
     }
   };
@@ -332,7 +340,11 @@ export function MotionPage() {
                       if (file) {
                         const reader = new FileReader();
                         reader.onloadend = () => {
-                          if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: reader.result as string } });
+                          const result = reader.result as string;
+                          if (pageId) {
+                            useMotionStore.getState().updatePageLocally(pageId, { cover_image: result });
+                            updatePage.mutate({ id: pageId, updates: { cover_image: result } });
+                          }
                         };
                         reader.readAsDataURL(file);
                       }
@@ -351,7 +363,10 @@ export function MotionPage() {
                     size="sm"
                     className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
                     onClick={() => {
-                      if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: null } });
+                      if (pageId) {
+                        useMotionStore.getState().updatePageLocally(pageId, { cover_image: null });
+                        updatePage.mutate({ id: pageId, updates: { cover_image: null } });
+                      }
                     }}
                   >
                     Remove
@@ -399,7 +414,10 @@ export function MotionPage() {
                                   className="h-14 rounded-md transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1" 
                                   style={{ backgroundColor: color }}
                                   onClick={() => {
-                                    if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: color } });
+                                    if (pageId) {
+                                      useMotionStore.getState().updatePageLocally(pageId, { cover_image: color });
+                                      updatePage.mutate({ id: pageId, updates: { cover_image: color } });
+                                    }
                                     setShowCoverPicker(false);
                                   }}
                                 />
@@ -422,7 +440,10 @@ export function MotionPage() {
                                   className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
                                   style={{ backgroundImage: `url(${url})` }}
                                   onClick={() => {
-                                    if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    if (pageId) {
+                                      useMotionStore.getState().updatePageLocally(pageId, { cover_image: url });
+                                      updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    }
                                     setShowCoverPicker(false);
                                   }}
                                 />
@@ -442,7 +463,10 @@ export function MotionPage() {
                                   className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
                                   style={{ backgroundImage: `url(${url})` }}
                                   onClick={() => {
-                                    if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    if (pageId) {
+                                      useMotionStore.getState().updatePageLocally(pageId, { cover_image: url });
+                                      updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                    }
                                     setShowCoverPicker(false);
                                   }}
                                 />
@@ -503,7 +527,10 @@ export function MotionPage() {
                           <button 
                             className="pb-2 text-[13px] text-muted-foreground hover:text-destructive transition-colors"
                             onClick={() => {
-                              if (pageId) updatePage.mutate({ id: pageId, updates: { icon: undefined } });
+                              if (pageId) {
+                                useMotionStore.getState().updatePageLocally(pageId, { icon: null });
+                                updatePage.mutate({ id: pageId, updates: { icon: null } });
+                              }
                               setShowEmojiPicker(false);
                             }}
                           >
@@ -552,7 +579,10 @@ export function MotionPage() {
                                     key={emoji}
                                     className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
                                     onClick={() => {
-                                      if (pageId) updatePage.mutate({ id: pageId, updates: { icon: emoji } });
+                                      if (pageId) {
+                                        useMotionStore.getState().updatePageLocally(pageId, { icon: emoji });
+                                        updatePage.mutate({ id: pageId, updates: { icon: emoji } });
+                                      }
                                       setShowEmojiPicker(false);
                                     }}
                                   >
@@ -582,7 +612,10 @@ export function MotionPage() {
                                     key={idx}
                                     className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
                                     onClick={() => {
-                                      if (pageId) updatePage.mutate({ id: pageId, updates: { icon: `lucide:${item.name}` } });
+                                      if (pageId) {
+                                        useMotionStore.getState().updatePageLocally(pageId, { icon: `lucide:${item.name}` });
+                                        updatePage.mutate({ id: pageId, updates: { icon: `lucide:${item.name}` } });
+                                      }
                                       setShowEmojiPicker(false);
                                     }}
                                   >
@@ -669,7 +702,11 @@ export function MotionPage() {
                     <button
                       className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
                       onClick={() => {
-                        if (pageId) updatePage.mutate({ id: pageId, updates: { cover_image: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop" } });
+                        const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
+                        if (pageId) {
+                          useMotionStore.getState().updatePageLocally(pageId, { cover_image: defaultCover });
+                          updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
+                        }
                       }}
                     >
                       Add cover

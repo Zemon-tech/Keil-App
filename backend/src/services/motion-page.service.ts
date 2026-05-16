@@ -3,6 +3,7 @@ import { motionPageRepository, motionPageShareRepository } from '../repositories
 import { MotionPage, MotionPageShare } from '../types/entities';
 import { MotionShareType, MotionPermission } from '../types/enums';
 import { ApiError } from '../utils/ApiError';
+import { broadcastMotionChange } from '../socket';
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -182,7 +183,10 @@ export const createPage = async (
     position: maxPos + 1000, // Leave room for fractional inserts between existing pages
   } as Partial<MotionPage>);
 
-  return toPageDTO(page);
+  const dto = toPageDTO(page);
+  broadcastMotionChange(spaceId, { type: 'create', page: dto, userId });
+
+  return dto;
 };
 
 export const updatePage = async (
@@ -218,7 +222,12 @@ export const updatePage = async (
   if (input.parent_id !== undefined) updates.parent_id = input.parent_id;
 
   const updated = await motionPageRepository.update(pageId, updates);
-  return updated ? toPageDTO(updated) : null;
+  if (updated) {
+    const dto = toPageDTO(updated);
+    broadcastMotionChange(spaceId, { type: 'update', pageId, page: dto, userId: _userId });
+    return dto;
+  }
+  return null;
 };
 
 export const softDeletePage = async (
@@ -233,6 +242,7 @@ export const softDeletePage = async (
   // Uses a recursive CTE to walk the full subtree, then bulk-updates deleted_at.
   // This is safe because all pages are scoped to the same org+space (enforced on create).
   await motionPageRepository.softDeleteWithDescendants(pageId);
+  broadcastMotionChange(spaceId, { type: 'delete', pageId, userId: _userId });
 };
 
 export const restorePage = async (
@@ -252,7 +262,10 @@ export const restorePage = async (
 
   const restored = await motionPageRepository.restore(pageId);
   if (!restored) throw new ApiError(404, 'Page not found');
-  return toPageDTO(restored);
+  
+  const dto = toPageDTO(restored);
+  broadcastMotionChange(spaceId, { type: 'restore', page: dto, userId: _userId });
+  return dto;
 };
 
 export const hardDeletePage = async (
@@ -269,6 +282,7 @@ export const hardDeletePage = async (
 
   // DB CASCADE on parent_id handles recursive deletion of all subpages
   await motionPageRepository.hardDelete(pageId);
+  broadcastMotionChange(spaceId, { type: 'hard_delete', pageId, userId: _userId });
 };
 
 // ─── Shares ───────────────────────────────────────────────────────────────────
