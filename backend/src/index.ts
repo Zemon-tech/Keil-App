@@ -15,8 +15,8 @@ const startServer = async () => {
         // Verify PostgreSQL connection before accepting traffic
         await pool.query('SELECT NOW()');
 
-        server.listen(5001, '0.0.0.0', () => {
-            console.log(`⚡️[server]: Server is running at http://localhost:5001`);
+        server.listen(port, '0.0.0.0', () => {
+            console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
         });
 
         // Initialize Socket.io (auth middleware + event handlers live in socket.ts)
