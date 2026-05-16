@@ -1,7 +1,6 @@
 import { Menu, MoreHorizontal, Clock, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
@@ -18,8 +17,6 @@ export function MotionHome() {
   const { data: pages = [], isLoading } = useMotionPages(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
 
-  // Keep Zustand store in sync so MotionSidebar subpage selectors work.
-  // Ref pattern avoids hydratePages being an unstable useEffect dependency.
   const hydratePagesRef = useRef(hydratePages);
   hydratePagesRef.current = hydratePages;
   useEffect(() => {
@@ -107,52 +104,72 @@ export function MotionHome() {
                     Loading pages…
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  <div className="flex flex-wrap gap-3">
                     {/* New page card */}
-                    <Card
+                    <div
                       onClick={handleCreatePage}
-                      className="bg-muted/50 border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted transition-all cursor-pointer group rounded-2xl p-0 py-0 gap-0"
+                      className="w-[120px] flex-shrink-0 rounded-xl border border-dashed border-border bg-muted/40 hover:bg-muted hover:border-primary/40 transition-all cursor-pointer group overflow-hidden"
                     >
-                      <CardContent className="p-3 flex flex-col gap-2 h-full justify-center items-center">
-                        <div className="text-xl h-9 w-9 flex items-center justify-center bg-primary/10 text-primary rounded-xl group-hover:scale-105 transition-transform">
-                          {createPage.isPending ? (
-                            <Loader2 className="size-5 animate-spin" />
-                          ) : (
-                            <Plus className="size-5" />
-                          )}
-                        </div>
-                        <h3 className="text-xs font-bold text-center text-foreground/70">
+                      {/* Cover area */}
+                      <div className="h-[80px] w-full bg-muted/60 flex items-center justify-center border-b border-dashed border-border group-hover:bg-muted transition-colors">
+                        {createPage.isPending ? (
+                          <Loader2 className="size-5 animate-spin text-muted-foreground/50" />
+                        ) : (
+                          <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <Plus className="size-4 text-primary" />
+                          </div>
+                        )}
+                      </div>
+                      {/* Info area */}
+                      <div className="px-2.5 py-2">
+                        <h3 className="text-xs font-semibold text-foreground/70 truncate">
                           New Page
                         </h3>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
 
                     {recentPages.map((item) => (
-                      <Card
+                      <div
                         key={item.id}
                         onClick={() => navigate(`/motion/${item.id}`)}
-                        className="bg-muted border-none hover:bg-muted/80 transition-colors cursor-pointer group rounded-2xl p-0 py-0 gap-0"
+                        className="w-[120px] flex-shrink-0 rounded-xl border border-border bg-muted/50 hover:bg-muted transition-all cursor-pointer group overflow-hidden"
                       >
-                        <CardContent className="p-3 flex flex-col gap-2">
-                          <div className="text-xl h-9 w-9 flex items-center justify-center bg-muted/40 rounded-xl group-hover:scale-105 transition-transform">
-                            {item.icon || "📄"}
+                        {/* Cover image area */}
+                        <div className="h-[52px] w-full overflow-hidden bg-muted relative">
+                          {item.cover_image ? (
+                            <img
+                              src={item.cover_image}
+                              alt=""
+                              className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-muted" />
+                          )}
+                        </div>
+
+                        {/* Info area with overlapping icon */}
+                        <div className="px-2.5 pt-1 pb-2">
+                          {/* Icon overlapping cover */}
+                          <div className="text-xl -mt-4 mb-1 w-7 h-7 flex items-center justify-center leading-none">
+                            <span className="group-hover:scale-110 transition-transform duration-200 drop-shadow-sm">
+                              {item.icon || "📄"}
+                            </span>
                           </div>
-                          <div className="space-y-0.5">
-                            <h3 className="text-xs font-bold truncate leading-none text-foreground/90">
-                              {item.title}
-                            </h3>
-                            <p className="text-[10px] text-muted-foreground/50 flex items-center gap-1.5 pt-1">
-                              <span className="size-3.5 bg-muted rounded-full flex items-center justify-center text-[7px] font-bold text-muted-foreground">
-                                {item.title.charAt(0).toUpperCase()}
-                              </span>
-                              {formatDistanceToNow(
-                                new Date(item.updated_at),
-                                { addSuffix: true }
-                              )}
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
+                          <h3 className="text-xs font-semibold truncate leading-tight text-foreground/90">
+                            {item.title}
+                          </h3>
+                          <p className="text-[10px] text-muted-foreground/50 flex items-center gap-1 mt-1">
+                            <span className="size-3 bg-muted-foreground/20 rounded-full flex items-center justify-center text-[6px] font-bold text-muted-foreground shrink-0">
+                              {item.title.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="truncate">
+                              {formatDistanceToNow(new Date(item.updated_at), {
+                                addSuffix: true,
+                              })}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}

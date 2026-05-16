@@ -279,9 +279,9 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const restorePage = useRestoreMotionPage(activeOrgId, activeSpaceId);
   const hardDelete = useHardDeleteMotionPage(activeOrgId, activeSpaceId);
   const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
-  
+
   const { user } = useAuth();
-  
+
   // ── Real-time ─────────────────────────────────────────────────────────────
   useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
 
@@ -355,8 +355,8 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 asChild
                 className={cn(
                   "h-8 px-2.5 rounded-lg transition-all flex items-center gap-2 border border-transparent hover:bg-accent/50",
-                  isActive 
-                    ? "bg-accent/80 text-foreground border-border/50 shadow-sm" 
+                  isActive
+                    ? "bg-accent/80 text-foreground border-border/50 shadow-sm"
                     : "text-muted-foreground"
                 )}
               >
@@ -379,7 +379,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           >
             {createPage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-[18px] w-[18px]" />}
           </Button>
-          
+
           {onClose && (
             <Button
               variant="ghost"
