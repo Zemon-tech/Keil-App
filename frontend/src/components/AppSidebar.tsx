@@ -47,7 +47,7 @@ import {
   Image,
   Building2,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";import { SettingsDialog } from "@/components/SettingsDialog";
 import { ChatDialog } from "@/components/ChatDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
@@ -203,6 +203,29 @@ export function AppSidebar() {
     setActiveOrganisation,
   } = useAppContext();
 
+  const navigate = useNavigate();
+
+  // ── Helper for manual workspace switching with navigation reset ──────────
+  // If the user is on a detail page (/tasks/:id or /events/:id), we reset
+  // them to /tasks after switching to avoid getting trapped by auto-switch logic.
+  // We only reset if the target workspace is actually different.
+  const handleManualSwitch = (
+    switchFn: () => void,
+    targetOrgId?: string | null,
+    targetSpaceId?: string | null
+  ) => {
+    const isDetailRoute = /^\/(tasks|events)\/[^\/]+/.test(location.pathname);
+    const isChanging = 
+      targetOrgId !== activeOrgId || 
+      (targetSpaceId !== undefined && targetSpaceId !== activeSpaceId);
+    
+    switchFn();
+
+    if (isDetailRoute && isChanging) {
+      navigate("/tasks");
+    }
+  };
+
   // Subtitle shown under the user name in the sidebar button
   const currentSpaceLabel =
     mode === "personal"
@@ -348,7 +371,7 @@ export function AppSidebar() {
                   </DropdownMenuLabel>
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={setPersonalMode}
+                    onSelect={() => handleManualSwitch(setPersonalMode, null, null)}
                   >
                     <User className="h-4 w-4 text-muted-foreground" />
                     Personal
@@ -406,7 +429,11 @@ export function AppSidebar() {
                         activeOrgId={activeOrgId}
                         activeSpaceId={activeSpaceId}
                         onSelectSpace={(orgId, spaceId) =>
-                          setActiveOrganisation(orgId, spaceId)
+                          handleManualSwitch(
+                            () => setActiveOrganisation(orgId, spaceId),
+                            orgId,
+                            spaceId
+                          )
                         }
                       />
                     ))

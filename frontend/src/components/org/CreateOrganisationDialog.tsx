@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useCreateOrganisation } from "@/hooks/api/useOrganisations";
 import { useAppContext } from "@/contexts/AppContext";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface CreateOrganisationDialogProps {
   open: boolean;
@@ -24,6 +25,8 @@ export function CreateOrganisationDialog({
   const [name, setName] = useState("");
   const createOrg = useCreateOrganisation();
   const { setActiveOrganisation } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const handleCreate = () => {
     const trimmed = name.trim();
@@ -33,6 +36,12 @@ export function CreateOrganisationDialog({
       onSuccess: ({ org, space }) => {
         // Switch the app to the new org + its default "General" space
         setActiveOrganisation(org.id, space.id);
+
+        // If on a detail page, reset to the new workspace's tasks list
+        if (/^\/(tasks|events)\/[^\/]+/.test(location.pathname)) {
+          navigate("/tasks");
+        }
+
         onOpenChange(false);
         setName("");
       },

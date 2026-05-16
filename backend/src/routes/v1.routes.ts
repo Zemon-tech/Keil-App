@@ -8,6 +8,7 @@ import orgActivityRoutes from "./org-activity.routes";
 import integrationRoutes from "./integration.routes";
 import motionPageRoutes from "./motion-page.routes";
 import motionPublicRoutes from "./motion-public.routes";
+import taskLocatorRoutes from "./task-locator.routes";
 
 const router = Router();
 
@@ -20,6 +21,9 @@ router.use("/orgs/:orgId/spaces/:spaceId/tasks", orgTaskRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId/notes", motionPageRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId/chat", orgChatRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId", orgActivityRoutes);
+
+// ── Cross-workspace task lookup (auth-only, no org/space scope) ───────────────
+router.use("/tasks", taskLocatorRoutes);
 
 // ── Integrations ──────────────────────────────────────────────────────────────
 router.use("/integrations", integrationRoutes);

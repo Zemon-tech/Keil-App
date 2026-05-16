@@ -17,6 +17,7 @@ import type { AnyStatus } from "../types/task";
 import {
   useOrgTasks,
   useOrgTask,
+  useLocateTask,
   useUpdateOrgTask,
   useDeleteOrgTask,
   useAssignOrgUser,
@@ -106,7 +107,7 @@ export function TasksPage() {
   }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
   // ── App mode ──────────────────────────────────────────
-  const { mode, activeOrgId, activeSpaceId } = useAppContext();
+  const { mode, activeOrgId, activeSpaceId, setActiveOrganisation } = useAppContext();
   const isPersonalMode = mode === "personal";
 
   // ── Org tasks (org/space-scoped route) ──
@@ -324,6 +325,37 @@ export function TasksPage() {
   const isSelectedTaskLoading = isPersonalMode ? false : isOrgTaskLoading;
   const isSelectedTaskError = isPersonalMode ? false : isOrgTaskError;
 
+  // ── Cross-workspace auto-switch ───────────────────────────────────────────────
+  // When the task is not found in the current workspace and the current workspace
+  // query has finished (not just loading), try to locate the task across all orgs
+  // the user belongs to. If found, silently switch to that workspace.
+  const needsLocate =
+    !isPersonalMode &&
+    !!selectedTaskId &&
+    !isOrgTaskLoading &&
+    (isOrgTaskError || !selectedTaskDetail) &&
+    !selected; // not in the current filtered list either
+
+  const {
+    data: locatedTask,
+    isLoading: isLocating,
+    isError: locateFailed,
+  } = useLocateTask(selectedTaskId, needsLocate);
+
+  // When the locator returns a result, switch to that org+space immediately.
+  useEffect(() => {
+    if (!locatedTask) return;
+    const { orgId, spaceId } = locatedTask;
+    // Don't switch if we're already in the correct org+space
+    if (orgId === activeOrgId && spaceId === activeSpaceId) return;
+    setActiveOrganisation(orgId, spaceId);
+  }, [locatedTask, activeOrgId, activeSpaceId, setActiveOrganisation]);
+
+  // Aggregate loading: also show spinner while the cross-workspace lookup is running
+  const isAnyTaskLoading = isSelectedTaskLoading || (needsLocate && isLocating);
+  // Only show "not found" after both the primary fetch AND the locate lookup have settled
+  const isDefinitelyNotFound = !isAnyTaskLoading && (isSelectedTaskError || !selectedTaskDetail) && !selected && (locateFailed || !needsLocate);
+
   // The parentTask for breadcrumb (top of the navigation stack)
   const parentTask = parentTaskStack.length > 0
     ? parentTaskStack[parentTaskStack.length - 1]
@@ -421,12 +453,12 @@ export function TasksPage() {
 
           <div className="flex-1 min-w-0 bg-background h-full">
             {selectedTaskId ? (
-              isSelectedTaskLoading && !selected ? (
+              isAnyTaskLoading && !selected ? (
                 <div className="flex flex-col items-center justify-center py-6 h-full text-muted-foreground gap-2">
                   <Loader2 className="h-5 w-5 animate-spin" />
                   <span className="text-sm">Loading task...</span>
                 </div>
-              ) : isSelectedTaskError || (!selected && !selectedTaskDetail) ? (
+              ) : isDefinitelyNotFound ? (
                 <div className="flex flex-col items-center justify-center h-full">
                   <p className="text-lg font-medium text-foreground mb-1">Task not found</p>
                   <p className="text-sm text-muted-foreground mb-4">The task you're looking for doesn't exist or you don't have access.</p>

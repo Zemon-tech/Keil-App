@@ -65,6 +65,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { useAppContext } from "@/contexts/AppContext";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   useOrgMembers,
   useCreateOrgInvite,
@@ -154,6 +155,8 @@ function OrgGeneralTab() {
   const renameOrg = useRenameOrganisation();
   const deleteOrg = useDeleteOrganisation();
   const { setPersonalMode } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const selectedOrg = organisations.find((org) => org.id === activeOrgId);
   const [name, setName] = useState(selectedOrg?.name || "");
@@ -181,6 +184,9 @@ function OrgGeneralTab() {
     deleteOrg.mutate(selectedOrg.id, {
       onSuccess: () => {
         setPersonalMode();
+        if (/^\/(tasks|events)\/[^\/]+/.test(location.pathname)) {
+          navigate("/tasks");
+        }
       },
     });
   };
@@ -1982,6 +1988,19 @@ export function SettingsDialog({
   initialTab = "account",
 }: SettingsDialogProps) {
   const { organisations, activeOrgId, setActiveOrganisation } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const handleManualSwitch = (orgId: string) => {
+    const isDetailRoute = /^\/(tasks|events)\/[^\/]+/.test(location.pathname);
+    const isChanging = orgId !== activeOrgId;
+    
+    setActiveOrganisation(orgId);
+
+    if (isDetailRoute && isChanging) {
+      navigate("/tasks");
+    }
+  };
   const [mode, setMode] = useState<"account" | "workspace">("account");
   const [activeAccountTab, setActiveAccountTab] = useState<AccountTab>(
     initialTab as AccountTab || "account"
@@ -2061,9 +2080,9 @@ export function SettingsDialog({
                   >
                     <div className="space-y-1">
                       {organisations.map((org) => (
-                        <button
-                          key={org.id}
-                          onClick={() => setActiveOrganisation(org.id)}
+                         <button
+                           key={org.id}
+                           onClick={() => handleManualSwitch(org.id)}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors",
                             activeOrgId === org.id

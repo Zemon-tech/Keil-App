@@ -218,7 +218,28 @@ export function useOrgTask(
   });
 }
 
+// ─── useLocateTask ────────────────────────────────────────────────────────────
+// Cross-workspace lookup: given a taskId, finds the orgId + spaceId it belongs
+// to — but only if the current user is an accepted member of that org.
+// Used by TasksPage to auto-switch workspace context when following a shared link.
+
+export function useLocateTask(taskId: string, enabled: boolean) {
+  return useQuery<{ orgId: string; spaceId: string }>({
+    queryKey: ["task-locate", taskId],
+    queryFn: async () => {
+      const res = await api.get<{ data: { orgId: string; spaceId: string } }>(
+        `v1/tasks/${taskId}/locate`
+      );
+      return res.data.data;
+    },
+    enabled: !!taskId && enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
 // ─── useOrgSubtasks ───────────────────────────────────────────────────────────
+
 
 export function useOrgSubtasks(
   orgId: string | null,
