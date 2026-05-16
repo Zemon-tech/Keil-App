@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Plus, MoreHorizontal, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useMotionStore } from "@/store/useMotionStore";
 
 interface KanbanColumn {
