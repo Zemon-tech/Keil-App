@@ -202,12 +202,11 @@ This is the section that makes 2-way sync hard. You must handle every one of the
 ### Edge Case 4: Event Created in Google has No Matching KeilHQ Task
 - **Scenario:** User creates a new event directly in Google Calendar (not from KeilHQ). Google fires a webhook. Your backend has no task with a matching `google_event_id`.
 - **Decision you must make:** Should you create a new KeilHQ task for this Google event? Or ignore it?
-- This is a **product decision**. Most apps ignore events created externally unless the user explicitly "imports" them. **I need your answer here before implementing.**
+- **Decision:** As per the finalized product decisions, we will **create a new Personal Task** in KeilHQ for events created externally in Google, provided they fall within the 30-day sync window.
 
 ### Edge Case 5: An Event is Deleted in Google
 - The webhook fires. You fetch the events. The event is marked with `status: 'cancelled'` in the Google API response (Google never hard-deletes events from the sync feed — it marks them cancelled).
-- **Solution:** When you see `status: 'cancelled'` for an event that matches a `google_event_id` in your DB, you must decide: soft-delete the task? Or just clear the `google_event_id`?
-- **I need your answer here too.**
+- **Decision:** We will **soft-delete the matching KeilHQ task** (set `deleted_at`) but keep the record in our DB.
 
 ### Edge Case 6: Conflict Resolution (Both Sides Changed)
 - **Scenario:** User updates the task in KeilHQ (offline or quickly), and also moves the event in Google at the same time.
@@ -353,8 +352,11 @@ async function doFullSync(userId: string, calendarId: string, authClient: OAuth2
       pageToken,
     });
     
-    // Process events — at this stage, just save the syncToken, don't import events
-    // (see Edge Case 4 — we only care about events WE created, i.e., have google_event_id)
+    // Process events — we now import events that aren't already in KeilHQ
+    for (const event of response.data.items ?? []) {
+      await processIncomingGoogleEvent(userId, event);
+    }
+    
     pageToken = response.data.nextPageToken ?? undefined;
     syncToken = response.data.nextSyncToken ?? undefined;
   } while (pageToken);
@@ -422,14 +424,32 @@ async function processIncomingGoogleEvent(userId: string, event: calendar_v3.Sch
   // (This requires a new helper that queries both `tasks` and `personal_tasks`)
 
   if (!matchingTask) {
-    // Edge Case 4: Event not created by us — IGNORE (product decision)
+    // Edge Case 4: Event not created by us — CREATE as Personal Task
+    // Only import if it's within our 30-day window and not in the past
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    
+    const isAllDay = !!event.start?.date;
+    const startDate = isAllDay ? new Date(event.start!.date!) : new Date(event.start!.dateTime!);
+    
+    if (startDate >= now && startDate <= thirtyDaysFromNow) {
+      await personalTaskRepository.create({
+        owner_user_id: userId,
+        title: event.summary || 'Untitled Google Event',
+        start_date: startDate,
+        due_date: isAllDay ? new Date(event.end!.date!) : new Date(event.end!.dateTime!),
+        google_event_id: googleEventId,
+        status: 'backlog', // Default status
+        priority: 'medium', // Default priority
+      });
+    }
     return;
   }
 
   // Edge Case 5: Event was deleted in Google
   if (event.status === 'cancelled') {
-    // Clear the google_event_id from our task but do NOT delete the task
-    await clearGoogleEventId(matchingTask.id, matchingTask.source);
+    // Soft-delete the matching KeilHQ task as per product decision
+    await softDeleteTask(matchingTask.id, matchingTask.source);
     return;
   }
 
@@ -466,6 +486,51 @@ async function processIncomingGoogleEvent(userId: string, event: calendar_v3.Sch
       due_date: dueDate,
     });
   }
+}
+
+---
+
+### Step 5.1 — New Helper Functions
+
+These helpers are required to manage the link between Google Events and KeilHQ tasks across both `tasks` (Org) and `personal_tasks` tables.
+
+```typescript
+async function findTaskByGoogleEventId(googleEventId: string): Promise<{ id: string, source: 'tasks' | 'personal_tasks', title: string, updated_at: Date } | null> {
+  // 1. Search in Personal Tasks
+  const personalResult = await pool.query(
+    'SELECT id, title, updated_at FROM public.personal_tasks WHERE google_event_id = $1',
+    [googleEventId]
+  );
+  if (personalResult.rows.length > 0) {
+    return { ...personalResult.rows[0], source: 'personal_tasks' };
+  }
+
+  // 2. Search in Org Tasks
+  const orgResult = await pool.query(
+    'SELECT id, title, updated_at FROM public.tasks WHERE google_event_id = $1',
+    [googleEventId]
+  );
+  if (orgResult.rows.length > 0) {
+    return { ...orgResult.rows[0], source: 'tasks' };
+  }
+
+  return null;
+}
+
+async function softDeleteTask(id: string, source: 'tasks' | 'personal_tasks'): Promise<void> {
+  const table = source === 'tasks' ? 'public.tasks' : 'public.personal_tasks';
+  await pool.query(
+    `UPDATE ${table} SET deleted_at = NOW(), google_event_id = NULL WHERE id = $1`,
+    [id]
+  );
+}
+
+async function clearGoogleEventId(id: string, source: 'tasks' | 'personal_tasks'): Promise<void> {
+  const table = source === 'tasks' ? 'public.tasks' : 'public.personal_tasks';
+  await pool.query(
+    `UPDATE ${table} SET google_event_id = NULL WHERE id = $1`,
+    [id]
+  );
 }
 ```
 
@@ -596,6 +661,21 @@ Run this cron every 12 hours.
 
 ---
 
+## Event Mapping: Tasks vs. Events
+
+Google Calendar only has **Events**. KeilHQ has both **Tasks** and **Events**.
+
+1.  **Inbound (Google → KeilHQ):**
+    *   All new events from Google are created as **Personal Tasks** in KeilHQ.
+    *   They use `status: 'backlog'` and `priority: 'medium'` by default.
+    *   If the Google event has a time (`dateTime`), it maps to KeilHQ's timed scheduling. If it only has a `date`, it maps to KeilHQ's **All-day** flag.
+
+2.  **Outbound (KeilHQ → Google):**
+    *   Both `tasks` and `personal_tasks` are pushed to Google as events.
+    *   For `tasks`, if `type === 'event'`, we can optionally include the `location` and `event_type` in the Google description or extended properties.
+
+---
+
 ## National Holidays Implementation
 
 ### How It Works
@@ -670,3 +750,32 @@ Cron: Every 12 hours
 Cron: Every January 1st
    → Re-fetch holiday events for all connected users
 ```
+
+---
+
+# Part 7: Final Implementation Roadmap (Checklist)
+
+Follow these steps in order to build the feature safely:
+
+### Phase 1: Database & Repository Setup
+- [ ] **1.1 Migration:** Run `009_gcal_two_way_sync.sql` to add channel tracking and sync tokens.
+- [ ] **1.2 Repository Methods:** Add `saveWatchChannel`, `findByChannelId`, and `saveSyncToken` to `IntegrationRepository`.
+- [ ] **1.3 Cross-Table Helpers:** Implement `findTaskByGoogleEventId`, `softDeleteTask`, and `clearGoogleEventId` (Step 5.1).
+
+### Phase 2: Outbound Logic (Loop Prevention)
+- [ ] **2.1 Tagging:** Update `syncTaskToCalendar` to include `extendedProperties.private.source: 'keilhq'` in the Google event body.
+
+### Phase 3: Webhook & Inbound Logic
+- [ ] **3.1 Public Route:** Add the `/api/v1/integrations/google/webhook` route (POST). Ensure it is public.
+- [ ] **3.2 Webhook Handler:** Implement `handleGoogleWebhook` with 200 OK response and `sync` verification check.
+- [ ] **3.3 Sync Logic:** Implement `doIncrementalSync` and `doFullSync`.
+- [ ] **3.4 Processor:** Implement `processIncomingGoogleEvent` (with task creation and soft-delete logic).
+
+### Phase 4: Lifecycle & Operations
+- [ ] **4.1 Registration:** Call `registerWatch()` inside the OAuth callback controller.
+- [ ] **4.2 Cleanup:** Call `stopWatch()` during the "Disconnect Google" flow.
+- [ ] **4.3 Cron Job:** Add the watch renewal cron job (runs every 12 hours).
+
+### Phase 5: Holidays & Polish
+- [ ] **5.1 Holiday Sync:** Implement the holiday calendar discovery and event fetching flow.
+- [ ] **5.2 Testing:** Use `ngrok` to verify the webhook receives events from a real Google Calendar.
