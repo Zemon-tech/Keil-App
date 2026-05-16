@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { FileText, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useMotionStore } from '@/store/useMotionStore'
 
 export const SubpageExtension = Node.create({
   name: 'subpage',
@@ -37,7 +38,14 @@ export const SubpageExtension = Node.create({
   addNodeView() {
     return ReactNodeViewRenderer(({ node }) => {
       const navigate = useNavigate()
-      const { id, title, icon } = node.attrs
+      const { id, title: attrTitle, icon: attrIcon } = node.attrs
+
+      // Get reactive page data from store if it exists
+      const pages = useMotionStore(state => state.pages)
+      const page = pages.find(p => p.id === id)
+      
+      const title = page?.title || attrTitle
+      const icon = page?.icon || attrIcon
 
       return (
         <NodeViewWrapper className="subpage-block my-0.5">

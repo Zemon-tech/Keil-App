@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { Plus, MoreHorizontal, GripVertical } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, MoreHorizontal, MessageSquare, Paperclip, Calendar, Flag, User, LayoutGrid, List, Search, Filter, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useMotionStore } from "@/store/useMotionStore";
 
 interface KanbanColumn {

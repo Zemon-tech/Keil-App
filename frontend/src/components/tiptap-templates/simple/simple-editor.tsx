@@ -45,7 +45,7 @@ const CustomBlockquote = Blockquote.extend({
     }
   }
 })
-import { Underline } from "@tiptap/extension-underline"
+
 import { TextStyle } from "@tiptap/extension-text-style"
 import { Color } from "@tiptap/extension-color"
 import { FontFamily } from "@tiptap/extension-font-family"
@@ -588,23 +588,13 @@ export function SimpleEditor({
     [editor]
   )
 
-  const positionDragHandleForBlock = useCallback((block: HTMLElement) => {
+  const positionDragHandleForBlock = useCallback(() => {
     const handle = getDragHandle()
     if (!handle) return
 
-    const rect = block.getBoundingClientRect()
-    const style = window.getComputedStyle(block)
-    const parsedLineHeight = Number.parseFloat(style.lineHeight)
-    const parsedFontSize = Number.parseFloat(style.fontSize)
-    const lineHeight = Number.isFinite(parsedLineHeight)
-      ? parsedLineHeight
-      : parsedFontSize * 1.2
-    const paddingTop = Number.parseFloat(style.paddingTop) || 0
-    const top = rect.top + paddingTop + (lineHeight - 20) / 2
-    const left = rect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP
-
-    handle.style.left = `${Math.round(left)}px`
-    handle.style.top = `${Math.round(top)}px`
+    // Let the global drag handle extension handle the exact coordinate positioning
+    // to correctly support nested blocks, tables, and custom nodes.
+    // We only call showDragHandle here to ensure it stays visible if we're hovering the gutter.
     showDragHandle(handle)
   }, [getDragHandle, showDragHandle])
 
@@ -808,7 +798,7 @@ export function SimpleEditor({
       }
 
       currentBlockTargetRef.current = getBlockTargetFromElement(block)
-      positionDragHandleForBlock(block)
+      positionDragHandleForBlock()
     }
 
     const onPointerLeave = (event: PointerEvent) => {
@@ -1406,7 +1396,7 @@ export function SimpleEditor({
               const { selection } = state
               const { empty } = selection
               
-              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
+              if (empty || 'node' in selection || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
                 return false
               }
               return true
