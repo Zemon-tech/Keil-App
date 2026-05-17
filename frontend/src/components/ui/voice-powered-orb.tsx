@@ -120,9 +120,12 @@ export const VoicePoweredOrb: FC<VoicePoweredOrbProps> = ({
       return vec4(colorIn.rgb / (a + 1e-5), a);
     }
 
-    const vec3 baseColor1 = vec3(0.611765, 0.262745, 0.996078);
-    const vec3 baseColor2 = vec3(0.298039, 0.760784, 0.913725);
-    const vec3 baseColor3 = vec3(0.062745, 0.078431, 0.600000);
+    // Convert hex values to normalized RGB vectors
+    const vec3 geminiBlue = vec3(0.2588, 0.5216, 0.9569);     // Base Shape & Calm State (#4285F4)
+    const vec3 electricViolet = vec3(0.6078, 0.3647, 0.8980); // Core Body & Processing State (#9B5DE5)
+    const vec3 brightMagenta = vec3(0.9451, 0.3569, 0.7098);  // Peaks / Speaking (#F15BB5)
+    const vec3 auroraCyan = vec3(0.0, 0.9608, 0.8314);        // Highlights & Mic Detection (#00F5D4)
+
     const float innerRadius = 0.6;
     const float noiseScale = 0.65;
 
@@ -135,9 +138,17 @@ export const VoicePoweredOrb: FC<VoicePoweredOrbProps> = ({
     }
 
     vec4 draw(vec2 uv) {
-      vec3 color1 = adjustHue(baseColor1, hue);
-      vec3 color2 = adjustHue(baseColor2, hue);
-      vec3 color3 = adjustHue(baseColor3, hue);
+      // Dynamic color morphs based on microphone activity (hover)
+      vec3 color1 = mix(geminiBlue, electricViolet, 0.5 + hover * 0.5);
+      color1 = mix(color1, brightMagenta, hover * 0.7);
+
+      vec3 color2 = mix(electricViolet, auroraCyan, 0.4 + hover * 0.6);
+      vec3 color3 = mix(geminiBlue * 0.15, electricViolet * 0.15, hover);
+
+      // Support hue adjustment via prop if requested
+      color1 = adjustHue(color1, hue);
+      color2 = adjustHue(color2, hue);
+      color3 = adjustHue(color3, hue);
 
       float ang = atan(uv.y, uv.x);
       float len = length(uv);
@@ -161,7 +172,12 @@ export const VoicePoweredOrb: FC<VoicePoweredOrbProps> = ({
 
       vec3 col = mix(color1, color2, cl);
       col = mix(color3, col, v0);
-      col = (col + v1) * v2 * v3;
+      
+      // Inject rotating spot highlight and reactive highlights
+      vec3 highlightColor = mix(geminiBlue, auroraCyan, hover);
+      col = col + (v1 * highlightColor);
+      
+      col = col * v2 * v3;
       col = clamp(col, 0.0, 1.0);
 
       return extractAlpha(col);
