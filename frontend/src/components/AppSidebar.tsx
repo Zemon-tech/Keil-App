@@ -46,6 +46,7 @@ import {
   Loader2,
   Image,
   Building2,
+  Mic,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTheme } from "next-themes";import { SettingsDialog } from "@/components/SettingsDialog";
@@ -55,12 +56,14 @@ import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { CreateOrganisationDialog } from "@/components/org/CreateOrganisationDialog";
 import { JoinOrganisationDialog } from "@/components/org/JoinOrganisationDialog";
 import type { Organisation } from "@/hooks/api/useOrganisations";
+import { MeetingDialog } from "@/components/MeetingDialog";
 
 // ─── Navigation items ─────────────────────────────────────────────────────────
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
+  { title: "Meetings", action: "meetings", icon: Mic },
   { title: "Motion", url: "/motion", icon: Image },
 ];
 
@@ -146,6 +149,7 @@ export function AppSidebar() {
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -250,16 +254,32 @@ export function AppSidebar() {
               <SidebarMenu>
                 {navigationItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location.pathname === item.url}
-                      tooltip={item.title}
-                    >
-                      <Link to={item.url}>
+                    {"url" in item && item.url ? (
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location.pathname === item.url}
+                        tooltip={item.title}
+                      >
+                        <Link to={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton
+                        onClick={() => {
+                          console.log("Meetings button clicked, action:", "action" in item ? item.action : "none");
+                          if ("action" in item && item.action === "meetings") {
+                            setMeetingDialogOpen(true);
+                          }
+                        }}
+                        isActive={meetingDialogOpen}
+                        tooltip={item.title}
+                      >
                         <item.icon />
                         <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
+                      </SidebarMenuButton>
+                    )}
                   </SidebarMenuItem>
                 ))}
 
@@ -479,6 +499,10 @@ export function AppSidebar() {
       <NotificationDialog
         open={notificationDialogOpen}
         onOpenChange={setNotificationDialogOpen}
+      />
+      <MeetingDialog
+        open={meetingDialogOpen}
+        onOpenChange={setMeetingDialogOpen}
       />
     </>
   );

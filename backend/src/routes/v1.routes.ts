@@ -8,6 +8,7 @@ import orgActivityRoutes from "./org-activity.routes";
 import integrationRoutes from "./integration.routes";
 import motionPageRoutes from "./motion-page.routes";
 import motionPublicRoutes from "./motion-public.routes";
+import meetingRoutes from "./meeting.routes";
 
 const router = Router();
 
@@ -23,6 +24,9 @@ router.use("/orgs/:orgId/spaces/:spaceId", orgActivityRoutes);
 
 // ── Integrations ──────────────────────────────────────────────────────────────
 router.use("/integrations", integrationRoutes);
+
+// ── Meetings / Recordings ─────────────────────────────────────────────────────
+router.use("/meetings", meetingRoutes);
 
 // ── Motion public links (no auth) ─────────────────────────────────────────────
 // Must be registered before the catch-all activityRoutes below.
