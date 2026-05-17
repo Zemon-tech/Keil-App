@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { Menu, MoreHorizontal, Trash2, ChevronRight, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile } from "lucide-react";
+import { Menu, MoreHorizontal, Trash2, ChevronRight, Search, Sparkles, FileText, Image as ImageLucide, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import throttle from "lodash.throttle";
+import { LUCIDE_ICON_MAP, ICON_CATEGORIES, ALL_ICON_NAMES, resolveLucideIcon } from "./iconMap";
+import { CoverPicker } from "./CoverPicker";
 
 export function MotionPage() {
   const navigate = useNavigate();
   const { pageId } = useParams();
   const [pageEditor, setPageEditor] = useState<any>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCoverPicker, setShowCoverPicker] = useState(false);
   const [activeEmojiTab, setActiveEmojiTab] = useState<'Emoji' | 'Icons' | 'Upload'>('Emoji');
   const [emojiSearch, setEmojiSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const { 
     pages, 
@@ -112,9 +114,7 @@ export function MotionPage() {
                   <span className="shrink-0 flex items-center justify-center size-4">
                     {parentPage.icon?.startsWith("lucide:") ? (
                       (() => {
-                        const iconName = parentPage.icon.split(":")[1];
-                        const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
-                        const Icon = icons[iconName] || FileText;
+                        const Icon = resolveLucideIcon(parentPage.icon.split(":")[1]);
                         return <Icon className="size-3.5" />;
                       })()
                     ) : (
@@ -128,9 +128,7 @@ export function MotionPage() {
                   <span className="shrink-0 flex items-center justify-center size-4">
                     {page.icon?.startsWith("lucide:") ? (
                       (() => {
-                        const iconName = page.icon.split(":")[1];
-                        const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
-                        const Icon = icons[iconName] || FileText;
+                        const Icon = resolveLucideIcon(page.icon.split(":")[1]);
                         return <Icon className="size-3.5" />;
                       })()
                     ) : (
@@ -169,55 +167,37 @@ export function MotionPage() {
         <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20 group/page">
           <div className="w-full pt-0 relative">
             {page.coverImage ? (
-              <div className="h-[280px] w-full overflow-hidden relative group/cover">
-                <img
-                  src={page.coverImage}
-                  alt="cover"
-                  className="h-full w-full object-cover"
-                />
-                <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
-                  <input 
-                    type="file" 
-                    ref={coverInputRef} 
-                    className="hidden" 
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          updatePage(pageId, { coverImage: reader.result as string });
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
+              <div className="relative group/cover">
+                <div className="h-[280px] w-full overflow-hidden">
+                  <img
+                    src={page.coverImage}
+                    alt="cover"
+                    className="h-full w-full object-cover transition-opacity duration-500"
+                    onLoad={(e) => (e.currentTarget.style.opacity = "1")}
+                    style={{ opacity: 0 }}
                   />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
-                    onClick={() => coverInputRef.current?.click()}
-                  >
-                    Upload cover
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
-                    onClick={() => {
-                      const covers = [
-                        "https://images.unsplash.com/photo-1518837695005-2083093ee35b",
-                        "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b",
-                        "https://images.unsplash.com/photo-1501785888041-af3ef285b470",
-                        "https://images.unsplash.com/photo-1470770841072-f978cf4d019e",
-                        "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
-                      ];
-                      const random = covers[Math.floor(Math.random() * covers.length)] + "?q=80&w=1600&auto=format&fit=crop";
-                      updatePage(pageId, { coverImage: random });
-                    }}
-                  >
-                    Random cover
-                  </Button>
+                </div>
+                <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2 z-50">
+                  <div className="relative">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium border border-border/20 shadow-sm"
+                      onClick={() => setShowCoverPicker(!showCoverPicker)}
+                    >
+                      Change cover
+                    </Button>
+                    {showCoverPicker && (
+                      <CoverPicker 
+                        onSelect={(url) => updatePage(pageId, { coverImage: url })}
+                        onRemove={() => {
+                          updatePage(pageId, { coverImage: undefined });
+                          setShowCoverPicker(false);
+                        }}
+                        onClose={() => setShowCoverPicker(false)}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -236,9 +216,7 @@ export function MotionPage() {
                       <img src={page.icon} alt="icon" className="size-full object-cover rounded-xl" />
                     ) : page.icon?.startsWith("lucide:") ? (
                       (() => {
-                        const iconName = page.icon.split(":")[1];
-                        const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
-                        const Icon = icons[iconName] || FileText;
+                        const Icon = resolveLucideIcon(page.icon.split(":")[1]);
                         return <Icon className="size-[64px] text-foreground/80" />;
                       })()
                     ) : page.icon ? (
@@ -268,12 +246,11 @@ export function MotionPage() {
                             className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                             onClick={() => {
                               if (activeEmojiTab === 'Emoji') {
-                                const icons = ["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚"];
-                                const random = icons[Math.floor(Math.random() * icons.length)];
+                                const emojis = ["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "🐱", "🐶", "🍕", "🍔", "🍦", "🎸", "🎮", "🌍", "🌈", "🔥", "💎"];
+                                const random = emojis[Math.floor(Math.random() * emojis.length)];
                                 updatePage(pageId, { icon: random });
                               } else if (activeEmojiTab === 'Icons') {
-                                const iconNames = ['Plane', 'Heart', 'Star', 'Cloud', 'Moon', 'Sun', 'Bell', 'Camera', 'Gift', 'Coffee', 'Music', 'Code', 'Terminal', 'Database', 'Shield', 'Layout', 'Settings', 'User', 'Users', 'Mail', 'Map', 'Flag', 'Bookmark', 'Calendar', 'CheckCircle', 'HelpCircle', 'Info', 'AlertTriangle', 'AlertCircle', 'XCircle', 'Clock', 'Zap'];
-                                const random = iconNames[Math.floor(Math.random() * iconNames.length)];
+                                const random = ALL_ICON_NAMES[Math.floor(Math.random() * ALL_ICON_NAMES.length)];
                                 updatePage(pageId, { icon: `lucide:${random}` });
                               }
                             }}
@@ -307,7 +284,7 @@ export function MotionPage() {
                               />
                             </div>
                             <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
-                              {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢"].filter(e => e.includes(emojiSearch) || emojiSearch === "").map(emoji => (
+                              {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢", "🚂", "🚃", "🚄", "🚅", "🚆", "🚇", "🚈", "🚉", "🚊", "🚝", "🚞", "🚋", "🚌", "🚍", "🚎", "🚐", "🚑", "🚒", "🚓", "🚔", "🚕", "🚖", "🚗", "🚘", "🚙", "🚚", "🚛", "🚜", "🚲", "🚏", "🛤️", "⛽", "🚨", "🚥", "🚦", "🚧", "⚓", "⛵", "🚣", "🚤", "🛳️", "⛴️", "🚢", "✈️", "🛫", "🛬", "💺", "🚁", "🚟", "🚠", "🚡", "🚀", "🛸", "🛰️", "⌛", "⏳", "⌚", "⏰", "⏱️", "⏲️", "🕰️", "🌡️", "☀️", "🌝", "🌞", "⭐", "🌟", "🌠", "☁️", "⛅", "⛈️", "🌤️", "🌥️", "🌦️", "🌧️", "🌨️", "🌩️", "🌪️", "🌫️", "🌬️", "🌀", "🌈", "🌂", "☂️", "☔", "⛱️", "⚡", "❄️", "☃️", "⛄", "☄️", "🔥", "💧", "🌊", "🎃", "🎄", "🎆", "🎇", "🧨", "✨", "🎈", "🎉", "🎊", "🎋", "🎍", "🎎", "🎏", "🎐", "🎑", "🧧", "🎀", "🎁", "🎗️", "🎟️", "🎫", "🎖️", "🏆", "🏅", "🥇", "🥈", "🥉", "⚽", "⚾", "🥎", "🏀", "🏐", "🏈", "🏉", "🎾", "🥏", "🎳", "🏏", "🏑", "🏒", "🥍", "🏓", "🏸", "🥊", "🥋", "🥅", "⛳", "⛸️", "🎣", "🤿", "🎽", "🎿", "🛷", "🥌", "🎯", "🪀", "🪁", "🎱", "🔮", "🧿", "🎮", "🕹️", "🎰", "🎲", "🧩", "🧸", "♠️", "♥️", "♦️", "♣️", "♟️", "🃏", "🀄", "🎴", "🎭", "🖼️", "🎨", "🧵", "🧶"].filter(e => e.includes(emojiSearch) || emojiSearch === "").map(emoji => (
                                 <button
                                   key={emoji}
                                   className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
@@ -328,26 +305,39 @@ export function MotionPage() {
                             <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
                               <Search className="size-3.5 text-muted-foreground" />
                               <input 
-                                placeholder="Filter..." 
+                                placeholder="Filter icons..." 
                                 className="bg-transparent border-none outline-none text-[13px] w-full"
                                 value={emojiSearch}
                                 onChange={(e) => setEmojiSearch(e.target.value)}
                               />
                             </div>
-                            <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
-                              {[
-                                { name: 'Plane', icon: Plane }, { name: 'Heart', icon: Heart }, { name: 'Star', icon: Star }, { name: 'Cloud', icon: Cloud }, { name: 'Moon', icon: Moon }, { name: 'Sun', icon: Sun }, { name: 'Bell', icon: Bell }, { name: 'Camera', icon: Camera }, { name: 'Gift', icon: Gift }, { name: 'Coffee', icon: Coffee }, { name: 'Music', icon: Music }, { name: 'Code', icon: Code }, { name: 'Terminal', icon: Terminal }, { name: 'Database', icon: Database }, { name: 'Shield', icon: Shield }, { name: 'Layout', icon: Layout }, { name: 'Settings', icon: Settings }, { name: 'User', icon: User }, { name: 'Users', icon: Users }, { name: 'Mail', icon: Mail }, { name: 'Map', icon: Map }, { name: 'Flag', icon: Flag }, { name: 'Bookmark', icon: Bookmark }, { name: 'Calendar', icon: Calendar }, { name: 'CheckCircle', icon: CheckCircle }, { name: 'HelpCircle', icon: HelpCircle }, { name: 'Info', icon: Info }, { name: 'AlertTriangle', icon: AlertTriangle }, { name: 'AlertCircle', icon: AlertCircle }, { name: 'XCircle', icon: XCircle }, { name: 'Clock', icon: Clock }, { name: 'Zap', icon: Zap }
-                              ].map((item, idx) => (
-                                <button
-                                  key={idx}
-                                  className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
-                                  onClick={() => {
-                                    updatePage(pageId, { icon: `lucide:${item.name}` });
-                                    setShowEmojiPicker(false);
-                                  }}
-                                >
-                                  <item.icon className="size-4 text-foreground/70" />
-                                </button>
+                            <div className="overflow-y-auto custom-scrollbar pr-1 flex-1">
+                              {ICON_CATEGORIES.map((category) => (
+                                <div key={category.name} className="mb-4 last:mb-0">
+                                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 mb-1.5 px-1">
+                                    {category.name}
+                                  </h3>
+                                  <div className="grid grid-cols-8 gap-1">
+                                    {category.icons
+                                      .filter(name => name.toLowerCase().includes(emojiSearch.toLowerCase()))
+                                      .map((name) => {
+                                        const Icon = resolveLucideIcon(name);
+                                        return (
+                                          <button
+                                            key={name}
+                                            className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors"
+                                            title={name}
+                                            onClick={() => {
+                                              updatePage(pageId, { icon: `lucide:${name}` });
+                                              setShowEmojiPicker(false);
+                                            }}
+                                          >
+                                            <Icon className="size-4 text-foreground/70" />
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -438,6 +428,7 @@ export function MotionPage() {
                     className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
                     onClick={() => {
                       updatePage(pageId, { coverImage: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop" });
+                      setTimeout(() => setShowCoverPicker(true), 0);
                     }}
                   >
                     Add cover

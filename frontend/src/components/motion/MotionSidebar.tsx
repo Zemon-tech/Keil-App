@@ -20,8 +20,8 @@ import {
   Pencil,
   Sparkles,
   SquarePen,
-  Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap
 } from "lucide-react";
+import { resolveLucideIcon } from "./iconMap";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
@@ -151,9 +151,7 @@ function SidebarPageItem({
                 <span className="shrink-0 flex items-center justify-center size-4">
                   {item.icon?.startsWith("lucide:") ? (
                     (() => {
-                      const iconName = item.icon.split(":")[1];
-                      const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap };
-                      const Icon = icons[iconName] || FileText;
+                      const Icon = resolveLucideIcon(item.icon.split(":")[1]);
                       return <Icon className="size-3.5" />;
                     })()
                   ) : (
