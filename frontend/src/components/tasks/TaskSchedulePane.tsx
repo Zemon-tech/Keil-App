@@ -831,6 +831,67 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
     }
   }, [currentViewType, currentViewDate]);
 
+  // Handle month/week/day change using mouse scroll wheel or 2-finger touchpad swipe left/right
+  useEffect(() => {
+    const container = calendarContainerRef.current;
+    if (!container) return;
+
+    const lastScrollTime = { current: 0 };
+    const cooldown = 600; // ms cooldown between navigation switches
+    const threshold = 15; // minimum delta to trigger navigation
+
+    const handleWheel = (e: WheelEvent) => {
+      const calendarApi = calendarRef.current?.getApi();
+      if (!calendarApi) return;
+
+      const viewType = calendarApi.view.type;
+      const now = Date.now();
+      const absX = Math.abs(e.deltaX);
+      const absY = Math.abs(e.deltaY);
+
+      if (absX > absY) {
+        // Horizontal scroll / 2-finger touchpad swipe left/right
+        // Intercept and use for navigation in all views
+        if (absX > threshold) {
+          if (now - lastScrollTime.current < cooldown) {
+            e.preventDefault();
+            return;
+          }
+          e.preventDefault();
+          if (e.deltaX > 0) {
+            calendarApi.next();
+          } else {
+            calendarApi.prev();
+          }
+          lastScrollTime.current = now;
+        }
+      } else {
+        // Vertical scroll / mouse scroll wheel
+        // Hijack vertical scroll for navigation ONLY in month view (dayGridMonth)
+        // because vertical scroll in Day/Week views is needed to scroll hours.
+        if (viewType === "dayGridMonth") {
+          if (absY > threshold) {
+            if (now - lastScrollTime.current < cooldown) {
+              e.preventDefault();
+              return;
+            }
+            e.preventDefault();
+            if (e.deltaY > 0) {
+              calendarApi.next();
+            } else {
+              calendarApi.prev();
+            }
+            lastScrollTime.current = now;
+          }
+        }
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
 
   const initialDate = useMemo(() => {
     if (selectedTask?.plannedStartISO) return parseISO(selectedTask.plannedStartISO);
