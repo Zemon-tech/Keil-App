@@ -63,8 +63,15 @@ function StatusBadge({
   status: AnyStatus;
   onStatusChange: (s: TaskStatus) => void;
 }) {
+  const [open, setOpen] = useState(false);
+
+  const handleStatusChange = (newStatus: TaskStatus) => {
+    onStatusChange(newStatus);
+    setOpen(false);
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Badge
           variant="outline"
@@ -78,7 +85,7 @@ function StatusBadge({
         {STATUS_OPTIONS.map((s) => (
           <button
             key={s}
-            onClick={() => onStatusChange(s)}
+            onClick={() => handleStatusChange(s)}
             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
                        hover:bg-accent transition-colors text-left"
           >
@@ -102,6 +109,7 @@ function PriorityBadge({
   onPriorityChange?: (p: TaskPriority) => void;
 }) {
   const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.low;
+  const [open, setOpen] = useState(false);
 
   if (!onPriorityChange) {
     return (
@@ -112,8 +120,13 @@ function PriorityBadge({
     );
   }
 
+  const handlePriorityChange = (newPriority: TaskPriority) => {
+    onPriorityChange(newPriority);
+    setOpen(false);
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Badge
           variant="outline"
@@ -129,7 +142,7 @@ function PriorityBadge({
           return (
             <button
               key={p}
-              onClick={() => onPriorityChange(p)}
+              onClick={() => handlePriorityChange(p)}
               className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
                          hover:bg-accent transition-colors text-left"
             >

@@ -59,8 +59,15 @@ function StatusBadge({
   status: AnyStatus;
   onStatusChange: (s: EventStatus) => void;
 }) {
+  const [open, setOpen] = useState(false);
+
+  const handleStatusChange = (newStatus: EventStatus) => {
+    onStatusChange(newStatus);
+    setOpen(false);
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Badge
           variant="outline"
@@ -74,7 +81,7 @@ function StatusBadge({
         {EVENT_STATUS_OPTIONS.map((s) => (
           <button
             key={s}
-            onClick={() => onStatusChange(s)}
+            onClick={() => handleStatusChange(s)}
             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
                        hover:bg-accent transition-colors text-left"
           >
