@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format, addDays, nextMonday, startOfToday, parseISO } from "date-fns";
 import {
   CalendarIcon,
@@ -48,6 +48,7 @@ import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
 import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
 import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
 import { useAppContext } from "@/contexts/AppContext";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -99,6 +100,19 @@ export function CreateTaskDialog({
   const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
   const createPersonalTask = useCreatePersonalTask();
   const updatePersonalTask = useUpdatePersonalTask();
+
+  const { data: spaceMembers = [] } = useSpaceMembers(
+    isPersonalMode ? null : activeOrgId,
+    isPersonalMode ? null : activeSpaceId
+  );
+
+  const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
+    if (allUsers && allUsers.length > 0) return allUsers;
+    return spaceMembers.map(m => ({
+      id: m.user_id,
+      name: m.name || m.email,
+    }));
+  }, [allUsers, spaceMembers]);
 
   // ── Form State ─────────────────────────────────────────────────────────────
   const [title, setTitle] = useState("");
@@ -164,14 +178,14 @@ export function CreateTaskDialog({
     }
 
     // Detect Assignees (simple @ match)
-    allUsers.forEach(user => {
+    resolvedUsers.forEach(user => {
       if (lowerTitle.includes(`@${user.name.toLowerCase().replace(/\s/g, "")}`)) {
         if (!assigneeIds.includes(user.id)) {
           setAssigneeIds(prev => [...prev, user.id]);
         }
       }
     });
-  }, [title, allUsers, mode, open]);
+  }, [title, resolvedUsers, mode, open]);
 
   // ── Pre-fill Mode ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -604,7 +618,7 @@ export function CreateTaskDialog({
                   {assigneeIds.length > 0 ? (
                     <div className="flex -space-x-1 ml-1">
                       {assigneeIds.map(id => {
-                        const user = allUsers.find(u => u.id === id);
+                        const user = resolvedUsers.find(u => u.id === id);
                         return (
                           <Avatar key={id} className="size-5 border border-background">
                             <AvatarImage src={user?.avatarUrl} />
@@ -627,7 +641,7 @@ export function CreateTaskDialog({
                   <CommandList>
                     <CommandEmpty>No members found.</CommandEmpty>
                     <CommandGroup>
-                      {allUsers.map((user) => (
+                      {resolvedUsers.map((user) => (
                         <CommandItem
                           key={user.id}
                           onSelect={() => {

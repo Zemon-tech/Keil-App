@@ -1,3 +1,4 @@
+
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -71,8 +72,8 @@ export function TasksPage() {
       setParentTaskStack([]);
       setSearchParams({}, { replace: true });
     }
-  // searchParams identity changes on every navigation — this is intentional
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // searchParams identity changes on every navigation — this is intentional
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // Handle Google Calendar OAuth redirect back (?gcal=connected or ?gcal=error)
@@ -89,8 +90,8 @@ export function TasksPage() {
       toast.error("Failed to connect Google Calendar. Please try again.");
       setSearchParams({}, { replace: true });
     }
-  // Run once on mount only — intentionally omitting deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Run once on mount only — intentionally omitting deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Pagination: just increase the limit to fetch more ──
@@ -135,10 +136,10 @@ export function TasksPage() {
   const { data: personalTasksRaw, isLoading: personalLoading } = usePersonalTasks(
     isPersonalMode
       ? {
-          status: (serverFilters.status as any) ?? undefined,
-          priority: (serverFilters.priority as any) ?? undefined,
-          limit: serverFilters.limit,
-        }
+        status: (serverFilters.status as any) ?? undefined,
+        priority: (serverFilters.priority as any) ?? undefined,
+        limit: serverFilters.limit,
+      }
       : {}
   );
 
@@ -243,9 +244,9 @@ export function TasksPage() {
         const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
         if (!isBlocked) return false;
       }
-      
+
       if (statusFilter === "Highest Priority" && t.priority !== "high" && t.priority !== "urgent") return false;
-      
+
       // Type filters (client-side only)
       if (statusFilter === "Task" && t.type !== "task") return false;
       if (statusFilter === "Event" && t.type !== "event") return false;
@@ -256,17 +257,17 @@ export function TasksPage() {
       } else {
         let tStart = t.start_date ? new Date(t.start_date) : null;
         let tEnd = t.due_date ? new Date(t.due_date) : null;
-        
+
         if (!tStart && tEnd) tStart = tEnd;
         if (!tEnd && tStart) tEnd = tStart;
-        
+
         if (tStart && tEnd) {
-           const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-           const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-           
-           if (tStart > monthEnd || tEnd < monthStart) {
-              return false;
-           }
+          const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+          const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+
+          if (tStart > monthEnd || tEnd < monthStart) {
+            return false;
+          }
         }
       }
 
@@ -288,7 +289,7 @@ export function TasksPage() {
       if (sortBy === "due_date") {
         const dateA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
         const dateB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
-        
+
         if (dateA !== dateB) {
           return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
         }
