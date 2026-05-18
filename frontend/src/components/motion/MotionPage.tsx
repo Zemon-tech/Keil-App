@@ -236,7 +236,7 @@ export function MotionPage() {
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         {/* Header */}
-        <header className="flex items-center justify-between px-2 py-1 z-40 shrink-0">
+        <header className="h-12 flex items-center justify-between px-2 z-40 shrink-0">
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"

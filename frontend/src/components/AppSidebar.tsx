@@ -217,7 +217,7 @@ export function AppSidebar() {
     <>
       <Sidebar collapsible="icon" className="border-r-0 bg-card">
         {/* ── Header ── */}
-        <SidebarHeader className="px-3 py-2 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-2 border-b border-border/50">
+        <SidebarHeader className="h-12 justify-center px-3 group-data-[state=collapsed]:px-2 border-b border-border/50">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (

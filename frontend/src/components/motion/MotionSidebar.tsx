@@ -343,7 +343,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
     <Sidebar collapsible="none" className="w-full h-full border-r border-border/50 bg-card flex flex-col select-none">
       {/* ── Header: workspace switcher ── */}
       {/* ── Header: Notion-style Tabs ── */}
-      <SidebarHeader className="px-3 py-3 border-b border-border/40">
+      <SidebarHeader className="h-12 justify-center px-3 border-b border-border/40">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {mainTabs.map((tab) => {
             const isActive = location.pathname === tab.url || (tab.id === 'home' && location.pathname === '/motion');
