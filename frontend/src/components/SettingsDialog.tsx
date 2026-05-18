@@ -89,6 +89,18 @@ import {
   useConnectGoogleCalendar,
   useDisconnectGoogleCalendar,
 } from "@/hooks/api/useGoogleCalendar";
+import { toast } from "sonner";
+
+// ─── Helper Functions ─────────────────────────────────────────────────
+const handleCopyToClipboard = async (text: string, label: string) => {
+  try {
+    await navigator.clipboard?.writeText(text);
+    toast.success(`${label} copied to clipboard`);
+  } catch (error) {
+    toast.error("Failed to copy to clipboard");
+    console.error("Clipboard error:", error);
+  }
+};
 
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type AccountTab =
@@ -238,7 +250,7 @@ function OrgGeneralTab() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => navigator.clipboard.writeText(selectedOrg.id)}
+              onClick={() => handleCopyToClipboard(selectedOrg.id, "Organisation ID")}
             >
               <Copy className="h-3.5 w-3.5" />
             </Button>
@@ -360,9 +372,7 @@ function OrgMembersTab() {
                         variant="secondary"
                         size="icon"
                         className="h-11 w-11 shrink-0 rounded-xl"
-                        onClick={() => {
-                          navigator.clipboard.writeText(inviteLink);
-                        }}
+                        onClick={() => handleCopyToClipboard(inviteLink, "Invite link")}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
