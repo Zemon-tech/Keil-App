@@ -8,6 +8,7 @@ import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
 import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
 import { UpNextCard } from "./dashboard/UpNextCard";
 import { useDashboard, useOrgDashboard } from "@/hooks/api/useDashboard";
+import api from "@/lib/api";
 import { useAppContext } from "@/contexts/AppContext";
 import { AlertCircle } from "lucide-react";
 import {
@@ -25,27 +26,11 @@ type DashboardChatMessage = {
   content: string;
 };
 
-const createAssistantResponse = (message: PromptInputMessage) => {
-  const text = message.text.trim();
-  const fileCount = message.files.length;
-
-  if (fileCount > 0 && text) {
-    return `I received your message and ${fileCount} attachment${fileCount === 1 ? "" : "s"}. I can use them as context here once the assistant backend is connected.`;
-  }
-
-  if (fileCount > 0) {
-    return `I received ${fileCount} attachment${fileCount === 1 ? "" : "s"}. Add a short instruction and I will help work through them.`;
-  }
-
-  return `I'm ready to help with: "${text}".`;
-};
-
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<DashboardChatMessage[]>([]);
   const [isAssistantThinking, setIsAssistantThinking] = useState(false);
-  const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Mode awareness ─────────────────────────────────────────
@@ -74,14 +59,6 @@ export function Dashboard() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isAssistantThinking]);
 
-  useEffect(() => {
-    return () => {
-      if (responseTimeoutRef.current) {
-        clearTimeout(responseTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const isCollapsed = state === "collapsed";
   const hasChatStarted = messages.length > 0 || isAssistantThinking;
   const assistantLoadingText =
@@ -91,38 +68,58 @@ export function Dashboard() {
     isCollapsed ? "max-w-[1400px]" : "max-w-6xl"
   );
 
-  const handlePromptSubmit = (message: PromptInputMessage) => {
+  const handlePromptSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
     const fileCount = message.files.length;
     const content =
       text ||
       `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        content,
-      },
-    ]);
+    const userMessage: DashboardChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content,
+    };
+
+    const conversation = [
+      ...messages,
+      userMessage,
+    ];
+
+    setMessages(conversation);
     setIsAssistantThinking(true);
 
-    if (responseTimeoutRef.current) {
-      clearTimeout(responseTimeoutRef.current);
-    }
+    try {
+      const response = await api.post<{ data: { content: string } }>("v1/ai/chat", {
+        messages: conversation.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+      });
 
-    responseTimeoutRef.current = setTimeout(() => {
+      const replyContent = response.data.data.content;
+
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: createAssistantResponse(message),
+          content: replyContent,
         },
       ]);
+    } catch (error) {
+      console.error("AI request failed:", error);
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
+        },
+      ]);
+    } finally {
       setIsAssistantThinking(false);
-    }, 500);
+    }
   };
 
   if (!mounted) return null;
