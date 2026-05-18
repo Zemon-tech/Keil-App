@@ -169,7 +169,7 @@ function renderEventContent(arg: EventContentArg) {
   const isBacklog = arg.event.extendedProps.taskStatus === "backlog";
 
   const BacklogDot = () => (
-    <div 
+    <div
       className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#FF0000] rounded-full z-50 pointer-events-none"
       style={{ transform: "translate(50%, -50%)" }}
     />
@@ -271,7 +271,15 @@ function renderEventContent(arg: EventContentArg) {
   );
 }
 
-function QuickNavPopover({ currentViewDate, calendarApi }: { currentViewDate: Date; calendarApi: any }) {
+function QuickNavPopover({
+  currentViewDate,
+  calendarApi,
+  children,
+}: {
+  currentViewDate: Date;
+  calendarApi: any;
+  children: React.ReactNode;
+}) {
   const [navDate, setNavDate] = useState(currentViewDate);
   const [view, setView] = useState<"days" | "months" | "years">("days");
   const [isOpen, setIsOpen] = useState(false);
@@ -340,18 +348,11 @@ function QuickNavPopover({ currentViewDate, calendarApi }: { currentViewDate: Da
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 hover:bg-muted transition-colors"
-          title="Quick Navigation"
-        >
-          <Calendar className="h-4.5 w-4.5 text-muted-foreground" />
-        </Button>
+        {children}
       </PopoverTrigger>
       <PopoverContent
         className="w-auto p-3 rounded-xl shadow-xl border-border/60"
-        align="end"
+        align="center"
         sideOffset={8}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
@@ -967,7 +968,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="truncate text-sm font-semibold min-w-[140px] text-center">{headerTitle}</div>
+              <QuickNavPopover
+                currentViewDate={currentViewDate}
+                calendarApi={calendarRef.current?.getApi()}
+              >
+                <button
+                  type="button"
+                  className="truncate text-sm font-semibold min-w-[140px] text-center cursor-pointer transition-colors duration-200 select-none py-1 px-2.5 rounded-md hover:bg-muted/80 active:bg-muted/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {headerTitle}
+                </button>
+              </QuickNavPopover>
               <Button
                 type="button"
                 variant="outline"
@@ -979,12 +990,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
               </Button>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
-              <QuickNavPopover
-                currentViewDate={currentViewDate}
-                calendarApi={calendarRef.current?.getApi()}
-              />
-            </div>
+            <div className="flex items-center gap-1 shrink-0 w-[88px]" />
           </div>
         </div>
 
