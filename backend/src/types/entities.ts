@@ -88,6 +88,7 @@ export interface Task {
   deleted_at: Date | null;
   subtask_count?: number | string;
   google_event_id?: string | null;
+  ical_uid?: string | null; // Added in migration 011 — stable Google iCalUID
 }
 
 export interface TaskAssignee {
@@ -144,6 +145,7 @@ export interface PersonalTask {
   updated_at: Date;
   deleted_at: Date | null;
   google_event_id?: string | null;
+  ical_uid?: string | null; // Added in migration 011 — stable Google iCalUID
 }
 
 export interface UserIntegration {
@@ -156,6 +158,16 @@ export interface UserIntegration {
   calendar_id: string;
   created_at: Date;
   updated_at: Date;
+  // 2-way sync fields (added in migration 011_gcal_two_way_sync.sql)
+  watch_status?: 'pending' | 'active' | 'degraded' | 'revoked';
+  watch_channel_id?: string | null;
+  watch_resource_id?: string | null;
+  watch_expires_at?: Date | null;
+  gcal_sync_token?: string | null;
+  last_sync_at?: Date | null;
+  sync_in_progress?: boolean;
+  last_sync_error?: string | null;
+  last_successful_sync_at?: Date | null;
 }
 
 export interface MotionPage {

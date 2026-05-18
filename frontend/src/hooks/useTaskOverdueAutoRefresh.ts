@@ -38,8 +38,19 @@ export function useTaskOverdueAutoRefresh() {
     };
 
     socket.on("task_overdue_moved", handleOverdueMoved);
+
+    // Listen for Google Calendar inbound sync updates
+    // Fired by the backend when processIncomingGoogleEvent creates/updates/deletes a task
+    const handleGcalTasksUpdated = () => {
+      queryClient.invalidateQueries({ queryKey: personalTaskKeys.all });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.all });
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    };
+    socket.on("gcal_tasks_updated", handleGcalTasksUpdated);
+
     return () => {
       socket.off("task_overdue_moved", handleOverdueMoved);
+      socket.off("gcal_tasks_updated", handleGcalTasksUpdated);
     };
   }, [queryClient]);
 

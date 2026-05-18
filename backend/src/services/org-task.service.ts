@@ -9,6 +9,7 @@ import { Task, User } from "../types/entities";
 import { LogActionType, LogEntityType, TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
 import { ApiError } from "../utils/ApiError";
+import { syncTaskToCalendar, deleteCalendarEvent } from "./google-calendar.service";
 
 export interface OrgTaskDTO {
   id: string;
@@ -186,6 +187,22 @@ export const createTask = async (
     return created;
   });
 
+  // Fire-and-forget Google Calendar sync — never blocks the task creation
+  if (task.start_date) {
+    syncTaskToCalendar(input.created_by, {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      start_date: task.start_date ? new Date(task.start_date) : null,
+      due_date: task.due_date ? new Date(task.due_date) : null,
+      is_all_day: false,
+      location: null,
+      status: task.status,
+      google_event_id: task.google_event_id,
+      source: 'tasks',
+    }).catch(err => console.error('[gcal] org task create sync failed:', err.message));
+  }
+
   return toDTO(task);
 };
 
@@ -194,6 +211,7 @@ export const updateTask = async (
   taskId: string,
   userId: string,
   input: UpdateOrgTaskInput,
+  options?: { skipGoogleSync?: boolean },
 ): Promise<OrgTaskDTO | null> => {
   const existingTask = await orgTaskRepository.findById(taskId);
   if (!existingTask) {
@@ -236,6 +254,22 @@ export const updateTask = async (
 
     return updated;
   });
+
+  if (result && !options?.skipGoogleSync) {
+    // Fire-and-forget Google Calendar sync — never blocks the task update
+    syncTaskToCalendar(userId, {
+      id: result.id,
+      title: result.title,
+      description: result.description,
+      start_date: result.start_date ? new Date(result.start_date) : null,
+      due_date: result.due_date ? new Date(result.due_date) : null,
+      is_all_day: false,
+      location: null,
+      status: result.status,
+      google_event_id: result.google_event_id,
+      source: 'tasks',
+    }).catch(err => console.error('[gcal] org task update sync failed:', err.message));
+  }
 
   return result ? toDTO(result) : null;
 };
@@ -285,6 +319,12 @@ export const deleteTask = async (
     const existing = await orgTaskRepository.findById(taskId, client);
     if (!existing) {
       throw new ApiError(404, "Task not found");
+    }
+
+    // Fire-and-forget Google Calendar event deletion
+    if (existing.google_event_id) {
+      deleteCalendarEvent(userId, existing.google_event_id)
+        .catch(err => console.error('[gcal] org task delete event failed:', err.message));
     }
 
     await orgTaskRepository.softDelete(taskId, client);

@@ -2,6 +2,451 @@
 
 ---
 
+# Critical Implementation Constraints & Safe Rollout Strategy
+
+## Mandatory Engineering Rules
+
+This project upgrades an already working production Google Calendar integration from 1-way sync to 2-way sync.
+
+The implementation MUST preserve all existing functionality and must NOT destabilize the current connector flow.
+
+The primary goal is:
+
+* safely extend the existing architecture
+* avoid regressions
+* isolate new functionality
+* maintain production stability
+
+---
+
+# 1. Existing Functionality Must Remain Untouched
+
+The following existing systems are already working and MUST continue working exactly the same after implementation:
+
+* Google OAuth connect flow
+* Google disconnect flow
+* Existing 1-way KeilHQ → Google sync
+* Existing connector UI and UX
+* Existing token refresh flow
+* Existing task creation/update flows
+* Existing repositories and DB operations
+* Existing workers and background jobs
+
+Do NOT:
+
+* rewrite existing sync logic
+* refactor unrelated systems
+* change existing API contracts
+* change existing response payloads
+* modify stable production flows unnecessarily
+
+Only extend the architecture safely.
+
+---
+
+# 2. Strict Isolation of New 2-Way Sync Logic
+
+All new 2-way sync functionality must be implemented independently from the current stable outbound sync system.
+
+New functionality should be added as:
+
+* new methods
+* new repository methods
+* new webhook handlers
+* new workers
+* new services
+* new cron jobs
+
+Avoid modifying existing stable logic unless absolutely necessary.
+
+2-way sync failures must NEVER break:
+
+* task updates
+* task creation
+* Google connection
+* existing outbound sync
+* connector UI
+* user workflows
+
+Outbound sync must continue working even if:
+
+* webhook registration fails
+* webhook delivery fails
+* incremental sync fails
+* syncToken expires
+* Google APIs are temporarily unavailable
+
+---
+
+# 3. OAuth Callback Flow Must Stay Independent
+
+The OAuth callback flow must NEVER depend on:
+
+* watch registration
+* webhook setup
+* incremental sync
+* full sync
+* holiday sync
+* channel renewal
+
+The OAuth callback should ONLY:
+
+1. validate state
+2. exchange auth code for tokens
+3. persist tokens
+4. redirect success
+
+Everything else must run asynchronously AFTER redirect.
+
+Correct pattern:
+
+```ts
+res.redirect(successUrl);
+
+registerWatch(userId).catch(err => {
+  console.error('[gcal] watch registration failed:', err);
+});
+```
+
+Incorrect pattern:
+
+```ts
+await registerWatch(userId);
+```
+
+A watch registration failure must NEVER prevent a successful Google Calendar connection.
+
+---
+
+# 4. Staged Rollout Is Mandatory
+
+Do NOT implement all 2-way sync functionality at once.
+
+Each phase must be completed and verified independently before moving to the next phase.
+
+---
+
+## Phase 1 — Database & Repository Setup ONLY
+
+Allowed:
+
+* migrations
+* repository methods
+* helper queries
+
+NOT allowed:
+
+* webhook handlers
+* OAuth modifications
+* watch registration
+* inbound sync
+* cron jobs
+* task mutations from Google events
+
+After Phase 1:
+
+* existing Google connect/disconnect must still work exactly as before
+
+---
+
+## Phase 2 — Outbound Event Tagging ONLY
+
+Allowed:
+
+* add extendedProperties tagging
+* loop prevention metadata
+
+NOT allowed:
+
+* inbound sync
+* webhook processing
+* Google → KeilHQ mutations
+
+After Phase 2:
+
+* existing 1-way sync behavior must remain unchanged
+
+---
+
+## Phase 3 — Webhook Infrastructure ONLY
+
+Allowed:
+
+* webhook endpoint
+* watch registration
+* webhook verification
+* logging
+
+Webhook events should ONLY log activity initially.
+
+NOT allowed:
+
+* task creation
+* task updates
+* task deletion
+
+---
+
+## Phase 4 — Incremental Sync Read-Only Validation
+
+Allowed:
+
+* incremental sync processing
+* syncToken handling
+* event comparison
+* logging incoming changes
+
+NOT allowed:
+
+* create/update/delete tasks
+
+This phase exists only for validation and debugging.
+
+---
+
+## Phase 5 — Controlled Google → KeilHQ Mutations
+
+Allowed:
+
+* update existing tasks
+* soft-delete tasks
+* create tasks from external Google events
+
+Must include:
+
+* idempotency protection
+* duplicate prevention
+* retry handling
+* conflict resolution
+* sync loop prevention
+
+---
+
+# 5. Resilience & Fault Tolerance Requirements
+
+All Google API operations must include:
+
+* **Explicit Timeout Policy**: Strict timeout limit of **10,000ms** (10 seconds) on all Google API calls (watch registration, incremental sync, token refresh, and event sync) to prevent worker stalls, queue clogging, and webhook processing backup.
+* **Strict Retry Limits**: Exponential backoff up to a maximum of **5 retries** (`maxRetries = 5`).
+* **Dead-letter / Graceful Degradation Behavior**: If retries are exhausted, the system must:
+  * Log the final failure as a structured critical alert.
+  * Mark the user's sync state as degraded in the system.
+  * Queue a recovery job to retry later via a scheduled recovery service.
+  * Never block task updates, task creation, or break the OAuth connection.
+* structured logging
+
+Google API failures must NEVER:
+
+* block task updates
+* block task creation
+* break OAuth connection
+* crash workers
+* corrupt DB state
+
+Google sync is a secondary side-effect and must remain non-blocking.
+
+---
+
+# 6. Webhook Security Requirements
+
+The webhook endpoint must validate:
+
+* X-Goog-Channel-ID
+* X-Goog-Resource-ID
+
+Never trust webhook headers blindly.
+
+Invalid or unknown webhook requests must be ignored safely.
+
+**CRITICAL:** Reject mismatched channel/resource pairs. When a webhook arrives, verify that the combination of `X-Goog-Channel-ID` and `X-Goog-Resource-ID` matches exactly what was stored during `registerWatch()`. Reject requests where the channel ID is known but the resource ID does not match — this indicates a potential spoofing attempt or stale notification.
+
+---
+
+# 7. Duplicate Prevention & Idempotency
+
+Google may:
+
+* retry webhooks
+* send duplicate notifications rapidly
+* send delayed notifications
+
+The implementation MUST be fully idempotent.
+
+### 7.1 Webhook Deduplication & Debounce Strategy
+Google often sends multiple notifications rapidly for a single user edit. To avoid unnecessary incremental sync spam and database query overhead:
+- **Deduplication / Debouncing**: Webhook notifications must NOT immediately execute incremental sync. Instead, they must enqueue a debounced per-user sync job or check a cache/db lock.
+- **5-15 Second Window**: Ignore or discard duplicate notification events for the same `userId` / `channelId` arriving within **10 seconds** of an active or recently completed sync run.
+
+### 7.2 DB-Level Uniqueness Enforcement
+- **Uniqueness Rule**: Enforce a strict unique constraint in the database on `(owner_user_id, google_event_id)` for personal tasks and `(user_id, google_event_id)` for org tasks to absolutely prevent duplicate creation under concurrent worker executions.
+- **Idempotency on Violation**: The create flow must catch database duplicate-key violations (e.g., PostgreSQL `23505` unique violation) and treat them as an **idempotent success**. Instead of throwing an error or crashing the process, the worker must safely fetch the existing task, log a trace, and return gracefully.
+
+Never create duplicate KeilHQ tasks for the same Google event.
+
+---
+
+# 8. Full Sync Safety Limits
+
+All full sync operations must include:
+
+* timeMin
+* timeMax
+* singleEvents: true
+
+Never fetch full historical calendars.
+
+Only sync:
+
+* today onwards
+* next 30 days
+
+**EXPLICIT REQUIREMENT:** The initial sync in `registerWatch()` / `doFullSync()` MUST use the same 30-day window (today → today + 30 days). Do not implement a broad historical fetch. This prevents:
+
+* quota exhaustion
+* recurring event explosion
+* performance degradation
+
+### 8.1 Recurring Event Strategy Clarification
+Google recurring events are extremely complex to synchronize bi-directionally. To prevent bugs and infinite recursion:
+- **Limited Scope**: Support for recurring events is **strictly limited to expanded single events** using `singleEvents: true` during the sync window.
+- **No Series Sync**: Advanced recurring-series synchronization (e.g., updating a recurring rule or modifying the parent series as a single entity) is explicitly **out of scope** for the MVP.
+- **Exception Handling**: Individual exceptions (modifying or deleting a single occurrence of a recurring series on Google Calendar) are handled naturally because `singleEvents: true` expands each occurrence into a separate event with its own distinct `google_event_id`. If an exception is created in Google, it will be sync-updated or soft-deleted in KeilHQ as a standalone task.
+
+---
+
+# 9. Concurrency Protection
+
+Prevent overlapping sync runs for the same user.
+
+The system must avoid:
+
+* race conditions
+* duplicate updates
+* concurrent incremental sync conflicts
+
+### 9.1 Explicit Per-User Sync Lock Implementation (Postgres native hashtext Advisory Locks)
+To ensure only one incremental sync runs per user at any given time, the system must acquire a lock before executing a sync.
+- **Strategy**: Use PostgreSQL Advisory Locks with native `hashtext()` mapping. Passing the UUID string directly into the database removes the need for a custom JavaScript integer-hashing helper and eliminates lock collision risks.
+- **Connection Isolation (Critical Node.js Pool Guideline)**: Do NOT use `pool.query()` directly for advisory locks because pooled connections are transient and queries can execute on different connections. Always check out a single dedicated connection client from the pool to acquire, hold, and release the lock.
+- **Lock Acquisition & Release**:
+  ```ts
+  const client = await pool.connect();
+  try {
+    // Attempt to acquire a non-blocking advisory lock atomically using Postgres native hashtext() on UUID string
+    const lockResult = await client.query('SELECT pg_try_advisory_lock(hashtext($1))', [userId]);
+    const acquired = lockResult.rows[0].pg_try_advisory_lock;
+    if (!acquired) {
+      console.log(`[gcal] Incremental sync already in progress for user ${userId}. Skipping run.`);
+      client.release(); // Return client immediately if lock fails
+      return;
+    }
+
+    await runSync(client); // Execute sync utilizing the active locked connection
+  } finally {
+    // Always release the lock and dedicated connection back to the pool
+    await client.query('SELECT pg_advisory_unlock(hashtext($1))', [userId]);
+    client.release();
+  }
+  ```
+
+---
+
+# 10. Observability & Debugging Requirements
+
+All sync operations must have structured logs.
+
+Required logs:
+
+* OAuth callback success/failure
+* watch registration success/failure
+* webhook received
+* incremental sync start/end
+* imported events
+* skipped events
+* duplicate prevention
+* token refresh failures
+* Google API failures
+
+Logs must include:
+
+* userId
+* googleEventId
+* channelId
+* operation type
+
+Never log OAuth tokens.
+
+---
+
+# 11. Backward Compatibility Is Mandatory
+
+No implementation may:
+
+* invalidate existing integrations
+* wipe refresh tokens
+* reset existing google_event_id mappings
+* require unnecessary reconnects
+
+Existing connected users must continue working seamlessly after deployment.
+
+---
+
+# 12. Mandatory Verification After Every Phase
+
+Before marking any phase complete, verify:
+
+* Google connect still works
+* Google disconnect still works
+* Existing 1-way sync still works
+* No connector regressions exist
+* No UI regressions exist
+* No task update regressions exist
+* No DB regressions exist
+
+Production stability must be preserved after every implementation phase.
+
+---
+
+# 13. Transactional Boundaries & Integration State Machine
+
+Multi-step flows such as saving tokens, registering watches, and updating channel/sync metadata can partially fail, leaving the system in an inconsistent or orphaned state. To avoid phantom half-configured integrations:
+
+### 13.1 Explicit Integration State Machine
+We introduce a strict status field in `public.user_integrations` to track the state of the Google Calendar sync lifecycle:
+
+* **`watch_status` Enum States**:
+  * `'pending'`: The user has connected OAuth and saved tokens, but watch registration/full sync is not yet initialized or completed.
+  * `'active'`: The watch has been successfully registered with Google, and the initial full sync completed successfully, securing the first `syncToken`. Only users in `'active'` state are processed on webhook delivery.
+  * `'degraded'`: Google watch renewal failed, or the sync process repeatedly failed (e.g. max retries reached). Safe background recovery crons will attempt to restore it.
+  * `'revoked'`: The user revoked calendar access (401/403 returned from Google) or disconnected manually. The channel details are stopped and cleared.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : User Connects OAuth (Tokens saved in DB)
+    pending --> active : watch registered + initial fullSync succeeded (syncToken saved)
+    pending --> degraded : fullSync or watch registration fails
+    active --> degraded : webhook sync fails persistently / renewal cron fails
+    degraded --> active : recovery cron succeeds
+    active --> revoked : 401/403 Auth revoked or manual disconnect
+    degraded --> revoked : 401/403 Auth revoked or manual disconnect
+    revoked --> pending : User reconnects settings
+```
+
+### 13.2 Transactional Persistence Rules
+Database writes related to integration status updates, watch channel metadata, and `syncToken` updates must be executed within database transactions (`BEGIN` / `COMMIT`) where appropriate.
+- **Atomicity Rule**: A user integration must never be assumed `active` until the watch details and the initial `syncToken` are both successfully stored in the database.
+- **Transactional Watch Setup**:
+  1. Generate unique `channelId` (UUID) in memory.
+  2. Register the watch channel via `calendar.events.watch()`.
+  3. Run `doFullSync()` to retrieve the first `nextSyncToken`.
+  4. Perform the database update inside a transaction:
+     * Save `watch_channel_id`, `watch_resource_id`, and `watch_expires_at`.
+     * Save `gcal_sync_token` with the token returned from the full sync.
+     * Set `watch_status = 'active'`.
+  5. If any API calls (watch or full sync) fail, the database update is aborted or rolls back, transitioning the user to `'degraded'` instead of leaving a phantom channel.
+
+---
+
 ## Part 1: Current 1-Way Sync — Complete Implementation Detail
 
 ### Overview
@@ -189,7 +634,9 @@ This is the section that makes 2-way sync hard. You must handle every one of the
 
 ### Edge Case 1: The Sync Loop (Most Critical)
 - **Scenario:** User updates a task in KeilHQ → KeilHQ pushes change to Google → Google detects a change on the calendar → Google calls your webhook → Your backend updates the task in KeilHQ → KeilHQ pushes to Google again → **Infinite loop**.
-- **Solution:** Use **Google's `extendedProperties`** on the event. When KeilHQ creates/updates a Google event, it sets a private extended property like `{ private: { source: "keilhq" } }`. When the webhook fires, your backend checks if the incoming event has this property. If yes, it knows KeilHQ made this change and **skips the DB update** entirely.
+- **Solution (Two-Pronged Guard)**:
+  1. **Google Event Tagging (`extendedProperties`)**: When KeilHQ creates or updates a Google event, it sets a private extended property `{ private: { source: "keilhq", taskId: "..." } }`. On webhook events, we inspect this property. If it matches `'keilhq'`, the incoming Google event is skipped.
+  2. **Inbound Retrigger Suppression (`skipGoogleSync` update flag/context)**: Extended properties alone are not enough if the database update triggers standard service/repository hooks that automatically enqueue an outbound `syncTaskToCalendar()` call. To prevent this "sync echo", all repository/service update methods (e.g., `personalTaskRepository.update()` and `orgTaskRepository.update()`) must accept an options/context parameter containing a `skipGoogleSync: true` flag. The outbound sync listener or scheduler must intercept this flag and abort immediately if the update originated from Google Calendar. This suppresses the outbound retrigger at the source.
 
 ### Edge Case 2: Watch Channel Expiration
 - Google's push notification channels have a **maximum TTL of 7 days**. After 7 days, Google stops sending notifications.
@@ -249,27 +696,71 @@ This is the section that makes 2-way sync hard. You must handle every one of the
 
 ### Step 1 — Database Migration (New file: `009_gcal_two_way_sync.sql`)
 
-Add these columns to `user_integrations` to support channel management:
+Add status enums, columns, webhook receipts table, and uniqueness constraints to support watch lifecycle states, debouncing, state tracking, stable iCalUID mappings, and replay protection:
 
 ```sql
+-- 1. Create watch status enum and add channel management & state tracking columns
+CREATE TYPE public.gcal_watch_status AS ENUM ('pending', 'active', 'degraded', 'revoked');
+
 ALTER TABLE public.user_integrations
-  ADD COLUMN IF NOT EXISTS watch_channel_id    TEXT,
-  ADD COLUMN IF NOT EXISTS watch_resource_id   TEXT,
-  ADD COLUMN IF NOT EXISTS watch_expires_at    TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS gcal_sync_token     TEXT;
+  ADD COLUMN IF NOT EXISTS watch_status              public.gcal_watch_status DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS watch_channel_id          TEXT,
+  ADD COLUMN IF NOT EXISTS watch_resource_id         TEXT,
+  ADD COLUMN IF NOT EXISTS watch_expires_at          TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS gcal_sync_token           TEXT,
+  ADD COLUMN IF NOT EXISTS last_sync_at              TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS sync_in_progress          BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS last_sync_error           TEXT,
+  ADD COLUMN IF NOT EXISTS last_successful_sync_at   TIMESTAMPTZ;
 
 -- Index for fast lookup by channel_id on webhook arrival
 CREATE INDEX IF NOT EXISTS idx_user_integrations_channel_id
   ON public.user_integrations(watch_channel_id)
   WHERE watch_channel_id IS NOT NULL;
+
+-- 2. Add stable iCalUID column to support organizer moving and ownership edge cases
+ALTER TABLE public.personal_tasks
+  ADD COLUMN IF NOT EXISTS ical_uid TEXT;
+
+ALTER TABLE public.tasks
+  ADD COLUMN IF NOT EXISTS ical_uid TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_personal_tasks_ical_uid ON public.personal_tasks(ical_uid);
+CREATE INDEX IF NOT EXISTS idx_tasks_ical_uid ON public.tasks(ical_uid);
+
+-- 3. Enforce DB-level uniqueness rules to prevent duplicate tasks from concurrent runs/webhook retries
+ALTER TABLE public.personal_tasks
+  ADD CONSTRAINT uq_personal_tasks_user_google_event UNIQUE (owner_user_id, google_event_id);
+
+ALTER TABLE public.tasks
+  ADD CONSTRAINT uq_tasks_user_google_event UNIQUE (user_id, google_event_id);
+
+-- 4. Create webhook receipts table to enforce replay protection and message idempotency
+CREATE TABLE IF NOT EXISTS public.gcal_webhook_receipts (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  channel_id      TEXT NOT NULL,
+  resource_id     TEXT NOT NULL,
+  message_number  BIGINT NOT NULL,
+  received_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(channel_id, resource_id, message_number)
+);
 ```
 
-| New Column | Purpose |
+| New Column / Constraint / Table | Purpose |
 | :--- | :--- |
-| `watch_channel_id` | UUID you generate when registering a watch. Used to identify which user a webhook notification belongs to. |
-| `watch_resource_id` | Returned by Google on `events.watch()`. Required to STOP the watch (unsubscribe) when user disconnects. |
-| `watch_expires_at` | When Google will stop sending notifications. Must be renewed before this date. |
-| `gcal_sync_token` | The token Google gives you after a full sync or incremental sync. Used to fetch only the events that changed since the last check. |
+| `watch_status` | Custom ENUM tracking watch states (`pending`, `active`, `degraded`, `revoked`). |
+| `watch_channel_id` | UUID generated during watch registration. Identifies which user a webhook notification belongs to. |
+| `watch_resource_id` | Returned by Google on `events.watch()`. Required to stop/unsubscribe the watch channel. |
+| `watch_expires_at` | Expiration date of the current watch (7 days max TTL). Must be renewed. |
+| `gcal_sync_token` | Incremental sync state token returned by Google's Calendar API. |
+| `last_sync_at` | Webhook debounce cooldown timestamp. |
+| `sync_in_progress` | Operational state flag indicating active background sync executions. |
+| `last_sync_error` | Persisted error message from the most recent failed sync. |
+| `last_successful_sync_at` | Timestamp of the last fully completed sync. Used for health tooling. |
+| `ical_uid` | Maps Google's `iCalUID` which remains stable across event moves, calendar transfers, and copy/paste. |
+| `uq_personal_tasks_user_google_event` | Unique constraint to prevent duplicate personal tasks for a user's Google event ID. |
+| `uq_tasks_user_google_event` | Unique constraint to prevent duplicate team/org tasks for a user's Google event ID. |
+| `gcal_webhook_receipts` | Tracks unique webhook message numbers (`X-Goog-Message-Number`) to prevent replay attacks. |
 
 ---
 
@@ -297,7 +788,7 @@ clearWatchChannel(userId: string, provider: string): Promise<void>
 
 ### Step 3 — Add `registerWatch()` to `google-calendar.service.ts`
 
-This function is called **once per user** after they connect their Google Calendar.
+This function is called **once per user** after they connect their Google Calendar. It includes channel cleanup (stopping old watch channels) and strict timeout configurations.
 
 ```typescript
 export async function registerWatch(userId: string): Promise<void> {
@@ -308,27 +799,94 @@ export async function registerWatch(userId: string): Promise<void> {
   if (!integration) return;
 
   const calendar = google.calendar({ version: 'v3', auth: authClient });
+  
+  // Set explicit 10-second timeout policy on Google API requests
+  calendar.context._options.timeout = 10000;
+
+  // --- Watch Channel Cleanup ---
+  // If an old watch channel exists in the database, stop it first to prevent orphaned channels and duplicate notifications
+  if (integration.watch_channel_id && integration.watch_resource_id) {
+    try {
+      console.log(`[gcal] Stopping old watch channel ${integration.watch_channel_id} before registering a new one.`);
+      await calendar.channels.stop({
+        requestBody: {
+          id: integration.watch_channel_id,
+          resourceId: integration.watch_resource_id,
+        },
+      });
+    } catch (stopErr: any) {
+      console.warn(`[gcal] Failed to stop old watch channel ${integration.watch_channel_id}:`, stopErr.message);
+    }
+  }
+
   const channelId = uuidv4(); // generate a unique ID for this watch channel
   const ttlMs = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
-  const response = await calendar.events.watch({
-    calendarId: integration.calendar_id || 'primary',
-    requestBody: {
-      id: channelId,
-      type: 'web_hook',
-      address: `${config.backendUrl}/api/v1/integrations/google/webhook`,
-      expiration: String(Date.now() + ttlMs),
-    },
-  });
+  // --- Watch Registration Advisory Lock (Idempotency) ---
+  // Acquire a watch-setup-specific advisory lock to prevent concurrent reconnects from registering duplicate active channels
+  const watchLockKey = `gcal-watch:${userId}`;
+  const lockClient = await pool.connect();
+  
+  try {
+    const lockRes = await lockClient.query('SELECT pg_try_advisory_lock(hashtext($1))', [watchLockKey]);
+    if (!lockRes.rows[0].pg_try_advisory_lock) {
+      console.log(`[gcal] Watch registration already in progress for user ${userId}. Skipping redundant setup.`);
+      lockClient.release();
+      return;
+    }
 
-  await integrationRepository.saveWatchChannel(userId, PROVIDER, {
-    channelId,
-    resourceId: response.data.resourceId!,
-    expiresAt: new Date(Date.now() + ttlMs),
-  });
+    // Set official googleapis request timeout policy globally/instance-level (stable API approach)
+    google.options({ timeout: 10000 });
 
-  // Also do a full initial sync to get the first syncToken
-  await doFullSync(userId, integration.calendar_id || 'primary', authClient);
+    // 1. Call Google Calendar API to watch events
+    const response = await calendar.events.watch({
+      calendarId: integration.calendar_id || 'primary',
+      requestBody: {
+        id: channelId,
+        type: 'web_hook',
+        address: `${config.backendUrl}/api/v1/integrations/google/webhook`,
+        expiration: String(Date.now() + ttlMs),
+      },
+    });
+
+    // 2. Perform safe full initial sync within transaction context to get the first syncToken
+    const initialSyncToken = await doFullSync(userId, integration.calendar_id || 'primary', authClient);
+
+    // 3. Atomically persist watch channel metadata and transition watch_status to 'active' inside a DB transaction
+    await pool.query('BEGIN');
+    try {
+      await pool.query(
+        `UPDATE public.user_integrations
+         SET watch_channel_id = $1,
+             watch_resource_id = $2,
+             watch_expires_at = $3,
+             gcal_sync_token = $4,
+             watch_status = 'active'::public.gcal_watch_status
+         WHERE user_id = $5`,
+        [channelId, response.data.resourceId!, new Date(Date.now() + ttlMs), initialSyncToken, userId]
+      );
+      await pool.query('COMMIT');
+    } catch (dbErr) {
+      await pool.query('ROLLBACK');
+      throw dbErr;
+    }
+
+  } catch (err: any) {
+    console.error(`[gcal] registerWatch failed for user ${userId}:`, err.message);
+    
+    // Mark watch channel as degraded in database atomically to avoid phantom active states
+    await pool.query(
+      `UPDATE public.user_integrations
+       SET watch_status = 'degraded'::public.gcal_watch_status
+       WHERE user_id = $1`,
+      [userId]
+    );
+    throw err;
+  } finally {
+    // Release advisory lock and dedicated setup connection client
+    await lockClient.query('SELECT pg_advisory_unlock(hashtext($1))', [watchLockKey]);
+    lockClient.release();
+  }
 }
 ```
 
@@ -336,12 +894,16 @@ export async function registerWatch(userId: string): Promise<void> {
 
 ### Step 4 — Add `doFullSync()` and `doIncrementalSync()` to `google-calendar.service.ts`
 
-**`doFullSync()`** — Called once when a watch is first registered, or when a `syncToken` expires (410 error):
+**`doFullSync()`** — Called once when a watch is first registered, or when a `syncToken` expires (410 error). Returns the fresh `syncToken`:
 ```typescript
-async function doFullSync(userId: string, calendarId: string, authClient: OAuth2Client): Promise<void> {
+async function doFullSync(userId: string, calendarId: string, authClient: OAuth2Client): Promise<string | undefined> {
   const calendar = google.calendar({ version: 'v3', auth: authClient });
   
-  // Fetch all events. This returns a syncToken at the end of the last page.
+  // Fetch events within the 30-day sync window (today → today + 30 days)
+  // This prevents quota exhaustion and recurring event explosion
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  
   let pageToken: string | undefined;
   let syncToken: string | undefined;
 
@@ -349,6 +911,8 @@ async function doFullSync(userId: string, calendarId: string, authClient: OAuth2
     const response = await calendar.events.list({
       calendarId,
       singleEvents: true,
+      timeMin: now.toISOString(),
+      timeMax: thirtyDaysFromNow.toISOString(),
       pageToken,
     });
     
@@ -361,49 +925,111 @@ async function doFullSync(userId: string, calendarId: string, authClient: OAuth2
     syncToken = response.data.nextSyncToken ?? undefined;
   } while (pageToken);
 
-  if (syncToken) {
-    await integrationRepository.saveSyncToken(userId, PROVIDER, syncToken);
-  }
+  return syncToken;
 }
 ```
 
-**`doIncrementalSync()`** — Called every time a webhook fires for this user:
+**`doIncrementalSync()`** — Called every time a webhook fires for this user (configured with a dedicated connection client, operational state tracking, revocation cleanup, and timeout controls):
 ```typescript
 export async function doIncrementalSync(userId: string): Promise<void> {
-  const authClient = await getAuthorizedClient(userId);
-  if (!authClient) return;
-
-  const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
-  if (!integration || !integration.gcal_sync_token) return;
-
-  const calendar = google.calendar({ version: 'v3', auth: authClient });
-
+  // 1. Check out dedicated pool connection to prevent transaction/session lock leakage across other pool queries
+  const lockClient = await pool.connect();
+  
   try {
-    const response = await calendar.events.list({
-      calendarId: integration.calendar_id || 'primary',
-      syncToken: integration.gcal_sync_token,
-    });
-
-    // Process each changed event
-    for (const event of response.data.items ?? []) {
-      await processIncomingGoogleEvent(userId, event);
+    // 2. Acquire non-blocking advisory lock atomically using Postgres native hashtext() on UUID string
+    const lockResult = await lockClient.query('SELECT pg_try_advisory_lock(hashtext($1))', [userId]);
+    const acquired = lockResult.rows[0].pg_try_advisory_lock;
+    if (!acquired) {
+      console.log(`[gcal] Incremental sync already in progress for user ${userId}. Skipping this run.`);
+      lockClient.release(); // release back immediately if lock fails
+      return;
     }
 
-    // Save the new syncToken for the next incremental sync
-    if (response.data.nextSyncToken) {
-      await integrationRepository.saveSyncToken(userId, PROVIDER, response.data.nextSyncToken);
-    }
+    const authClient = await getAuthorizedClient(userId);
+    if (!authClient) return;
 
-  } catch (err: any) {
-    if (err?.code === 410) {
-      // syncToken expired — do a full sync to get a fresh one
-      await doFullSync(userId, integration.calendar_id || 'primary', authClient);
-    } else {
-      throw err;
+    const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
+    // Only process webhook events if the integration watch_status is active
+    if (!integration || integration.watch_status !== 'active' || !integration.gcal_sync_token) return;
+
+    // Track active sync state in DB
+    await pool.query(
+      `UPDATE public.user_integrations SET sync_in_progress = TRUE, last_sync_error = NULL WHERE user_id = $1`,
+      [userId]
+    );
+
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
+    
+    // Set official request timeout policy globally/instance-level (stable API approach)
+    google.options({ timeout: 10000 });
+
+    try {
+      const response = await calendar.events.list({
+        calendarId: integration.calendar_id || 'primary',
+        syncToken: integration.gcal_sync_token,
+      });
+
+      // Process each changed event
+      for (const event of response.data.items ?? []) {
+        await processIncomingGoogleEvent(userId, event);
+      }
+
+      // Save the new syncToken for the next incremental sync
+      if (response.data.nextSyncToken) {
+        await integrationRepository.saveSyncToken(userId, PROVIDER, response.data.nextSyncToken);
+      }
+
+      // Sync success state update
+      await pool.query(
+        `UPDATE public.user_integrations 
+         SET sync_in_progress = FALSE, last_sync_error = NULL, last_successful_sync_at = NOW() 
+         WHERE user_id = $1`,
+        [userId]
+      );
+
+    } catch (err: any) {
+      // 3. Graceful 401/403 Revocation Cleanup
+      // If the OAuth authorization is revoked (401, 403, or invalid_grant), immediately tear down credentials and status
+      if (err?.code === 401 || err?.code === 403 || err?.response?.data?.error === 'invalid_grant') {
+        console.warn(`[gcal] Authorization credentials revoked (Code: ${err?.code}) for user ${userId}. Cleaning up watch channel.`);
+        await pool.query(
+          `UPDATE public.user_integrations
+           SET watch_status = 'revoked'::public.gcal_watch_status,
+               watch_channel_id = NULL,
+               watch_resource_id = NULL,
+               watch_expires_at = NULL,
+               gcal_sync_token = NULL,
+               sync_in_progress = FALSE,
+               last_sync_error = $1
+           WHERE user_id = $2`,
+          [`Google OAuth credentials revoked: ${err.message}`, userId]
+        );
+        return;
+      }
+
+      if (err?.code === 410) {
+        console.warn(`[gcal] syncToken expired/invalid (410 Gone) for user ${userId}. Clearing token and initiating full resync.`);
+        await integrationRepository.saveSyncToken(userId, PROVIDER, null);
+        
+        const freshSyncToken = await doFullSync(userId, integration.calendar_id || 'primary', authClient);
+        if (freshSyncToken) {
+          await integrationRepository.saveSyncToken(userId, PROVIDER, freshSyncToken);
+        }
+      } else {
+        // Update operational sync error
+        await pool.query(
+          `UPDATE public.user_integrations SET sync_in_progress = FALSE, last_sync_error = $1 WHERE user_id = $2`,
+          [err.message, userId]
+        );
+        throw err;
+      }
     }
+  } finally {
+    // 4. Always release advisory lock and return connection client back to pool
+    await lockClient.query('SELECT pg_advisory_unlock(hashtext($1))', [userId]);
+    lockClient.release();
   }
 }
-```
 
 ---
 
@@ -417,31 +1043,46 @@ async function processIncomingGoogleEvent(userId: string, event: calendar_v3.Sch
   if (source === 'keilhq') return;
 
   const googleEventId = event.id;
+  const icalUid = event.iCalUID;
   if (!googleEventId) return;
 
-  // Find if we have a matching task in our DB
-  const matchingTask = await findTaskByGoogleEventId(googleEventId);
-  // (This requires a new helper that queries both `tasks` and `personal_tasks`)
+  // --- SYNC WINDOW FILTER ---
+  // Ensure that even on incremental resync, we discard historical/future events outside our 30-day window
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  
+  const isAllDay = !!event.start?.date;
+  const startDate = isAllDay ? new Date(event.start!.date!) : new Date(event.start!.dateTime!);
+  const dueDate = isAllDay ? new Date(event.end!.date!) : new Date(event.end!.dateTime!);
+
+  if (startDate < now || startDate > thirtyDaysFromNow) {
+    console.log(`[gcal] Event ${googleEventId} falls outside current sync window. Skipping processing.`);
+    return;
+  }
+
+  // Find if we have a matching task in our DB by either googleEventId OR stable iCalUID (covers moved events)
+  const matchingTask = await findTaskByGoogleEventIdOrIcalUid(googleEventId, icalUid);
 
   if (!matchingTask) {
     // Edge Case 4: Event not created by us — CREATE as Personal Task
-    // Only import if it's within our 30-day window and not in the past
-    const now = new Date();
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    
-    const isAllDay = !!event.start?.date;
-    const startDate = isAllDay ? new Date(event.start!.date!) : new Date(event.start!.dateTime!);
-    
-    if (startDate >= now && startDate <= thirtyDaysFromNow) {
+    try {
       await personalTaskRepository.create({
         owner_user_id: userId,
         title: event.summary || 'Untitled Google Event',
         start_date: startDate,
-        due_date: isAllDay ? new Date(event.end!.date!) : new Date(event.end!.dateTime!),
+        due_date: dueDate,
         google_event_id: googleEventId,
+        ical_uid: icalUid,
         status: 'backlog', // Default status
         priority: 'medium', // Default priority
       });
+    } catch (err: any) {
+      // Enforce DB-level uniqueness and handle duplicate key errors as idempotent success
+      if (err.code === '23505') { // PostgreSQL unique_violation
+        console.warn(`[gcal] Duplicate task detected for googleEventId ${googleEventId} during concurrent insert. Treating as idempotent success.`);
+        return;
+      }
+      throw err;
     }
     return;
   }
@@ -453,40 +1094,45 @@ async function processIncomingGoogleEvent(userId: string, event: calendar_v3.Sch
     return;
   }
 
-  // --- Parse the incoming event dates ---
-  const isAllDay = !!event.start?.date; // Google uses `date` for all-day, `dateTime` for timed
-  const startDate = isAllDay
-    ? new Date(event.start!.date!)
-    : new Date(event.start!.dateTime!);
-  const dueDate = isAllDay
-    ? new Date(event.end!.date!)
-    : new Date(event.end!.dateTime!);
   const newTitle = event.summary ?? matchingTask.title;
 
-  // --- Conflict Resolution: Last Write Wins ---
-  const googleUpdatedAt = new Date(event.updated!);
-  const ourUpdatedAt = new Date(matchingTask.updated_at);
-
-  if (googleUpdatedAt <= ourUpdatedAt) {
-    // Our version is newer — Google's change is stale, ignore it
+  // --- PREVENT INFINITE "TIMESTAMP UPDATE WARS" ---
+  // Skip DB write entirely if values are identical to avoid pointless writes and unnecessary outbound suppression logic
+  const sameDates = (d1: Date | string, d2: Date | string) => new Date(d1).getTime() === new Date(d2).getTime();
+  if (matchingTask.title === newTitle && sameDates(matchingTask.start_date, startDate) && sameDates(matchingTask.due_date, dueDate)) {
+    console.log(`[gcal] Task ${matchingTask.id} details are identical to event updates. Skipping redundant database write.`);
     return;
   }
 
-  // Google's version is newer — update our task
+  // --- Conflict Resolution: Last Write Wins with 5-Second Tolerance Window ---
+  const googleUpdatedAt = new Date(event.updated!);
+  const ourUpdatedAt = new Date(matchingTask.updated_at);
+
+  const timeDifferenceMs = Math.abs(googleUpdatedAt.getTime() - ourUpdatedAt.getTime());
+  const toleranceMs = 5000; // 5-second window to resolve minor clock skews
+
+  if (googleUpdatedAt <= ourUpdatedAt || timeDifferenceMs < toleranceMs) {
+    // Our version is newer or within the 5-second tolerance skew window — ignore Google's update
+    console.log(`[gcal] Conflicting update ignored due to tolerance skew window (diff: ${timeDifferenceMs}ms) or older timestamp.`);
+    return;
+  }
+
+  // Google's version is newer — update our task with skipGoogleSync context to suppress outbound loop retriggers
   if (matchingTask.source === 'personal_tasks') {
     await personalTaskRepository.update(matchingTask.id, {
       title: newTitle,
       start_date: startDate,
       due_date: dueDate,
-    });
+    }, { skipGoogleSync: true });
   } else {
     await orgTaskRepository.update(matchingTask.id, {
       title: newTitle,
       start_date: startDate,
       due_date: dueDate,
-    });
+    }, { skipGoogleSync: true });
   }
 }
+```
 
 ---
 
@@ -495,11 +1141,12 @@ async function processIncomingGoogleEvent(userId: string, event: calendar_v3.Sch
 These helpers are required to manage the link between Google Events and KeilHQ tasks across both `tasks` (Org) and `personal_tasks` tables.
 
 ```typescript
-async function findTaskByGoogleEventId(googleEventId: string): Promise<{ id: string, source: 'tasks' | 'personal_tasks', title: string, updated_at: Date } | null> {
-  // 1. Search in Personal Tasks
+async function findTaskByGoogleEventIdOrIcalUid(googleEventId: string, icalUid?: string): Promise<{ id: string, source: 'tasks' | 'personal_tasks', title: string, updated_at: Date, start_date: Date, due_date: Date } | null> {
+  // 1. Search in Personal Tasks using both google_event_id and stable ical_uid
   const personalResult = await pool.query(
-    'SELECT id, title, updated_at FROM public.personal_tasks WHERE google_event_id = $1',
-    [googleEventId]
+    `SELECT id, title, updated_at, start_date, due_date FROM public.personal_tasks 
+     WHERE google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2)`,
+    [googleEventId, icalUid]
   );
   if (personalResult.rows.length > 0) {
     return { ...personalResult.rows[0], source: 'personal_tasks' };
@@ -507,8 +1154,9 @@ async function findTaskByGoogleEventId(googleEventId: string): Promise<{ id: str
 
   // 2. Search in Org Tasks
   const orgResult = await pool.query(
-    'SELECT id, title, updated_at FROM public.tasks WHERE google_event_id = $1',
-    [googleEventId]
+    `SELECT id, title, updated_at, start_date, due_date FROM public.tasks 
+     WHERE google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2)`,
+    [googleEventId, icalUid]
   );
   if (orgResult.rows.length > 0) {
     return { ...orgResult.rows[0], source: 'tasks' };
@@ -536,17 +1184,37 @@ async function clearGoogleEventId(id: string, source: 'tasks' | 'personal_tasks'
 
 ---
 
-### Step 6 — Update `syncTaskToCalendar()` to Tag Events as KeilHQ-Owned
+### Step 6 — Update `syncTaskToCalendar()` to Tag Events & Prevent Echo Loops
 
-Add `extendedProperties` to every event body your backend sends to Google:
+Add both the `skipGoogleSync` check and the `extendedProperties` tagging to prevent any loop retriggering:
 
 ```typescript
-// Inside buildEventBody(task):
-extendedProperties: {
-  private: {
-    source: 'keilhq',      // Identifies events created by us
-    taskId: task.id,        // Optional but useful for debugging
+export async function syncTaskToCalendar(userId: string, task: Task, options?: { skipGoogleSync?: boolean }): Promise<void> {
+  // --- INBOUND SYNC LOOP RETRIGGER SUPPRESSION ---
+  // If the update originated from an inbound Google update (processIncomingGoogleEvent), skip pushing it back!
+  if (options?.skipGoogleSync) {
+    console.log(`[gcal] Suppressing outbound sync for task ${task.id} to avoid loop echo.`);
+    return;
   }
+
+  const authClient = await getAuthorizedClient(userId);
+  if (!authClient) return;
+
+  const calendar = google.calendar({ version: 'v3', auth: authClient });
+  google.options({ timeout: 10000 }); // Strict 10s timeout policy (stable googleapis way)
+
+  const body = {
+    summary: task.title,
+    // ... start, end dates
+    extendedProperties: {
+      private: {
+        source: 'keilhq',      // Identifies events created/updated by us
+        taskId: task.id,        // Links to the KeilHQ task ID
+      }
+    }
+  };
+
+  // ... execute update/insert
 }
 ```
 
@@ -556,9 +1224,11 @@ This is the fix for **Edge Case 1 (Sync Loop)**.
 
 ### Step 7 — Add Webhook Handler to `integration.controller.ts`
 
+This handler enforces security checks (verifying `X-Goog-Resource-ID`) and implements a 10-second webhook deduplication/debounce strategy.
+
 ```typescript
 export const handleGoogleWebhook = async (req: Request, res: Response): Promise<void> => {
-  // Step 1: Always respond 200 immediately. Google will retry if you're slow.
+  // Step 1: Always respond 200 immediately. Google will retry if you are slow.
   res.status(200).send();
 
   // Step 2: Handle Google's initial sync verification ping
@@ -567,15 +1237,79 @@ export const handleGoogleWebhook = async (req: Request, res: Response): Promise<
 
   // Step 3: Identify which user this notification is for
   const channelId = req.headers['x-goog-channel-id'] as string;
-  if (!channelId) return;
+  const resourceId = req.headers['x-goog-resource-id'] as string;
+  const messageNumberStr = req.headers['x-goog-message-number'] as string;
+  if (!channelId || !resourceId || !messageNumberStr) return;
 
   const integration = await integrationRepository.findByChannelId(channelId);
   if (!integration) return; // Unknown channel, ignore
 
-  // Step 4: Run incremental sync for this user (fire-and-forget)
-  doIncrementalSync(integration.user_id)
-    .catch(err => console.error(`[gcal] incremental sync failed for user ${integration.user_id}:`, err.message));
+  // --- CRITICAL SECURITY CHECK ---
+  // Reject mismatched channel/resource pairs indicating potential spoofing or stale channels
+  if (integration.watch_resource_id !== resourceId) {
+    console.warn(`[gcal] Mismatched resource ID ${resourceId} for channel ${channelId}. Discarding webhook.`);
+    return;
+  }
+
+  // --- WEBHOOK REPLAY PROTECTION ---
+  // Enforce message-level idempotency by atomically recording webhook receipts. Reject duplicates immediately.
+  const messageNumber = BigInt(messageNumberStr);
+  try {
+    await pool.query(
+      `INSERT INTO public.gcal_webhook_receipts (channel_id, resource_id, message_number)
+       VALUES ($1, $2, $3)`,
+      [channelId, resourceId, messageNumber]
+    );
+  } catch (err: any) {
+    if (err.code === '23505') { // unique_violation
+      console.log(`[gcal] Replayed/duplicate webhook notification rejected: message ${messageNumberStr}`);
+      return;
+    }
+    throw err;
+  }
+
+  // Step 4: Webhook Deduplication / Debounce Check (10-second cooldown window)
+  const userId = integration.user_id;
+  const isDebounced = await checkAndSetSyncDebounce(userId);
+  if (isDebounced) {
+    console.log(`[gcal] Webhook notification debounced for user ${userId} to prevent sync spam.`);
+    return;
+  }
+
+  // Step 5: Webhook Work Queue Enqueueing (Never execute sync inside the request chain)
+  // Push the task into BullMQ, Pg-boss, or a background worker channel to prevent event-loop congestion or thread exhaustion under load
+  await enqueueIncrementalSync(userId);
 };
+
+// Helper function to debounce rapid concurrent webhooks atomically (e.g. 10s cooldown)
+async function checkAndSetSyncDebounce(userId: string): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE public.user_integrations
+     SET last_sync_at = NOW()
+     WHERE user_id = $1
+       AND (
+         last_sync_at IS NULL
+         OR last_sync_at < NOW() - INTERVAL '10 seconds'
+       )
+     RETURNING user_id`,
+    [userId]
+  );
+  
+  // If no row is returned, the update condition failed (updated within 10s), so it is debounced
+  return result.rows.length === 0;
+}
+
+// Background work enqueuer helper
+async function enqueueIncrementalSync(userId: string): Promise<void> {
+  console.log(`[gcal] Webhook event enqueued into background worker for user ${userId}.`);
+  // MVP Background Queue Implementation Context:
+  // For production scale, push onto BullMQ: `await syncQueue.add('incremental_sync', { userId });`
+  // If a background queue is pending infrastructure setup, defer processing immediately using process.nextTick:
+  process.nextTick(() => {
+    doIncrementalSync(userId)
+      .catch(err => console.error(`[gcal] Background incremental sync failed for user ${userId}:`, err.message));
+  });
+}
 ```
 
 ---
@@ -630,16 +1364,38 @@ Add to `task-overdue-worker.service.ts` (or a new file `gcal-watch-renewal.servi
 
 ```typescript
 export async function renewExpiringWatchChannels(): Promise<void> {
+  // --- CHANNEL RENEWAL EXPIRATION JITTER ---
+  // To avoid renewal request spikes occurring simultaneously, check expirations using a randomized interval (18 - 30 hours)
   const result = await pool.query(`
     SELECT user_id FROM public.user_integrations
     WHERE provider = 'google_calendar'
+      AND watch_status = 'active'::public.gcal_watch_status
       AND watch_expires_at IS NOT NULL
-      AND watch_expires_at < NOW() + INTERVAL '24 hours'
+      AND watch_expires_at < NOW() + INTERVAL '18 hours' + (random() * INTERVAL '12 hours')
   `);
 
   for (const row of result.rows) {
     await registerWatch(row.user_id)
       .catch(err => console.error(`[gcal] watch renewal failed for user ${row.user_id}:`, err.message));
+  }
+}
+
+// --- SELF-HEALING DEGRADED INTEGRATION RECOVERY CRON ---
+// Automated recovery worker to heal degraded watch channels and resume 2-way sync without user intervention
+export async function healDegradedWatchChannels(): Promise<void> {
+  const result = await pool.query(`
+    SELECT user_id FROM public.user_integrations
+    WHERE provider = 'google_calendar'
+      AND watch_status = 'degraded'::public.gcal_watch_status
+  `);
+
+  for (const row of result.rows) {
+    console.log(`[gcal] Background self-healing triggered for degraded user integration: ${row.user_id}`);
+    try {
+      await registerWatch(row.user_id);
+    } catch (err: any) {
+      console.error(`[gcal] Self-healing recovery failed for user ${row.user_id}:`, err.message);
+    }
   }
 }
 ```
@@ -758,24 +1514,71 @@ Cron: Every January 1st
 Follow these steps in order to build the feature safely:
 
 ### Phase 1: Database & Repository Setup
-- [ ] **1.1 Migration:** Run `009_gcal_two_way_sync.sql` to add channel tracking and sync tokens.
+- [ ] **1.1 Migration:** Run `009_gcal_two_way_sync.sql` to add status enums, sync progress tracking, `ical_uid`, unique constraints, and the replay receipts table.
 - [ ] **1.2 Repository Methods:** Add `saveWatchChannel`, `findByChannelId`, and `saveSyncToken` to `IntegrationRepository`.
-- [ ] **1.3 Cross-Table Helpers:** Implement `findTaskByGoogleEventId`, `softDeleteTask`, and `clearGoogleEventId` (Step 5.1).
+- [ ] **1.3 Cross-Table Helpers:** Implement `findTaskByGoogleEventIdOrIcalUid`, `softDeleteTask`, and `clearGoogleEventId` (Step 5.1).
+- [ ] **1.4 DB Uniqueness Rules:** Enforce `uq_personal_tasks_user_google_event` and `uq_tasks_user_google_event` at schema level.
 
-### Phase 2: Outbound Logic (Loop Prevention)
+### Phase 2: Outbound Logic (Loop Prevention & Retry/Timeout Policy)
 - [ ] **2.1 Tagging:** Update `syncTaskToCalendar` to include `extendedProperties.private.source: 'keilhq'` in the Google event body.
+- [ ] **2.2 Resilience Config:** Set explicit 10,000ms timeouts on all Google client requests and maximum retry count of 5.
 
 ### Phase 3: Webhook & Inbound Logic
 - [ ] **3.1 Public Route:** Add the `/api/v1/integrations/google/webhook` route (POST). Ensure it is public.
-- [ ] **3.2 Webhook Handler:** Implement `handleGoogleWebhook` with 200 OK response and `sync` verification check.
-- [ ] **3.3 Sync Logic:** Implement `doIncrementalSync` and `doFullSync`.
-- [ ] **3.4 Processor:** Implement `processIncomingGoogleEvent` (with task creation and soft-delete logic).
+- [ ] **3.2 Webhook Handler:** Implement `handleGoogleWebhook` with 200 OK response, resource/channel matching, and 10s debounce verification.
+- [ ] **3.3 Sync Logic:** Implement `doIncrementalSync` (using PostgreSQL Dedicated Client Advisory Locks) and `doFullSync` (handling 410 invalidation by clearing token).
+- [ ] **3.4 Processor:** Implement `processIncomingGoogleEvent` (with soft-delete, duplicate-key idempotency, stable iCalUID resolution, and 5-second tolerance conflict window).
 
 ### Phase 4: Lifecycle & Operations
-- [ ] **4.1 Registration:** Call `registerWatch()` inside the OAuth callback controller.
-- [ ] **4.2 Cleanup:** Call `stopWatch()` during the "Disconnect Google" flow.
-- [ ] **4.3 Cron Job:** Add the watch renewal cron job (runs every 12 hours).
+- [ ] **4.1 Registration & Transactions:** Call `registerWatch()` inside the OAuth callback controller, ensuring transactional consistency.
+- [ ] **4.2 Cleanup:** Call `stopWatch()` to stop the active watch channel during "Disconnect Google" and reconnect flows.
+- [ ] **4.3 Cron Job:** Add the watch renewal cron job (runs every 12 hours) and handle channel cleanup properly.
 
 ### Phase 5: Holidays & Polish
 - [ ] **5.1 Holiday Sync:** Implement the holiday calendar discovery and event fetching flow.
 - [ ] **5.2 Testing:** Use `ngrok` to verify the webhook receives events from a real Google Calendar.
+
+---
+
+# Part 8: Staged Rollout & Phase Validation Gates
+
+To ensure the production environment is completely shielded from regression or integration drift, the rollout must satisfy the following strict validation gates:
+
+## Phase 1 Validation (Database & Schema Integrity Gate)
+* **Precheck Migration Script**: Run this precheck SQL on a production clone/snapshot to ensure no duplicate event mappings exist before applying unique constraints:
+  ```sql
+  SELECT owner_user_id, google_event_id, COUNT(*)
+  FROM public.personal_tasks
+  WHERE google_event_id IS NOT NULL
+  GROUP BY 1,2
+  HAVING COUNT(*) > 1;
+  ```
+* **Gate Conditions**:
+  * [ ] Migration script runs and terminates with success status.
+  * [ ] Existing connected users continue scheduling tasks outbound without regression.
+  * [ ] Disconnecting Google integration successfully cleans and clears credentials in the DB.
+
+## Phase 2 Validation (Outbound Loop Prevention Tagging Gate)
+* **Gate Conditions**:
+  * [ ] Create and update tasks in KeilHQ and observe event feeds.
+  * [ ] Verify that outbound event payloads sent to Google contain `extendedProperties.private.source = "keilhq"` metadata.
+  * [ ] Ensure this change causes zero changes to titles, date values, or update performance.
+
+## Phase 3 Validation (Webhook Replay & Express Queueing Observation Gate)
+* **Gate Conditions**:
+  * [ ] Webhook endpoint responds with `200 OK` instantly (<50ms).
+  * [ ] Observe logs to ensure verification headers (`X-Goog-Resource-State: sync`) bypass sync actions correctly.
+  * [ ] Malformed payloads, mismatched resources, or spoofed headers are safely discarded and logged.
+  * [ ] Verify replay protection: Replayed headers (same `X-Goog-Message-Number`) are rejected with immediate logging by `gcal_webhook_receipts` unique check.
+  * [ ] Webhook enqueues jobs to nextTick/worker and exits instantly without locking Express processes.
+
+## Phase 4 Validation (Dry-Run Incremental Sync Gate)
+* **Gate Conditions**:
+  * [ ] Deploy incremental sync in "dry-run" mode (log output only, omit actual DB updates).
+  * [ ] Verify logs match expected operational patterns:
+    * `[gcal] detected update...`
+    * `[gcal] detected external create...`
+    * `[gcal] skipped self-originated event...`
+    * `[gcal] detected cancellation...`
+  * [ ] Verify that zero DB mutations occur during this dry-run phase.
+  * [ ] Once dry-run logs operate with 100% stability, remove dry-run logging blocks and unlock active inbound mutation writes for Phase 5.

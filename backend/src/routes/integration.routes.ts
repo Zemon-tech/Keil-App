@@ -5,9 +5,14 @@ import {
   handleGoogleCallback,
   getGoogleStatus,
   disconnectGoogle,
+  handleGoogleWebhook,
 } from '../controllers/integration.controller';
 
 const router = Router();
+
+// PUBLIC — Google calls this directly to deliver push notifications.
+// Must be registered BEFORE any protect middleware routes.
+router.post('/google/webhook', handleGoogleWebhook);
 
 // Generate the Google OAuth consent URL (user must be logged in)
 router.get('/google/connect', protect, getGoogleConnectUrl);
