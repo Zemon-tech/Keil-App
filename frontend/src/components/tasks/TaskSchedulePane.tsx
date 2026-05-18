@@ -347,14 +347,8 @@ function QuickNavPopover({
 
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
-      <PopoverTrigger
-        className={cn(
-          buttonVariants({ variant: "outline", size: "sm" }),
-          "h-8 px-2 hover:bg-muted transition-colors flex items-center justify-center cursor-pointer"
-        )}
-        title="Quick Navigation"
-      >
-        <Calendar className="h-4.5 w-4.5 text-muted-foreground" />
+      <PopoverTrigger asChild>
+        {children}
       </PopoverTrigger>
       <PopoverContent
         className="w-auto p-3 rounded-xl shadow-xl border-border/60"
