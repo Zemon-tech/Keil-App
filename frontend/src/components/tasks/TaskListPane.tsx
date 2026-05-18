@@ -18,6 +18,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverClose,
 } from "@/components/ui/popover";
 import {
   DropdownMenu,
@@ -169,17 +170,18 @@ function SubtaskList({
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
                   {((sub as any).type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
-                    <button
-                      key={s}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpdateTask?.(sub.id, { status: s });
-                      }}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
-                    >
-                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
-                      {s}
-                    </button>
+                    <PopoverClose asChild key={s}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateTask?.(sub.id, { status: s });
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                      >
+                        <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
+                        {s}
+                      </button>
+                    </PopoverClose>
                   ))}
                 </PopoverContent>
               </Popover>
@@ -652,22 +654,23 @@ export function TaskListPane({
                           className="w-36 p-1 rounded-lg shadow-lg"
                         >
                           {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
-                            <button
-                              key={s}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onUpdateTask?.(t.id, { status: s });
-                              }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
-                            >
-                              <div
-                                className={cn(
-                                  "w-2 h-2 rounded-full shrink-0",
-                                  STATUS_COLOR[s]
-                                )}
-                              />
-                              {s}
-                            </button>
+                            <PopoverClose asChild key={s}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateTask?.(t.id, { status: s });
+                                }}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                              >
+                                <div
+                                  className={cn(
+                                    "w-2 h-2 rounded-full shrink-0",
+                                    STATUS_COLOR[s]
+                                  )}
+                                />
+                                {s}
+                              </button>
+                            </PopoverClose>
                           ))}
                         </PopoverContent>
                       </Popover>

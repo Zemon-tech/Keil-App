@@ -988,7 +988,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
               >
                 <button
                   type="button"
-                  className="truncate text-sm font-semibold min-w-[140px] text-center cursor-pointer transition-colors duration-200 select-none py-1 px-2.5 rounded-md hover:bg-muted/80 active:bg-muted/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="truncate text-sm font-semibold text-center cursor-pointer transition-colors duration-200 select-none py-1 px-2.5 rounded-md hover:bg-muted/80 active:bg-muted/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   {headerTitle}
                 </button>
