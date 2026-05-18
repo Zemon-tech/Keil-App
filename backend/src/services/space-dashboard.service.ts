@@ -19,6 +19,8 @@ const toDTO = (task: any): OrgTaskDTO => ({
   created_by: task.created_by,
   created_at: new Date(task.created_at).toISOString(),
   updated_at: new Date(task.updated_at).toISOString(),
+  type: task.type,
+  event_type: task.event_type,
 });
 
 const getPriorityWeight = (priority: TaskPriority): number => {

@@ -23,6 +23,8 @@ export interface TaskDTO {
   created_by: string;
   created_at: string;
   updated_at: string;
+  type?: 'task' | 'event';
+  event_type?: string | null;
 }
 
 export interface DashboardBucketsDTO {
@@ -50,7 +52,9 @@ const taskToDTO = (task: Task): TaskDTO => {
     due_date: task.due_date ? task.due_date.toISOString() : null,
     created_by: task.created_by,
     created_at: task.created_at.toISOString(),
-    updated_at: task.updated_at.toISOString()
+    updated_at: task.updated_at.toISOString(),
+    type: task.type,
+    event_type: task.event_type
   };
 };
 
