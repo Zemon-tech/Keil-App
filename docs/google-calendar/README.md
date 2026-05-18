@@ -2,15 +2,18 @@
 
 ## Overview
 
-This feature enables users to sync their scheduled tasks to their personal Google Calendar. When a user drags a task onto the calendar (setting a `start_date` and `due_date`), the backend automatically pushes a corresponding event to their connected Google Calendar. Updates and deletions follow the same path.
+This feature enables **full two-way sync** between KeilHQ tasks and Google Calendar.
 
-The sync is **one-way** (app → Google Calendar) and **best-effort** — Google sync never blocks or fails a task update.
+- **KeilHQ → Google Calendar**: When a user schedules, updates, or deletes a task/event in KeilHQ, the change is automatically pushed to their connected Google Calendar.
+- **Google Calendar → KeilHQ**: When a user creates, modifies, or deletes an event directly in Google Calendar (from any device or app), the change is automatically reflected in their KeilHQ workspace (General space).
+
+The sync is **best-effort and non-blocking** — Google sync never prevents a task update from succeeding.
 
 ## Table of Contents
 
 | Document | Description |
 | --- | --- |
-| [Architecture](./architecture.md) | OAuth flow, sync trigger design, and key decisions |
+| [Architecture](./architecture.md) | OAuth flow, sync trigger design, webhook pipeline, and key decisions |
 | [Frontend Guide](./frontend.md) | Hook usage, Connectors UI, and redirect handling |
 | [Backend Guide](./backend.md) | Service logic, endpoints, schema, and token management |
 | [Environment Variables](./environment.md) | Required configuration and Google Cloud setup |
@@ -19,26 +22,26 @@ The sync is **one-way** (app → Google Calendar) and **best-effort** — Google
 
 ### 1. Google Cloud setup
 
-1. Open your existing Google Cloud project (the one used for Google login).
+1. Open your existing Google Cloud project.
 2. Go to **APIs & Services → Enable APIs** and enable the **Google Calendar API**.
 3. Go to **APIs & Services → Credentials → OAuth 2.0 Client IDs**.
-4. Add `http://localhost:5000/api/v1/integrations/google/callback` as an authorized redirect URI.
-5. Note your **Client ID** and **Client Secret** — these are the same credentials already used for Supabase Google login.
+4. Add your callback URI as an authorized redirect URI:
+   - Development: `http://localhost:5000/api/v1/integrations/google/callback`
+   - Production: `https://your-backend.com/api/v1/integrations/google/callback`
 
-### 2. Run the migration
+### 2. Run the migrations
 
-Run `backend/src/migrations/008_google_calendar_integration.sql` against your database. This adds:
-- `public.user_integrations` table for storing OAuth tokens
-- `google_event_id` column on `public.tasks` and `public.personal_tasks`
-
-### 3. Install the backend dependency
+Run both migrations against your database:
 
 ```bash
-cd backend
-npm install googleapis
+node run-migration.js
 ```
 
-### 4. Configure environment variables
+This applies:
+- `008_google_calendar_integration.sql` — `user_integrations` table + `google_event_id` columns
+- `011_gcal_two_way_sync.sql` — watch channel columns, `ical_uid`, unique constraints, webhook receipts table
+
+### 3. Configure environment variables
 
 Add to `backend/.env`:
 
@@ -48,34 +51,43 @@ GOOGLE_CLIENT_SECRET=<your-google-client-secret>
 GOOGLE_REDIRECT_URI=http://localhost:5000/api/v1/integrations/google/callback
 GOOGLE_OAUTH_STATE_SECRET=<random-32-byte-hex-string>
 FRONTEND_URL=http://localhost:5173
+BACKEND_URL=https://your-public-backend-url.com
 ```
 
-Generate the state secret:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+> **Important:** `BACKEND_URL` must be a publicly accessible URL. Google cannot reach `localhost`. Use [ngrok](https://ngrok.com) for local development.
 
-### 5. Connect Google Calendar
+### 4. Connect Google Calendar
 
 1. Start the backend and frontend.
 2. Open **Settings → Connectors**.
 3. Click **Connect** next to Google Calendar.
 4. Complete the Google consent screen.
 5. You are redirected back to `/tasks` with a success toast.
+6. The backend automatically registers a push notification watch channel with Google.
 
-### 6. Test the sync
+### 5. Test outbound sync (KeilHQ → Google)
 
-1. Open the Tasks page.
-2. Drag any task from the list onto the calendar to schedule it.
-3. Open Google Calendar — the event should appear within a few seconds.
+1. Open the Tasks page in the General workspace.
+2. Create or drag a task onto the calendar to schedule it.
+3. Open Google Calendar — the event should appear within seconds.
+
+### 6. Test inbound sync (Google → KeilHQ)
+
+1. Open Google Calendar and create a new event on a future date.
+2. Within a few seconds, the event should appear as a task in the General workspace in KeilHQ.
+
+> **Note:** Only events with a future start date are synced. Past events are ignored.
 
 ## Tech Stack
 
 | Layer | Technology | Purpose |
 | --- | --- | --- |
 | OAuth Provider | Google OAuth 2.0 | Per-user calendar access grant |
-| Calendar API | Google Calendar API v3 | Create, update, delete calendar events |
+| Calendar API | Google Calendar API v3 | Create, update, delete, watch calendar events |
+| Push Notifications | Google Calendar Push Notifications | Real-time change delivery via webhooks |
 | Backend Library | `googleapis` (npm) | Official Google API client for Node.js |
-| Token Storage | PostgreSQL (`user_integrations`) | Persist refresh tokens per user |
+| Token Storage | PostgreSQL (`user_integrations`) | Persist refresh tokens and watch channel state per user |
 | CSRF Protection | HMAC-SHA256 signed state param | Prevent OAuth state forgery |
-| Frontend State | TanStack React Query | Cache and invalidate connection status |
+| Real-time UI Update | Socket.io (`gcal_tasks_updated` event) | Trigger frontend task refresh on inbound sync |
+| Frontend State | TanStack React Query | Cache and invalidate connection status and task lists |
+| Tunnel (dev only) | ngrok | Expose local backend to Google's webhook delivery |
