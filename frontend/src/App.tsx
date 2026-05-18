@@ -65,6 +65,7 @@ function App() {
             </Layout>
           }
         />
+
         <Route
           path="/events"
           element={

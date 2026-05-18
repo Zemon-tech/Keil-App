@@ -118,4 +118,6 @@ export type DashboardTaskDTO = {
     priority: TaskPriority;
     due_date: string | null;
     objective: string | null;
+    type?: "task" | "event" | null;
+    event_type?: string | null;
 };

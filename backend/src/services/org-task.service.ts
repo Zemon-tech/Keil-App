@@ -33,6 +33,8 @@ export interface OrgTaskDTO {
   blocked_by_count?: number;
   subtask_count?: number;
   parent_task_title?: string;
+  type?: 'task' | 'event';
+  event_type?: string | null;
 }
 
 export interface OrgTaskContext {
@@ -90,6 +92,8 @@ const toDTO = (task: Task & { assignees?: User[] }): OrgTaskDTO => ({
   updated_at: toISO(task.updated_at)!,
   assignees: task.assignees as any,
   subtask_count: task.subtask_count ? parseInt(task.subtask_count.toString(), 10) : 0,
+  type: task.type,
+  event_type: task.event_type,
 });
 
 const validateDateOrder = (startDate?: Date | null, dueDate?: Date | null): void => {
