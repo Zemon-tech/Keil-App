@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -339,15 +339,14 @@ function QuickNavPopover({ currentViewDate, calendarApi }: { currentViewDate: Da
 
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 hover:bg-muted transition-colors"
-          title="Quick Navigation"
-        >
-          <Calendar className="h-4.5 w-4.5 text-muted-foreground" />
-        </Button>
+      <PopoverTrigger
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "h-8 px-2 hover:bg-muted transition-colors flex items-center justify-center cursor-pointer"
+        )}
+        title="Quick Navigation"
+      >
+        <Calendar className="h-4.5 w-4.5 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent
         className="w-auto p-3 rounded-xl shadow-xl border-border/60"
@@ -578,8 +577,24 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
       });
 
     const allEvents = [...blockEvents, ...taskEvents];
-    console.log("✅ Events state updated:", allEvents.length);
-    setEvents(allEvents);
+    setEvents((prevEvents) => {
+      const isSame =
+        prevEvents.length === allEvents.length &&
+        prevEvents.every((evt, idx) => {
+          const nextEvt = allEvents[idx];
+          return (
+            evt.id === nextEvt.id &&
+            evt.start === nextEvt.start &&
+            evt.end === nextEvt.end &&
+            evt.title === nextEvt.title
+          );
+        });
+      if (isSame) {
+        return prevEvents;
+      }
+      console.log("✅ Events state updated:", allEvents.length);
+      return allEvents;
+    });
   }, [tasks, blocks, statusFilter]);
 
   // Handle unschedule - remove task from local events state
@@ -876,16 +891,14 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                   {currentViewType === "dayGridMonth" ? "Today" : "Month"}
                 </Button>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-2 rounded-l-none"
-                      aria-label="Change calendar view"
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
+                  <DropdownMenuTrigger
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      "h-8 px-2 rounded-l-none flex items-center justify-center cursor-pointer"
+                    )}
+                    aria-label="Change calendar view"
+                  >
+                    <ChevronDown className="h-4 w-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="rounded-xl">
                     <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>

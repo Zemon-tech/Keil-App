@@ -22,6 +22,8 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -77,11 +79,13 @@ const PRIORITY_LEVELS = [
   { label: "Urgent", value: "urgent", color: "text-red-400 bg-red-400/10", icon: Flag },
 ] as const;
 
+const EMPTY_USERS: SimpleAssigneeOption[] = [];
+
 export function CreateTaskDialog({
   open,
   onOpenChange,
   onTaskCreated,
-  allUsers = [],
+  allUsers = EMPTY_USERS,
   mode = "create",
   taskId,
   initialValues,
@@ -132,18 +136,32 @@ export function CreateTaskDialog({
 
     // Detect Type
     if (lowerTitle.match(/\b(meeting|call|sync|lunch|coffee|event|workshop)\b/)) {
-      setType("event");
+      if (type !== "event") {
+        setType("event");
+      }
     }
 
     // Detect Priority
-    if (lowerTitle.includes("!urgent") || lowerTitle.includes("urgent")) setPriority("urgent");
-    else if (lowerTitle.includes("!high") || lowerTitle.includes("high")) setPriority("high");
-    else if (lowerTitle.includes("!low") || lowerTitle.includes("low")) setPriority("low");
+    let detectedPriority: "urgent" | "high" | "low" | null = null;
+    if (lowerTitle.includes("!urgent") || lowerTitle.includes("urgent")) detectedPriority = "urgent";
+    else if (lowerTitle.includes("!high") || lowerTitle.includes("high")) detectedPriority = "high";
+    else if (lowerTitle.includes("!low") || lowerTitle.includes("low")) detectedPriority = "low";
+
+    if (detectedPriority && priority !== detectedPriority) {
+      setPriority(detectedPriority);
+    }
 
     // Detect Date
-    if (lowerTitle.includes("today")) setDate(startOfToday());
-    else if (lowerTitle.includes("tomorrow")) setDate(addDays(startOfToday(), 1));
-    else if (lowerTitle.includes("monday")) setDate(nextMonday(startOfToday()));
+    let detectedDate: Date | null = null;
+    if (lowerTitle.includes("today")) detectedDate = startOfToday();
+    else if (lowerTitle.includes("tomorrow")) detectedDate = addDays(startOfToday(), 1);
+    else if (lowerTitle.includes("monday")) detectedDate = nextMonday(startOfToday());
+
+    if (detectedDate) {
+      if (!date || date.getTime() !== detectedDate.getTime()) {
+        setDate(detectedDate);
+      }
+    }
 
     // Detect Assignees (simple @ match)
     allUsers.forEach(user => {
@@ -308,6 +326,12 @@ export function CreateTaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[600px] bg-background border-border p-0 overflow-hidden shadow-2xl [&>button]:hidden">
         <DialogHeader className="p-6 pb-2 relative">
+          <DialogTitle className="sr-only">
+            {mode === "edit" ? "Edit Task" : "Create Task"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Use this form to define task details, assignees, dates, and priorities.
+          </DialogDescription>
           <div className="flex items-center justify-between mb-4">
             <div className="flex bg-muted/50 rounded-lg p-1">
               <button

@@ -34,6 +34,8 @@ import {
 } from "../hooks/api/usePersonalTasks";
 
 const PAGE_SIZE = 20;
+const EMPTY_BLOCKS: any[] = [];
+const EMPTY_TASKS: TaskDTO[] = [];
 const INITIAL_LIMIT = 10000; // Load all tasks within current month without pagination
 
 export function TasksPage() {
@@ -163,7 +165,7 @@ export function TasksPage() {
   }, [isPersonalMode, personalTasksRaw]);
 
   // Active task list and loading state depend on mode
-  const tasks = isPersonalMode ? personalTasks : (orgTasks ?? []);
+  const tasks = isPersonalMode ? personalTasks : (orgTasks ?? EMPTY_TASKS);
   const isLoading = isPersonalMode ? personalLoading : orgLoading;
   const isFetching = isPersonalMode ? false : orgFetching;
 
@@ -455,7 +457,7 @@ export function TasksPage() {
             ) : (
               <TaskSchedulePane
                 tasks={taskList as any}
-                blocks={[] as any}
+                blocks={EMPTY_BLOCKS}
                 selectedTask={null as any}
                 statusFilter={statusFilter}
                 onDateChange={setCalendarMonth}
