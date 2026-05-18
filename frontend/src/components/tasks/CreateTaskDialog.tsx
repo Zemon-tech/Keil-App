@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format, addDays, nextMonday, startOfToday, parseISO } from "date-fns";
 import {
   CalendarIcon,
@@ -28,6 +28,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverClose,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -117,6 +118,9 @@ export function CreateTaskDialog({
   const [showClarity, setShowClarity] = useState(false);
   const [showAgenda, setShowAgenda] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
+
+  // Ref for programmatically closing the date popover
+  const dateCloseRef = useRef<HTMLButtonElement>(null);
 
   // New metadata fields
   const [storyPoints, setStoryPoints] = useState<number | undefined>(undefined);
@@ -351,6 +355,7 @@ export function CreateTaskDialog({
                   </PopoverTrigger>
                   <PopoverContent className="p-0 w-auto bg-background border-border shadow-xl" align="end">
                     <div className="flex flex-col">
+                      <PopoverClose ref={dateCloseRef} className="hidden" />
                       <Calendar
                         mode="single"
                         selected={date}
@@ -359,6 +364,9 @@ export function CreateTaskDialog({
                             newDate.setHours(date.getHours(), date.getMinutes());
                           }
                           setDate(newDate);
+                          if (isAllDay) {
+                            dateCloseRef.current?.click();
+                          }
                         }}
                         initialFocus
                         className="bg-background"
@@ -455,13 +463,14 @@ export function CreateTaskDialog({
                 </PopoverTrigger>
                 <PopoverContent className="p-1 w-32 bg-background border-border">
                   {["meeting", "call", "birthday", "workshop", "other"].map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setEventType(t)}
-                      className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors capitalize"
-                    >
-                      {t}
-                    </button>
+                    <PopoverClose asChild key={t}>
+                      <button
+                        onClick={() => setEventType(t)}
+                        className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors capitalize"
+                      >
+                        {t}
+                      </button>
+                    </PopoverClose>
                   ))}
                 </PopoverContent>
               </Popover>
@@ -506,14 +515,15 @@ export function CreateTaskDialog({
                   </PopoverTrigger>
                   <PopoverContent className="p-1 w-32 bg-background border-border">
                     {PRIORITY_LEVELS.map((p) => (
-                      <button
-                        key={p.value}
-                        onClick={() => setPriority(p.value)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
-                      >
-                        <p.icon className={cn("size-3", p.color.split(' ')[0])} />
-                        {p.label}
-                      </button>
+                      <PopoverClose asChild key={p.value}>
+                        <button
+                          onClick={() => setPriority(p.value)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+                        >
+                          <p.icon className={cn("size-3", p.color.split(' ')[0])} />
+                          {p.label}
+                        </button>
+                      </PopoverClose>
                     ))}
                   </PopoverContent>
                 </Popover>
@@ -530,23 +540,26 @@ export function CreateTaskDialog({
                     <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Story Points</div>
                     <div className="grid grid-cols-3 gap-1">
                       {[1, 2, 3, 5, 8].map(pts => (
-                        <button
-                          key={pts}
-                          onClick={() => setStoryPoints(pts)}
-                          className={cn(
-                            "h-7 rounded flex items-center justify-center text-xs transition-colors",
-                            storyPoints === pts ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                          )}
-                        >
-                          {pts}
-                        </button>
+                        <PopoverClose asChild key={pts}>
+                          <button
+                            onClick={() => setStoryPoints(pts)}
+                            className={cn(
+                              "h-7 rounded flex items-center justify-center text-xs transition-colors",
+                              storyPoints === pts ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                            )}
+                          >
+                            {pts}
+                          </button>
+                        </PopoverClose>
                       ))}
-                      <button
-                        onClick={() => setStoryPoints(undefined)}
-                        className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground"
-                      >
-                        -
-                      </button>
+                      <PopoverClose asChild>
+                        <button
+                          onClick={() => setStoryPoints(undefined)}
+                          className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground"
+                        >
+                          -
+                        </button>
+                      </PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>
