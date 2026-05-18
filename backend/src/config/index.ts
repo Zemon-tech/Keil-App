@@ -20,6 +20,10 @@ export const config = {
     backendUrl: process.env.BACKEND_URL || "",
     // Sarvam AI
     sarvamApiKey: process.env.SARVAM_API_KEY || "",
+    // OpenRouter / Vercel AI SDK
+    openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
+    openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+    openRouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
     // Sevalla S3
     sevallaS3Endpoint: process.env.SEVALLA_S3_ENDPOINT || "",
     sevallaS3AccessKeyId: process.env.SEVALLA_S3_ACCESS_KEY_ID || "",
