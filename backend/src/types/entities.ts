@@ -175,12 +175,15 @@ export interface MotionPage {
   org_id: string;
   space_id: string;
   created_by: string;
+  updated_by: string;
   parent_id: string | null;
   title: string;
   content: Record<string, any>; // Tiptap JSONContent
   icon: string | null;
   cover_image: string | null;
   position: number;
+  small_text: boolean;
+  full_width: boolean;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;

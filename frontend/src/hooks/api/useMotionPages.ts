@@ -12,12 +12,15 @@ export interface MotionPageDTO {
   org_id: string;
   space_id: string;
   created_by: string;
+  updated_by: string;
   parent_id: string | null;
   title: string;
   content: JSONContent;
   icon: string | null;
   cover_image: string | null;
   position: number;
+  small_text: boolean;
+  full_width: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -52,6 +55,8 @@ export interface UpdateMotionPageInput {
   icon?: string | null;
   cover_image?: string | null;
   parent_id?: string | null;
+  small_text?: boolean;
+  full_width?: boolean;
 }
 
 export interface CreateShareInput {

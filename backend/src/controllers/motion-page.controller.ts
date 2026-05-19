@@ -63,7 +63,7 @@ export const createPage = catchAsync(async (req: Request, res: Response) => {
 export const updatePage = catchAsync(async (req: Request, res: Response) => {
   const { orgId, spaceId, userId } = getContext(req);
   const pageId = asString(req.params.id);
-  const { title, content, icon, cover_image, parent_id } = req.body;
+  const { title, content, icon, cover_image, parent_id, small_text, full_width } = req.body;
 
   // Build updates object — only include fields that were explicitly sent
   const input: motionPageService.UpdateMotionPageInput = {};
@@ -82,6 +82,8 @@ export const updatePage = catchAsync(async (req: Request, res: Response) => {
   if (icon !== undefined) input.icon = icon;
   if (cover_image !== undefined) input.cover_image = cover_image;
   if (parent_id !== undefined) input.parent_id = parent_id;
+  if (small_text !== undefined) input.small_text = small_text;
+  if (full_width !== undefined) input.full_width = full_width;
 
   const updated = await motionPageService.updatePage(orgId, spaceId, pageId, userId, input);
   if (!updated) throw new ApiError(404, 'Page not found');

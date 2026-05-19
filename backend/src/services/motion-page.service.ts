@@ -12,12 +12,15 @@ export interface MotionPageDTO {
   org_id: string;
   space_id: string;
   created_by: string;
+  updated_by: string;
   parent_id: string | null;
   title: string;
   content: Record<string, any>;
   icon: string | null;
   cover_image: string | null;
   position: number;
+  small_text: boolean;
+  full_width: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -51,6 +54,8 @@ export interface UpdateMotionPageInput {
   icon?: string | null;
   cover_image?: string | null;
   parent_id?: string | null;
+  small_text?: boolean;
+  full_width?: boolean;
 }
 
 export interface CreateShareInput {
@@ -73,12 +78,15 @@ const toPageDTO = (page: MotionPage): MotionPageDTO => ({
   org_id: page.org_id,
   space_id: page.space_id,
   created_by: page.created_by,
+  updated_by: page.updated_by,
   parent_id: page.parent_id,
   title: page.title,
   content: page.content,
   icon: page.icon,
   cover_image: page.cover_image,
   position: page.position,
+  small_text: page.small_text,
+  full_width: page.full_width,
   created_at: toISO(page.created_at)!,
   updated_at: toISO(page.updated_at)!,
   deleted_at: toISO(page.deleted_at),
@@ -176,11 +184,14 @@ export const createPage = async (
     org_id: orgId,
     space_id: spaceId,
     created_by: userId,
+    updated_by: userId,
     parent_id: input.parent_id ?? null,
     title: input.title?.trim() || 'Untitled',
     icon: input.icon ?? null,
     cover_image: input.cover_image ?? null,
     position: maxPos + 1000, // Leave room for fractional inserts between existing pages
+    small_text: false,
+    full_width: false,
   } as Partial<MotionPage>);
 
   const dto = toPageDTO(page);
@@ -220,6 +231,9 @@ export const updatePage = async (
   if (input.icon !== undefined) updates.icon = input.icon;
   if (input.cover_image !== undefined) updates.cover_image = input.cover_image;
   if (input.parent_id !== undefined) updates.parent_id = input.parent_id;
+  if (input.small_text !== undefined) updates.small_text = input.small_text;
+  if (input.full_width !== undefined) updates.full_width = input.full_width;
+  updates.updated_by = _userId;
 
   const updated = await motionPageRepository.update(pageId, updates);
   if (updated) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Link2, Copy, Files, CornerUpRight, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, PenLine, Languages, Undo2, Download, Upload, RotateCw, History, AppWindow, FilePlus, ArrowRight
 } from "lucide-react";
 import { MotionShareModal } from "./MotionShareModal";
 import { 
@@ -10,12 +10,15 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import {
   useMotionPage,
@@ -25,6 +28,7 @@ import {
   useMotionSocketListeners,
 } from "@/hooks/api/useMotionPages";
 import type { JSONContent } from "@tiptap/core";
+import { toast } from "sonner";
 
 // ─── Save status indicator ────────────────────────────────────────────────────
 
@@ -62,6 +66,31 @@ export function MotionPage() {
   const [emojiSearch, setEmojiSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  // -- Dropdown State --
+  const [menuSearch, setMenuSearch] = useState("");
+  const [isLocked, setIsLocked] = useState(false);
+
+  useEffect(() => {
+    if (pageEditor) {
+      pageEditor.setEditable(!isLocked);
+    }
+  }, [isLocked, pageEditor]);
+
+  const matchesSearch = (text: string) => text.toLowerCase().includes(menuSearch.toLowerCase());
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast("Link copied to clipboard");
+  };
+
+  const handleCopyContent = () => {
+    if (pageEditor) {
+      const text = pageEditor.getText();
+      navigator.clipboard.writeText(text);
+      toast("Content copied to clipboard");
+    }
+  };
 
   const { activeOrgId, activeSpaceId, mode } = useAppContext();
   const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty } =
@@ -202,6 +231,20 @@ export function MotionPage() {
     }
   };
 
+  const toggleSmallText = () => {
+    if (!pageId) return;
+    const nextValue = !displayPage.small_text;
+    useMotionStore.getState().updatePageLocally(pageId, { small_text: nextValue });
+    updatePage.mutate({ id: pageId, updates: { small_text: nextValue } });
+  };
+
+  const toggleFullWidth = () => {
+    if (!pageId) return;
+    const nextValue = !displayPage.full_width;
+    useMotionStore.getState().updatePageLocally(pageId, { full_width: nextValue });
+    updatePage.mutate({ id: pageId, updates: { full_width: nextValue } });
+  };
+
   // ── Guards ──────────────────────────────────────────────────────────────────
   if (mode !== "organisation" || !activeOrgId || !activeSpaceId) {
     return (
@@ -220,6 +263,12 @@ export function MotionPage() {
   }
 
   const displayPage = page ?? serverPage!;
+
+  const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
+  const lastEditedMember = useMemo(() => {
+    if (!displayPage?.updated_by) return null;
+    return members.find((m) => m.user_id === displayPage.updated_by);
+  }, [members, displayPage?.updated_by]);
 
   return (
     <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative">
@@ -310,17 +359,322 @@ export function MotionPage() {
             >
               <Trash2 className="size-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground/50 hover:text-foreground transition-colors"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[300px] p-0 rounded-xl shadow-lg border border-border bg-popover overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="flex flex-col overflow-y-auto custom-scrollbar">
+                  {/* Search bar */}
+                  <div className="p-2 pb-0">
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border/50 bg-muted/30 focus-within:border-primary/50 focus-within:bg-background transition-colors">
+                      <Search className="size-3.5 text-muted-foreground" />
+                      <input 
+                        placeholder="Search actions..." 
+                        className="bg-transparent border-none outline-none text-xs w-full placeholder:text-muted-foreground/60"
+                        value={menuSearch}
+                        onChange={(e) => setMenuSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Section 1 — Font Style Selector */}
+                  {(matchesSearch("Default") || matchesSearch("Serif") || matchesSearch("Mono")) && (
+                    <>
+                      <div className="flex items-center justify-between px-3 py-2 mt-1">
+                        {matchesSearch("Default") && (
+                          <div className="flex flex-col items-center gap-1 cursor-pointer w-[30%] py-1 rounded hover:bg-muted/50 transition-colors">
+                            <span className="text-xl font-medium font-sans">Ag</span>
+                            <span className="text-[10px] text-muted-foreground">Default</span>
+                          </div>
+                        )}
+                        {matchesSearch("Serif") && (
+                          <div className="flex flex-col items-center gap-1 cursor-pointer w-[30%] py-1 rounded hover:bg-muted/50 transition-colors">
+                            <span className="text-xl font-medium font-serif">Ag</span>
+                            <span className="text-[10px] text-muted-foreground">Serif</span>
+                          </div>
+                        )}
+                        {matchesSearch("Mono") && (
+                          <div className="flex flex-col items-center gap-1 cursor-pointer w-[30%] py-1 rounded hover:bg-muted/50 transition-colors">
+                            <span className="text-xl font-medium font-mono">Ag</span>
+                            <span className="text-[10px] text-muted-foreground">Mono</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 2 — Page Actions */}
+                  {(matchesSearch("Copy link") || matchesSearch("Copy page contents") || matchesSearch("Duplicate") || matchesSearch("Move to") || matchesSearch("Move to Trash")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Copy link") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleCopyLink}>
+                            <div className="flex items-center gap-2.5">
+                              <Link2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Copy link</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/60">Ctrl+Alt+L</span>
+                          </div>
+                        )}
+                        {matchesSearch("Copy page contents") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleCopyContent}>
+                            <div className="flex items-center gap-2.5">
+                              <Copy className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Copy page contents</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Duplicate") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <FilePlus className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Duplicate</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/60">Ctrl+D</span>
+                          </div>
+                        )}
+                        {matchesSearch("Move to") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <CornerUpRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Move to</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/60">Ctrl+⇧+P</span>
+                          </div>
+                        )}
+                        {matchesSearch("Move to Trash") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleDelete}>
+                            <div className="flex items-center gap-2.5">
+                              <Trash2 className="size-4 text-muted-foreground group-hover:text-destructive transition-colors" />
+                              <span className="text-xs font-medium group-hover:text-destructive transition-colors">Move to Trash</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 3 — View & Layout Toggles */}
+                  {(matchesSearch("Small text") || matchesSearch("Full width")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Small text") && (
+                          <div 
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                            onClick={toggleSmallText}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <AArrowDown className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Small text</span>
+                            </div>
+                            <Switch size="sm" checked={displayPage.small_text || false} className="pointer-events-none" />
+                          </div>
+                        )}
+                        {matchesSearch("Full width") && (
+                          <div 
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                            onClick={toggleFullWidth}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <MoveHorizontal className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Full width</span>
+                            </div>
+                            <Switch size="sm" checked={displayPage.full_width || false} className="pointer-events-none" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 4 — Page Settings */}
+                  {(matchesSearch("Customize page") || matchesSearch("Lock page") || matchesSearch("Use with AI") || matchesSearch("Suggest edits") || matchesSearch("Translate")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Customize page") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <SlidersHorizontal className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Customize page</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Lock page") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={() => setIsLocked(!isLocked)}>
+                            <div className="flex items-center gap-2.5">
+                              <Lock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Lock page</span>
+                            </div>
+                            <Switch size="sm" checked={isLocked} onCheckedChange={setIsLocked} />
+                          </div>
+                        )}
+                        {matchesSearch("Use with AI") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Sparkles className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Use with AI</span>
+                            </div>
+                            <ChevronRight className="size-3.5 text-muted-foreground/60" />
+                          </div>
+                        )}
+                        {matchesSearch("Suggest edits") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <PenLine className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Suggest edits</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Translate") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Languages className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Translate</span>
+                            </div>
+                            <ChevronRight className="size-3.5 text-muted-foreground/60" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 5 — History & Actions */}
+                  {(matchesSearch("Undo") || matchesSearch("Import") || matchesSearch("Export")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Undo") && (
+                          <div 
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                            onClick={() => {
+                              if (pageEditor) {
+                                pageEditor.commands.undo();
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Undo2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Undo</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/60">Ctrl+Z</span>
+                          </div>
+                        )}
+                        {matchesSearch("Import") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Download className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Import</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Export") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Upload className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Export</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 6 — Advanced */}
+                  {(matchesSearch("Turn into wiki") || matchesSearch("Updates & analytics") || matchesSearch("Version history") || matchesSearch("Notify me") || matchesSearch("Connections") || matchesSearch("Open in Windows app")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Turn into wiki") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <RotateCw className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Turn into wiki</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Updates & analytics") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Clock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Updates & analytics</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Version history") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <History className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Version history</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Notify me") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Bell className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Notify me</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                              Comments <ChevronRight className="size-3" />
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Connections") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Link2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Connections</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                              None <ChevronRight className="size-3" />
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Open in Windows app") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <AppWindow className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Open in Windows app</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 7 — Footer Meta Info */}
+                  <div className="py-2 px-3 flex flex-col gap-0.5 bg-muted/20">
+                    <span className="text-[10px] text-muted-foreground/70">
+                      Word count: {pageEditor ? pageEditor.storage.characterCount.words() : 0} words
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/70">
+                      Last edited by {lastEditedMember?.name || lastEditedMember?.email || user?.name || "User"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/70">
+                      {displayPage?.updated_at ? new Date(displayPage.updated_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20 group/page">
+        <div className={cn(
+          "flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20 group/page",
+          displayPage.small_text && "motion-page-small-text",
+          displayPage.full_width && "motion-page-full-width"
+        )}>
           <div className="w-full pt-0 relative">
             {displayPage.cover_image ? (
               <div className="h-[220px] w-full relative group/cover">
@@ -485,7 +839,7 @@ export function MotionPage() {
 
             {/* Icon — straddles the cover/content boundary */}
             {(displayPage.icon || showEmojiPicker) && (
-              <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16">
+              <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16 motion-page-container">
                 <div className="relative group/icon pl-4" style={{ marginTop: displayPage.cover_image ? '-40px' : '16px', marginBottom: '12px', width: 'fit-content' }}>
                     <div
                       className="text-[78px] leading-none select-none cursor-pointer flex items-center justify-center shrink-0"
@@ -681,7 +1035,7 @@ export function MotionPage() {
                 </div>
             )}
 
-            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16">
+            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16 motion-page-container">
               <div className="group/title-area">
                 <div className={cn(
                   "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
@@ -753,6 +1107,40 @@ export function MotionPage() {
           .custom-scrollbar-page::-webkit-scrollbar { width: 6px; }
           .custom-scrollbar-page::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
           .custom-scrollbar-page:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); }
+
+          /* Small Text Toggle Styles */
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor {
+            font-size: 14px !important;
+            line-height: 1.5 !important;
+          }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h1 { font-size: 1.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h2 { font-size: 1.45rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h3 { font-size: 1.05rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h4 { font-size: 0.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor p,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor li,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor td,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor th,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor code,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor blockquote {
+            font-size: 14px !important;
+          }
+
+          /* Full Width Toggle Styles */
+          .motion-page-full-width .motion-page-container {
+            max-width: none !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+          }
+          .motion-page-full-width .simple-editor-content {
+            max-width: none !important;
+          }
+          @media (min-width: 1024px) {
+            .motion-page-full-width .motion-page-container {
+              padding-left: 3rem !important;
+              padding-right: 3rem !important;
+            }
+          }
         `,
         }}
       />
