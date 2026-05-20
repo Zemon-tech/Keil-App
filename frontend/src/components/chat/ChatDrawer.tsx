@@ -1,7 +1,6 @@
 // src/components/chat/ChatDrawer.tsx
 
 import { useChatStore } from "@/store/useChatStore";
-import { useChatSocketListeners } from "@/hooks/api/useChat";
 import { useAppContext } from "@/contexts/AppContext";
 import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
@@ -22,9 +21,6 @@ export function ChatDrawer() {
     navigate("/chat");
     closeChat();
   };
-
-  // ⚠️ Mount socket listeners here — once, at the drawer level.
-  useChatSocketListeners(activeChannelId, activeOrgId, activeSpaceId);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {

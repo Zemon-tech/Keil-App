@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { AppSidebar } from "./AppSidebar";
 import { AiAssistant } from "./AiAssistant";
 import { ChatDrawer } from "./chat/ChatDrawer";
+import { ChatSocketManager } from "./chat/ChatSocketManager";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { LayoutDashboard, MessageSquare, Activity, User, Settings } from "lucide-react";
 import {
@@ -93,6 +94,9 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
       
       {/* Global Chat Drawer */}
       <ChatDrawer />
+      
+      {/* Global Socket Manager for Chat */}
+      <ChatSocketManager />
       
       <Toaster />
     </SidebarProvider>

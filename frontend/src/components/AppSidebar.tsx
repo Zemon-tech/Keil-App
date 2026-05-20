@@ -311,7 +311,10 @@ export function AppSidebar() {
                 {mode === "organisation" && activeOrgId && activeSpaceId && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={() => openChat()}
+                      onClick={() => {
+                        openChat();
+                        setNotificationDrawerOpen(false);
+                      }}
                       tooltip="Chat"
                     >
                       <MessageSquare />
@@ -323,7 +326,10 @@ export function AppSidebar() {
                 {/* Notifications */}
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => setNotificationDrawerOpen(true)}
+                    onClick={() => {
+                      setNotificationDrawerOpen(true);
+                      useChatStore.getState().closeChat();
+                    }}
                     isActive={notificationDrawerOpen || notificationDialogOpen}
                     tooltip="Notifications"
                   >

@@ -2,7 +2,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
 import { supabaseAdmin } from "./config/supabase";
 import pool from "./config/pg";
-import { chatService } from "./services/chat.service";
+import * as orgChatService from "./services/org-chat.service";
 import { config } from "./config";
 
 export let io: SocketIOServer;
@@ -97,7 +97,7 @@ export const initSocket = (server: HttpServer) => {
                 if (!(await isChannelMember(channel_id))) return;
 
                 // Save message
-                const message = await chatService.saveMessage(channel_id, user.id, content);
+                const message = await orgChatService.saveMessage(channel_id, user.id, content);
 
                 // Broadcast strictly inside the channel_id socket room
                 io.to(`channel:${channel_id}`).emit("receive_message", message);

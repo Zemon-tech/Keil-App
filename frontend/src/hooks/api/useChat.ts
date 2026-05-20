@@ -6,7 +6,7 @@
 // the enabled/disabled logic explicit.
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useChatStore } from "@/store/useChatStore";
@@ -95,7 +95,7 @@ export function useChatMessages(
       return res.data.data.messages ?? [];
     },
     enabled: !!channelId && !!orgId && !!spaceId,
-    staleTime: Infinity, // ⚠️ prevents refetch from wiping socket-injected messages
+    staleTime: 0, // refetch on channel open; socket keeps it live while viewing
   });
 }
 
@@ -126,10 +126,10 @@ export function useReadChannel(orgId: string | null, spaceId: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useSendMessage() {
-  return (channelId: string, content: string) => {
+  return useCallback((channelId: string, content: string) => {
     const socket = getSocket();
     socket?.emit("send_message", { channel_id: channelId, content });
-  };
+  }, []); // stable ref — socket is a module-level singleton
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +218,31 @@ export function useRemoveChannelMember(orgId: string | null, spaceId: string | n
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PART 3H — useDeleteChannel
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useDeleteChannel(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/chat/channels/${channelId}`
+      );
+    },
+    onSuccess: (_, channelId) => {
+      queryClient.invalidateQueries({
+        queryKey: chatKeys.channels(orgId, spaceId),
+      });
+      // Clear active channel locally if it was the deleted channel
+      if (useChatStore.getState().activeChannelId === channelId) {
+        useChatStore.getState().setActiveChannel(null);
+      }
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PART 4 — useChatSocketListeners
 //
 // ⚠️ Mount this hook ONCE — inside <ChatDialog> only.
@@ -243,10 +268,18 @@ export function useChatSocketListeners(
       useChatStore.getState().removeTypingUser(message.channel_id, message.sender.id);
       const isViewingThisChannel = message.channel_id === activeChannelId;
 
-      queryClient.setQueryData<ChatMessage[]>(
-        chatKeys.messages(message.channel_id),
-        (prev = []) => [...prev, message]
-      );
+      // Only inject into cache if the user is actively viewing this channel.
+      // For background channels, invalidate so a full fetch runs on open.
+      if (isViewingThisChannel) {
+        queryClient.setQueryData<ChatMessage[]>(
+          chatKeys.messages(message.channel_id),
+          (prev = []) => [...prev, message]
+        );
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: chatKeys.messages(message.channel_id),
+        });
+      }
 
       if (!isViewingThisChannel && orgId && spaceId) {
         queryClient.setQueryData<Channel[]>(

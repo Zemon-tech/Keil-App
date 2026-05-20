@@ -6,7 +6,7 @@ import {
 import { VisuallyHidden } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/useChatStore";
-import { useChatChannels, useReadChannel, useChatSocketListeners, useChatMessages, useSendMessage } from "@/hooks/api/useChat";
+import { useChatChannels, useReadChannel, useChatMessages, useSendMessage } from "@/hooks/api/useChat";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -43,9 +43,6 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     const { data: me } = useMe();
     const { data: members } = useSpaceMembers(activeOrgId, activeSpaceId);
     const openDM = useOpenDM(activeOrgId, activeSpaceId);
-
-    // Mount global socket listeners at dialog level
-    useChatSocketListeners(activeChannelId, activeOrgId, activeSpaceId);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [messageText, setMessageText] = useState("");

@@ -11,10 +11,9 @@ const asString = (value: string | string[] | undefined): string =>
 const getChatContext = (req: Request) => {
   const orgId = asString(req.params.orgId);
   const spaceId = asString(req.params.spaceId);
-  const workspaceId = (req as any).space?.compatibility_workspace_id as string | undefined;
-  if (!workspaceId) {
-    throw new ApiError(500, "Compatibility workspace is missing for this space");
-  }
+  // workspaceId is optional — org-native spaces have no legacy workspace.
+  // channels.workspace_id is now nullable (migration 012).
+  const workspaceId = ((req as any).space?.compatibility_workspace_id as string | null) ?? null;
   return { orgId, spaceId, workspaceId };
 };
 
@@ -178,4 +177,30 @@ export const removeChannelMember = catchAsync(async (req: Request, res: Response
   io.to(`channel:${asString(req.params.id)}`).emit("channel_updated", { channel_id: asString(req.params.id) });
 
   res.status(200).json({ success: true, message: "Member removed successfully" });
+});
+
+export const deleteChannel = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const channelId = asString(req.params.id);
+
+  const roleCheck = await pool.query(
+    `
+      SELECT cm.role, c.type
+      FROM public.channel_members cm
+      JOIN public.channels c ON c.id = cm.channel_id
+      WHERE cm.channel_id = $1 AND cm.user_id = $2
+    `,
+    [channelId, userId],
+  );
+  
+  const row = roleCheck.rows[0];
+  if (!row) throw new ApiError(403, "Not a member of this channel");
+  if (row.type === "group" && row.role !== "admin") {
+    throw new ApiError(403, "Only group admins can delete the group");
+  }
+
+  await orgChatService.deleteChannel(channelId);
+  io.to(`channel:${channelId}`).emit("channel_removed", { channel_id: channelId });
+  
+  res.status(200).json({ success: true, message: "Channel deleted successfully" });
 });
