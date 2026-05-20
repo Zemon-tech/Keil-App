@@ -112,6 +112,9 @@ export function MotionPage() {
 
   const { user } = useAuth();
 
+  // ── Space members (must be called unconditionally — before any early returns) ──
+  const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
+
   // ── Real-time ──
   useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
 
@@ -132,6 +135,15 @@ export function MotionPage() {
     () => (page?.parent_id ? getPageById(page.parent_id) : null),
     [page?.parent_id, getPageById]
   );
+
+  // ── Derived display page (null-safe, used before guards) ───────────────────
+  const displayPage = page ?? serverPage ?? null;
+
+  // ── Last edited member ─────────────────────────────────────────────────────
+  const lastEditedMember = useMemo(() => {
+    if (!displayPage?.updated_by) return null;
+    return members.find((m) => m.user_id === displayPage.updated_by);
+  }, [members, displayPage?.updated_by]);
 
   // ── Redirect if page not found after load ───────────────────────────────────
   useEffect(() => {
@@ -232,14 +244,14 @@ export function MotionPage() {
   };
 
   const toggleSmallText = () => {
-    if (!pageId) return;
+    if (!pageId || !displayPage) return;
     const nextValue = !displayPage.small_text;
     useMotionStore.getState().updatePageLocally(pageId, { small_text: nextValue });
     updatePage.mutate({ id: pageId, updates: { small_text: nextValue } });
   };
 
   const toggleFullWidth = () => {
-    if (!pageId) return;
+    if (!pageId || !displayPage) return;
     const nextValue = !displayPage.full_width;
     useMotionStore.getState().updatePageLocally(pageId, { full_width: nextValue });
     updatePage.mutate({ id: pageId, updates: { full_width: nextValue } });
@@ -261,14 +273,6 @@ export function MotionPage() {
       <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative" />
     );
   }
-
-  const displayPage = page ?? serverPage!;
-
-  const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
-  const lastEditedMember = useMemo(() => {
-    if (!displayPage?.updated_by) return null;
-    return members.find((m) => m.user_id === displayPage.updated_by);
-  }, [members, displayPage?.updated_by]);
 
   return (
     <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative">
