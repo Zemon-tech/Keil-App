@@ -21,6 +21,7 @@ This document serves as the developer entry point for understanding the RBAC imp
 | [Architecture & Design](./architecture.md) | Database schemas, unique space index constraints, key design decisions, and ASCII auth flows. |
 | [Frontend Guide](./frontend.md) | The centralised `useSpaceRole` permissions hook, capabilities matrix, UI gating, and read-only text editors. |
 | [Backend Guide](./backend.md) | Centralised RBAC middleware (`requireOrgRole`, `requireSpaceRole`), Express route protection, and service validation. |
+| [Acceptance & Testing Criteria](./acceptance-criteria.md) | Standard checklists and verification procedures to manually test and audit the RBAC implementation. |
 
 ---
 
