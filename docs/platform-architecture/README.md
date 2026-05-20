@@ -15,6 +15,7 @@ A new user who signs up lands in **Personal Mode** with no organisation. They mu
 - [Architecture & Design Decisions](./architecture.md)
 - [Frontend Implementation Guide](./frontend.md)
 - [Backend Implementation Guide](./backend.md)
+- [Role-Based Access Control (RBAC) System](../rbac/README.md)
 
 ## Quick Start
 
