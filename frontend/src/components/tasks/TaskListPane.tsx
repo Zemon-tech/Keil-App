@@ -74,8 +74,6 @@ type Props = {
   isLoadingMore?: boolean;
   /** Workspace members for bulk assign */
   workspaceMembers?: Array<{ id: string; name: string | null; email: string }>;
-  /** When true, CreateTaskDialog uses personal task endpoints */
-  isPersonalMode?: boolean;
 };
 
 function formatTaskDateRange(start?: string, end?: string) {
@@ -240,7 +238,6 @@ export function TaskListPane({
   onLoadMore,
   isLoadingMore = false,
   workspaceMembers = [],
-  isPersonalMode = false,
 }: Props) {
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1056,7 +1053,6 @@ export function TaskListPane({
         onOpenChange={onCreateDialogOpenChange}
         onTaskCreated={onTaskCreated}
         allTasks={allTasks ?? tasks}
-        isPersonalMode={isPersonalMode}
       />
 
       {/* ── Edit task dialog ──────────────────────────────────── */}
@@ -1069,7 +1065,6 @@ export function TaskListPane({
           initialValues={editingTask}
           onTaskUpdated={() => setEditingTask(null)}
           allTasks={allTasks ?? tasks}
-          isPersonalMode={isPersonalMode}
         />
       )}
     </div>

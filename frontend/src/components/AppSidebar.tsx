@@ -62,6 +62,7 @@ import { MeetingDialog } from "@/components/MeetingDialog";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "My Tasks", url: "/my-tasks", icon: User },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Meetings", action: "meetings", icon: Mic },
   { title: "Motion", url: "/motion", icon: Image },
@@ -87,17 +88,32 @@ function OrgSpaceSubmenu({
   const [subOpen, setSubOpen] = useState(false);
   // Only fetch spaces when the submenu is actually opened
   const { data: spaces = [], isLoading } = useSpaces(subOpen ? org.id : null);
+  const { user } = useAuth();
 
   const isActiveOrg = activeOrgId === org.id;
+
+  // Filter out Private spaces for non-owners in this organisation
+  const visibleSpaces = spaces.filter((space) => {
+    if (space.is_private) {
+      return org.owner_user_id === user?.id;
+    }
+    return true;
+  });
 
   return (
     <DropdownMenuSub open={subOpen} onOpenChange={setSubOpen}>
       <DropdownMenuSubTrigger className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
-            {org.name.charAt(0).toUpperCase()}
+            {org.is_personal ? (
+              <User className="h-3.5 w-3.5" />
+            ) : (
+              org.name.charAt(0).toUpperCase()
+            )}
           </div>
-          <span className="text-sm font-medium truncate">{org.name}</span>
+          <span className="text-sm font-medium truncate">
+            {org.is_personal ? "Personal Workspace" : org.name}
+          </span>
         </div>
         {isActiveOrg && (
           <Check className="h-4 w-4 text-primary shrink-0 mr-1" />
@@ -109,12 +125,12 @@ function OrgSpaceSubmenu({
           <div className="flex items-center justify-center py-3">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
-        ) : spaces.length === 0 ? (
+        ) : visibleSpaces.length === 0 ? (
           <div className="px-2 py-3 text-xs text-muted-foreground text-center">
             No spaces yet
           </div>
         ) : (
-          spaces.map((space) => {
+          visibleSpaces.map((space) => {
             const isActiveSpace = isActiveOrg && activeSpaceId === space.id;
             return (
               <DropdownMenuItem
@@ -203,7 +219,6 @@ export function AppSidebar() {
     activeSpaceId,
     activeOrg,
     activeSpace,
-    setPersonalMode,
     setActiveOrganisation,
   } = useAppContext();
 
@@ -232,8 +247,8 @@ export function AppSidebar() {
 
   // Subtitle shown under the user name in the sidebar button
   const currentSpaceLabel =
-    mode === "personal"
-      ? `${userDisplayName.split("@")[0]}'s Personal Space`
+    activeOrg?.is_personal
+      ? (activeSpace?.name ?? "Personal Workspace")
       : (activeSpace?.name ?? activeOrg?.name ?? "Organisation");
 
   return (
@@ -385,22 +400,7 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
-                  {/* ── Mode section ── */}
-                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">
-                    Mode
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={() => handleManualSwitch(setPersonalMode, null, null)}
-                  >
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Personal
-                    {mode === "personal" && (
-                      <Check className="ml-auto h-4 w-4 text-primary" />
-                    )}
-                  </DropdownMenuItem>
 
-                  <DropdownMenuSeparator />
 
                   {/* ── Organisation section ── */}
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">

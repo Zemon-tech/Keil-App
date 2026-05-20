@@ -14,6 +14,7 @@ export interface Space {
   role: "admin" | "manager" | "member";
   /** Compatibility: the legacy workspace_id for this space. Used by legacy chat/task hooks during transition. */
   compatibility_workspace_id: string | null;
+  is_private: boolean;
 }
 
 export interface DeletedSpace {

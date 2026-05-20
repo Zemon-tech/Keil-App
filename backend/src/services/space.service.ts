@@ -13,6 +13,7 @@ export interface SpaceDTO {
   created_at: string;
   role: string;
   compatibility_workspace_id: string | null;
+  is_private: boolean;
 }
 
 export interface SpaceMemberDTO {
@@ -41,6 +42,7 @@ const toDTO = (row: any): SpaceDTO => ({
   created_at: new Date(row.created_at).toISOString(),
   role: row.membership_role,
   compatibility_workspace_id: row.compatibility_workspace_id,
+  is_private: !!row.is_private,
 });
 
 const toDeletedDTO = (row: any): DeletedSpaceDTO => ({
@@ -99,6 +101,7 @@ export const createSpace = async (
     created_at: new Date(space.created_at).toISOString(),
     role: "admin",
     compatibility_workspace_id: null,
+    is_private: !!space.is_private,
   };
 };
 
@@ -125,6 +128,7 @@ export const renameSpace = async (
     created_at: new Date(updated.created_at).toISOString(),
     role: "admin",
     compatibility_workspace_id: null,
+    is_private: !!updated.is_private,
   };
 };
 
@@ -142,6 +146,14 @@ export const deleteSpace = async (
   spaceId: string,
   userId: string,
 ): Promise<void> => {
+  const space = await spaceRepository.findById(spaceId);
+  if (!space) {
+    throw new ApiError(404, "Space not found");
+  }
+  if (space.is_private) {
+    throw new ApiError(400, "Cannot delete the private space");
+  }
+
   const activeCount = await spaceRepository.countActiveByOrg(orgId);
   if (activeCount <= 1) {
     throw new ApiError(400, "Cannot delete the last space in an organisation");
@@ -181,6 +193,7 @@ export const restoreSpace = async (
     created_at: new Date(restored.created_at).toISOString(),
     role: "admin",
     compatibility_workspace_id: null,
+    is_private: !!restored.is_private,
   };
 };
 
@@ -198,6 +211,9 @@ export const hardDeleteSpace = async (
   const target = deleted.find((s) => s.id === spaceId);
   if (!target) {
     throw new ApiError(400, "Space must be soft-deleted before permanent deletion");
+  }
+  if (target.is_private) {
+    throw new ApiError(400, "Cannot delete the private space");
   }
 
   await spaceRepository.executeInTransaction(async (client) => {
@@ -234,6 +250,14 @@ export const addSpaceMember = async (
   userId: string,
   targetUserId: string,
 ): Promise<void> => {
+  const space = await spaceRepository.findById(spaceId);
+  if (!space) {
+    throw new ApiError(404, "Space not found");
+  }
+  if (space.is_private) {
+    throw new ApiError(400, "Cannot add members to a private space");
+  }
+
   const targetRole = await organisationRepository.getMemberRole(orgId, targetUserId);
   if (!targetRole) {
     throw new ApiError(400, "User is not a member of this organisation");

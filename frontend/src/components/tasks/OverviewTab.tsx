@@ -49,21 +49,20 @@ export const OverviewTab = ({
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const [createSubtaskOpen, setCreateSubtaskOpen] = useState(false);
 
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const { canEditTask, canAssignTask, canCreateTask } = useSpaceRole();
-  const isOrgMode = mode === "organisation";
   const { data: members = [] } = useSpaceMembers(
-    isOrgMode ? activeOrgId : null,
-    isOrgMode ? activeSpaceId : null
+    activeOrgId,
+    activeSpaceId
   );
   const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
   const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
-  // Fetch real subtasks from API — only in org mode
+  // Fetch real subtasks from API
   const isTopLevelTask = !task.parent_task_id;
   const { data: subtasks = [], isLoading: subtasksLoading } = useOrgSubtasks(
-    isOrgMode ? activeOrgId : null,
-    isOrgMode ? activeSpaceId : null,
+    activeOrgId,
+    activeSpaceId,
     isTopLevelTask ? task.id : ""
   );
 
@@ -275,8 +274,8 @@ export const OverviewTab = ({
                 );
               })}
 
-              {/* Assignees section — only shown in org mode */}
-              {isOrgMode && canAssignTask && (
+              {/* Assignees section */}
+              {canAssignTask && (
               <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">

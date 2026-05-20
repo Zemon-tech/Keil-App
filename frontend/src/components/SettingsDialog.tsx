@@ -165,10 +165,9 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 function OrgGeneralTab() {
-  const { organisations, activeOrgId } = useAppContext();
+  const { organisations, activeOrgId, setActiveOrganisation } = useAppContext();
   const renameOrg = useRenameOrganisation();
   const deleteOrg = useDeleteOrganisation();
-  const { setPersonalMode } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -197,7 +196,10 @@ function OrgGeneralTab() {
       return;
     deleteOrg.mutate(selectedOrg.id, {
       onSuccess: () => {
-        setPersonalMode();
+        const personalOrg = organisations.find((o) => o.is_personal);
+        if (personalOrg) {
+          setActiveOrganisation(personalOrg.id);
+        }
         if (/^\/(tasks|events)\/[^\/]+/.test(location.pathname)) {
           navigate("/tasks");
         }
@@ -266,7 +268,7 @@ function OrgGeneralTab() {
         </div>
       </div>
 
-      {isOwner && (
+      {isOwner && !selectedOrg?.is_personal && (
         <div className="pt-10 border-t border-border/50">
           <div className="bg-destructive/5 rounded-2xl border border-destructive/20 p-6">
             <div className="flex items-center gap-3 text-destructive mb-4">
@@ -673,7 +675,7 @@ function SpaceDetailsSheet({
             currentUserId={user?.id || ""}
           />
 
-          {isAdmin && (
+          {isAdmin && !space.is_private && (
             <div className="pt-8 border-t border-border/50">
               <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
                 Danger Zone
@@ -746,7 +748,7 @@ function SpaceMembersPanel({
           Space members ({members.length})
         </p>
       </div>
-      {isAdmin && (
+      {isAdmin && !space.is_private && (
         <div className="rounded-lg border border-border p-2">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -789,7 +791,7 @@ function SpaceMembersPanel({
         {members.map((member) => {
           const isSelf = member.user_id === currentUserId;
           const isTargetAdmin = member.role === "admin";
-          const canEditRole = canManageSpaceMembers && !isSelf && (!isTargetAdmin || orgRole === "owner" || orgRole === "admin");
+          const canEditRole = canManageSpaceMembers && !space.is_private && !isSelf && (!isTargetAdmin || orgRole === "owner" || orgRole === "admin");
 
           return (
             <div
@@ -844,7 +846,7 @@ function SpaceMembersPanel({
                 ) : (
                   <RoleBadge role={member.role} />
                 )}
-                {isAdmin && !isSelf && (
+                {isAdmin && !space.is_private && !isSelf && (
                   <Button
                     variant="ghost"
                     size="icon"

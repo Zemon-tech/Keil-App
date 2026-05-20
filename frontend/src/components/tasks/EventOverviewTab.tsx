@@ -31,11 +31,10 @@ export const EventOverviewTab = ({
   const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
 
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
-  const isOrgMode = mode === "organisation";
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const { data: members = [] } = useSpaceMembers(
-    isOrgMode ? activeOrgId : null,
-    isOrgMode ? activeSpaceId : null
+    activeOrgId,
+    activeSpaceId
   );
   const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
   const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
@@ -137,8 +136,8 @@ export const EventOverviewTab = ({
                 );
               })}
 
-              {/* Attendee picker — only in org mode */}
-              {isOrgMode && (
+              {/* Attendee picker */}
+              {true && (
               <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">

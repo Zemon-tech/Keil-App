@@ -9,6 +9,7 @@ export interface OrganisationDTO {
   created_at: string;
   updated_at: string;
   role: string;
+  is_personal: boolean;
 }
 
 export interface OrgMemberDTO {
@@ -25,6 +26,7 @@ const toDTO = (row: any): OrganisationDTO => ({
   created_at: new Date(row.created_at).toISOString(),
   updated_at: new Date(row.updated_at).toISOString(),
   role: row.membership_role,
+  is_personal: !!row.is_personal,
 });
 
 export const getUserOrganisations = async (userId: string): Promise<OrganisationDTO[]> => {
@@ -53,6 +55,7 @@ export const createOrganisation = async (
         created_at: new Date(org.created_at).toISOString(),
         updated_at: new Date(org.updated_at).toISOString(),
         role: "owner",
+        is_personal: false,
       },
       space: {
         id: space.id,
@@ -114,14 +117,22 @@ export const joinOrganisation = async (
     throw new ApiError(404, "Organisation not found");
   }
 
-  const defaultSpace = await spaceRepository.findDefaultSpace(orgId);
+  let defaultSpace = await spaceRepository.findDefaultSpace(orgId);
   if (!defaultSpace) {
     throw new ApiError(500, "Organisation has no spaces");
   }
 
+  if (defaultSpace.is_private) {
+    const fallbackSpace = await spaceRepository.findOldestNonPrivateSpace(orgId);
+    if (!fallbackSpace) {
+      throw new ApiError(400, "This organisation has no joinable spaces");
+    }
+    defaultSpace = fallbackSpace;
+  }
+
   await organisationRepository.executeInTransaction(async (client) => {
     await organisationRepository.addMember(orgId, userId, "member", client);
-    await spaceRepository.addMember(orgId, defaultSpace.id, userId, "member", client);
+    await spaceRepository.addMember(orgId, defaultSpace!.id, userId, "member", client);
   });
 
   return { orgId, spaceId: defaultSpace.id };
@@ -152,6 +163,14 @@ export const deleteOrganisation = async (
   orgId: string,
   userId: string,
 ): Promise<void> => {
+  const org = await organisationRepository.findById(orgId);
+  if (!org) {
+    throw new ApiError(404, "Organisation not found");
+  }
+  if (org.is_personal) {
+    throw new ApiError(400, "Personal organisation cannot be deleted");
+  }
+
   const role = await organisationRepository.getMemberRole(orgId, userId);
   if (role !== "owner") {
     throw new ApiError(403, "Only the organisation owner can delete this organisation");

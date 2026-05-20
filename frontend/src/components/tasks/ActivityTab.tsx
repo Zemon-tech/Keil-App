@@ -228,8 +228,7 @@ function CommentNode({
 
 export function ActivityTab({ task }: { task: TaskDTO }) {
   const [input, setInput] = useState("");
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
-  const isOrgMode = mode === "organisation";
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const { data: comments, isPending } = useOrgTaskComments(activeOrgId, activeSpaceId, task.id);
   const createComment = useCreateOrgComment(activeOrgId, activeSpaceId);
   const { canComment } = useSpaceRole();
@@ -237,8 +236,8 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   const [activePicker, setActivePicker] = useState<"user" | "task" | "event" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
   const { data: members = [] } = useSpaceMembers(
-    isOrgMode ? activeOrgId : null,
-    isOrgMode ? activeSpaceId : null
+    activeOrgId,
+    activeSpaceId
   );
   const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
   const fileInputRef = useRef<HTMLInputElement>(null);
