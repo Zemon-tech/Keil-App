@@ -132,6 +132,8 @@ export const addChannelMembers = catchAsync(async (req: Request, res: Response) 
     throw new ApiError(400, "member_ids must be a non-empty array");
   }
 
+  const uniqueMemberIds = Array.from(new Set(member_ids));
+
   const roleCheck = await pool.query(
     `
       SELECT cm.role, c.type
@@ -145,9 +147,9 @@ export const addChannelMembers = catchAsync(async (req: Request, res: Response) 
   if (!row || row.type !== "group") throw new ApiError(400, "Invalid channel or not a group");
   if (row.role !== "admin") throw new ApiError(403, "Only group admins can add members");
 
-  await orgChatService.addMembers(orgId, spaceId, asString(req.params.id), member_ids);
+  await orgChatService.addMembers(orgId, spaceId, asString(req.params.id), uniqueMemberIds);
   const channel = await orgChatService.getChannelById(asString(req.params.id), userId);
-  broadcastNewChannel(member_ids, channel);
+  broadcastNewChannel(uniqueMemberIds, channel);
   io.to(`channel:${asString(req.params.id)}`).emit("channel_updated", { channel_id: asString(req.params.id) });
 
   res.status(200).json({ success: true, data: { channel } });

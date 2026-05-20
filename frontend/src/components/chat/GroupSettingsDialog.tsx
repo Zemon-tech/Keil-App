@@ -35,6 +35,9 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
   const removeMember = useRemoveChannelMember(orgId, spaceId);
   const deleteChannel = useDeleteChannel(orgId, spaceId);
 
+  const myMember = (channel.members || []).find((m) => m.id === me?.id);
+  const isAdmin = myMember?.role === "admin";
+
   const handleAdd = (userId: string) => {
     addMembers.mutate(
       { channelId: channel.id, member_ids: [userId] },
@@ -72,12 +75,14 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
 
         <div className="flex justify-between items-center mt-4">
           <h3 className="text-sm font-medium">Members ({(channel.members || []).length})</h3>
-          <Button variant="outline" size="sm" onClick={() => setShowAdd(!showAdd)}>
-            <UserPlus className="w-4 h-4 mr-1" /> Add
-          </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setShowAdd(!showAdd)}>
+              <UserPlus className="w-4 h-4 mr-1" /> Add
+            </Button>
+          )}
         </div>
 
-        {showAdd && (
+        {isAdmin && showAdd && (
           <div className="mt-2 p-2 border rounded-md max-h-40 overflow-y-auto">
             <h4 className="text-xs font-semibold text-muted-foreground mb-2 px-1">
               Add to Group
@@ -167,58 +172,69 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm font-medium">{member.name || "Unknown"} {isSelf && "(You)"}</span>
+                  <span className="text-sm font-medium flex items-center gap-1.5">
+                    {member.name || "Unknown"} {isSelf && "(You)"}
+                    {member.role === "admin" && (
+                      <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
+                        Admin
+                      </span>
+                    )}
+                  </span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => setConfirmRemoveId(member.id)}
-                  disabled={removeMember.isPending}
-                  title="Remove Member"
-                >
-                  <UserX className="w-4 h-4" />
-                </Button>
+                {(isAdmin || isSelf) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setConfirmRemoveId(member.id)}
+                    disabled={removeMember.isPending}
+                    title={isSelf ? "Leave Group" : "Remove Member"}
+                  >
+                    <UserX className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             );
           })}
         </div>
 
-        {confirmDelete ? (
-          <div className="mt-6 p-4 border border-destructive/20 bg-destructive/5 rounded-lg flex flex-col gap-3 animate-in slide-in-from-bottom-2 duration-200">
-            <p className="text-xs text-destructive font-medium">
-              Are you sure you want to delete this group? All messages and history will be permanently deleted.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>
-                Cancel
-              </Button>
+        {isAdmin && (
+          confirmDelete ? (
+            <div className="mt-6 p-4 border border-destructive/20 bg-destructive/5 rounded-lg flex flex-col gap-3 animate-in slide-in-from-bottom-2 duration-200">
+              <p className="text-xs text-destructive font-medium">
+                Are you sure you want to delete this group? All messages and history will be permanently deleted.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    deleteChannel.mutate(channel.id, {
+                      onSuccess: () => {
+                        setActiveChannel(null);
+                        setOpen(false);
+                      }
+                    });
+                  }}
+                  disabled={deleteChannel.isPending}
+                >
+                  Yes, Delete Group
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 pt-4 border-t flex justify-end">
               <Button
-                size="sm"
                 variant="destructive"
-                onClick={() => {
-                  deleteChannel.mutate(channel.id, {
-                    onSuccess: () => {
-                      setActiveChannel(null);
-                      setOpen(false);
-                    }
-                  });
-                }}
-                disabled={deleteChannel.isPending}
+                onClick={() => setConfirmDelete(true)}
               >
-                Yes, Delete Group
+                Delete Group
               </Button>
             </div>
-          </div>
-        ) : (
-          <div className="mt-6 pt-4 border-t flex justify-end">
-            <Button
-              variant="destructive"
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete Group
-            </Button>
-          </div>
+          )
         )}
       </DialogContent>
     </Dialog>

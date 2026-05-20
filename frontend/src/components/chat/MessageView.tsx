@@ -63,7 +63,14 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
     if (!text.trim()) return;
     sendMessage(channelId, text.trim());
     setText("");
-    getSocket()?.emit("typing_end", { channel_id: channelId });
+    const socket = getSocket();
+    if (socket) {
+      socket.emit("typing_end", { channel_id: channelId });
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
   };
 
   const channelName = currentChannel?.type === "direct"

@@ -6,6 +6,12 @@ const toISO = (value: Date | string | null | undefined): string | null => {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 };
 
+export interface ChatMemberDTO {
+  id: string;
+  name: string | null;
+  role: "admin" | "member";
+}
+
 export interface ChatChannelDTO {
   id: string;
   org_id: string | null;
@@ -14,7 +20,7 @@ export interface ChatChannelDTO {
   name: string | null;
   unread_count: number;
   last_message_at: string | null;
-  members: Array<{ id: string; name: string | null }>;
+  members: ChatMemberDTO[];
 }
 
 export const findDirectChannel = async (
@@ -128,7 +134,7 @@ export const getUserChannels = async (
         ) AS unread_count,
         COALESCE(
           json_agg(
-            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email))
+            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
           ) FILTER (WHERE u.id IS NOT NULL),
           '[]'
         ) AS members
@@ -173,7 +179,7 @@ export const getChannelById = async (channelId: string, userId: string): Promise
         0 AS unread_count,
         COALESCE(
           json_agg(
-            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email))
+            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
           ) FILTER (WHERE u.id IS NOT NULL),
           '[]'
         ) AS members

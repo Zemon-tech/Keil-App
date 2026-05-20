@@ -18,6 +18,7 @@ import { useChatStore } from "@/store/useChatStore";
 export interface ChatMember {
   id: string;
   name: string;
+  role?: "admin" | "member";
 }
 
 export interface Channel {
@@ -273,7 +274,12 @@ export function useChatSocketListeners(
       if (isViewingThisChannel) {
         queryClient.setQueryData<ChatMessage[]>(
           chatKeys.messages(message.channel_id),
-          (prev = []) => [...prev, message]
+          (prev = []) => {
+            if (prev.some((m) => m.id === message.id)) {
+              return prev;
+            }
+            return [...prev, message];
+          }
         );
       } else {
         queryClient.invalidateQueries({
@@ -281,7 +287,7 @@ export function useChatSocketListeners(
         });
       }
 
-      if (!isViewingThisChannel && orgId && spaceId) {
+      if (orgId && spaceId) {
         queryClient.setQueryData<Channel[]>(
           chatKeys.channels(orgId, spaceId),
           (prev: Channel[] = []) =>
@@ -290,7 +296,7 @@ export function useChatSocketListeners(
                 ch.id === message.channel_id
                   ? {
                       ...ch,
-                      unread_count: ch.unread_count + 1,
+                      unread_count: isViewingThisChannel ? ch.unread_count : ch.unread_count + 1,
                       last_message_at: message.created_at,
                     }
                   : ch
