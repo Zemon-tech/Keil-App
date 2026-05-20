@@ -82,8 +82,10 @@ import {
   useRenameSpace,
   useSpaceMembers,
   useSpaces,
+  useUpdateSpaceMemberRole,
   type Space,
 } from "@/hooks/api/useSpaces";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { Loader2, Copy } from "lucide-react";
 import {
   useGoogleCalendarStatus,
@@ -727,6 +729,9 @@ function SpaceMembersPanel({
   const { data: members = [] } = useSpaceMembers(orgId, space.id);
   const addMember = useAddSpaceMember(orgId, space.id);
   const removeMember = useRemoveSpaceMember(orgId, space.id);
+  const updateMemberRole = useUpdateSpaceMemberRole(orgId, space.id);
+  const { canManageSpaceMembers, orgRole } = useSpaceRole();
+
   const addableMembers = orgMembers.filter(
     (member) =>
       !members.some((spaceMember) => spaceMember.user_id === member.user_id) &&
@@ -783,6 +788,9 @@ function SpaceMembersPanel({
       <div className="space-y-1">
         {members.map((member) => {
           const isSelf = member.user_id === currentUserId;
+          const isTargetAdmin = member.role === "admin";
+          const canEditRole = canManageSpaceMembers && !isSelf && (!isTargetAdmin || orgRole === "owner" || orgRole === "admin");
+
           return (
             <div
               key={member.user_id}
@@ -797,7 +805,45 @@ function SpaceMembersPanel({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <RoleBadge role={member.role} />
+                {canEditRole ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        disabled={updateMemberRole.isPending}
+                        className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-border bg-muted hover:bg-accent text-[10px] uppercase font-bold tracking-widest text-muted-foreground transition-colors shrink-0"
+                      >
+                        {member.role}
+                        <span className="text-[8px] opacity-70">▼</span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-32 p-1 rounded-xl shadow-lg border border-border bg-popover text-popover-foreground" align="end">
+                      {(["admin", "manager", "member"] as const).map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => {
+                            updateMemberRole.mutate({
+                              userId: member.user_id,
+                              role: r,
+                            }, {
+                              onSuccess: () => toast.success("Role updated successfully"),
+                              onError: (err: any) => toast.error(err?.response?.data?.message ?? "Failed to update role"),
+                            });
+                          }}
+                          disabled={updateMemberRole.isPending}
+                          className={cn(
+                            "w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg hover:bg-muted transition-colors text-left capitalize font-medium",
+                            member.role === r && "text-primary font-semibold"
+                          )}
+                        >
+                          {r}
+                          {member.role === r && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <RoleBadge role={member.role} />
+                )}
                 {isAdmin && !isSelf && (
                   <Button
                     variant="ghost"

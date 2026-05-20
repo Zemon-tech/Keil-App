@@ -44,6 +44,8 @@ import type { TaskPriority, TaskStatus, AnyStatus } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import { useChangeOrgTaskStatus } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
+import { useAuth } from "@/contexts/AuthContext";
 
 import {
   STATUS_OPTIONS,
@@ -59,10 +61,24 @@ import {
 function StatusBadge({
   status,
   onStatusChange,
+  disabled,
 }: {
   status: AnyStatus;
   onStatusChange: (s: TaskStatus) => void;
+  disabled?: boolean;
 }) {
+  if (disabled) {
+    return (
+      <Badge
+        variant="outline"
+        className="h-5 gap-1 px-1.5 text-[11px] opacity-60 cursor-default"
+      >
+        <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[status])} />
+        {status}
+      </Badge>
+    );
+  }
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -201,15 +217,31 @@ export function TaskDetailHeader({
   const changeStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  const { user } = useAuth();
+  const currentUserId = user?.id;
+
+  const {
+    canEditTask,
+    canDeleteTask,
+    canChangeAnyStatus,
+    canChangeAssignedStatus,
+  } = useSpaceRole();
+
+  const isAssignee = task.assignees?.some((a) => a.id === currentUserId) ?? false;
+  const canUpdateStatus = canChangeAnyStatus || (canChangeAssignedStatus && isAssignee);
+
   const handleStatusChange = (newStatus: TaskStatus) => {
+    if (!canUpdateStatus) return;
     changeStatus.mutate({ id: task.id, status: newStatus });
   };
 
   const handleMarkDone = () => {
+    if (!canUpdateStatus) return;
     changeStatus.mutate({ id: task.id, status: "done" });
   };
 
   const handlePriorityChange = (newPriority: TaskPriority) => {
+    if (!canEditTask) return;
     onUpdateField?.({ priority: newPriority });
   };
 
@@ -274,6 +306,7 @@ export function TaskDetailHeader({
                   placeholder="Untitled task"
                   className="text-sm font-medium text-foreground truncate"
                   inputClassName="text-sm font-medium text-foreground truncate"
+                  disabled={!canEditTask}
                 />
               </BreadcrumbItem>
             </BreadcrumbList>
@@ -286,40 +319,53 @@ export function TaskDetailHeader({
             variant={task.status === "done" ? "secondary" : "default"}
             className="h-6 px-3 text-xs"
             onClick={handleMarkDone}
-            disabled={task.status === "done" || changeStatus.isPending}
+            disabled={task.status === "done" || changeStatus.isPending || !canUpdateStatus}
           >
             {task.status === "done" ? "Done ✓" : "Mark done"}
           </Button>
 
           {/* Actions dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                <MoreVertical className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => onEditTask?.()}>
-                <Pencil className="mr-2 h-3.5 w-3.5" />
-                Edit task
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                <Trash2 className="mr-2 h-3.5 w-3.5" />
-                Delete task
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(canEditTask || canDeleteTask) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {canEditTask && (
+                  <DropdownMenuItem onClick={() => onEditTask?.()}>
+                    <Pencil className="mr-2 h-3.5 w-3.5" />
+                    Edit task
+                  </DropdownMenuItem>
+                )}
+                {canEditTask && canDeleteTask && <DropdownMenuSeparator />}
+                {canDeleteTask && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    Delete task
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
       {/* Chips row */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <StatusBadge status={task.status} onStatusChange={handleStatusChange} />
-        <PriorityBadge priority={task.priority} onPriorityChange={handlePriorityChange} />
+        <StatusBadge
+          status={task.status}
+          onStatusChange={handleStatusChange}
+          disabled={!canUpdateStatus}
+        />
+        <PriorityBadge
+          priority={task.priority}
+          onPriorityChange={canEditTask ? handlePriorityChange : undefined}
+        />
         <AssigneesChip assignees={task.assignees ?? []} />
 
         {(task.due_date || task.dueDateISO) && (

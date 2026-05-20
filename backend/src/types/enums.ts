@@ -66,3 +66,7 @@ export enum MotionPermission {
   VIEW = 'view',
   EDIT = 'edit',
 }
+
+export type OrgRole = "owner" | "admin" | "member";
+export type SpaceRole = "admin" | "manager" | "member";
+

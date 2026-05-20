@@ -152,7 +152,8 @@ export const changeTaskStatus = catchAsync(async (req: Request, res: Response) =
   if (!validateStatus(status)) throw new ApiError(400, "Invalid status");
   await assertTaskInSpace(req, asString(req.params.id));
 
-  const updated = await orgTaskService.changeTaskStatus(context, asString(req.params.id), userId, status);
+  const spaceRole = (req as any).space?.membership_role as string;
+  const updated = await orgTaskService.changeTaskStatus(context, asString(req.params.id), userId, status, spaceRole as any);
   if (!updated) throw new ApiError(404, "Task not found");
 
   res.status(200).json(new ApiResponse(200, updated, "Task status updated successfully"));
@@ -258,10 +259,11 @@ export const deleteTaskComment = catchAsync(async (req: Request, res: Response) 
   // Verify the task belongs to this org/space before allowing comment deletion
   await assertTaskInSpace(req, asString(req.params.id));
 
+  const spaceRole = (req as any).space?.membership_role as string;
   await hardDeleteComment(asString(req.params.commentId), userId, {
     org_id: context.orgId,
     space_id: context.spaceId,
-  });
+  }, spaceRole);
 
   res.status(200).json(new ApiResponse(200, {}, "Comment deleted successfully"));
 });

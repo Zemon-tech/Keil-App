@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 import { cn } from "@/lib/utils";
 import {
@@ -78,6 +79,11 @@ function SidebarPageItem({
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState(item.title);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const { spaceRole, canCreatePage } = useSpaceRole();
+  const { user } = useAuth();
+
+  const isPageReadOnly = spaceRole === "admin" ? false : spaceRole === "manager" ? item.created_by !== user?.id : true;
 
   const getSubpages = useMotionStore((s) => s.getSubpages);
   const subpages = getSubpages(item.id);
@@ -173,53 +179,63 @@ function SidebarPageItem({
           )}
 
           <div className="absolute right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={`Open ${item.title} menu`}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 rounded-xl p-1">
-                <DropdownMenuItem
-                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                  onClick={(e) => { e.preventDefault(); setIsRenaming(true); }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                  onClick={(e) => { e.preventDefault(); onAddSubpage(item.id); setIsOpen(true); }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add subpage
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-destructive focus:text-destructive"
-                  onClick={(e) => { e.preventDefault(); onDelete(item.id, item.title); }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {(canCreatePage || !isPageReadOnly) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Open ${item.title} menu`}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44 rounded-xl p-1">
+                  {!isPageReadOnly && (
+                    <DropdownMenuItem
+                      className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
+                      onClick={(e) => { e.preventDefault(); setIsRenaming(true); }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Rename
+                    </DropdownMenuItem>
+                  )}
+                  {canCreatePage && (
+                    <DropdownMenuItem
+                      className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
+                      onClick={(e) => { e.preventDefault(); onAddSubpage(item.id); setIsOpen(true); }}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add subpage
+                    </DropdownMenuItem>
+                  )}
+                  {!isPageReadOnly && <DropdownMenuSeparator />}
+                  {!isPageReadOnly && (
+                    <DropdownMenuItem
+                      className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-destructive focus:text-destructive"
+                      onClick={(e) => { e.preventDefault(); onDelete(item.id, item.title); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAddSubpage(item.id); setIsOpen(true); }}
-              aria-label={`Add subpage to ${item.title}`}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
+            {canCreatePage && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAddSubpage(item.id); setIsOpen(true); }}
+                aria-label={`Add subpage to ${item.title}`}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </SidebarMenuItem>
@@ -281,6 +297,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
 
   const { user } = useAuth();
+  const { canCreatePage, spaceRole } = useSpaceRole();
 
   // ── Real-time ─────────────────────────────────────────────────────────────
   useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
@@ -369,16 +386,18 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           })}
           <div className="flex-1" />
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleAddPage()}
-            disabled={createPage.isPending}
-            className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            aria-label="New page"
-          >
-            {createPage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-[18px] w-[18px]" />}
-          </Button>
+          {canCreatePage && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleAddPage()}
+              disabled={createPage.isPending}
+              className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              aria-label="New page"
+            >
+              {createPage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-[18px] w-[18px]" />}
+            </Button>
+          )}
 
           {onClose && (
             <Button
@@ -454,15 +473,17 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                   </div>
                   Pages
                 </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
-                  onClick={() => handleAddPage()}
-                  aria-label="Add page"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
+                {canCreatePage && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
+                    onClick={() => handleAddPage()}
+                    aria-label="Add page"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
               {privateOpen && (
                 <SidebarMenu>
@@ -504,36 +525,41 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
               {trashOpen && (
                 <SidebarMenu className="mt-1">
                   {trashPages.length > 0 ? (
-                    trashPages.map((item) => (
-                      <SidebarMenuItem key={item.id}>
-                        <div className="group/trash flex min-h-8 w-full items-center rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground">
-                          <FileText className="mr-2 h-4 w-4 shrink-0" />
-                          <span className="flex-1 truncate text-sm font-medium italic line-through">
-                            {item.title}
-                          </span>
-                          <div className="flex items-center gap-1 opacity-0 group-hover/trash:opacity-100 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-primary transition-all"
-                              onClick={() => handleRestorePage(item.id)}
-                              title="Restore"
-                            >
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-destructive transition-all"
-                              onClick={() => handlePermanentDelete(item.id)}
-                              title="Delete permanently"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                    trashPages.map((item) => {
+                      const isPageReadOnly = spaceRole === "admin" ? false : spaceRole === "manager" ? item.created_by !== user?.id : true;
+                      return (
+                        <SidebarMenuItem key={item.id}>
+                          <div className="group/trash flex min-h-8 w-full items-center rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground">
+                            <FileText className="mr-2 h-4 w-4 shrink-0" />
+                            <span className="flex-1 truncate text-sm font-medium italic line-through">
+                              {item.title}
+                            </span>
+                            {!isPageReadOnly && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover/trash:opacity-100 transition-opacity">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-primary transition-all"
+                                  onClick={() => handleRestorePage(item.id)}
+                                  title="Restore"
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-destructive transition-all"
+                                  onClick={() => handlePermanentDelete(item.id)}
+                                  title="Delete permanently"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      </SidebarMenuItem>
-                    ))
+                        </SidebarMenuItem>
+                      );
+                    })
                   ) : (
                     <div className="px-2.5 py-2 text-xs text-muted-foreground">Trash is empty</div>
                   )}

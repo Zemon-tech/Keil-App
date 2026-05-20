@@ -43,6 +43,7 @@ import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hoo
 import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, STATUS_COLOR } from "./task-detail-shared";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
 
 type Props = {
   query: string;
@@ -249,6 +250,8 @@ export function TaskListPane({
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
 
+  const { canCreateTask, canEditTask, canDeleteTask } = useSpaceRole();
+
   // Toggle subtask expansion for a task
   const toggleExpanded = (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation();
@@ -290,13 +293,14 @@ export function TaskListPane({
       )
         return;
       if (e.key === "c" || e.key === "C") {
+        if (!canCreateTask) return;
         e.preventDefault();
         onCreateDialogOpenChange(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCreateDialogOpenChange]);
+  }, [onCreateDialogOpenChange, canCreateTask]);
 
   // Logic handle by useMemo above
   // const taskList = tasks.filter(t => !t.parent_task_id);
@@ -452,14 +456,16 @@ export function TaskListPane({
                 >
                   <Search className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0 shrink-0 rounded-md"
-                  onClick={() => onCreateDialogOpenChange(true)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
+                {canCreateTask && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 shrink-0 rounded-md"
+                    onClick={() => onCreateDialogOpenChange(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </>
           )}
@@ -738,19 +744,23 @@ export function TaskListPane({
                             <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setEditingTask(t)}>
-                              <Pencil className="h-3.5 w-3.5 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive focus:text-destructive" 
-                              onClick={() => {
-                                if (onDeleteTask) onDeleteTask(t.id);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
+                            {canEditTask && (
+                              <DropdownMenuItem onClick={() => setEditingTask(t)}>
+                                <Pencil className="h-3.5 w-3.5 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            {canDeleteTask && (
+                              <DropdownMenuItem 
+                                className="text-destructive focus:text-destructive" 
+                                onClick={() => {
+                                  if (onDeleteTask) onDeleteTask(t.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

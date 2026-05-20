@@ -26,6 +26,7 @@ import {
 } from "@/hooks/api/useTasks";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
 
 import { formatDate } from "./task-detail-shared";
 import { BulletListEditor } from "./BulletListEditor";
@@ -49,6 +50,7 @@ export const OverviewTab = ({
   const [createSubtaskOpen, setCreateSubtaskOpen] = useState(false);
 
   const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { canEditTask, canAssignTask, canCreateTask } = useSpaceRole();
   const isOrgMode = mode === "organisation";
   const { data: members = [] } = useSpaceMembers(
     isOrgMode ? activeOrgId : null,
@@ -104,6 +106,7 @@ export const OverviewTab = ({
               onSave={(description) => onUpdateField?.({ description })}
               placeholder="Add a description..."
               minRows={2}
+              disabled={!canEditTask}
             />
           </div>
 
@@ -115,6 +118,7 @@ export const OverviewTab = ({
                 value={task.objective ?? ""}
                 onSave={(objective) => onUpdateField?.({ objective })}
                 placeholder="No objective points set"
+                disabled={!canEditTask}
               />
             </div>
             <div className="bg-background p-4 min-h-[120px]">
@@ -123,6 +127,7 @@ export const OverviewTab = ({
                 value={task.success_criteria ?? ""}
                 onSave={(success_criteria) => onUpdateField?.({ success_criteria })}
                 placeholder="No criteria points set"
+                disabled={!canEditTask}
               />
             </div>
           </div>
@@ -208,13 +213,15 @@ export const OverviewTab = ({
                   </p>
                 )}
 
-                <button
-                  onClick={() => setCreateSubtaskOpen(true)}
-                  className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add subtask
-                </button>
+                {canCreateTask && (
+                  <button
+                    onClick={() => setCreateSubtaskOpen(true)}
+                    className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add subtask
+                  </button>
+                )}
               </div>
 
               {/* Create subtask dialog */}
@@ -256,18 +263,20 @@ export const OverviewTab = ({
                       </Avatar>
                       <span className="text-sm">{name}</span>
                     </div>
-                    <button
-                      onClick={() => handleRemoveAssignee(a.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    {canAssignTask && (
+                      <button
+                        onClick={() => handleRemoveAssignee(a.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
 
               {/* Assignees section — only shown in org mode */}
-              {isOrgMode && (
+              {isOrgMode && canAssignTask && (
               <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
