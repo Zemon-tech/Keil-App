@@ -67,7 +67,7 @@ export function useChatChannels(orgId: string | null, spaceId: string | null) {
       return res.data.data.channels ?? [];
     },
     enabled: !!orgId && !!spaceId,
-    retry: (failureCount, error: unknown) => {
+    retry: (failureCount: number, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;
       return failureCount < 1;
@@ -251,9 +251,9 @@ export function useChatSocketListeners(
       if (!isViewingThisChannel && orgId && spaceId) {
         queryClient.setQueryData<Channel[]>(
           chatKeys.channels(orgId, spaceId),
-          (prev = []) =>
+          (prev: Channel[] = []) =>
             prev
-              .map((ch) =>
+              .map((ch: Channel) =>
                 ch.id === message.channel_id
                   ? {
                       ...ch,
@@ -270,7 +270,10 @@ export function useChatSocketListeners(
     };
 
     // ── EVENT 2: New channel added ──────────────────────────────────────────
-    const handleChannelAdded = () => {
+    const handleChannelAdded = (channel: Channel) => {
+      // Auto-join the new channel's socket room
+      socket.emit("join_channel", { channel_id: channel.id });
+      
       if (orgId && spaceId) {
         queryClient.invalidateQueries({
           queryKey: chatKeys.channels(orgId, spaceId),
@@ -283,6 +286,11 @@ export function useChatSocketListeners(
       if (activeChannelId) {
         queryClient.invalidateQueries({
           queryKey: chatKeys.messages(activeChannelId),
+        });
+      }
+      if (orgId && spaceId) {
+        queryClient.invalidateQueries({
+          queryKey: chatKeys.channels(orgId, spaceId),
         });
       }
     };

@@ -52,12 +52,14 @@ export function ChatDrawer() {
     };
   }, [isChatOpen]);
 
-  if (!isChatOpen) return null;
+  if (!isChatOpen) {
+    return null;
+  }
 
   return (
     <div
       style={{ width: `${width}px` }}
-      className="fixed inset-y-0 right-0 z-60 flex shadow-2xl border-l border-border bg-background transition-colors duration-200"
+      className="fixed inset-y-0 right-0 z-50 flex shadow-2xl border-l border-border bg-background transition-colors duration-200"
     >
       {/* Resize Handle */}
       <div

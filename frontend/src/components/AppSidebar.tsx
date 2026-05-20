@@ -49,10 +49,11 @@ import {
   Mic,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useTheme } from "next-themes";import { SettingsDialog } from "@/components/SettingsDialog";
-import { ChatDialog } from "@/components/ChatDialog";
+import { useTheme } from "next-themes";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
+import { useChatStore } from "@/store/useChatStore";
 import { CreateOrganisationDialog } from "@/components/org/CreateOrganisationDialog";
 import { JoinOrganisationDialog } from "@/components/org/JoinOrganisationDialog";
 import type { Organisation } from "@/hooks/api/useOrganisations";
@@ -72,6 +73,7 @@ const navigationItems = [
 // Renders as a DropdownMenuSub trigger + content.
 
 interface OrgSpaceSubmenuProps {
+  key?: React.Key | string | number;
   org: Organisation;
   activeOrgId: string | null;
   activeSpaceId: string | null;
@@ -114,7 +116,7 @@ function OrgSpaceSubmenu({
             No spaces yet
           </div>
         ) : (
-          spaces.map((space) => {
+          spaces.map((space: any) => {
             const isActiveSpace = isActiveOrg && activeSpaceId === space.id;
             return (
               <DropdownMenuItem
@@ -146,7 +148,7 @@ export function AppSidebar() {
   >("account");
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [joinOrgOpen, setJoinOrgOpen] = useState(false);
-  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const openChat = useChatStore((state: any) => state.openChat);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
@@ -306,12 +308,10 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 ))}
 
-                {/* Chat — only in organisation mode with an active space */}
                 {mode === "organisation" && activeOrgId && activeSpaceId && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={() => setChatDialogOpen(true)}
-                      isActive={chatDialogOpen}
+                      onClick={() => openChat()}
                       tooltip="Chat"
                     >
                       <MessageSquare />
@@ -413,7 +413,7 @@ export function AppSidebar() {
                         variant="ghost"
                         size="sm"
                         className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
-                        onClick={(e) => {
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           setJoinOrgOpen(true);
                         }}
@@ -426,7 +426,7 @@ export function AppSidebar() {
                         size="icon"
                         className="h-6 w-6 hover:bg-muted-foreground/10"
                         title="Create organisation"
-                        onClick={(e) => {
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           setCreateOrgOpen(true);
                         }}
@@ -514,7 +514,6 @@ export function AppSidebar() {
         onOpenChange={setSettingsOpen}
         initialTab={settingsInitialTab}
       />
-      <ChatDialog open={chatDialogOpen} onOpenChange={setChatDialogOpen} />
       <NotificationDrawer
         open={notificationDrawerOpen}
         onOpenChange={setNotificationDrawerOpen}
