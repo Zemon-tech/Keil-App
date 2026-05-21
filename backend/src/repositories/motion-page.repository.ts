@@ -179,6 +179,22 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
   }
 
   /**
+   * Finds a single share by its ID.
+   * Overrides base findById because motion_page_shares has no deleted_at column.
+   */
+  async findById(id: string, client?: PoolClient): Promise<MotionPageShare | null> {
+    const query = `
+      SELECT *
+      FROM public.motion_page_shares
+      WHERE id = $1
+      LIMIT 1
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [id]);
+    return result.rows.length > 0 ? (result.rows[0] as MotionPageShare) : null;
+  }
+
+  /**
    * Returns all shares for a given page.
    */
   async findByPage(pageId: string, client?: PoolClient): Promise<MotionPageShare[]> {
