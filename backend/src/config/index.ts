@@ -30,5 +30,10 @@ export const config = {
     sevallaS3SecretAccessKey: process.env.SEVALLA_S3_SECRET_ACCESS_KEY || "",
     sevallaS3BucketName: process.env.SEVALLA_S3_BUCKET_NAME || "",
     sevallaS3Region: process.env.SEVALLA_S3_REGION || "auto",
+    // ── Google ADK ───────────────────────────────────────────────────────────
+    // Get your API key from https://aistudio.google.com/app/apikey
+    googleAdkApiKey: process.env.GOOGLE_ADK_API_KEY || "",
+    // Which Gemini model the ADK agent runs on.
+    // Recommended: gemini-2.0-flash (fast) or gemini-2.5-pro (more capable)
+    googleAdkModel: process.env.GOOGLE_ADK_MODEL || "gemini-2.0-flash",
 };
-
