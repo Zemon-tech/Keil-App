@@ -211,7 +211,14 @@ export async function getAuthorizedClient(userId: string): Promise<OAuth2Client 
           credentials.access_token,
           expiry
         );
-        oauth2Client.setCredentials(credentials);
+
+        // Merge credentials to preserve the vital in-memory refresh_token
+        oauth2Client.setCredentials({
+          ...oauth2Client.credentials,
+          ...credentials,
+          refresh_token: credentials.refresh_token ?? oauth2Client.credentials.refresh_token,
+          expiry_date: expiry.getTime()
+        });
       }
     } catch (err) {
       // Refresh failed — token may have been revoked by the user in Google settings.

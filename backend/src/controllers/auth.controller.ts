@@ -6,9 +6,9 @@ import { getAuthUrl, handleCallback, registerWatch } from "../services/google-ca
 const logger = pino();
 
 export const getGoogleAuthUrl = (req: Request, res: Response) => {
-    const userId = (req as any).user?.id || (req.query.userId as string);
+    const userId = (req as any).user?.id as string | undefined;
     if (!userId) {
-        return res.status(400).json({ error: "Missing user ID for authentication" });
+        return res.status(401).json({ error: "Unauthorized: Missing authenticated user context" });
     }
     try {
         const url = getAuthUrl(userId);
@@ -22,13 +22,13 @@ export const getGoogleAuthUrl = (req: Request, res: Response) => {
 export const googleCallback = async (req: Request, res: Response) => {
     const { code, state, error } = req.query;
 
-    if (error || !code || !state) {
-        logger.error(`Google OAuth Error: ${error}`);
+    if (error || typeof code !== "string" || typeof state !== "string") {
+        logger.error(`Google OAuth Callback parameter validation failed. Error: ${error}`);
         return res.redirect(`${config.frontendUrl}/tasks?gcal=error`);
     }
 
     try {
-        const { userId } = await handleCallback(code as string, state as string);
+        const { userId } = await handleCallback(code, state);
         
         // Redirect first — watch registration must NEVER block or fail
         res.redirect(`${config.frontendUrl}/tasks?gcal=connected`);
