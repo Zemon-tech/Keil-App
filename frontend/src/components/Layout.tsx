@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { AppSidebar } from "./AppSidebar";
 import { AiAssistant } from "./AiAssistant";
+import { ChatDrawer } from "./chat/ChatDrawer";
+import { ChatSocketManager } from "./chat/ChatSocketManager";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { LayoutDashboard, MessageSquare, Activity, User, Settings } from "lucide-react";
 import {
@@ -14,6 +16,7 @@ import {
 } from "@/components/ui/command";
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { useChatStore } from "@/store/useChatStore";
 import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
 
@@ -28,6 +31,7 @@ type LayoutProps = {
 export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const location = useLocation();
+  const openChat = useChatStore((state: any) => state.openChat);
   
   // Activate automatic task overdue refresh logic
   useTaskOverdueAutoRefresh();
@@ -36,7 +40,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setIsCommandOpen((open) => !open);
+        setIsCommandOpen((open: boolean) => !open);
       }
     };
     document.addEventListener("keydown", down);
@@ -59,7 +63,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
                 <LayoutDashboard className="mr-2 h-4 w-4 text-slate-400" />
                 <span>Go to Dashboard</span>
               </CommandItem>
-              <CommandItem>
+              <CommandItem onSelect={() => { setIsCommandOpen(false); openChat(); }}>
                 <MessageSquare className="mr-2 h-4 w-4 text-slate-400" />
                 <span>Open Chat</span>
               </CommandItem>
@@ -87,6 +91,13 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
 
       {/* AI Assistant - Available on all pages except dashboard and motion */}
       {location.pathname !== "/" && location.pathname !== "/dashboard" && location.pathname !== "/motion" ? <AiAssistant /> : null}
+      
+      {/* Global Chat Drawer */}
+      <ChatDrawer />
+      
+      {/* Global Socket Manager for Chat */}
+      <ChatSocketManager />
+      
       <Toaster />
     </SidebarProvider>
   );

@@ -6,7 +6,7 @@
 // the enabled/disabled logic explicit.
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useChatStore } from "@/store/useChatStore";
@@ -18,6 +18,7 @@ import { useChatStore } from "@/store/useChatStore";
 export interface ChatMember {
   id: string;
   name: string;
+  role?: "admin" | "member";
 }
 
 export interface Channel {
@@ -67,7 +68,7 @@ export function useChatChannels(orgId: string | null, spaceId: string | null) {
       return res.data.data.channels ?? [];
     },
     enabled: !!orgId && !!spaceId,
-    retry: (failureCount, error: unknown) => {
+    retry: (failureCount: number, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;
       return failureCount < 1;
@@ -95,7 +96,7 @@ export function useChatMessages(
       return res.data.data.messages ?? [];
     },
     enabled: !!channelId && !!orgId && !!spaceId,
-    staleTime: Infinity, // ⚠️ prevents refetch from wiping socket-injected messages
+    staleTime: 0, // refetch on channel open; socket keeps it live while viewing
   });
 }
 
@@ -126,10 +127,10 @@ export function useReadChannel(orgId: string | null, spaceId: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useSendMessage() {
-  return (channelId: string, content: string) => {
+  return useCallback((channelId: string, content: string) => {
     const socket = getSocket();
     socket?.emit("send_message", { channel_id: channelId, content });
-  };
+  }, []); // stable ref — socket is a module-level singleton
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +219,31 @@ export function useRemoveChannelMember(orgId: string | null, spaceId: string | n
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PART 3H — useDeleteChannel
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useDeleteChannel(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/chat/channels/${channelId}`
+      );
+    },
+    onSuccess: (_, channelId) => {
+      queryClient.invalidateQueries({
+        queryKey: chatKeys.channels(orgId, spaceId),
+      });
+      // Clear active channel locally if it was the deleted channel
+      if (useChatStore.getState().activeChannelId === channelId) {
+        useChatStore.getState().setActiveChannel(null);
+      }
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PART 4 — useChatSocketListeners
 //
 // ⚠️ Mount this hook ONCE — inside <ChatDialog> only.
@@ -243,21 +269,34 @@ export function useChatSocketListeners(
       useChatStore.getState().removeTypingUser(message.channel_id, message.sender.id);
       const isViewingThisChannel = message.channel_id === activeChannelId;
 
-      queryClient.setQueryData<ChatMessage[]>(
-        chatKeys.messages(message.channel_id),
-        (prev = []) => [...prev, message]
-      );
+      // Only inject into cache if the user is actively viewing this channel.
+      // For background channels, invalidate so a full fetch runs on open.
+      if (isViewingThisChannel) {
+        queryClient.setQueryData<ChatMessage[]>(
+          chatKeys.messages(message.channel_id),
+          (prev = []) => {
+            if (prev.some((m) => m.id === message.id)) {
+              return prev;
+            }
+            return [...prev, message];
+          }
+        );
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: chatKeys.messages(message.channel_id),
+        });
+      }
 
-      if (!isViewingThisChannel && orgId && spaceId) {
+      if (orgId && spaceId) {
         queryClient.setQueryData<Channel[]>(
           chatKeys.channels(orgId, spaceId),
-          (prev = []) =>
+          (prev: Channel[] = []) =>
             prev
-              .map((ch) =>
+              .map((ch: Channel) =>
                 ch.id === message.channel_id
                   ? {
                       ...ch,
-                      unread_count: ch.unread_count + 1,
+                      unread_count: isViewingThisChannel ? ch.unread_count : ch.unread_count + 1,
                       last_message_at: message.created_at,
                     }
                   : ch
@@ -270,7 +309,10 @@ export function useChatSocketListeners(
     };
 
     // ── EVENT 2: New channel added ──────────────────────────────────────────
-    const handleChannelAdded = () => {
+    const handleChannelAdded = (channel: Channel) => {
+      // Auto-join the new channel's socket room
+      socket.emit("join_channel", { channel_id: channel.id });
+      
       if (orgId && spaceId) {
         queryClient.invalidateQueries({
           queryKey: chatKeys.channels(orgId, spaceId),
@@ -283,6 +325,11 @@ export function useChatSocketListeners(
       if (activeChannelId) {
         queryClient.invalidateQueries({
           queryKey: chatKeys.messages(activeChannelId),
+        });
+      }
+      if (orgId && spaceId) {
+        queryClient.invalidateQueries({
+          queryKey: chatKeys.channels(orgId, spaceId),
         });
       }
     };
