@@ -32,6 +32,7 @@ export interface Organisation {
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
+  is_personal?: boolean;
 }
 
 export interface OrganisationMember {
@@ -53,6 +54,7 @@ export interface Space {
   created_at: Date;
   updated_at: Date | null;
   deleted_at: Date | null;
+  is_private?: boolean;
 }
 
 export interface SpaceMember {

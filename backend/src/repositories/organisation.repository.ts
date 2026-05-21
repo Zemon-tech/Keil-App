@@ -17,7 +17,7 @@ export class OrganisationRepository extends BaseRepository<Organisation> {
         ON om.org_id = o.id
       WHERE om.user_id = $1
         AND o.deleted_at IS NULL
-      ORDER BY o.created_at ASC
+      ORDER BY o.is_personal DESC, o.created_at ASC
     `;
 
     const executor = client || this.pool;

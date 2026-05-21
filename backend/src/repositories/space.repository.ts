@@ -100,6 +100,21 @@ export class SpaceRepository extends BaseRepository<Space> {
   }
 
   /**
+   * Returns the oldest active non-private space in an organisation.
+   */
+  async findOldestNonPrivateSpace(orgId: string, client?: PoolClient): Promise<Space | null> {
+    const executor = client || this.pool;
+    const result = await executor.query<Space>(
+      `SELECT * FROM public.spaces
+       WHERE org_id = $1 AND is_private = FALSE AND deleted_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [orgId],
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  /**
    * Adds a user to a space as a member. Idempotent — does nothing if already a member.
    */
   async addMember(

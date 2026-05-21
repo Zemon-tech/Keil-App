@@ -29,13 +29,6 @@ import {
   type TaskDTO,
 } from "../hooks/api/useTasks";
 import { useSpaceMembers } from "../hooks/api/useSpaces";
-import {
-  usePersonalTasks,
-  useUpdatePersonalTask,
-  useDeletePersonalTask,
-  type PersonalTaskDTO,
-} from "../hooks/api/usePersonalTasks";
-
 const PAGE_SIZE = 20;
 const EMPTY_BLOCKS: any[] = [];
 const EMPTY_TASKS: TaskDTO[] = [];
@@ -122,60 +115,23 @@ export function TasksPage() {
     return filters;
   }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
-  // ── App mode ──────────────────────────────────────────
-  const { mode, activeOrgId, activeSpaceId, setActiveOrganisation } = useAppContext();
-  const isPersonalMode = mode === "personal";
+  // ── App context ────────────────────────────────────────
+  const { activeOrgId, activeSpaceId, setActiveOrganisation } = useAppContext();
 
   // ── Org tasks (org/space-scoped route) ──
   const { data: orgTasks, isLoading: orgLoading, isFetching: orgFetching } = useOrgTasks(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId,
-    isPersonalMode ? {} : serverFilters
+    activeOrgId,
+    activeSpaceId,
+    serverFilters
   );
 
-  // ── Personal tasks (active in personal mode) ────────────────────
-  const { data: personalTasksRaw, isLoading: personalLoading } = usePersonalTasks(
-    isPersonalMode
-      ? {
-        status: (serverFilters.status as any) ?? undefined,
-        priority: (serverFilters.priority as any) ?? undefined,
-        limit: serverFilters.limit,
-      }
-      : {}
-  );
-
-  // Shape PersonalTaskDTO into the same TaskDTO interface the list/detail panes expect.
-  const personalTasks: TaskDTO[] = useMemo(() => {
-    if (!isPersonalMode || !personalTasksRaw) return [];
-    return personalTasksRaw.map((pt: PersonalTaskDTO): TaskDTO => ({
-      id: pt.id,
-      title: pt.title,
-      type: "task",
-      description: pt.description ?? undefined,
-      objective: pt.objective ?? undefined,
-      success_criteria: pt.success_criteria ?? undefined,
-      status: pt.status,       // already TaskStatus — no cast needed
-      priority: pt.priority,   // already TaskPriority — no cast needed
-      due_date: pt.due_date ?? undefined,
-      start_date: pt.start_date ?? undefined,
-      parent_task_id: pt.parent_task_id ?? undefined,
-      workspace_id: "",        // personal tasks have no workspace
-      created_by: pt.owner_user_id,
-      created_at: pt.created_at,
-      updated_at: pt.updated_at,
-    }));
-  }, [isPersonalMode, personalTasksRaw]);
-
-  // Active task list and loading state depend on mode
-  const tasks = isPersonalMode ? personalTasks : (orgTasks ?? EMPTY_TASKS);
-  const isLoading = isPersonalMode ? personalLoading : orgLoading;
-  const isFetching = isPersonalMode ? false : orgFetching;
-
-  // Stable reference — never creates a new [] on each render
-  const taskList = tasks;
+  // Active task list and loading state
+  const taskList = orgTasks ?? EMPTY_TASKS;
+  const isLoading = orgLoading;
+  const isFetching = orgFetching;
 
   // Derive pagination state from the result (no useEffect needed)
-  const hasMore = !isPersonalMode && taskList.length >= limit;
+  const hasMore = taskList.length >= limit;
 
   const handleLoadMore = useCallback(() => {
     setLimit((prev) => prev + PAGE_SIZE);
@@ -199,36 +155,23 @@ export function TasksPage() {
   const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
   const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
-  // Personal task mutations
-  const updatePersonalTask = useUpdatePersonalTask();
-  const deletePersonalTask = useDeletePersonalTask();
-
-  // Unified mutation helpers that dispatch to the correct endpoint
+  // Unified mutation helpers
   const handleUpdateTask = useCallback((id: string, updates: any) => {
-    if (isPersonalMode) {
-      updatePersonalTask.mutate({ id, updates });
-    } else {
-      updateOrgTask.mutate({ id, updates });
-    }
-  }, [isPersonalMode, updatePersonalTask, updateOrgTask]);
+    updateOrgTask.mutate({ id, updates });
+  }, [updateOrgTask]);
 
   const handleDeleteTask = useCallback((id: string) => {
     const taskToDelete = taskList.find(t => t.id === id);
     if (!taskToDelete) return;
 
-    if (isPersonalMode) {
-      deletePersonalTask.mutate({ id, title: taskToDelete.title });
-    } else {
-      deleteOrgTask.mutate({ id, title: taskToDelete.title, type: taskToDelete.type });
-    }
+    deleteOrgTask.mutate({ id, title: taskToDelete.title, type: taskToDelete.type });
     if (id === selectedTaskId) navigate("/tasks");
-  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId, taskList, navigate]);
+  }, [deleteOrgTask, selectedTaskId, taskList, navigate]);
 
-  // ── Space members for assignee picker (org mode only) ─────────────
-  // In personal mode, assignees don't exist — pass null so the hook is disabled.
+  // ── Space members for assignee picker ─────────────
   const { data: spaceMembers = [] } = useSpaceMembers(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId
+    activeOrgId,
+    activeSpaceId
   );
   const workspaceMembers = spaceMembers.map((m) => ({
     id: m.user_id,
@@ -328,28 +271,24 @@ export function TasksPage() {
   );
 
   // Fetch full task data for the selected task (handles subtask detail too)
-  const {
-    data: selectedTaskDetail,
-    isLoading: isOrgTaskLoading,
-    isError: isOrgTaskError
+  const { 
+    data: selectedTaskDetail, 
+    isLoading: isSelectedTaskLoading, 
+    isError: isSelectedTaskError 
   } = useOrgTask(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId,
+    activeOrgId,
+    activeSpaceId,
     selectedTaskId
   );
-
-  const isSelectedTaskLoading = isPersonalMode ? false : isOrgTaskLoading;
-  const isSelectedTaskError = isPersonalMode ? false : isOrgTaskError;
 
   // ── Cross-workspace auto-switch ───────────────────────────────────────────────
   // When the task is not found in the current workspace and the current workspace
   // query has finished (not just loading), try to locate the task across all orgs
   // the user belongs to. If found, silently switch to that workspace.
   const needsLocate =
-    !isPersonalMode &&
     !!selectedTaskId &&
-    !isOrgTaskLoading &&
-    (isOrgTaskError || !selectedTaskDetail) &&
+    !isSelectedTaskLoading &&
+    (isSelectedTaskError || !selectedTaskDetail) &&
     !selected; // not in the current filtered list either
 
   const {
@@ -398,13 +337,8 @@ export function TasksPage() {
 
   // Handle task scheduling from calendar
   const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string, isAllDay: boolean) => {
-    if (isPersonalMode) {
-      // Personal tasks have no is_all_day column — only update the dates
-      handleUpdateTask(taskId, { start_date: startISO, due_date: endISO });
-    } else {
-      handleUpdateTask(taskId, { start_date: startISO, due_date: endISO, is_all_day: isAllDay });
-    }
-  }, [isPersonalMode, handleUpdateTask]);
+    handleUpdateTask(taskId, { start_date: startISO, due_date: endISO, is_all_day: isAllDay });
+  }, [handleUpdateTask]);
 
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",
@@ -426,7 +360,6 @@ export function TasksPage() {
               onSortChange={handleSortChange}
               tasks={filtered}
               allTasks={taskList}
-              isPersonalMode={isPersonalMode}
               selectedTaskId={selectedTaskId}
               onSelectTask={(id) => {
                 // When selecting from list, check if it's a subtask to set the parent stack
@@ -455,10 +388,10 @@ export function TasksPage() {
               onUpdateTask={handleUpdateTask}
               onDeleteTask={handleDeleteTask}
               onAssignUser={(taskId, userId) => {
-                if (!isPersonalMode) assignUser.mutate({ id: taskId, userId });
+                assignUser.mutate({ id: taskId, userId });
               }}
               onRemoveAssignee={(taskId, userId) => {
-                if (!isPersonalMode) removeAssignee.mutate({ id: taskId, userId });
+                removeAssignee.mutate({ id: taskId, userId });
               }}
               workspaceMembers={workspaceMembers}
               hasMore={hasMore}
@@ -501,7 +434,6 @@ export function TasksPage() {
               ) : (
                 <TaskDetailPane
                   task={(selectedTaskDetail || selected)!}
-                  isPersonalMode={isPersonalMode}
                   onUpdateTask={handleUpdateTask}
                   onTaskDeleted={() => {
                     navigate("/tasks");

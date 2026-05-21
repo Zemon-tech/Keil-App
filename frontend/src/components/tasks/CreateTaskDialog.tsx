@@ -47,7 +47,6 @@ import { toast } from "sonner";
 
 import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
 import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
-import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { Switch } from "@/components/ui/switch";
@@ -71,7 +70,6 @@ interface CreateTaskDialogProps {
   onTaskUpdated?: (taskId: string) => void;
   parentTaskId?: string;
   parentTaskTitle?: string;
-  isPersonalMode?: boolean;
 }
 
 const PRIORITY_LEVELS = [
@@ -105,17 +103,14 @@ export function CreateTaskDialog({
   onTaskUpdated,
   parentTaskId,
   parentTaskTitle,
-  isPersonalMode = false,
 }: CreateTaskDialogProps) {
   const { activeOrgId, activeSpaceId } = useAppContext();
   const createOrgTask = useCreateOrgTask(activeOrgId, activeSpaceId);
   const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const createPersonalTask = useCreatePersonalTask();
-  const updatePersonalTask = useUpdatePersonalTask();
 
   const { data: spaceMembers = [] } = useSpaceMembers(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId
+    activeOrgId,
+    activeSpaceId
   );
 
   const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
@@ -369,33 +364,9 @@ export function CreateTaskDialog({
     };
 
     if (mode === "edit" && taskId) {
-      if (isPersonalMode) {
-        const personalUpdate = {
-          title: input.title,
-          description: input.description,
-          priority: input.priority as any,
-          status: 'todo' as any,
-          due_date: input.due_date,
-          story_points: input.story_points,
-        };
-        updatePersonalTask.mutate({ id: taskId, updates: personalUpdate }, options);
-      } else {
-        updateOrgTask.mutate({ id: taskId, updates: input }, options);
-      }
+      updateOrgTask.mutate({ id: taskId, updates: input }, options);
     } else {
-      if (isPersonalMode) {
-        const personalCreate = {
-          title: input.title,
-          description: input.description,
-          priority: input.priority as any,
-          status: 'todo' as any,
-          due_date: input.due_date,
-          story_points: input.story_points,
-        };
-        createPersonalTask.mutate(personalCreate, options);
-      } else {
-        createOrgTask.mutate(input, options);
-      }
+      createOrgTask.mutate(input, options);
     }
   };
 

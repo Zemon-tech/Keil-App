@@ -184,7 +184,7 @@ function SpaceDetailPanel({
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Members ({members.length})
             </p>
-            {isAdmin && (
+            {isAdmin && !space.is_private && (
               <Popover open={addMemberOpen} onOpenChange={setAddMemberOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg gap-1">
@@ -241,7 +241,7 @@ function SpaceDetailPanel({
               const isSelf = member.user_id === currentUserId;
               const displayName = member.name || member.email;
               const isTargetAdmin = member.role === "admin";
-              const canEditRole = canManageSpaceMembers && !isSelf && (!isTargetAdmin || orgRole === "owner" || orgRole === "admin");
+              const canEditRole = canManageSpaceMembers && !space.is_private && !isSelf && (!isTargetAdmin || orgRole === "owner" || orgRole === "admin");
 
               return (
                 <div
@@ -301,7 +301,7 @@ function SpaceDetailPanel({
                         {member.role}
                       </span>
                     )}
-                    {isAdmin && !isSelf && (
+                    {isAdmin && !space.is_private && !isSelf && (
                       <button
                         onClick={() => handleRemoveMember(member.user_id)}
                         disabled={removeMember.isPending}
@@ -319,7 +319,7 @@ function SpaceDetailPanel({
         </div>
 
         {/* Danger zone — admin only */}
-        {isAdmin && (
+        {isAdmin && !space.is_private && (
           <>
             <Separator />
             <div>
