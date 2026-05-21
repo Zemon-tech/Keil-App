@@ -112,3 +112,18 @@ export const removeSpaceMember = catchAsync(async (req: Request, res: Response) 
   res.status(200).json(new ApiResponse(200, {}, "Member removed from space"));
 });
 
+export const updateSpaceMemberRole = catchAsync(async (req: Request, res: Response) => {
+  const orgId = asString(req.params.orgId);
+  const spaceId = asString(req.params.spaceId);
+  const targetUserId = asString(req.params.userId);
+  const actorUserId = (req as any).user?.id as string;
+  const { role } = req.body;
+
+  if (!["admin", "manager", "member"].includes(role)) {
+    throw new ApiError(400, "Role must be admin, manager, or member");
+  }
+
+  await spaceService.updateSpaceMemberRole(orgId, spaceId, actorUserId, targetUserId, role as any);
+  res.status(200).json(new ApiResponse(200, {}, "Space member role updated successfully"));
+});
+

@@ -85,7 +85,8 @@ export const updatePage = catchAsync(async (req: Request, res: Response) => {
   if (small_text !== undefined) input.small_text = small_text;
   if (full_width !== undefined) input.full_width = full_width;
 
-  const updated = await motionPageService.updatePage(orgId, spaceId, pageId, userId, input);
+  const spaceRole = (req as any).space?.membership_role as string;
+  const updated = await motionPageService.updatePage(orgId, spaceId, pageId, userId, input, spaceRole);
   if (!updated) throw new ApiError(404, 'Page not found');
 
   res.status(200).json(new ApiResponse(200, updated, 'Page updated successfully'));
@@ -95,7 +96,8 @@ export const softDeletePage = catchAsync(async (req: Request, res: Response) => 
   const { orgId, spaceId, userId } = getContext(req);
   const pageId = asString(req.params.id);
 
-  await motionPageService.softDeletePage(orgId, spaceId, pageId, userId);
+  const spaceRole = (req as any).space?.membership_role as string;
+  await motionPageService.softDeletePage(orgId, spaceId, pageId, userId, spaceRole);
   res.status(200).json(new ApiResponse(200, {}, 'Page moved to trash'));
 });
 
@@ -103,7 +105,8 @@ export const restorePage = catchAsync(async (req: Request, res: Response) => {
   const { orgId, spaceId, userId } = getContext(req);
   const pageId = asString(req.params.id);
 
-  const page = await motionPageService.restorePage(orgId, spaceId, pageId, userId);
+  const spaceRole = (req as any).space?.membership_role as string;
+  const page = await motionPageService.restorePage(orgId, spaceId, pageId, userId, spaceRole);
   res.status(200).json(new ApiResponse(200, page, 'Page restored successfully'));
 });
 
@@ -111,7 +114,8 @@ export const hardDeletePage = catchAsync(async (req: Request, res: Response) => 
   const { orgId, spaceId, userId } = getContext(req);
   const pageId = asString(req.params.id);
 
-  await motionPageService.hardDeletePage(orgId, spaceId, pageId, userId);
+  const spaceRole = (req as any).space?.membership_role as string;
+  await motionPageService.hardDeletePage(orgId, spaceId, pageId, userId, spaceRole);
   res.status(200).json(new ApiResponse(200, {}, 'Page permanently deleted'));
 });
 
@@ -137,13 +141,14 @@ export const createShare = catchAsync(async (req: Request, res: Response) => {
     throw new ApiError(400, 'permission must be "view" or "edit"');
   }
 
+  const spaceRole = (req as any).space?.membership_role as string;
   const share = await motionPageService.createShare(orgId, spaceId, pageId, userId, {
     share_type,
     permission,
     target_org_id: target_org_id ?? null,
     target_space_id: target_space_id ?? null,
     expires_at: expires_at ?? null,
-  });
+  }, spaceRole);
 
   res.status(201).json(new ApiResponse(201, share, 'Share created successfully'));
 });
@@ -153,7 +158,8 @@ export const revokeShare = catchAsync(async (req: Request, res: Response) => {
   const pageId = asString(req.params.id);
   const shareId = asString(req.params.shareId);
 
-  await motionPageService.revokeShare(orgId, spaceId, pageId, shareId, userId);
+  const spaceRole = (req as any).space?.membership_role as string;
+  await motionPageService.revokeShare(orgId, spaceId, pageId, shareId, userId, spaceRole);
   res.status(200).json(new ApiResponse(200, {}, 'Share revoked successfully'));
 });
 

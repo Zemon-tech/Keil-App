@@ -53,15 +53,7 @@ const toDeletedDTO = (row: any): DeletedSpaceDTO => ({
   deleted_at: new Date(row.deleted_at).toISOString(),
 });
 
-// ── Helper: assert caller is org owner or admin ───────────────────────────────
 
-const assertOwnerOrAdmin = async (orgId: string, userId: string): Promise<void> => {
-  const role = await organisationRepository.getMemberRole(orgId, userId);
-  if (!role) throw new ApiError(403, "Not a member of this organisation");
-  if (role !== "owner" && role !== "admin") {
-    throw new ApiError(403, "Only organisation owners and admins can manage spaces");
-  }
-};
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
@@ -78,7 +70,6 @@ export const getDeletedSpaces = async (
   orgId: string,
   userId: string,
 ): Promise<DeletedSpaceDTO[]> => {
-  await assertOwnerOrAdmin(orgId, userId);
   const spaces = await spaceRepository.findDeletedByOrg(orgId);
   return spaces.map(toDeletedDTO);
 };
@@ -95,8 +86,6 @@ export const createSpace = async (
   userId: string,
   name: string,
 ): Promise<SpaceDTO> => {
-  await assertOwnerOrAdmin(orgId, userId);
-
   const space = await spaceRepository.executeInTransaction(async (client) => {
     return spaceRepository.createWithOwner(orgId, name.trim(), userId, client);
   });
@@ -108,7 +97,7 @@ export const createSpace = async (
     visibility: space.visibility,
     created_by: space.created_by,
     created_at: new Date(space.created_at).toISOString(),
-    role: "owner",
+    role: "admin",
     compatibility_workspace_id: null,
   };
 };
@@ -121,8 +110,6 @@ export const renameSpace = async (
   userId: string,
   name: string,
 ): Promise<SpaceDTO> => {
-  await assertOwnerOrAdmin(orgId, userId);
-
   const trimmed = name.trim();
   if (!trimmed) throw new ApiError(400, "Space name is required");
 
@@ -136,7 +123,7 @@ export const renameSpace = async (
     visibility: updated.visibility,
     created_by: updated.created_by,
     created_at: new Date(updated.created_at).toISOString(),
-    role: "owner",
+    role: "admin",
     compatibility_workspace_id: null,
   };
 };
@@ -155,8 +142,6 @@ export const deleteSpace = async (
   spaceId: string,
   userId: string,
 ): Promise<void> => {
-  await assertOwnerOrAdmin(orgId, userId);
-
   const activeCount = await spaceRepository.countActiveByOrg(orgId);
   if (activeCount <= 1) {
     throw new ApiError(400, "Cannot delete the last space in an organisation");
@@ -181,8 +166,6 @@ export const restoreSpace = async (
   spaceId: string,
   userId: string,
 ): Promise<SpaceDTO> => {
-  await assertOwnerOrAdmin(orgId, userId);
-
   const restored = await spaceRepository.executeInTransaction(async (client) => {
     return spaceRepository.restore(spaceId, client);
   });
@@ -196,7 +179,7 @@ export const restoreSpace = async (
     visibility: restored.visibility,
     created_by: restored.created_by,
     created_at: new Date(restored.created_at).toISOString(),
-    role: "owner",
+    role: "admin",
     compatibility_workspace_id: null,
   };
 };
@@ -211,8 +194,6 @@ export const hardDeleteSpace = async (
   spaceId: string,
   userId: string,
 ): Promise<void> => {
-  await assertOwnerOrAdmin(orgId, userId);
-
   const deleted = await spaceRepository.findDeletedByOrg(orgId);
   const target = deleted.find((s) => s.id === spaceId);
   if (!target) {
@@ -253,8 +234,6 @@ export const addSpaceMember = async (
   userId: string,
   targetUserId: string,
 ): Promise<void> => {
-  await assertOwnerOrAdmin(orgId, userId);
-
   const targetRole = await organisationRepository.getMemberRole(orgId, targetUserId);
   if (!targetRole) {
     throw new ApiError(400, "User is not a member of this organisation");
@@ -271,8 +250,6 @@ export const removeSpaceMember = async (
   userId: string,
   targetUserId: string,
 ): Promise<void> => {
-  await assertOwnerOrAdmin(orgId, userId);
-
   if (userId === targetUserId) {
     throw new ApiError(400, "Cannot remove yourself from a space");
   }
@@ -280,4 +257,31 @@ export const removeSpaceMember = async (
   await spaceRepository.executeInTransaction(async (client) => {
     await spaceRepository.removeMember(spaceId, targetUserId, client);
   });
+};
+
+export const updateSpaceMemberRole = async (
+  orgId: string,
+  spaceId: string,
+  actorUserId: string,
+  targetUserId: string,
+  role: "admin" | "manager" | "member",
+): Promise<void> => {
+  const actorSpaceRole = await spaceRepository.getMemberRole(spaceId, actorUserId);
+  const targetSpaceRole = await spaceRepository.getMemberRole(spaceId, targetUserId);
+
+  if (!targetSpaceRole) throw new ApiError(404, "Member not found in this space");
+
+  // Space admin cannot change another admin's role unless they are org owner/admin
+  if (targetSpaceRole === "admin" && actorSpaceRole !== "admin") {
+    const actorOrgRole = await organisationRepository.getMemberRole(orgId, actorUserId);
+    if (actorOrgRole !== "owner" && actorOrgRole !== "admin") {
+      throw new ApiError(403, "Cannot change the role of a space admin");
+    }
+  }
+  // Prevent self-demotion
+  if (actorUserId === targetUserId) {
+    throw new ApiError(400, "Cannot change your own role");
+  }
+
+  await spaceRepository.updateMemberRole(spaceId, targetUserId, role);
 };

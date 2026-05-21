@@ -12,11 +12,13 @@ export function BulletListEditor({
   value,
   onSave,
   placeholder,
+  disabled = false,
 }: {
   title: string;
   value: string;
   onSave: (val: string) => void;
   placeholder: string;
+  disabled?: boolean;
 }) {
   const points = value ? value.split("\n").filter(Boolean).map(p => p.replace(/^•\s*/, "")) : [];
   const [newPoint, setNewPoint] = useState("");
@@ -42,7 +44,7 @@ export function BulletListEditor({
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           {title}
         </span>
-        {!isAdding && (
+        {!isAdding && !disabled && (
           <button
             onClick={() => setIsAdding(true)}
             className="flex items-center gap-1 text-[10px] uppercase font-semibold text-muted-foreground transition-colors hover:text-foreground"
@@ -60,12 +62,14 @@ export function BulletListEditor({
               <li key={i} className="group flex items-start gap-2.5 text-sm text-foreground">
                 <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
                 <span className="flex-1 leading-snug">{pt}</span>
-                <button
-                  onClick={() => handleDelete(i)}
-                  className="mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {!disabled && (
+                  <button
+                    onClick={() => handleDelete(i)}
+                    className="mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

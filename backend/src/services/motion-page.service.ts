@@ -204,10 +204,15 @@ export const updatePage = async (
   orgId: string,
   spaceId: string,
   pageId: string,
-  _userId: string,
+  userId: string,
   input: UpdateMotionPageInput,
+  spaceRole: string,
 ): Promise<MotionPageDTO | null> => {
-  await assertPageInSpace(pageId, orgId, spaceId);
+  const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (spaceRole === 'manager' && page.created_by !== userId) {
+    throw new ApiError(403, 'Managers can only edit their own pages');
+  }
 
   // If re-parenting, verify the new parent is in the same org+space
   if (input.parent_id !== undefined && input.parent_id !== null) {
@@ -233,12 +238,12 @@ export const updatePage = async (
   if (input.parent_id !== undefined) updates.parent_id = input.parent_id;
   if (input.small_text !== undefined) updates.small_text = input.small_text;
   if (input.full_width !== undefined) updates.full_width = input.full_width;
-  updates.updated_by = _userId;
+  updates.updated_by = userId;
 
   const updated = await motionPageRepository.update(pageId, updates);
   if (updated) {
     const dto = toPageDTO(updated);
-    broadcastMotionChange(spaceId, { type: 'update', pageId, page: dto, userId: _userId });
+    broadcastMotionChange(spaceId, { type: 'update', pageId, page: dto, userId });
     return dto;
   }
   return null;
@@ -248,22 +253,28 @@ export const softDeletePage = async (
   orgId: string,
   spaceId: string,
   pageId: string,
-  _userId: string,
+  userId: string,
+  spaceRole: string,
 ): Promise<void> => {
-  await assertPageInSpace(pageId, orgId, spaceId);
+  const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (spaceRole === 'manager' && page.created_by !== userId) {
+    throw new ApiError(403, 'Managers can only delete their own pages');
+  }
 
   // Recursively soft-delete the page and all its descendants in one query.
   // Uses a recursive CTE to walk the full subtree, then bulk-updates deleted_at.
   // This is safe because all pages are scoped to the same org+space (enforced on create).
   await motionPageRepository.softDeleteWithDescendants(pageId);
-  broadcastMotionChange(spaceId, { type: 'delete', pageId, userId: _userId });
+  broadcastMotionChange(spaceId, { type: 'delete', pageId, userId });
 };
 
 export const restorePage = async (
   orgId: string,
   spaceId: string,
   pageId: string,
-  _userId: string,
+  userId: string,
+  spaceRole: string,
 ): Promise<MotionPageDTO> => {
   // For restore, we need to find the page even if deleted — use findById from base
   const page = await motionPageRepository.findById(pageId, undefined, true);
@@ -274,11 +285,15 @@ export const restorePage = async (
     throw new ApiError(400, 'Page is not in trash');
   }
 
+  if (spaceRole === 'manager' && page.created_by !== userId) {
+    throw new ApiError(403, 'Managers can only restore their own pages');
+  }
+
   const restored = await motionPageRepository.restore(pageId);
   if (!restored) throw new ApiError(404, 'Page not found');
   
   const dto = toPageDTO(restored);
-  broadcastMotionChange(spaceId, { type: 'restore', page: dto, userId: _userId });
+  broadcastMotionChange(spaceId, { type: 'restore', page: dto, userId });
   return dto;
 };
 
@@ -286,7 +301,8 @@ export const hardDeletePage = async (
   orgId: string,
   spaceId: string,
   pageId: string,
-  _userId: string,
+  userId: string,
+  spaceRole: string,
 ): Promise<void> => {
   // Allow hard-deleting from trash (deleted_at IS NOT NULL) — use base findById
   const page = await motionPageRepository.findById(pageId, undefined, true);
@@ -294,9 +310,13 @@ export const hardDeletePage = async (
     throw new ApiError(404, 'Page not found');
   }
 
+  if (spaceRole === 'manager' && page.created_by !== userId) {
+    throw new ApiError(403, 'Managers can only permanently delete their own pages');
+  }
+
   // DB CASCADE on parent_id handles recursive deletion of all subpages
   await motionPageRepository.hardDelete(pageId);
-  broadcastMotionChange(spaceId, { type: 'hard_delete', pageId, userId: _userId });
+  broadcastMotionChange(spaceId, { type: 'hard_delete', pageId, userId });
 };
 
 // ─── Shares ───────────────────────────────────────────────────────────────────
@@ -317,8 +337,13 @@ export const createShare = async (
   pageId: string,
   userId: string,
   input: CreateShareInput,
+  spaceRole: string,
 ): Promise<MotionPageShareDTO> => {
-  await assertPageInSpace(pageId, orgId, spaceId);
+  const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (spaceRole === 'manager' && page.created_by !== userId) {
+    throw new ApiError(403, 'Managers can only share their own pages');
+  }
 
   if (input.share_type === MotionShareType.PUBLIC_LINK) {
     // Generate a unique token
@@ -374,9 +399,14 @@ export const revokeShare = async (
   spaceId: string,
   pageId: string,
   shareId: string,
-  _userId: string,
+  userId: string,
+  spaceRole: string,
 ): Promise<void> => {
-  await assertPageInSpace(pageId, orgId, spaceId);
+  const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (spaceRole === 'manager' && page.created_by !== userId) {
+    throw new ApiError(403, 'Managers can only revoke shares for their own pages');
+  }
 
   const share = await motionPageShareRepository.findById(shareId);
   if (!share || share.page_id !== pageId) {

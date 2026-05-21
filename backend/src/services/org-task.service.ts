@@ -6,7 +6,7 @@ import {
   taskDependencyRepository,
 } from "../repositories";
 import { Task, User } from "../types/entities";
-import { LogActionType, LogEntityType, TaskPriority, TaskStatus } from "../types/enums";
+import { LogActionType, LogEntityType, TaskPriority, TaskStatus, SpaceRole } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
 import { ApiError } from "../utils/ApiError";
 import { syncTaskToCalendar, deleteCalendarEvent } from "./google-calendar.service";
@@ -283,7 +283,15 @@ export const changeTaskStatus = async (
   taskId: string,
   userId: string,
   status: TaskStatus,
+  spaceRole: SpaceRole,
 ): Promise<OrgTaskDTO | null> => {
+  if (spaceRole === "member") {
+    const isAssigned = await taskAssigneeRepository.isAssigned(taskId, userId);
+    if (!isAssigned) {
+      throw new ApiError(403, "Members can only change status of tasks assigned to them");
+    }
+  }
+
   if (status === TaskStatus.DONE) {
     const allDependenciesComplete = await taskDependencyRepository.checkAllDependenciesComplete(taskId);
     if (!allDependenciesComplete) {

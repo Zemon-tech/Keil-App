@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Link2, Copy, Files, CornerUpRight, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, PenLine, Languages, Undo2, Download, Upload, RotateCw, History, AppWindow, FilePlus, ArrowRight
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Link2, Copy, CornerUpRight, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, PenLine, Languages, Undo2, Download, Upload, RotateCw, History, AppWindow, FilePlus
 } from "lucide-react";
 import { MotionShareModal } from "./MotionShareModal";
 import { 
@@ -18,6 +18,7 @@ import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import {
@@ -71,11 +72,9 @@ export function MotionPage() {
   const [menuSearch, setMenuSearch] = useState("");
   const [isLocked, setIsLocked] = useState(false);
 
-  useEffect(() => {
-    if (pageEditor) {
-      pageEditor.setEditable(!isLocked);
-    }
-  }, [isLocked, pageEditor]);
+  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { user } = useAuth();
+  const { spaceRole } = useSpaceRole();
 
   const matchesSearch = (text: string) => text.toLowerCase().includes(menuSearch.toLowerCase());
 
@@ -92,7 +91,6 @@ export function MotionPage() {
     }
   };
 
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
   const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty } =
     useMotionStore();
 
@@ -109,8 +107,6 @@ export function MotionPage() {
   const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
   const softDelete = useSoftDeleteMotionPage(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
-
-  const { user } = useAuth();
 
   // ── Space members (must be called unconditionally — before any early returns) ──
   const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
@@ -138,6 +134,14 @@ export function MotionPage() {
 
   // ── Derived display page (null-safe, used before guards) ───────────────────
   const displayPage = page ?? serverPage ?? null;
+
+  const isPageReadOnly = spaceRole === "admin" ? false : spaceRole === "manager" ? displayPage?.created_by !== user?.id : true;
+
+  useEffect(() => {
+    if (pageEditor) {
+      pageEditor.setEditable(!isLocked && !isPageReadOnly);
+    }
+  }, [isLocked, isPageReadOnly, pageEditor]);
 
   // ── Last edited member ─────────────────────────────────────────────────────
   const lastEditedMember = useMemo(() => {
@@ -268,7 +272,7 @@ export function MotionPage() {
     );
   }
 
-  if (isLoading || (!page && !serverPage)) {
+  if (isLoading || !displayPage) {
     return (
       <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative" />
     );
@@ -344,25 +348,29 @@ export function MotionPage() {
             <SaveIndicator status={saveStatus} />
 
             {/* Share button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
-              onClick={() => setShareModalOpen(true)}
-            >
-              <Share2 className="size-3.5" />
-              Share
-            </Button>
+            {!isPageReadOnly && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
+                onClick={() => setShareModalOpen(true)}
+              >
+                <Share2 className="size-3.5" />
+                Share
+              </Button>
+            )}
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground/50 hover:text-destructive transition-colors"
-              onClick={handleDelete}
-              disabled={softDelete.isPending}
-            >
-              <Trash2 className="size-4" />
-            </Button>
+            {!isPageReadOnly && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                onClick={handleDelete}
+                disabled={softDelete.isPending}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -416,7 +424,7 @@ export function MotionPage() {
                   )}
 
                   {/* Section 2 — Page Actions */}
-                  {(matchesSearch("Copy link") || matchesSearch("Copy page contents") || matchesSearch("Duplicate") || matchesSearch("Move to") || matchesSearch("Move to Trash")) && (
+                  {(matchesSearch("Copy link") || matchesSearch("Copy page contents") || (matchesSearch("Duplicate") && !isPageReadOnly) || (matchesSearch("Move to") && !isPageReadOnly) || (matchesSearch("Move to Trash") && !isPageReadOnly)) && (
                     <>
                       <div className="py-1">
                         {matchesSearch("Copy link") && (
@@ -436,7 +444,7 @@ export function MotionPage() {
                             </div>
                           </div>
                         )}
-                        {matchesSearch("Duplicate") && (
+                        {matchesSearch("Duplicate") && !isPageReadOnly && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
                             <div className="flex items-center gap-2.5">
                               <FilePlus className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -445,7 +453,7 @@ export function MotionPage() {
                             <span className="text-[10px] text-muted-foreground/60">Ctrl+D</span>
                           </div>
                         )}
-                        {matchesSearch("Move to") && (
+                        {matchesSearch("Move to") && !isPageReadOnly && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
                             <div className="flex items-center gap-2.5">
                               <CornerUpRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -454,7 +462,7 @@ export function MotionPage() {
                             <span className="text-[10px] text-muted-foreground/60">Ctrl+⇧+P</span>
                           </div>
                         )}
-                        {matchesSearch("Move to Trash") && (
+                        {matchesSearch("Move to Trash") && !isPageReadOnly && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleDelete}>
                             <div className="flex items-center gap-2.5">
                               <Trash2 className="size-4 text-muted-foreground group-hover:text-destructive transition-colors" />
@@ -468,7 +476,7 @@ export function MotionPage() {
                   )}
 
                   {/* Section 3 — View & Layout Toggles */}
-                  {(matchesSearch("Small text") || matchesSearch("Full width")) && (
+                  {!isPageReadOnly && (matchesSearch("Small text") || matchesSearch("Full width")) && (
                     <>
                       <div className="py-1">
                         {matchesSearch("Small text") && (
@@ -512,7 +520,7 @@ export function MotionPage() {
                             </div>
                           </div>
                         )}
-                        {matchesSearch("Lock page") && (
+                        {matchesSearch("Lock page") && !isPageReadOnly && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={() => setIsLocked(!isLocked)}>
                             <div className="flex items-center gap-2.5">
                               <Lock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -597,7 +605,7 @@ export function MotionPage() {
                   {(matchesSearch("Turn into wiki") || matchesSearch("Updates & analytics") || matchesSearch("Version history") || matchesSearch("Notify me") || matchesSearch("Connections") || matchesSearch("Open in Windows app")) && (
                     <>
                       <div className="py-1">
-                        {matchesSearch("Turn into wiki") && (
+                        {matchesSearch("Turn into wiki") && !isPageReadOnly && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
                             <div className="flex items-center gap-2.5">
                               <RotateCw className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -662,7 +670,7 @@ export function MotionPage() {
                       Word count: {pageEditor ? pageEditor.storage.characterCount.words() : 0} words
                     </span>
                     <span className="text-[10px] text-muted-foreground/70">
-                      Last edited by {lastEditedMember?.name || lastEditedMember?.email || user?.name || "User"}
+                      Last edited by {lastEditedMember?.name || lastEditedMember?.email || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.email || "User"}
                     </span>
                     <span className="text-[10px] text-muted-foreground/70">
                       {displayPage?.updated_at ? new Date(displayPage.updated_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
@@ -687,49 +695,51 @@ export function MotionPage() {
                   alt="cover"
                   className="h-full w-full object-cover"
                 />
-                <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
-                  <input
-                    type="file"
-                    ref={coverInputRef}
-                    className="hidden"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          const result = reader.result as string;
-                          if (pageId) {
-                            useMotionStore.getState().updatePageLocally(pageId, { cover_image: result });
-                            updatePage.mutate({ id: pageId, updates: { cover_image: result } });
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
-                    onClick={() => setShowCoverPicker(true)}
-                  >
-                    Change
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
-                    onClick={() => {
-                      if (pageId) {
-                        useMotionStore.getState().updatePageLocally(pageId, { cover_image: null });
-                        updatePage.mutate({ id: pageId, updates: { cover_image: null } });
-                      }
-                    }}
-                  >
-                    Remove
-                  </Button>
-                </div>
+                {!isPageReadOnly && (
+                  <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
+                    <input
+                      type="file"
+                      ref={coverInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const result = reader.result as string;
+                            if (pageId) {
+                              useMotionStore.getState().updatePageLocally(pageId, { cover_image: result });
+                              updatePage.mutate({ id: pageId, updates: { cover_image: result } });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                      onClick={() => setShowCoverPicker(true)}
+                    >
+                      Change
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                      onClick={() => {
+                        if (pageId) {
+                          useMotionStore.getState().updatePageLocally(pageId, { cover_image: null });
+                          updatePage.mutate({ id: pageId, updates: { cover_image: null } });
+                        }
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
 
                 <Dialog open={showCoverPicker} onOpenChange={setShowCoverPicker}>
                   <DialogContent showCloseButton={false} className="max-w-[540px] p-0 overflow-hidden bg-popover border-border shadow-2xl">
@@ -846,8 +856,15 @@ export function MotionPage() {
               <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16 motion-page-container">
                 <div className="relative group/icon pl-4" style={{ marginTop: displayPage.cover_image ? '-40px' : '16px', marginBottom: '12px', width: 'fit-content' }}>
                     <div
-                      className="text-[78px] leading-none select-none cursor-pointer flex items-center justify-center shrink-0"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className={cn(
+                        "text-[78px] leading-none select-none flex items-center justify-center shrink-0",
+                        isPageReadOnly ? "cursor-default" : "cursor-pointer"
+                      )}
+                      onClick={() => {
+                        if (!isPageReadOnly) {
+                          setShowEmojiPicker(!showEmojiPicker);
+                        }
+                      }}
                     >
                       {displayPage.icon?.startsWith("data:image") ? (
                         <img src={displayPage.icon} alt="icon" className="size-full object-cover rounded-xl" />
@@ -1041,39 +1058,41 @@ export function MotionPage() {
 
             <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16 motion-page-container">
               <div className="group/title-area">
-                <div className={cn(
-                  "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
-                  "mt-3 mb-2",
-                  "opacity-0 group-hover/title-area:opacity-100"
-                )}>
-                  {!displayPage.icon && (
-                    <button
-                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                      onClick={() => {
-                        setShowEmojiPicker(true);
-                      }}
-                    >
-                      Add icon
+                {!isPageReadOnly && (
+                  <div className={cn(
+                    "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
+                    "mt-3 mb-2",
+                    "opacity-0 group-hover/title-area:opacity-100"
+                  )}>
+                    {!displayPage.icon && (
+                      <button
+                        className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                        onClick={() => {
+                          setShowEmojiPicker(true);
+                        }}
+                      >
+                        Add icon
+                      </button>
+                    )}
+                    {!displayPage.cover_image && (
+                      <button
+                        className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                        onClick={() => {
+                          const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
+                          if (pageId) {
+                            useMotionStore.getState().updatePageLocally(pageId, { cover_image: defaultCover });
+                            updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
+                          }
+                        }}
+                      >
+                        Add cover
+                      </button>
+                    )}
+                    <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
+                      Add comment
                     </button>
-                  )}
-                  {!displayPage.cover_image && (
-                    <button
-                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                      onClick={() => {
-                        const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
-                        if (pageId) {
-                          useMotionStore.getState().updatePageLocally(pageId, { cover_image: defaultCover });
-                          updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
-                        }
-                      }}
-                    >
-                      Add cover
-                    </button>
-                  )}
-                  <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
-                    Add comment
-                  </button>
-                </div>
+                  </div>
+                )}
 
                 {/* Title */}
                 <input
@@ -1085,7 +1104,11 @@ export function MotionPage() {
                     pageEditor?.commands?.focus?.("start");
                   }}
                   onBlur={handleTitleBlur}
-                  className="w-full bg-transparent text-[44px] px-4 leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25"
+                  readOnly={isPageReadOnly}
+                  className={cn(
+                    "w-full bg-transparent text-[44px] px-4 leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25",
+                    isPageReadOnly && "pointer-events-none"
+                  )}
                   placeholder="Untitled"
                 />
               </div>

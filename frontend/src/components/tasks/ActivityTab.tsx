@@ -34,6 +34,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useOrgTaskComments, useCreateOrgComment, useDeleteOrgComment } from "@/hooks/api/useComments";
 import type { Comment } from "@/types/task";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
 
 import { formatRelTime } from "./task-detail-shared";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
@@ -61,6 +62,7 @@ function CommentNode({
   const createComment = useCreateOrgComment(activeOrgId, activeSpaceId);
   const deleteComment = useDeleteOrgComment(activeOrgId, activeSpaceId);
   const { user } = useAuth();
+  const { canComment, canDeleteOwnComment, canDeleteAnyComment } = useSpaceRole();
 
   // Close reply box when clicking outside it.
   // We defer adding the listener by one frame so the mousedown that
@@ -134,33 +136,37 @@ function CommentNode({
         </p>
 
         {/* Floating Action Menu */}
-        <div className="absolute right-4 -top-3 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border shadow-sm rounded-md flex items-center overflow-hidden z-10">
-          <button
-            onClick={() => setIsReplying(!isReplying)}
-            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center justify-center"
-            title="Reply"
-          >
-            <span className="text-xs font-semibold px-2">Reply</span>
-          </button>
+        {(canComment || (user?.id === comment.user_id && canDeleteOwnComment) || canDeleteAnyComment) && (
+          <div className="absolute right-4 -top-3 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border shadow-sm rounded-md flex items-center overflow-hidden z-10">
+            {canComment && (
+              <button
+                onClick={() => setIsReplying(!isReplying)}
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center justify-center"
+                title="Reply"
+              >
+                <span className="text-xs font-semibold px-2">Reply</span>
+              </button>
+            )}
 
-          {user?.id === comment.user_id && (
-            <button
-              onClick={handleDelete}
-              disabled={deleteComment.isPending}
-              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center justify-center disabled:opacity-50"
-              title="Delete message"
-            >
-              {deleteComment.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-            </button>
-          )}
-        </div>
+            {((user?.id === comment.user_id && canDeleteOwnComment) || canDeleteAnyComment) && (
+              <button
+                onClick={handleDelete}
+                disabled={deleteComment.isPending}
+                className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex items-center justify-center disabled:opacity-50"
+                title="Delete message"
+              >
+                {deleteComment.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Reply Box Toggle */}
-        {isReplying && (
+        {isReplying && canComment && (
           <div ref={replyBoxRef} className="mt-2 flex items-center gap-2 max-w-2xl bg-muted/50 p-1 rounded-md border border-border/40 focus-within:border-border/80">
             <Input
               autoFocus
@@ -226,6 +232,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   const isOrgMode = mode === "organisation";
   const { data: comments, isPending } = useOrgTaskComments(activeOrgId, activeSpaceId, task.id);
   const createComment = useCreateOrgComment(activeOrgId, activeSpaceId);
+  const { canComment } = useSpaceRole();
 
   const [activePicker, setActivePicker] = useState<"user" | "task" | "event" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
@@ -435,63 +442,68 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
       {/* Sticky comment input - WhatsApp Style */}
       <div className="shrink-0 px-6 pb-6 pt-2">
         <div className="flex items-center gap-2 w-full max-w-5xl mx-auto bg-background rounded-full px-4 py-2.5 border border-border focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all shadow-sm">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 ml-0.5 outline-none">
-                <Plus className="h-[22px] w-[22px] text-foreground/70" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-64 p-2 mb-2 rounded-xl border border-border shadow-md">
-              <DropdownMenuItem onClick={() => setActivePicker('user')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
-                  <AtSign className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Mention someone</span>
-                  <span className="text-xs text-muted-foreground">Notify a team member</span>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setActivePicker('task')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
-                  <Hash className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Mention task</span>
-                  <span className="text-xs text-muted-foreground">Reference a task name</span>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setActivePicker('event')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
-                  <DollarSign className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Mention event</span>
-                  <span className="text-xs text-muted-foreground">Reference an event name</span>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="mx-2 my-1" />
-              <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
-                  <Paperclip className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Add files</span>
-                  <span className="text-xs text-muted-foreground">Opens file picker dialog</span>
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {canComment && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 ml-0.5 outline-none">
+                  <Plus className="h-[22px] w-[22px] text-foreground/70" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="w-64 p-2 mb-2 rounded-xl border border-border shadow-md">
+                <DropdownMenuItem onClick={() => setActivePicker('user')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
+                    <AtSign className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">Mention someone</span>
+                    <span className="text-xs text-muted-foreground">Notify a team member</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActivePicker('task')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
+                    <Hash className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">Mention task</span>
+                    <span className="text-xs text-muted-foreground">Reference a task name</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActivePicker('event')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
+                    <DollarSign className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">Mention event</span>
+                    <span className="text-xs text-muted-foreground">Reference an event name</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="mx-2 my-1" />
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
+                    <Paperclip className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">Add files</span>
+                    <span className="text-xs text-muted-foreground">Opens file picker dialog</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
-          <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 outline-none">
-            <Smile className="h-5 w-5 text-foreground/70" />
-          </button>
+          {canComment && (
+            <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 outline-none">
+              <Smile className="h-5 w-5 text-foreground/70" />
+            </button>
+          )}
 
           <Input
-            placeholder="Type a message"
+            placeholder={canComment ? "Type a message" : "You don't have permission to comment in this space"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            disabled={!canComment}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !activePicker) {
+              if (e.key === "Enter" && !e.shiftKey && !activePicker && canComment) {
                 handleSend();
               }
             }}
@@ -499,7 +511,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
           />
 
           <div className="flex shrink-0 pr-1">
-            {input.trim() || createComment.isPending ? (
+            {canComment && (input.trim() || createComment.isPending) ? (
               <Button
                 size="sm"
                 variant="ghost"
@@ -509,11 +521,11 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
               >
                 {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
               </Button>
-            ) : (
+            ) : canComment ? (
               <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 outline-none text-foreground/70">
                 <Mic className="h-[22px] w-[22px]" />
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
