@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, Undo2, History
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, Undo2, History
 } from "lucide-react";
 import { MotionSharePanel } from "./MotionShareModal";
 import { 
@@ -141,6 +141,26 @@ export function MotionPage() {
       pageEditor.setEditable(!isLocked && !isPageReadOnly);
     }
   }, [isLocked, isPageReadOnly, pageEditor]);
+
+  // ── Click outside cover to auto-save reposition ────────────────────────────
+  useEffect(() => {
+    if (!isRepositioning) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (coverContainerRef.current && !coverContainerRef.current.contains(e.target as Node)) {
+        // Auto-save when clicking outside the cover area
+        if (pageId) {
+          useMotionStore.getState().updatePageLocally(pageId, { cover_position: draftPosition });
+          updatePage.mutate({ id: pageId, updates: { cover_position: draftPosition } });
+        }
+        setIsRepositioning(false);
+      }
+    };
+
+    // Use mousedown so it fires before click handlers elsewhere
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isRepositioning, draftPosition, pageId]);
 
   // ── Last edited member ─────────────────────────────────────────────────────
   const lastEditedMember = useMemo(() => {
