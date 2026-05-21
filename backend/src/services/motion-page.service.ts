@@ -18,6 +18,7 @@ export interface MotionPageDTO {
   content: Record<string, any>;
   icon: string | null;
   cover_image: string | null;
+  cover_position: number;
   position: number;
   small_text: boolean;
   full_width: boolean;
@@ -53,6 +54,7 @@ export interface UpdateMotionPageInput {
   content?: Record<string, any>;
   icon?: string | null;
   cover_image?: string | null;
+  cover_position?: number;
   parent_id?: string | null;
   small_text?: boolean;
   full_width?: boolean;
@@ -84,6 +86,7 @@ const toPageDTO = (page: MotionPage): MotionPageDTO => ({
   content: page.content,
   icon: page.icon,
   cover_image: page.cover_image,
+  cover_position: page.cover_position ?? 50,
   position: page.position,
   small_text: page.small_text,
   full_width: page.full_width,
@@ -235,6 +238,7 @@ export const updatePage = async (
   if (input.content !== undefined) updates.content = input.content;
   if (input.icon !== undefined) updates.icon = input.icon;
   if (input.cover_image !== undefined) updates.cover_image = input.cover_image;
+  if (input.cover_position !== undefined) updates.cover_position = input.cover_position;
   if (input.parent_id !== undefined) updates.parent_id = input.parent_id;
   if (input.small_text !== undefined) updates.small_text = input.small_text;
   if (input.full_width !== undefined) updates.full_width = input.full_width;
@@ -427,6 +431,29 @@ export const getPageByPublicToken = async (
   // Fetch the page — must be active (not deleted)
   const page = await motionPageRepository.findById(share.page_id);
   if (!page) return null;
+
+  return toPageDTO(page);
+};
+
+/**
+ * Returns a page by its ID only if public sharing is enabled for it.
+ * Used by the new /motion/:slug/:pageId public URL.
+ */
+export const getPageByIdIfPublic = async (
+  pageId: string,
+): Promise<MotionPageDTO | null> => {
+  // Check if there is an active public_link share for this page
+  const shares = await motionPageShareRepository.findByPage(pageId);
+  const hasPublicShare = shares.some(
+    (s) =>
+      s.share_type === MotionShareType.PUBLIC_LINK &&
+      (s.expires_at === null || new Date(s.expires_at) > new Date()),
+  );
+  if (!hasPublicShare) return null;
+
+  // Fetch the page — must be active (not deleted)
+  const page = await motionPageRepository.findById(pageId);
+  if (!page || page.deleted_at) return null;
 
   return toPageDTO(page);
 };

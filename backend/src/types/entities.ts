@@ -183,6 +183,7 @@ export interface MotionPage {
   content: Record<string, any>; // Tiptap JSONContent
   icon: string | null;
   cover_image: string | null;
+  cover_position: number; // 0–100, vertical %, default 50
   position: number;
   small_text: boolean;
   full_width: boolean;

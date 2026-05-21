@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Link2, Copy, CornerUpRight, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, PenLine, Languages, Undo2, Download, Upload, RotateCw, History, AppWindow, FilePlus
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, Undo2, History
 } from "lucide-react";
-import { MotionShareModal } from "./MotionShareModal";
+import { MotionSharePanel } from "./MotionShareModal";
 import { 
   Dialog, 
   DialogContent, 
@@ -71,17 +71,16 @@ export function MotionPage() {
   // -- Dropdown State --
   const [menuSearch, setMenuSearch] = useState("");
   const [isLocked, setIsLocked] = useState(false);
+  const [isRepositioning, setIsRepositioning] = useState(false);
+  // Draft position used only while repositioning — not saved until "Save position"
+  const [draftPosition, setDraftPosition] = useState<number>(50);
+  const coverContainerRef = useRef<HTMLDivElement>(null);
 
   const { activeOrgId, activeSpaceId, mode } = useAppContext();
   const { user } = useAuth();
   const { spaceRole } = useSpaceRole();
 
   const matchesSearch = (text: string) => text.toLowerCase().includes(menuSearch.toLowerCase());
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    toast("Link copied to clipboard");
-  };
 
   const handleCopyContent = () => {
     if (pageEditor) {
@@ -347,17 +346,33 @@ export function MotionPage() {
             {/* Save status */}
             <SaveIndicator status={saveStatus} />
 
-            {/* Share button */}
-            {!isPageReadOnly && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
-                onClick={() => setShareModalOpen(true)}
-              >
-                <Share2 className="size-3.5" />
-                Share
-              </Button>
+            {/* Share button — opens panel anchored below */}
+            {!isPageReadOnly && activeOrgId && activeSpaceId && (
+              <Popover open={shareModalOpen} onOpenChange={setShareModalOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
+                  >
+                    <Share2 className="size-3.5" />
+                    Share
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  sideOffset={8}
+                  className="p-0 rounded-xl shadow-lg border border-border bg-popover overflow-hidden w-auto"
+                >
+                  <MotionSharePanel
+                    open={shareModalOpen}
+                    pageId={pageId!}
+                    pageTitle={displayPage.title}
+                    orgId={activeOrgId}
+                    spaceId={activeSpaceId}
+                  />
+                </PopoverContent>
+              </Popover>
             )}
 
             {!isPageReadOnly && (
@@ -396,70 +411,16 @@ export function MotionPage() {
                     </div>
                   </div>
 
-                  {/* Section 1 — Font Style Selector */}
-                  {(matchesSearch("Default") || matchesSearch("Serif") || matchesSearch("Mono")) && (
-                    <>
-                      <div className="flex items-center justify-between px-3 py-2 mt-1">
-                        {matchesSearch("Default") && (
-                          <div className="flex flex-col items-center gap-1 cursor-pointer w-[30%] py-1 rounded hover:bg-muted/50 transition-colors">
-                            <span className="text-xl font-medium font-sans">Ag</span>
-                            <span className="text-[10px] text-muted-foreground">Default</span>
-                          </div>
-                        )}
-                        {matchesSearch("Serif") && (
-                          <div className="flex flex-col items-center gap-1 cursor-pointer w-[30%] py-1 rounded hover:bg-muted/50 transition-colors">
-                            <span className="text-xl font-medium font-serif">Ag</span>
-                            <span className="text-[10px] text-muted-foreground">Serif</span>
-                          </div>
-                        )}
-                        {matchesSearch("Mono") && (
-                          <div className="flex flex-col items-center gap-1 cursor-pointer w-[30%] py-1 rounded hover:bg-muted/50 transition-colors">
-                            <span className="text-xl font-medium font-mono">Ag</span>
-                            <span className="text-[10px] text-muted-foreground">Mono</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="h-px bg-border/50 w-full" />
-                    </>
-                  )}
-
                   {/* Section 2 — Page Actions */}
-                  {(matchesSearch("Copy link") || matchesSearch("Copy page contents") || (matchesSearch("Duplicate") && !isPageReadOnly) || (matchesSearch("Move to") && !isPageReadOnly) || (matchesSearch("Move to Trash") && !isPageReadOnly)) && (
+                  {(matchesSearch("Copy page contents") || (matchesSearch("Move to Trash") && !isPageReadOnly)) && (
                     <>
                       <div className="py-1">
-                        {matchesSearch("Copy link") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleCopyLink}>
-                            <div className="flex items-center gap-2.5">
-                              <Link2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Copy link</span>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground/60">Ctrl+Alt+L</span>
-                          </div>
-                        )}
                         {matchesSearch("Copy page contents") && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleCopyContent}>
                             <div className="flex items-center gap-2.5">
                               <Copy className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                               <span className="text-xs font-medium">Copy page contents</span>
                             </div>
-                          </div>
-                        )}
-                        {matchesSearch("Duplicate") && !isPageReadOnly && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <FilePlus className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Duplicate</span>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground/60">Ctrl+D</span>
-                          </div>
-                        )}
-                        {matchesSearch("Move to") && !isPageReadOnly && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <CornerUpRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Move to</span>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground/60">Ctrl+⇧+P</span>
                           </div>
                         )}
                         {matchesSearch("Move to Trash") && !isPageReadOnly && (
@@ -509,7 +470,7 @@ export function MotionPage() {
                   )}
 
                   {/* Section 4 — Page Settings */}
-                  {(matchesSearch("Customize page") || matchesSearch("Lock page") || matchesSearch("Use with AI") || matchesSearch("Suggest edits") || matchesSearch("Translate")) && (
+                  {(matchesSearch("Customize page") || matchesSearch("Lock page")) && (
                     <>
                       <div className="py-1">
                         {matchesSearch("Customize page") && (
@@ -529,39 +490,13 @@ export function MotionPage() {
                             <Switch size="sm" checked={isLocked} onCheckedChange={setIsLocked} />
                           </div>
                         )}
-                        {matchesSearch("Use with AI") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <Sparkles className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Use with AI</span>
-                            </div>
-                            <ChevronRight className="size-3.5 text-muted-foreground/60" />
-                          </div>
-                        )}
-                        {matchesSearch("Suggest edits") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <PenLine className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Suggest edits</span>
-                            </div>
-                          </div>
-                        )}
-                        {matchesSearch("Translate") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <Languages className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Translate</span>
-                            </div>
-                            <ChevronRight className="size-3.5 text-muted-foreground/60" />
-                          </div>
-                        )}
                       </div>
                       <div className="h-px bg-border/50 w-full" />
                     </>
                   )}
 
                   {/* Section 5 — History & Actions */}
-                  {(matchesSearch("Undo") || matchesSearch("Import") || matchesSearch("Export")) && (
+                  {matchesSearch("Undo") && (
                     <>
                       <div className="py-1">
                         {matchesSearch("Undo") && (
@@ -580,39 +515,15 @@ export function MotionPage() {
                             <span className="text-[10px] text-muted-foreground/60">Ctrl+Z</span>
                           </div>
                         )}
-                        {matchesSearch("Import") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <Download className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Import</span>
-                            </div>
-                          </div>
-                        )}
-                        {matchesSearch("Export") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <Upload className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Export</span>
-                            </div>
-                          </div>
-                        )}
                       </div>
                       <div className="h-px bg-border/50 w-full" />
                     </>
                   )}
 
                   {/* Section 6 — Advanced */}
-                  {(matchesSearch("Turn into wiki") || matchesSearch("Updates & analytics") || matchesSearch("Version history") || matchesSearch("Notify me") || matchesSearch("Connections") || matchesSearch("Open in Windows app")) && (
+                  {(matchesSearch("Updates & analytics") || matchesSearch("Version history")) && (
                     <>
                       <div className="py-1">
-                        {matchesSearch("Turn into wiki") && !isPageReadOnly && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <RotateCw className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Turn into wiki</span>
-                            </div>
-                          </div>
-                        )}
                         {matchesSearch("Updates & analytics") && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
                             <div className="flex items-center gap-2.5">
@@ -626,36 +537,6 @@ export function MotionPage() {
                             <div className="flex items-center gap-2.5">
                               <History className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                               <span className="text-xs font-medium">Version history</span>
-                            </div>
-                          </div>
-                        )}
-                        {matchesSearch("Notify me") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <Bell className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Notify me</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
-                              Comments <ChevronRight className="size-3" />
-                            </div>
-                          </div>
-                        )}
-                        {matchesSearch("Connections") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <Link2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Connections</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
-                              None <ChevronRight className="size-3" />
-                            </div>
-                          </div>
-                        )}
-                        {matchesSearch("Open in Windows app") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <AppWindow className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Open in Windows app</span>
                             </div>
                           </div>
                         )}
@@ -689,13 +570,49 @@ export function MotionPage() {
         )}>
           <div className="w-full pt-0 relative">
             {displayPage.cover_image ? (
-              <div className="h-[220px] w-full relative group/cover">
+              <div
+                ref={coverContainerRef}
+                className="h-[220px] w-full relative group/cover"
+              >
                 <img
                   src={displayPage.cover_image}
                   alt="cover"
-                  className="h-full w-full object-cover"
+                  className={cn(
+                    "h-full w-full object-cover select-none transition-none",
+                    isRepositioning ? "cursor-ns-resize" : ""
+                  )}
+                  style={{
+                    objectPosition: `center ${isRepositioning ? draftPosition : (displayPage.cover_position ?? 50)}%`,
+                  }}
+                  draggable={false}
+                  onMouseDown={isRepositioning ? (e) => {
+                    e.preventDefault();
+                    const startY = e.clientY;
+                    const startPos = draftPosition;
+                    const containerHeight = coverContainerRef.current?.getBoundingClientRect().height ?? 220;
+                    // Each pixel of drag = (100 / containerHeight) % shift, inverted:
+                    // dragging up (negative deltaY) → show lower part → increase %
+                    // dragging down (positive deltaY) → show upper part → decrease %
+                    const pxToPct = 100 / containerHeight;
+
+                    const onMouseMove = (mv: MouseEvent) => {
+                      const delta = mv.clientY - startY;
+                      const next = Math.round(Math.max(0, Math.min(100, startPos + delta * pxToPct)));
+                      setDraftPosition(next);
+                    };
+
+                    const onMouseUp = () => {
+                      document.removeEventListener("mousemove", onMouseMove);
+                      document.removeEventListener("mouseup", onMouseUp);
+                    };
+
+                    document.addEventListener("mousemove", onMouseMove);
+                    document.addEventListener("mouseup", onMouseUp);
+                  } : undefined}
                 />
-                {!isPageReadOnly && (
+
+                {/* Normal buttons — hidden while repositioning */}
+                {!isPageReadOnly && !isRepositioning && (
                   <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
                     <input
                       type="file"
@@ -730,6 +647,17 @@ export function MotionPage() {
                       size="sm"
                       className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
                       onClick={() => {
+                        setDraftPosition(displayPage.cover_position ?? 50);
+                        setIsRepositioning(true);
+                      }}
+                    >
+                      Reposition
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                      onClick={() => {
                         if (pageId) {
                           useMotionStore.getState().updatePageLocally(pageId, { cover_image: null });
                           updatePage.mutate({ id: pageId, updates: { cover_image: null } });
@@ -739,6 +667,49 @@ export function MotionPage() {
                       Remove
                     </Button>
                   </div>
+                )}
+
+                {/* Reposition mode — overlay with hint + Save/Cancel */}
+                {isRepositioning && (
+                  <>
+                    {/* Drag hint — center of image */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="bg-background/70 backdrop-blur-sm text-foreground/80 text-xs font-medium px-3 py-1.5 rounded-full shadow-sm">
+                        Drag image to reposition
+                      </span>
+                    </div>
+
+                    {/* Save / Cancel — top-right, always visible */}
+                    <div className="absolute top-3 right-4 flex gap-2 z-10">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="bg-background/90 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium shadow-sm"
+                        onClick={() => {
+                          // Save: commit draft to DB and local store
+                          if (pageId) {
+                            useMotionStore.getState().updatePageLocally(pageId, { cover_position: draftPosition });
+                            updatePage.mutate({ id: pageId, updates: { cover_position: draftPosition } });
+                          }
+                          setIsRepositioning(false);
+                        }}
+                      >
+                        Save position
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="bg-background/90 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium shadow-sm"
+                        onClick={() => {
+                          // Cancel: discard draft, revert to saved position
+                          setDraftPosition(displayPage.cover_position ?? 50);
+                          setIsRepositioning(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </>
                 )}
 
                 <Dialog open={showCoverPicker} onOpenChange={setShowCoverPicker}>
@@ -1172,17 +1143,6 @@ export function MotionPage() {
         }}
       />
 
-      {/* Share modal — rendered outside the scrollable area */}
-      {activeOrgId && activeSpaceId && (
-        <MotionShareModal
-          open={shareModalOpen}
-          onOpenChange={setShareModalOpen}
-          pageId={pageId!}
-          pageTitle={displayPage.title}
-          orgId={activeOrgId!}
-          spaceId={activeSpaceId!}
-        />
-      )}
     </div>
   );
 }

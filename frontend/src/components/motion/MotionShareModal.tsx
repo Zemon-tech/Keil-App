@@ -1,10 +1,4 @@
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -13,11 +7,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
-  Link2,
   Copy,
   Check,
-  Trash2,
   Globe,
   Building2,
   Loader2,
@@ -36,9 +29,7 @@ import { formatDistanceToNow } from "date-fns";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface MotionShareModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+export interface MotionSharePanelProps {
   pageId: string;
   pageTitle: string;
   orgId: string;
@@ -47,8 +38,20 @@ interface MotionShareModalProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildPublicUrl(token: string): string {
-  return `${window.location.origin}/notes/public/${token}`;
+/** Converts a page title to a URL-friendly slug */
+function toSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "untitled";
+}
+
+/** Builds the clean public URL: /motion/page-slug/pageId */
+function buildPublicUrl(pageTitle: string, pageId: string): string {
+  return `${window.location.origin}/motion/${toSlug(pageTitle)}/${pageId}`;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -82,117 +85,6 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// ─── PublicLinkSection ────────────────────────────────────────────────────────
-
-function PublicLinkSection({
-  shares,
-  pageId,
-  orgId,
-  spaceId,
-}: {
-  shares: MotionPageShareDTO[];
-  pageId: string;
-  orgId: string;
-  spaceId: string;
-}) {
-  const publicShares = shares.filter((s) => s.share_type === "public_link");
-  const createShare = useCreateMotionPageShare(orgId, spaceId, pageId);
-  const revokeShare = useRevokeMotionPageShare(orgId, spaceId, pageId);
-  const [permission, setPermission] = useState<MotionPermission>("view");
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Globe className="size-4 text-muted-foreground shrink-0" />
-        <div className="flex-1">
-          <p className="text-sm font-medium">Public link</p>
-          <p className="text-xs text-muted-foreground">
-            Anyone with the link can access this page
-          </p>
-        </div>
-      </div>
-
-      {publicShares.length === 0 ? (
-        <div className="flex items-center gap-2 pl-6">
-          <Select
-            value={permission}
-            onValueChange={(v) => setPermission(v as MotionPermission)}
-          >
-            <SelectTrigger className="h-8 w-28 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="view">Can view</SelectItem>
-              <SelectItem value="edit">Can edit</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            className="h-8 text-xs gap-1.5"
-            disabled={createShare.isPending}
-            onClick={() =>
-              createShare.mutate({ share_type: "public_link", permission })
-            }
-          >
-            {createShare.isPending ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <Link2 className="size-3" />
-            )}
-            Create link
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-2 pl-6">
-          {publicShares.map((share) => (
-            <div
-              key={share.id}
-              className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-mono text-muted-foreground truncate">
-                  {buildPublicUrl(share.share_token!)}
-                </p>
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                  {share.permission === "edit" ? "Can edit" : "Can view"} ·
-                  Created{" "}
-                  {formatDistanceToNow(new Date(share.created_at), {
-                    addSuffix: true,
-                  })}
-                  {share.expires_at && (
-                    <span className="text-amber-500/80">
-                      {" "}
-                      · Expires{" "}
-                      {formatDistanceToNow(new Date(share.expires_at), {
-                        addSuffix: true,
-                      })}
-                    </span>
-                  )}
-                </p>
-              </div>
-              <CopyButton text={buildPublicUrl(share.share_token!)} />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                disabled={revokeShare.isPending}
-                onClick={() => revokeShare.mutate(share.id)}
-                title="Revoke link"
-              >
-                {revokeShare.isPending ? (
-                  <Loader2 className="size-3 animate-spin" />
-                ) : (
-                  <Trash2 className="size-3" />
-                )}
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── SpaceShareSection ────────────────────────────────────────────────────────
 
 function SpaceShareSection({
@@ -221,7 +113,6 @@ function SpaceShareSection({
     targetOrgId || null
   );
 
-  // Filter out the current space from the target options
   const availableSpaces = targetSpaces.filter(
     (s) => !(s.org_id === orgId && s.id === spaceId)
   );
@@ -241,7 +132,7 @@ function SpaceShareSection({
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Building2 className="size-4 text-muted-foreground shrink-0" />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">Share with a space</p>
           <p className="text-xs text-muted-foreground">
             Members of the selected space can access this page
@@ -250,11 +141,16 @@ function SpaceShareSection({
       </div>
 
       {/* Share form */}
-      <div className="pl-6 space-y-2">
+      <div className="pl-6">
         <div className="flex flex-wrap gap-2">
-          {/* Org selector */}
-          <Select value={targetOrgId} onValueChange={(v) => { setTargetOrgId(v); setTargetSpaceId(""); }}>
-            <SelectTrigger className="h-8 w-40 text-xs">
+          <Select
+            value={targetOrgId}
+            onValueChange={(v) => {
+              setTargetOrgId(v);
+              setTargetSpaceId("");
+            }}
+          >
+            <SelectTrigger className="h-8 w-36 text-xs">
               <SelectValue placeholder="Organisation" />
             </SelectTrigger>
             <SelectContent>
@@ -266,13 +162,12 @@ function SpaceShareSection({
             </SelectContent>
           </Select>
 
-          {/* Space selector */}
           <Select
             value={targetSpaceId}
             onValueChange={setTargetSpaceId}
             disabled={!targetOrgId || spacesLoading}
           >
-            <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectTrigger className="h-8 w-32 text-xs">
               <SelectValue
                 placeholder={spacesLoading ? "Loading…" : "Space"}
               />
@@ -291,12 +186,11 @@ function SpaceShareSection({
             </SelectContent>
           </Select>
 
-          {/* Permission */}
           <Select
             value={permission}
             onValueChange={(v) => setPermission(v as MotionPermission)}
           >
-            <SelectTrigger className="h-8 w-28 text-xs">
+            <SelectTrigger className="h-8 w-24 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -364,55 +258,137 @@ function SpaceShareSection({
   );
 }
 
-// ─── MotionShareModal ─────────────────────────────────────────────────────────
+// ─── PublicLinkSection ────────────────────────────────────────────────────────
 
-export function MotionShareModal({
-  open,
-  onOpenChange,
+function PublicLinkSection({
+  shares,
   pageId,
   pageTitle,
   orgId,
   spaceId,
-}: MotionShareModalProps) {
+}: {
+  shares: MotionPageShareDTO[];
+  pageId: string;
+  pageTitle: string;
+  orgId: string;
+  spaceId: string;
+}) {
+  const publicShares = shares.filter((s) => s.share_type === "public_link");
+  const isEnabled = publicShares.length > 0;
+
+  const createShare = useCreateMotionPageShare(orgId, spaceId, pageId);
+  const revokeShare = useRevokeMotionPageShare(orgId, spaceId, pageId);
+
+  const publicUrl = buildPublicUrl(pageTitle, pageId);
+
+  const handleToggle = (checked: boolean) => {
+    if (checked) {
+      createShare.mutate({ share_type: "public_link", permission: "view" });
+    } else {
+      publicShares.forEach((share) => revokeShare.mutate(share.id));
+    }
+  };
+
+  const isTogglePending = createShare.isPending || revokeShare.isPending;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Globe className="size-4 text-muted-foreground shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">Public link</p>
+          <p className="text-xs text-muted-foreground">
+            Anyone with the link can access this page
+          </p>
+        </div>
+        {isTogglePending ? (
+          <Loader2 className="size-4 animate-spin text-muted-foreground shrink-0" />
+        ) : (
+          <Switch
+            checked={isEnabled}
+            onCheckedChange={handleToggle}
+            className="shrink-0"
+          />
+        )}
+      </div>
+
+      {isEnabled && (
+        <div className="pl-6">
+          <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-mono text-muted-foreground truncate">
+                {publicUrl}
+              </p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                Can view · Created{" "}
+                {formatDistanceToNow(new Date(publicShares[0].created_at), {
+                  addSuffix: true,
+                })}
+              </p>
+            </div>
+            <CopyButton text={publicUrl} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MotionSharePanel ─────────────────────────────────────────────────────────
+// The inner content of the share panel — rendered inside a Popover in MotionPage.
+// `open` is passed so the shares query only fires when the panel is visible.
+
+export function MotionSharePanel({
+  open,
+  pageId,
+  pageTitle,
+  orgId,
+  spaceId,
+}: MotionSharePanelProps & { open: boolean }) {
   const { data: shares = [], isLoading } = useMotionPageShares(
     orgId,
     spaceId,
-    open ? pageId : null // only fetch when modal is open
+    open ? pageId : null
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-base font-bold truncate pr-6">
-            Share "{pageTitle}"
-          </DialogTitle>
-        </DialogHeader>
+    <div className="w-[380px] p-4">
+      {/* Title */}
+      <p className="text-sm font-semibold mb-4 truncate">
+        Share "{pageTitle}"
+      </p>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-6 pt-2">
-            <PublicLinkSection
-              shares={shares}
-              pageId={pageId}
-              orgId={orgId}
-              spaceId={spaceId}
-            />
+      {isLoading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* Space share — shown first */}
+          <SpaceShareSection
+            shares={shares}
+            pageId={pageId}
+            orgId={orgId}
+            spaceId={spaceId}
+          />
 
-            <div className="border-t border-border/50" />
+          <div className="border-t border-border/50" />
 
-            <SpaceShareSection
-              shares={shares}
-              pageId={pageId}
-              orgId={orgId}
-              spaceId={spaceId}
-            />
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          {/* Public link — shown below */}
+          <PublicLinkSection
+            shares={shares}
+            pageId={pageId}
+            pageTitle={pageTitle}
+            orgId={orgId}
+            spaceId={spaceId}
+          />
+        </div>
+      )}
+    </div>
   );
 }
+
+// ─── MotionShareModal (kept for backward compatibility) ───────────────────────
+// Re-exports MotionSharePanel — no longer used directly but kept so any
+// other import of MotionShareModal doesn't break.
+export { MotionSharePanel as MotionShareModal };

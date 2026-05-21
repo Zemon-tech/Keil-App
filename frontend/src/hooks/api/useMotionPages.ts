@@ -18,6 +18,7 @@ export interface MotionPageDTO {
   content: JSONContent;
   icon: string | null;
   cover_image: string | null;
+  cover_position: number;
   position: number;
   small_text: boolean;
   full_width: boolean;
@@ -54,6 +55,7 @@ export interface UpdateMotionPageInput {
   content?: JSONContent;
   icon?: string | null;
   cover_image?: string | null;
+  cover_position?: number;
   parent_id?: string | null;
   small_text?: boolean;
   full_width?: boolean;

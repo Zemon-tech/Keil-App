@@ -63,7 +63,7 @@ export const createPage = catchAsync(async (req: Request, res: Response) => {
 export const updatePage = catchAsync(async (req: Request, res: Response) => {
   const { orgId, spaceId, userId } = getContext(req);
   const pageId = asString(req.params.id);
-  const { title, content, icon, cover_image, parent_id, small_text, full_width } = req.body;
+  const { title, content, icon, cover_image, cover_position, parent_id, small_text, full_width } = req.body;
 
   // Build updates object — only include fields that were explicitly sent
   const input: motionPageService.UpdateMotionPageInput = {};
@@ -81,6 +81,13 @@ export const updatePage = catchAsync(async (req: Request, res: Response) => {
   }
   if (icon !== undefined) input.icon = icon;
   if (cover_image !== undefined) input.cover_image = cover_image;
+  if (cover_position !== undefined) {
+    const pos = Number(cover_position);
+    if (isNaN(pos) || pos < 0 || pos > 100) {
+      throw new ApiError(400, 'cover_position must be a number between 0 and 100');
+    }
+    input.cover_position = pos;
+  }
   if (parent_id !== undefined) input.parent_id = parent_id;
   if (small_text !== undefined) input.small_text = small_text;
   if (full_width !== undefined) input.full_width = full_width;
@@ -182,6 +189,21 @@ export const getPublicPage = catchAsync(async (req: Request, res: Response) => {
 
   const page = await motionPageService.getPageByPublicToken(token);
   if (!page) throw new ApiError(404, 'Page not found or link has expired');
+
+  res.status(200).json(new ApiResponse(200, page, 'Page retrieved successfully'));
+});
+
+// ─── Public page by ID (no auth) — used by /motion/:slug/:pageId URL ─────────
+
+export const getPublicPageById = catchAsync(async (req: Request, res: Response) => {
+  const pageId = asString(req.params.pageId);
+
+  if (!pageId) {
+    throw new ApiError(400, 'Invalid page ID');
+  }
+
+  const page = await motionPageService.getPageByIdIfPublic(pageId);
+  if (!page) throw new ApiError(404, 'Page not found or public sharing is not enabled');
 
   res.status(200).json(new ApiResponse(200, page, 'Page retrieved successfully'));
 });
