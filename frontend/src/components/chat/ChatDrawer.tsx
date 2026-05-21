@@ -6,19 +6,18 @@ import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
 import { X, Maximize2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 
 export function ChatDrawer() {
-  const { isChatOpen, activeChannelId, closeChat } = useChatStore();
+  const { isChatOpen, activeChannelId, closeChat, openChatDialog } =
+    useChatStore();
   const [width, setWidth] = useState(360);
   const isResizing = useRef(false);
-  const navigate = useNavigate();
 
   const { activeOrgId, activeSpaceId } = useAppContext();
 
   const handleExpandClick = () => {
-    navigate("/chat");
+    openChatDialog();
     closeChat();
   };
 

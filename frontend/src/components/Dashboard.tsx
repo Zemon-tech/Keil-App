@@ -2,11 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { HeroSection } from "./dashboard/HeroSection";
-import { CurrentFocusCard } from "./dashboard/CurrentFocusCard";
-import { NextEventCard } from "./dashboard/NextEventCard";
-import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
-import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
-import { UpNextCard } from "./dashboard/UpNextCard";
+import { DashboardPanel } from "./dashboard/DashboardPanel";
 import { useOrgDashboard } from "@/hooks/api/useDashboard";
 import api from "@/lib/api";
 import { useAppContext } from "@/contexts/AppContext";
@@ -39,7 +35,7 @@ export function Dashboard() {
   // ── Org/space-scoped dashboard ──────────
   const { data, isLoading, isError } = useOrgDashboard(
     activeOrgId,
-    activeSpaceId
+    activeSpaceId,
   );
 
   useEffect(() => {
@@ -47,24 +43,29 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
   }, [messages, isAssistantThinking]);
 
   const isCollapsed = state === "collapsed";
   const hasChatStarted = messages.length > 0 || isAssistantThinking;
-  const assistantLoadingText =
-    ["Fetching the output", "Be ready", "Forging a response"][messages.length % 3];
+  const assistantLoadingText = [
+    "Fetching the output",
+    "Be ready",
+    "Forging a response",
+  ][messages.length % 3];
   const containerClassName = cn(
     "mx-auto transition-all duration-500 ease-in-out px-4 sm:px-6 lg:px-10",
-    isCollapsed ? "max-w-[1400px]" : "max-w-6xl"
+    isCollapsed ? "max-w-[1400px]" : "max-w-6xl",
   );
 
   const handlePromptSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
     const fileCount = message.files.length;
     const content =
-      text ||
-      `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
+      text || `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
 
     const userMessage: DashboardChatMessage = {
       id: crypto.randomUUID(),
@@ -72,21 +73,21 @@ export function Dashboard() {
       content,
     };
 
-    const conversation = [
-      ...messages,
-      userMessage,
-    ];
+    const conversation = [...messages, userMessage];
 
     setMessages(conversation);
     setIsAssistantThinking(true);
 
     try {
-      const response = await api.post<{ data: { content: string } }>("v1/ai/chat", {
-        messages: conversation.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-      });
+      const response = await api.post<{ data: { content: string } }>(
+        "v1/ai/chat",
+        {
+          messages: conversation.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+        },
+      );
 
       const replyContent = response.data.data.content;
 
@@ -105,7 +106,8 @@ export function Dashboard() {
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
+          content:
+            "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
         },
       ]);
     } finally {
@@ -116,13 +118,11 @@ export function Dashboard() {
   if (!mounted) return null;
 
   return (
-    <div
-      className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none"
-    >
+    <div className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none">
       <main
         className={cn(
           containerClassName,
-          "h-full flex flex-col items-center relative overflow-hidden overscroll-none"
+          "h-full flex flex-col items-center relative overflow-hidden overscroll-none",
         )}
       >
         {!hasChatStarted ? (
@@ -137,14 +137,8 @@ export function Dashboard() {
               </div>
             )}
 
-            {/* Widgets grid */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl mt-10 opacity-90 hover:opacity-100 transition-opacity">
-              <CurrentFocusCard task={data?.immediate?.[0] ?? null} isLoading={isLoading} />
-              <NextEventCard />
-              <ImmediateBlockersCard tasks={data?.immediate ?? []} isLoading={isLoading} />
-              <NeedsReplyCard />
-              <UpNextCard tasks={data?.today ?? []} isLoading={isLoading} />
-            </section>
+            {/* Dashboard Panel with 3D Wheels */}
+            <DashboardPanel data={data} isLoading={isLoading} />
           </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center">
@@ -155,7 +149,7 @@ export function Dashboard() {
                     <MessageContent
                       className={cn(
                         message.role === "assistant" &&
-                          "w-full max-w-[46rem] text-[0.95rem] leading-7"
+                          "w-full max-w-[46rem] text-[0.95rem] leading-7",
                       )}
                     >
                       <MessageResponse>{message.content}</MessageResponse>
