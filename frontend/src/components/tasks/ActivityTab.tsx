@@ -34,7 +34,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useOrgTaskComments, useCreateOrgComment, useDeleteOrgComment } from "@/hooks/api/useComments";
 import type { Comment } from "@/types/task";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSpaceRole } from "@/hooks/useSpaceRole";
+import { useTaskPermissions } from "@/hooks/useTaskPermissions";
 
 import { formatRelTime } from "./task-detail-shared";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
@@ -48,21 +48,26 @@ function CommentNode({
   taskId,
   allTasks,
   onTaskClick,
+  orgId,
+  spaceId,
+  task,
 }: {
   comment: Comment;
   taskId: string;
   allTasks: TaskDTO[];
   onTaskClick: (taskId: string) => void;
+  orgId: string | null;
+  spaceId: string | null;
+  task: TaskDTO;
 }) {
   const authorName = comment.user?.name || comment.user?.email || "Unknown";
   const [isReplying, setIsReplying] = useState(false);
   const [replyInput, setReplyInput] = useState("");
   const [repliesExpanded, setRepliesExpanded] = useState(false);
-  const { activeOrgId, activeSpaceId } = useAppContext();
-  const createComment = useCreateOrgComment(activeOrgId, activeSpaceId);
-  const deleteComment = useDeleteOrgComment(activeOrgId, activeSpaceId);
+  const createComment = useCreateOrgComment(orgId, spaceId);
+  const deleteComment = useDeleteOrgComment(orgId, spaceId);
   const { user } = useAuth();
-  const { canComment, canDeleteOwnComment, canDeleteAnyComment } = useSpaceRole();
+  const { canComment, canDeleteOwnComment, canDeleteAnyComment } = useTaskPermissions(task);
 
   // Close reply box when clicking outside it.
   // We defer adding the listener by one frame so the mousedown that
@@ -203,7 +208,7 @@ function CommentNode({
                 {/* Replies */}
                 <div className="pl-4 space-y-0">
                   {comment.replies.map((reply) => (
-                    <CommentNode key={reply.id} comment={reply} taskId={taskId} allTasks={allTasks} onTaskClick={onTaskClick} />
+                    <CommentNode key={reply.id} comment={reply} taskId={taskId} allTasks={allTasks} onTaskClick={onTaskClick} orgId={orgId} spaceId={spaceId} task={task} />
                   ))}
                 </div>
               </div>
@@ -229,17 +234,20 @@ function CommentNode({
 export function ActivityTab({ task }: { task: TaskDTO }) {
   const [input, setInput] = useState("");
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const { data: comments, isPending } = useOrgTaskComments(activeOrgId, activeSpaceId, task.id);
-  const createComment = useCreateOrgComment(activeOrgId, activeSpaceId);
-  const { canComment } = useSpaceRole();
+  const taskOrgId = task.org_id ?? activeOrgId;
+  const taskSpaceId = task.space_id ?? activeSpaceId;
+
+  const { data: comments, isPending } = useOrgTaskComments(taskOrgId, taskSpaceId, task.id);
+  const createComment = useCreateOrgComment(taskOrgId, taskSpaceId);
+  const { canComment } = useTaskPermissions(task);
 
   const [activePicker, setActivePicker] = useState<"user" | "task" | "event" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
   const { data: members = [] } = useSpaceMembers(
-    activeOrgId,
-    activeSpaceId
+    taskOrgId,
+    taskSpaceId
   );
-  const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
+  const { data: allTasks = [] } = useOrgTasks(taskOrgId, taskSpaceId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-trigger picker on special characters
@@ -334,7 +342,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
           ) : (comments ?? []).length > 0 ? (
             <div className="space-y-0.5 mt-auto">
               {(comments ?? []).map((comment) => (
-                <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} />
+                <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} />
               ))}
             </div>
           ) : (

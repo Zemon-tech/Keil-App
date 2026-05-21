@@ -79,18 +79,24 @@ export function TaskDetailPane({
   }, [task?.id]);
 
   const { activeOrgId, activeSpaceId, activeOrg } = useAppContext();
-  const isPersonal = activeOrg?.is_personal ?? false;
+
+  // Resolve the task's originating space/org contexts dynamically
+  const taskOrgId = task?.org_id ?? activeOrgId;
+  const taskSpaceId = task?.space_id ?? activeSpaceId;
+
+  // If the task belongs to another org, it's not a personal task context
+  const isPersonal = taskOrgId === activeOrgId ? (activeOrg?.is_personal ?? false) : false;
 
   // Fetch fresh server data
   const { data: freshTask } = useOrgTask(
-    activeOrgId,
-    activeSpaceId,
+    taskOrgId,
+    taskSpaceId,
     task?.id ?? ""
   );
 
   // Mutations
-  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const deleteOrgTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
+  const updateOrgTask = useUpdateOrgTask(taskOrgId, taskSpaceId);
+  const deleteOrgTask = useDeleteOrgTask(taskOrgId, taskSpaceId);
 
   // Use fresh data from server if available, fall back to prop (list data)
   const displayTask = freshTask ?? task;
@@ -175,6 +181,8 @@ export function TaskDetailPane({
         initialValues={taskToRender}
         onTaskCreated={() => {}}
         onTaskUpdated={() => setEditDialogOpen(false)}
+        orgId={taskOrgId ?? undefined}
+        spaceId={taskSpaceId ?? undefined}
       />
 
       {/* Zone 2 + 3: Tab bar + content */}

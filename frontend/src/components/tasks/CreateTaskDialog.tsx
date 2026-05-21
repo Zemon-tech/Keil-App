@@ -70,6 +70,8 @@ interface CreateTaskDialogProps {
   onTaskUpdated?: (taskId: string) => void;
   parentTaskId?: string;
   parentTaskTitle?: string;
+  orgId?: string;
+  spaceId?: string;
 }
 
 const PRIORITY_LEVELS = [
@@ -103,14 +105,19 @@ export function CreateTaskDialog({
   onTaskUpdated,
   parentTaskId,
   parentTaskTitle,
+  orgId,
+  spaceId,
 }: CreateTaskDialogProps) {
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const createOrgTask = useCreateOrgTask(activeOrgId, activeSpaceId);
-  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
+  const resolvedOrgId = orgId ?? initialValues?.org_id ?? activeOrgId;
+  const resolvedSpaceId = spaceId ?? initialValues?.space_id ?? activeSpaceId;
+
+  const createOrgTask = useCreateOrgTask(resolvedOrgId, resolvedSpaceId);
+  const updateOrgTask = useUpdateOrgTask(resolvedOrgId, resolvedSpaceId);
 
   const { data: spaceMembers = [] } = useSpaceMembers(
-    activeOrgId,
-    activeSpaceId
+    resolvedOrgId,
+    resolvedSpaceId
   );
 
   const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {

@@ -9,7 +9,6 @@ import integrationRoutes from "./integration.routes";
 import motionPageRoutes from "./motion-page.routes";
 import motionPublicRoutes from "./motion-public.routes";
 import taskLocatorRoutes from "./task-locator.routes";
-import myTasksRoutes from "./my-tasks.routes";
 import publicTaskRoutes from "./public-task.routes";
 import meetingRoutes from "./meeting.routes";
 import aiRoutes from "./ai.routes";
@@ -32,7 +31,6 @@ router.use("/orgs/:orgId/spaces/:spaceId", orgActivityRoutes);
 
 // ── Cross-workspace task lookup (auth-only, no org/space scope) ───────────────
 router.use("/tasks", taskLocatorRoutes);
-router.use("/my-tasks", myTasksRoutes);
 
 // ── Integrations ──────────────────────────────────────────────────────────────
 router.use("/integrations", integrationRoutes);

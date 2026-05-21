@@ -11,22 +11,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { integrationKeys } from "@/hooks/api/useGoogleCalendar";
+import api from "@/lib/api";
 
 import type { AnyStatus } from "../types/task";
 import {
   useOrgTasks,
   useOrgTask,
   useLocateTask,
-  useUpdateOrgTask,
-  useDeleteOrgTask,
-  useAssignOrgUser,
-  useRemoveOrgAssignee,
   type TaskFilters,
   type SortBy,
   type SortOrder,
   type TaskDTO,
+  normalizeTaskDTO,
+  orgTaskKeys,
 } from "../hooks/api/useTasks";
 import { useSpaceMembers } from "../hooks/api/useSpaces";
 const PAGE_SIZE = 20;
@@ -38,6 +37,9 @@ export function TasksPage() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { user } = useAuth();
+
+  // ── App context ────────────────────────────────────────
+  const { activeOrgId, activeSpaceId, activeSpace, setActiveOrganisation } = useAppContext();
 
   // ── Read ?taskId from URL (e.g. navigated from a task preview dialog) ──
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,10 +54,18 @@ export function TasksPage() {
   const navigate = useNavigate();
   const selectedTaskId = urlTaskId ?? urlEventId ?? "";
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [orgFilter, setOrgFilter] = useState<string>("all");
+  const [spaceFilter, setSpaceFilter] = useState<string>("all");
 
   // ── Subtask navigation stack ──
   // Tracks the parent task when user navigates into a subtask
   const [parentTaskStack, setParentTaskStack] = useState<Array<{ id: string; title: string }>>([]);
+
+  // Reset org and space filters when active workspace/space changes
+  useEffect(() => {
+    setOrgFilter("all");
+    setSpaceFilter("all");
+  }, [activeOrgId, activeSpaceId]);
 
   // When ?taskId appears in the URL (including when already on this page),
   // select that task and immediately clean the param so the URL stays tidy.
@@ -112,11 +122,19 @@ export function TasksPage() {
     } else if (statusFilter === "Highest Priority") {
       // Handled client-side to show both high and urgent
     }
-    return filters;
-  }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
-  // ── App context ────────────────────────────────────────
-  const { activeOrgId, activeSpaceId, setActiveOrganisation } = useAppContext();
+    if (activeSpace?.is_private) {
+      filters.mirror = true;
+      if (orgFilter !== "all") {
+        filters.org_filter = orgFilter;
+      }
+      if (spaceFilter !== "all") {
+        filters.space_filter = spaceFilter;
+      }
+    }
+
+    return filters;
+  }, [statusFilter, sortBy, sortOrder, limit, user?.id, activeSpace?.is_private, orgFilter, spaceFilter]);
 
   // ── Org tasks (org/space-scoped route) ──
   const { data: orgTasks, isLoading: orgLoading, isFetching: orgFetching } = useOrgTasks(
@@ -149,24 +167,6 @@ export function TasksPage() {
     setLimit(INITIAL_LIMIT);
   }, []);
 
-  // ── Org task mutations ─────────────────────────────────────────
-  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const deleteOrgTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
-  const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
-  const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
-
-  // Unified mutation helpers
-  const handleUpdateTask = useCallback((id: string, updates: any) => {
-    updateOrgTask.mutate({ id, updates });
-  }, [updateOrgTask]);
-
-  const handleDeleteTask = useCallback((id: string) => {
-    const taskToDelete = taskList.find(t => t.id === id);
-    if (!taskToDelete) return;
-
-    deleteOrgTask.mutate({ id, title: taskToDelete.title, type: taskToDelete.type });
-    if (id === selectedTaskId) navigate("/tasks");
-  }, [deleteOrgTask, selectedTaskId, taskList, navigate]);
 
   // ── Space members for assignee picker ─────────────
   const { data: spaceMembers = [] } = useSpaceMembers(
@@ -281,6 +281,203 @@ export function TasksPage() {
     selectedTaskId
   );
 
+  // ── Helper to retrieve task's home org and space boundaries ──
+  const getTaskCoordinates = useCallback((id: string) => {
+    const task = taskList.find(t => t.id === id) || 
+                 (selectedTaskDetail?.id === id ? selectedTaskDetail : null) || 
+                 (selected?.id === id ? selected : null);
+    return {
+      orgId: task?.org_id || activeOrgId,
+      spaceId: task?.space_id || activeSpaceId,
+      title: task?.title || "",
+      type: task?.type || "task"
+    };
+  }, [taskList, selectedTaskDetail, selected, activeOrgId, activeSpaceId]);
+
+  // ── Dynamic Org Task mutations ───────────────────────────────────
+  const updateTaskMutation = useMutation<TaskDTO, Error, { id: string; updates: any }>({
+    mutationFn: async ({ id, updates }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      const res = await api.patch<{ data: TaskDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}`,
+        updates
+      );
+      return normalizeTaskDTO(res.data.data);
+    },
+    onSuccess: (data, variables) => {
+      const { orgId, spaceId } = getTaskCoordinates(variables.id);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
+      });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+    },
+    onError: () => {
+      toast.error("Failed to update task. Please try again.");
+    },
+  });
+
+  const deleteTaskMutation = useMutation<
+    void,
+    Error,
+    { id: string },
+    { previousTasksQueries?: [import("@tanstack/react-query").QueryKey, TaskDTO[] | undefined][]; previousDetail?: TaskDTO }
+  >({
+    onMutate: async ({ id: taskId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(taskId);
+      if (!orgId || !spaceId) return {};
+
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      await queryClient.cancelQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, taskId) });
+
+      // Snapshot the previous value
+      const previousTasksQueries = queryClient.getQueriesData<TaskDTO[]>({
+        queryKey: orgTaskKeys.lists(orgId, spaceId)
+      });
+      const previousDetail = queryClient.getQueryData<TaskDTO>(
+        orgTaskKeys.detail(orgId, spaceId, taskId)
+      );
+
+      // Optimistically remove from list
+      queryClient.setQueriesData<TaskDTO[]>(
+        { queryKey: orgTaskKeys.lists(orgId, spaceId) },
+        (old) => old ? old.filter((t) => t.id !== taskId) : old
+      );
+
+      // Also optimistic remove from active list if different
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.setQueriesData<TaskDTO[]>(
+          { queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) },
+          (old) => old ? old.filter((t) => t.id !== taskId) : old
+        );
+      }
+
+      return { previousTasksQueries, previousDetail };
+    },
+    mutationFn: async ({ id: taskId }) => {
+      const { orgId, spaceId, title, type } = getTaskCoordinates(taskId);
+      return new Promise((resolve, reject) => {
+        let isUndone = false;
+
+        const timerId = setTimeout(async () => {
+          if (!isUndone) {
+            try {
+              await api.delete(`v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}`);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          }
+        }, 3000);
+
+        toast(`${title} (${type}) deleted`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              isUndone = true;
+              clearTimeout(timerId);
+              reject(new Error("UNDONE"));
+            }
+          },
+          duration: 3000,
+        });
+      });
+    },
+    onSuccess: (_data, { id: taskId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(taskId);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.removeQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, taskId),
+      });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+    },
+    onError: (err, { id: taskId }, context) => {
+      const { orgId, spaceId } = getTaskCoordinates(taskId);
+      if (context?.previousTasksQueries) {
+        context.previousTasksQueries.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+      if (context?.previousDetail && orgId && spaceId) {
+        queryClient.setQueryData(
+          orgTaskKeys.detail(orgId, spaceId, taskId),
+          context.previousDetail
+        );
+      }
+      
+      if (err.message !== "UNDONE") {
+        toast.error("Failed to delete task. Please try again.");
+      }
+    },
+  });
+
+  const assignUserMutation = useMutation<void, Error, { id: string; userId: string }>({
+    mutationFn: async ({ id, userId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      await api.post(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/assignees`,
+        { user_id: userId }
+      );
+    },
+    onSuccess: (_, { id }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+      toast.success("Assignee added");
+    },
+    onError: () => {
+      toast.error("Failed to assign user");
+    },
+  });
+
+  const removeAssigneeMutation = useMutation<void, Error, { id: string; userId: string }>({
+    mutationFn: async ({ id, userId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/assignees/${userId}`
+      );
+    },
+    onSuccess: (_, { id }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+      toast.success("Assignee removed");
+    },
+    onError: () => {
+      toast.error("Failed to remove assignee");
+    },
+  });
+
+  // Unified mutation helpers
+  const handleUpdateTask = useCallback((id: string, updates: any) => {
+    updateTaskMutation.mutate({ id, updates });
+  }, [updateTaskMutation]);
+
+  const handleDeleteTask = useCallback((id: string) => {
+    deleteTaskMutation.mutate({ id });
+    if (id === selectedTaskId) navigate("/tasks");
+  }, [deleteTaskMutation, selectedTaskId, navigate]);
+
+
   // ── Cross-workspace auto-switch ───────────────────────────────────────────────
   // When the task is not found in the current workspace and the current workspace
   // query has finished (not just loading), try to locate the task across all orgs
@@ -388,15 +585,19 @@ export function TasksPage() {
               onUpdateTask={handleUpdateTask}
               onDeleteTask={handleDeleteTask}
               onAssignUser={(taskId, userId) => {
-                assignUser.mutate({ id: taskId, userId });
+                assignUserMutation.mutate({ id: taskId, userId });
               }}
               onRemoveAssignee={(taskId, userId) => {
-                removeAssignee.mutate({ id: taskId, userId });
+                removeAssigneeMutation.mutate({ id: taskId, userId });
               }}
               workspaceMembers={workspaceMembers}
               hasMore={hasMore}
               onLoadMore={handleLoadMore}
               isLoadingMore={isFetching && limit > PAGE_SIZE}
+              orgFilter={orgFilter}
+              onOrgFilterChange={setOrgFilter}
+              spaceFilter={spaceFilter}
+              onSpaceFilterChange={setSpaceFilter}
             />
           </div>
 

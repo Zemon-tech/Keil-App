@@ -13,7 +13,6 @@ import { MotionPage } from "./components/motion/MotionPage";
 import { MotionHome } from "./components/motion/MotionHome";
 import { MotionProfile } from "./components/motion/MotionProfile";
 import { MotionPublicPage } from "./components/motion/MotionPublicPage";
-import { MyTasksPage } from "./components/MyTasksPage";
 
 /**
  * Main application component.
@@ -78,11 +77,7 @@ function App() {
         />
         <Route
           path="/my-tasks"
-          element={
-            <Layout>
-              <MyTasksPage />
-            </Layout>
-          }
+          element={<Navigate to="/tasks" replace />}
         />
         <Route
           path="/motion"

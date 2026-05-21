@@ -63,7 +63,6 @@ import { MeetingDialog } from "@/components/MeetingDialog";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "My Tasks", url: "/my-tasks", icon: User },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Meetings", action: "meetings", icon: Mic },
   { title: "Motion", url: "/motion", icon: Image },

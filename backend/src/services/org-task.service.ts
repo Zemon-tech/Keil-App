@@ -35,6 +35,9 @@ export interface OrgTaskDTO {
   parent_task_title?: string;
   type?: 'task' | 'event';
   event_type?: string | null;
+  user_space_role?: string;
+  org_name?: string;
+  space_name?: string;
 }
 
 export interface OrgTaskContext {
@@ -73,7 +76,7 @@ const toISO = (value: Date | string | null | undefined): string | null => {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 };
 
-const toDTO = (task: Task & { assignees?: User[] }): OrgTaskDTO => ({
+const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string }): OrgTaskDTO => ({
   id: task.id,
   workspace_id: task.workspace_id,
   org_id: task.org_id ?? null,
@@ -94,6 +97,9 @@ const toDTO = (task: Task & { assignees?: User[] }): OrgTaskDTO => ({
   subtask_count: task.subtask_count ? parseInt(task.subtask_count.toString(), 10) : 0,
   type: task.type,
   event_type: task.event_type,
+  user_space_role: task.user_space_role,
+  org_name: (task as any).org_name,
+  space_name: (task as any).space_name,
 });
 
 const validateDateOrder = (startDate?: Date | null, dueDate?: Date | null): void => {

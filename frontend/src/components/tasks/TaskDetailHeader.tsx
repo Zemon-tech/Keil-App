@@ -44,7 +44,7 @@ import type { TaskPriority, TaskStatus, AnyStatus } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import { useChangeOrgTaskStatus } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
-import { useSpaceRole } from "@/hooks/useSpaceRole";
+import { useTaskPermissions } from "@/hooks/useTaskPermissions";
 import { useAuth } from "@/contexts/AuthContext";
 
 import {
@@ -214,7 +214,9 @@ export function TaskDetailHeader({
   onNavigateToParent?: (parentTaskId: string) => void;
 }) {
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const changeStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
+  const taskOrgId = task.org_id ?? activeOrgId;
+  const taskSpaceId = task.space_id ?? activeSpaceId;
+  const changeStatus = useChangeOrgTaskStatus(taskOrgId, taskSpaceId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { user } = useAuth();
@@ -225,7 +227,7 @@ export function TaskDetailHeader({
     canDeleteTask,
     canChangeAnyStatus,
     canChangeAssignedStatus,
-  } = useSpaceRole();
+  } = useTaskPermissions(task);
 
   const isAssignee = task.assignees?.some((a) => a.id === currentUserId) ?? false;
   const canUpdateStatus = canChangeAnyStatus || (canChangeAssignedStatus && isAssignee);

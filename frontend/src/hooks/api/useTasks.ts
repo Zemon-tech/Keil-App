@@ -31,6 +31,9 @@ export interface TaskDTO {
   assignees?: Array<{ id: string; name: string | null; email: string }>;
   story_points?: number;
   time_estimate?: number;
+  user_space_role?: string;
+  org_name?: string;
+  space_name?: string;
   // frontend-side extras from Task type (optional when fetching list)
   projectId?: string;
   projectTitle?: string;
@@ -63,6 +66,9 @@ export interface TaskFilters {
   offset?: number;
   parent_task_id?: string | null;
   query?: string; // client-side text search — not sent to backend
+  mirror?: boolean;
+  org_filter?: string;
+  space_filter?: string;
 }
 
 export interface CreateTaskInput {
@@ -107,7 +113,7 @@ const EVENT_STATUSES = new Set<AnyStatus>([
   "completed",
 ]);
 
-function normalizeTaskDTO(dto: TaskDTO): TaskDTO {
+export function normalizeTaskDTO(dto: TaskDTO): TaskDTO {
   const raw = dto as unknown as { type?: unknown; status?: AnyStatus; event_type?: EventType | null };
   const type = raw.type;
   if (type === "task" || type === "event") {

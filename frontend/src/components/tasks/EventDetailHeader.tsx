@@ -138,7 +138,9 @@ export function EventDetailHeader({
   onEditTask?: () => void;
 }) {
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const changeStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
+  const eventOrgId = event.org_id ?? activeOrgId;
+  const eventSpaceId = event.space_id ?? activeSpaceId;
+  const changeStatus = useChangeOrgTaskStatus(eventOrgId, eventSpaceId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleStatusChange = (newStatus: EventStatus) => {

@@ -44,6 +44,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, STATUS_COLOR } from "./task-detail-shared";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
+import { useSpaces } from "@/hooks/api/useSpaces";
 
 type Props = {
   query: string;
@@ -74,6 +75,10 @@ type Props = {
   isLoadingMore?: boolean;
   /** Workspace members for bulk assign */
   workspaceMembers?: Array<{ id: string; name: string | null; email: string }>;
+  orgFilter?: string;
+  onOrgFilterChange?: (value: string) => void;
+  spaceFilter?: string;
+  onSpaceFilterChange?: (value: string) => void;
 };
 
 function formatTaskDateRange(start?: string, end?: string) {
@@ -214,6 +219,29 @@ function SubtaskList({
   );
 }
 
+type SpaceRole = "admin" | "manager" | "member";
+const SPACE_RANK: Record<SpaceRole, number> = { admin: 3, manager: 2, member: 1 };
+
+function getTaskPermissions(
+  task: { org_id?: string; space_id?: string; user_space_role?: string },
+  activeOrgId: string | null,
+  activeSpaceId: string | null,
+  activeSpaceRole: string | null
+) {
+  const spaceRole = (
+    task.org_id === activeOrgId && task.space_id === activeSpaceId
+      ? (activeSpaceRole ?? "member")
+      : (task.user_space_role ?? "member")
+  ) as SpaceRole;
+
+  const spaceRank = SPACE_RANK[spaceRole] ?? 1;
+
+  return {
+    canEditTask: spaceRank >= SPACE_RANK.manager,
+    canDeleteTask: spaceRank >= SPACE_RANK.manager,
+  };
+}
+
 export function TaskListPane({
   query,
   onQueryChange,
@@ -238,6 +266,10 @@ export function TaskListPane({
   onLoadMore,
   isLoadingMore = false,
   workspaceMembers = [],
+  orgFilter = "all",
+  onOrgFilterChange,
+  spaceFilter = "all",
+  onSpaceFilterChange,
 }: Props) {
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -247,7 +279,10 @@ export function TaskListPane({
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
 
-  const { canCreateTask, canEditTask, canDeleteTask } = useSpaceRole();
+  const { activeOrgId, activeSpace, organisations } = useAppContext();
+  const { data: spacesForFilter = [] } = useSpaces(orgFilter !== "all" ? orgFilter : null);
+
+  const { canCreateTask } = useSpaceRole();
 
   // Toggle subtask expansion for a task
   const toggleExpanded = (e: React.MouseEvent, taskId: string) => {
@@ -561,6 +596,45 @@ export function TaskListPane({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Organisation & Space selectors (only when viewing private space) */}
+        {activeSpace?.is_private && (
+          <div className="flex items-center gap-1.5 mt-2 pb-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
+            {/* Organisation Filter */}
+            <Select value={orgFilter} onValueChange={onOrgFilterChange}>
+              <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
+                <SelectValue placeholder="All Workspaces" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All Workspaces</SelectItem>
+                {organisations.map((org) => (
+                  <SelectItem key={org.id} value={org.id} className="text-xs">
+                    {org.name} {org.is_personal ? "(Personal)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Space Filter */}
+            <Select 
+              value={spaceFilter} 
+              onValueChange={onSpaceFilterChange}
+              disabled={orgFilter === "all"}
+            >
+              <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
+                <SelectValue placeholder="All Spaces" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All Spaces</SelectItem>
+                {spacesForFilter.map((sp) => (
+                  <SelectItem key={sp.id} value={sp.id} className="text-xs">
+                    {sp.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* ── Task list ──────────────────────────────────────────── */}
@@ -593,6 +667,13 @@ export function TaskListPane({
             const isDone = t.status === "done" || t.status === "completed";
             const isDraggable = t.status !== "done" && t.status !== "completed";
             const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
+
+            const { canEditTask: itemCanEdit, canDeleteTask: itemCanDelete } = getTaskPermissions(
+              t,
+              activeOrgId,
+              activeSpace?.id ?? null,
+              activeSpace?.role ?? null
+            );
 
             return (
               <div key={t.id} className="group/item">
@@ -691,13 +772,18 @@ export function TaskListPane({
                       </button>
                     </div>
 
-                    <div className="task-name-container">
+                    <div className="task-name-container flex flex-col items-start gap-0.5">
                       <span className={cn(
                         "task-name-scroll text-sm font-medium leading-snug",
                         isDone && "line-through opacity-60"
                       )}>
                         {t.title}
                       </span>
+                      {t.org_id !== activeOrgId && t.org_name && (
+                        <div className="text-[10px] font-medium text-muted-foreground/80 bg-muted/40 px-1.5 py-0.5 rounded backdrop-blur-sm border border-border/20 shadow-sm mt-0.5 transition-colors">
+                          {t.org_name} › {t.space_name ?? "General"}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -741,13 +827,13 @@ export function TaskListPane({
                             <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
                               View Details
                             </DropdownMenuItem>
-                            {canEditTask && (
+                            {itemCanEdit && (
                               <DropdownMenuItem onClick={() => setEditingTask(t)}>
                                 <Pencil className="h-3.5 w-3.5 mr-2" />
                                 Edit
                               </DropdownMenuItem>
                             )}
-                            {canDeleteTask && (
+                            {itemCanDelete && (
                               <DropdownMenuItem 
                                 className="text-destructive focus:text-destructive" 
                                 onClick={() => {
@@ -1065,6 +1151,8 @@ export function TaskListPane({
           initialValues={editingTask}
           onTaskUpdated={() => setEditingTask(null)}
           allTasks={allTasks ?? tasks}
+          orgId={editingTask.org_id}
+          spaceId={editingTask.space_id}
         />
       )}
     </div>
