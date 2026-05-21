@@ -126,19 +126,21 @@ export function Dashboard() {
         )}
       >
         {!hasChatStarted ? (
-          <div className="w-full flex flex-col items-center pt-25 lg:pt-30">
-            {/* Hero: greeting + input area */}
-            <HeroSection onSubmit={handlePromptSubmit} />
+          <div className="w-full h-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar">
+            <div className="w-full flex flex-col items-center gap-1 sm:gap-2">
+              {/* Hero: greeting + input area */}
+              <HeroSection onSubmit={handlePromptSubmit} />
 
-            {isError && (
-              <div className="w-full max-w-4xl mt-4 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
-                <AlertCircle className="w-4 h-4" />
-                <span>Failed to load dashboard data. Please try again.</span>
-              </div>
-            )}
+              {isError && (
+                <div className="w-full max-w-4xl mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Failed to load dashboard data. Please try again.</span>
+                </div>
+              )}
 
-            {/* Dashboard Panel with 3D Wheels */}
-            <DashboardPanel data={data} isLoading={isLoading} />
+              {/* Dashboard Panel with 3D Wheels */}
+              <DashboardPanel data={data} isLoading={isLoading} />
+            </div>
           </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center">

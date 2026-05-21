@@ -129,10 +129,10 @@ export function WheelPicker({
               backgroundColor:
                 activeIndex === i
                   ? "var(--primary)"
-                  : "rgba(var(--primary), 0.4)",
+                  : "color-mix(in srgb, var(--primary) 30%, transparent)",
               opacity: activeIndex === i ? 1 : 0.6,
             }}
-            className="rounded-full bg-primary transition-all duration-300 shadow-[0_0_8px_rgba(var(--primary),0.3)]"
+            className="rounded-full bg-primary transition-all duration-300 shadow-[0_0_8px_color-mix(in srgb,var(--primary)_30%,transparent)]"
           />
         ))}
       </div>
@@ -143,7 +143,7 @@ export function WheelPicker({
 interface WheelItemProps {
   index: number;
   itemHeight: number;
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   children: React.ReactNode;
   radius: number;
 }
