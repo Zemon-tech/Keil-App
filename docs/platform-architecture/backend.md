@@ -5,43 +5,37 @@
 ```text
 backend/src/
 ├── migrations/
-│   ├── 005_platform_organisation_space_schema.sql  # organisations, spaces, personal_tasks
-│   └── ...                                         # earlier migrations kept for history
+│   ├── 015_personal_organisation.sql       # adds is_personal, is_private, user triggers
+│   └── ...                                 # earlier migrations kept for history
 ├── middlewares/
-│   ├── auth.middleware.ts           # protect (identity), attachWorkspaceContext (compat shim)
-│   └── org-context.middleware.ts    # requireOrgMember, requireSpaceMember
+│   ├── auth.middleware.ts                  # protect (identity), attachWorkspaceContext (compat shim)
+│   ├── org-context.middleware.ts           # requireOrgMember, requireSpaceMember
+│   └── rbac.middleware.ts                  # requireOrgRole, requireSpaceRole
 ├── routes/
-│   ├── org.routes.ts                # All /orgs/* routes
-│   ├── org-task.routes.ts           # /orgs/:orgId/spaces/:spaceId/tasks
-│   ├── org-chat.routes.ts           # /orgs/:orgId/spaces/:spaceId/chat/channels
-│   ├── org-activity.routes.ts       # /orgs/:orgId/spaces/:spaceId/dashboard + activity
-│   ├── personal-task.routes.ts      # /personal/tasks
-│   ├── workspace.routes.ts          # Legacy compatibility routes (kept, not removed)
-│   └── v1.routes.ts                 # Main router
+│   ├── org.routes.ts                       # All /orgs/* routes
+│   ├── org-task.routes.ts                  # /orgs/:orgId/spaces/:spaceId/tasks
+│   ├── org-chat.routes.ts                  # /orgs/:orgId/spaces/:spaceId/chat/channels
+│   ├── org-activity.routes.ts              # /orgs/:orgId/spaces/:spaceId/dashboard + activity
+│   ├── my-tasks.routes.ts                  # /my-tasks (cross-org aggregate)
+│   ├── personal-task.routes.ts             # /personal/tasks (DEPRECATED - legacy compatibility)
+│   ├── workspace.routes.ts                 # Legacy compatibility routes (kept, not removed)
+│   └── v1.routes.ts                        # Main router
 ├── controllers/
-│   ├── organisation.controller.ts   # getOrganisations, createOrganisation,
-│   │                                #   createOrgInvite, joinOrg, getOrgMembers
-│   ├── space.controller.ts          # getSpaces, getSpaceMembers, createSpace,
-│   │                                #   renameSpace, deleteSpace, restoreSpace,
-│   │                                #   hardDeleteSpace, getDeletedSpaces,
-│   │                                #   addSpaceMember, removeSpaceMember
+│   ├── organisation.controller.ts          # getOrganisations, createOrganisation
+│   ├── space.controller.ts                 # getSpaces, space member management
+│   ├── my-tasks.controller.ts              # getMyTasks cross-org aggregate handler
 │   ├── org-task.controller.ts
 │   ├── org-chat.controller.ts
 │   ├── org-activity.controller.ts
-│   └── personal-task.controller.ts
+│   └── personal-task.controller.ts         # DEPRECATED
 ├── services/
-│   ├── organisation.service.ts      # createOrganisation, generateInviteToken,
-│   │                                #   joinOrganisation, getOrgMembers
-│   ├── space.service.ts             # getVisibleSpaces, getSpaceMembers, createSpace,
-│   │                                #   renameSpace, deleteSpace, restoreSpace,
-│   │                                #   hardDeleteSpace, getDeletedSpaces,
-│   │                                #   addSpaceMember, removeSpaceMember
-│   └── personal-task.service.ts
+│   ├── organisation.service.ts             # handles deletion blocks on personal orgs
+│   ├── space.service.ts                    # handles deletion/membership blocks on private spaces
+│   ├── my-tasks.service.ts                 # cross-org assigned tasks query aggregator
+│   └── personal-task.service.ts            # DEPRECATED
 └── repositories/
-    ├── organisation.repository.ts   # createWithOwner, findMembers, getMemberRole, addMember
-    └── space.repository.ts          # createWithOwner, findDefaultSpace, addMember,
-                                     #   rename, softDeleteSpace, restore, hardDelete,
-                                     #   findDeletedByOrg, countActiveByOrg, removeMember
+    ├── organisation.repository.ts          # createWithOwner, findByUserId (sorted)
+    └── space.repository.ts                 # createWithOwner, findOldestNonPrivateSpace
 ```
 
 ## API Routes
@@ -50,108 +44,87 @@ backend/src/
 
 | Method | Route | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/orgs` | `protect` | List user's organisations |
+| `GET` | `/api/v1/orgs` | `protect` | List user's organisations (personal first) |
 | `POST` | `/api/v1/orgs` | `protect` | Create org + default General space (atomic) |
-| `POST` | `/api/v1/orgs/join` | `protect` | Join org via invite token |
+| `POST` | `/api/v1/orgs/join` | `protect` | Join org via invite token (safety fallback if default private) |
 | `GET` | `/api/v1/orgs/:orgId/members` | `protect` + `requireOrgMember` | List org members |
 | `POST` | `/api/v1/orgs/:orgId/invite` | `protect` + `requireOrgMember` | Generate invite link |
 | `GET` | `/api/v1/orgs/:orgId/spaces` | `protect` + `requireOrgMember` | List visible (non-deleted) spaces |
 | `POST` | `/api/v1/orgs/:orgId/spaces` | `protect` + `requireOrgMember` | Create space (owner/admin only) |
 | `GET` | `/api/v1/orgs/:orgId/spaces/deleted` | `protect` + `requireOrgMember` | List soft-deleted spaces (owner/admin only) |
-| `PATCH` | `/api/v1/orgs/:orgId/spaces/:spaceId` | `protect` + both middlewares | Rename space (owner/admin only) |
-| `DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId` | `protect` + both middlewares | Soft-delete space. Blocked if last space. |
+| `PATCH` | `/api/v1/orgs/:orgId/spaces/:spaceId` | `protect` + both middlewares | Rename space. Blocked if private. |
+| `DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId` | `protect` + both middlewares | Soft-delete space. Blocked if last space or private. |
 | `POST` | `/api/v1/orgs/:orgId/spaces/:spaceId/restore` | `protect` + `requireOrgMember` | Restore soft-deleted space |
-| `DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId/permanent` | `protect` + `requireOrgMember` | Permanently delete space (must be soft-deleted first) |
-| `GET` | `/api/v1/orgs/:orgId/spaces/:spaceId/members` | `protect` + both middlewares | List space members |
-| `POST` | `/api/v1/orgs/:orgId/spaces/:spaceId/members` | `protect` + both middlewares | Add org member to space |
-| `DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId/members/:userId` | `protect` + both middlewares | Remove member from space |
-
-> **Route ordering note:** `GET /spaces/deleted` is registered before `GET /spaces/:spaceId/members` in `org.routes.ts` to prevent Express treating the literal string `"deleted"` as a `spaceId` parameter. `restore` and `permanent` routes use only `requireOrgMember` (not `requireSpaceMember`) because `requireSpaceMember` filters `deleted_at IS NULL` and would block operations on soft-deleted spaces.
+| `DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId/permanent` | `protect` + `requireOrgMember` | Permanently delete space (blocked if private) |
+| `GET` | `/api/v1/orgs/:orgId/spaces/:spaceId/members` | `protect` + both middlewares | List space members (blocked if private) |
+| `POST` | `/api/v1/orgs/:orgId/spaces/:spaceId/members` | `protect` + both middlewares | Add org member to space (blocked if private) |
+| `DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId/members/:userId` | `protect` + both middlewares | Remove member from space (blocked if private) |
 
 ### Space-Scoped Data
 
 | Method | Route | Description |
 | :--- | :--- | :--- |
-| `GET/POST/PATCH/DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId/tasks` | Org task CRUD |
-| `GET/POST` | `/api/v1/orgs/:orgId/spaces/:spaceId/chat/channels` | Chat channels |
-| `GET` | `/api/v1/orgs/:orgId/spaces/:spaceId/dashboard` | Space dashboard |
-| `GET` | `/api/v1/orgs/:orgId/spaces/:spaceId/activity` | Space activity feed |
+| `GET/POST/PATCH/DELETE` | `/api/v1/orgs/:orgId/spaces/:spaceId/tasks` | Standard & personal task CRUD |
+| `GET/POST` | `/api/v1/orgs/:orgId/spaces/:spaceId/chat/channels` | Chat channels (non-private spaces only) |
+| `GET` | `/api/v1/orgs/:orgId/spaces/:spaceId/dashboard` | Org space dashboard |
+| `GET` | `/api/v1/orgs/:orgId/spaces/:spaceId/activity` | Org space activity feed |
 
-### Personal Data
+### Cross-Org Aggregate Data
+
+| Method | Route | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/my-tasks` | `protect` | Fetch assigned active tasks across all organisations |
+
+### Personal Data (Legacy Compatibility Layer)
 
 | Method | Route | Description |
 | :--- | :--- | :--- |
-| `GET/POST/PATCH/DELETE` | `/api/v1/personal/tasks` | Personal task CRUD |
-| `PATCH` | `/api/v1/personal/tasks/:id/status` | Update personal task status |
+| `GET/POST/PATCH/DELETE` | `/api/v1/personal/tasks` | DEPRECATED legacy personal task CRUD |
 
 ## Database Schema
 
 | Table | Key Columns | Notes |
 | :--- | :--- | :--- |
-| `users` | `id`, `email`, `name` | Created by DB trigger on `auth.users` insert |
-| `organisations` | `id`, `name`, `owner_user_id` | No auto-creation on signup |
-| `organisation_members` | `org_id`, `user_id`, `role` | Unique on `(org_id, user_id)` |
-| `spaces` | `id`, `org_id`, `name`, `visibility`, `deleted_at` | Always `private`. `workspace_id` is nullable (NULL for new org-model spaces). `compatibility_workspace_id` bridges legacy routes. |
-| `space_members` | `org_id`, `space_id`, `user_id`, `role` | FK to `organisation_members` — must be org member first |
-| `personal_tasks` | `id`, `owner_user_id` | No `org_id` or `space_id` columns |
-| `tasks` (org tasks) | `id`, `org_id`, `space_id`, `workspace_id` | `org_id` and `space_id` required |
+| `users` | `id`, `email`, `name` | Triggers creation of personal org & Private space atomically |
+| `organisations` | `id`, `name`, `is_personal` | `is_personal` marks the non-deletable personal org |
+| `organisation_members` | `org_id`, `user_id`, `role` | Links users to org roles (`owner`, `admin`, `member`) |
+| `spaces` | `id`, `org_id`, `is_private`, `deleted_at` | `is_private` marks the system-managed private space |
+| `space_members` | `org_id`, `space_id`, `user_id`, `role` | FK to `organisation_members` |
+| `tasks` | `id`, `org_id`, `space_id` | Unified table. Personal tasks live here scoped to Private space |
+
+## Signup Triggers & Database Constraints
+
+Atomic signup behavior is handled natively in PostgreSQL inside `015_personal_organisation.sql`. 
+When a new user signs up:
+1. An insert is triggered into `public.organisations` with `is_personal = TRUE`.
+2. The user is added to `public.organisation_members` as `owner`.
+3. A system-managed space is created in `public.spaces` named `'Private'` with `is_private = TRUE` and `is_default = TRUE`.
+4. The user is added to `space_members` as `admin` for that space.
+
+**Index Constraint**:
+To prevent duplicate personal organisations, a partial unique index is enforced:
+```sql
+CREATE UNIQUE INDEX idx_organisations_one_personal_per_user 
+ON public.organisations(owner_user_id) 
+WHERE is_personal = TRUE AND deleted_at IS NULL;
+```
 
 ## Middlewares
 
 ### `protect`
-Validates the Supabase JWT from the `Authorization` header and attaches `req.user`. Does **not** infer any organisation context.
+Validates the Supabase JWT from the `Authorization` header and attaches `req.user`.
 
 ### `requireOrgMember`
-Used on all `/:orgId` routes. Queries `organisation_members` for `(orgId, userId)`. Returns `403` if not a member. Attaches `req.org` (includes `membership_role`).
+Validates that `(orgId, userId)` exists in `organisation_members`. Attaches `req.org` containing the user's role.
 
 ### `requireSpaceMember`
-Used on all `/:orgId/spaces/:spaceId` routes. Validates the space belongs to the org and the user is in `space_members`. Returns `403` if not a member. Attaches `req.space` (includes `compatibility_workspace_id` for legacy route bridging).
+Validates that `(spaceId, userId)` exists in `space_members` and the space belongs to the target organisation. Attaches `req.space`.
 
-### `attachWorkspaceContext` (Legacy Compat Shim)
-Used only on legacy `/workspaces` routes. Infers `req.workspaceId` from the user's first workspace membership. Not used by any new code.
+## Service Guards
 
-## Space Delete Behaviour
+Service guards are placed strictly in the business-logic layers:
+- **Organisation Deletion Block**: `deleteOrganisation` in `organisation.service.ts` throws `400` if `org.is_personal` is true.
+- **Space Deletion Block**: `deleteSpace` and `hardDeleteSpace` in `space.service.ts` throw `400` if `space.is_private` is true.
+- **Private Space Membership Block**: `addSpaceMember` in `space.service.ts` throws `400` if `space.is_private` is true.
+- **Safe Invite Joins**: When a user joins an organisation via token, `joinOrganisation` queries the oldest *non-private* space as the target landing page if the default space is private.
 
-Space deletion is a two-step process enforced at the service layer:
-
-**Soft-delete** (`DELETE /spaces/:spaceId`):
-- Sets `deleted_at` on the space row.
-- Cascades `deleted_at` to all `tasks` in the space.
-- `channels` and `activity_logs` do not have `deleted_at` — they are excluded from the cascade and become inaccessible but are not removed.
-- `space_members` rows are **preserved** so the space can be restored.
-- Blocked with `400` if this is the last active space in the org.
-
-**Restore** (`POST /spaces/:spaceId/restore`):
-- Clears `deleted_at` on the space row only.
-- Tasks that were cascade-deleted remain soft-deleted and must be restored separately.
-
-**Permanent delete** (`DELETE /spaces/:spaceId/permanent`):
-- Space must already be soft-deleted (returns `400` otherwise).
-- Runs in a single transaction: deletes `task_dependencies`, `task_assignees`, `comments`, `tasks`, `channels` (cascades to `channel_members` and `messages`), `activity_logs`, `space_members`, then the space row itself.
-
-## Org Creation — Atomic Transaction
-
-`POST /api/v1/orgs` runs the following in a single DB transaction:
-
-```sql
-INSERT INTO organisations (name, owner_user_id) ...
-INSERT INTO organisation_members (org_id, user_id, role='owner') ...
-INSERT INTO spaces (org_id, name='General', visibility='private', created_by) ...
-INSERT INTO space_members (org_id, space_id, user_id, role='owner') ...
-```
-
-Returns `{ org: OrganisationDTO, space: SpaceDTO }`.
-
-## Invite Token
-
-`POST /api/v1/orgs/:orgId/invite` signs a JWT:
-```json
-{ "orgId": "<uuid>", "type": "org_invite" }
-```
-Expiry: 7 days. Signed with `JWT_SECRET`.
-
-`POST /api/v1/orgs/join` (top-level, no `:orgId` in URL — orgId comes from the token):
-1. Verifies and decodes the JWT.
-2. Finds the org's default space (`ORDER BY created_at ASC LIMIT 1`).
-3. Inserts into `organisation_members` and `space_members` with `ON CONFLICT DO NOTHING` (idempotent).
-4. Returns `{ orgId, spaceId }`.
