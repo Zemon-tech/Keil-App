@@ -55,7 +55,7 @@ export function MotionHome() {
       </div>
 
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
-        <header className="flex items-center justify-between px-2 py-1.5 z-40 shrink-0">
+        <header className="h-12 flex items-center justify-between px-2 z-40 shrink-0">
           <Button
             variant="ghost"
             size="icon"

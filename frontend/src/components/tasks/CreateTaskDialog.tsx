@@ -49,6 +49,7 @@ import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
 import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
 import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
 import { useAppContext } from "@/contexts/AppContext";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -112,6 +113,19 @@ export function CreateTaskDialog({
   const createPersonalTask = useCreatePersonalTask();
   const updatePersonalTask = useUpdatePersonalTask();
 
+  const { data: spaceMembers = [] } = useSpaceMembers(
+    isPersonalMode ? null : activeOrgId,
+    isPersonalMode ? null : activeSpaceId
+  );
+
+  const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
+    if (allUsers && allUsers.length > 0) return allUsers;
+    return spaceMembers.map(m => ({
+      id: m.user_id,
+      name: m.name || m.email,
+    }));
+  }, [allUsers, spaceMembers]);
+
   // ── Form State ─────────────────────────────────────────────────────────────
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"task" | "event">("task");
@@ -164,7 +178,7 @@ export function CreateTaskDialog({
           setIsDragging(false);
           if (dragStartRef.current && dragEnd) {
             const ordered = getOrderedRange(dragStartRef.current, dragEnd);
-            
+
             const newStart = new Date(ordered.from);
             if (date && !isAllDay) {
               newStart.setHours(date.getHours(), date.getMinutes());
@@ -229,14 +243,14 @@ export function CreateTaskDialog({
     }
 
     // Detect Assignees (simple @ match)
-    allUsers.forEach(user => {
+    resolvedUsers.forEach(user => {
       if (lowerTitle.includes(`@${user.name.toLowerCase().replace(/\s/g, "")}`)) {
         if (!assigneeIds.includes(user.id)) {
           setAssigneeIds(prev => [...prev, user.id]);
         }
       }
     });
-  }, [title, allUsers, mode, open]);
+  }, [title, resolvedUsers, mode, open]);
 
   // ── Pre-fill Mode ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -306,7 +320,7 @@ export function CreateTaskDialog({
         const today = startOfToday();
         const selectedDateOnly = new Date(date);
         selectedDateOnly.setHours(0, 0, 0, 0);
-        
+
         if (selectedDateOnly < today) {
           toast.error("Cannot create in the past", {
             description: "Please select a future time slot.",
@@ -356,7 +370,7 @@ export function CreateTaskDialog({
 
     if (mode === "edit" && taskId) {
       if (isPersonalMode) {
-          const personalUpdate = {
+        const personalUpdate = {
           title: input.title,
           description: input.description,
           priority: input.priority as any,
@@ -370,7 +384,7 @@ export function CreateTaskDialog({
       }
     } else {
       if (isPersonalMode) {
-          const personalCreate = {
+        const personalCreate = {
           title: input.title,
           description: input.description,
           priority: input.priority as any,
@@ -418,7 +432,7 @@ export function CreateTaskDialog({
                 Event
               </button>
             </div>
-            
+
             <div className="flex items-center gap-3">
               {/* Top Right Actions: All Day & Date */}
               <div className="flex items-center gap-3 pr-2">
@@ -432,13 +446,13 @@ export function CreateTaskDialog({
                     <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors text-[11px] font-bold text-primary">
                       <CalendarIcon className="size-3.5" />
                       {date && isValidDate(date) ? (
-                        isAllDay 
+                        isAllDay
                           ? (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
-                              ? `${safeFormat(date, "MMM d")} - ${safeFormat(endDate, "MMM d, yyyy")}`
-                              : safeFormat(date, "MMM d, yyyy"))
+                            ? `${safeFormat(date, "MMM d")} - ${safeFormat(endDate, "MMM d, yyyy")}`
+                            : safeFormat(date, "MMM d, yyyy"))
                           : (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
-                              ? `${safeFormat(date, "MMM d, h:mm a")} - ${safeFormat(endDate, "MMM d, h:mm a")}`
-                              : safeFormat(date, "MMM d, h:mm a"))
+                            ? `${safeFormat(date, "MMM d, h:mm a")} - ${safeFormat(endDate, "MMM d, h:mm a")}`
+                            : safeFormat(date, "MMM d, h:mm a"))
                       ) : "Set date"}
                     </button>
                   </PopoverTrigger>
@@ -770,7 +784,7 @@ export function CreateTaskDialog({
                   {assigneeIds.length > 0 ? (
                     <div className="flex -space-x-1 ml-1">
                       {assigneeIds.map(id => {
-                        const user = allUsers.find(u => u.id === id);
+                        const user = resolvedUsers.find(u => u.id === id);
                         return (
                           <Avatar key={id} className="size-5 border border-background">
                             <AvatarImage src={user?.avatarUrl} />
@@ -793,7 +807,7 @@ export function CreateTaskDialog({
                   <CommandList>
                     <CommandEmpty>No members found.</CommandEmpty>
                     <CommandGroup>
-                      {allUsers.map((user) => (
+                      {resolvedUsers.map((user) => (
                         <CommandItem
                           key={user.id}
                           onSelect={() => {
