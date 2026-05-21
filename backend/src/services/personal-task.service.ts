@@ -92,6 +92,23 @@ export const createPersonalTask = async (
   validateDateOrder(input.start_date ?? null, input.due_date ?? null);
 
   const task = await personalTaskRepository.create(input);
+
+  // Fire-and-forget Google Calendar sync on create — never blocks the response
+  if (task.start_date) {
+    syncTaskToCalendar(input.owner_user_id, {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      start_date: task.start_date,
+      due_date: task.due_date,
+      is_all_day: false,
+      location: null,
+      status: task.status,
+      google_event_id: task.google_event_id,
+      source: 'personal_tasks',
+    }).catch(err => console.error('[gcal] personal task create sync failed:', err.message));
+  }
+
   return toDTO(task);
 };
 
@@ -99,6 +116,7 @@ export const updatePersonalTask = async (
   taskId: string,
   ownerUserId: string,
   input: UpdatePersonalTaskInput,
+  options?: { skipGoogleSync?: boolean },
 ): Promise<PersonalTaskDTO | null> => {
   const existingTask = await personalTaskRepository.findById(taskId);
   if (!existingTask || existingTask.owner_user_id !== ownerUserId) {
@@ -113,18 +131,21 @@ export const updatePersonalTask = async (
   if (!updated) return null;
 
   // Fire-and-forget Google Calendar sync — never blocks the task update
-  syncTaskToCalendar(ownerUserId, {
-    id: updated.id,
-    title: updated.title,
-    description: updated.description,
-    start_date: updated.start_date,
-    due_date: updated.due_date,
-    is_all_day: false, // personal tasks don't have is_all_day
-    location: null,
-    status: updated.status,
-    google_event_id: updated.google_event_id,
-    source: 'personal_tasks',
-  }).catch(err => console.error('[gcal] personal task sync failed:', err.message));
+  // Guard: skip if this update originated from an inbound Google event (prevents echo loop)
+  if (!options?.skipGoogleSync) {
+    syncTaskToCalendar(ownerUserId, {
+      id: updated.id,
+      title: updated.title,
+      description: updated.description,
+      start_date: updated.start_date,
+      due_date: updated.due_date,
+      is_all_day: false, // personal tasks don't have is_all_day
+      location: null,
+      status: updated.status,
+      google_event_id: updated.google_event_id,
+      source: 'personal_tasks',
+    }).catch(err => console.error('[gcal] personal task sync failed:', err.message));
+  }
 
   return toDTO(updated);
 };

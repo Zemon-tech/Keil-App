@@ -82,7 +82,7 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getTasks = catchAsync(async (req: Request, res: Response) => {
-  const { status, priority, assignee_id, due_date_start, due_date_end, sort_by, sort_order, limit, offset, parent_task_id } =
+  const { status, priority, assignee_id, due_date_start, due_date_end, sort_by, sort_order, limit, offset, parent_task_id, mirror, org_filter, space_filter } =
     req.query;
 
   const options: TaskQueryOptions = {
@@ -92,6 +92,16 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
     },
     filters: {},
   };
+
+  // Always populate userId filter so user_space_role is returned for every task query
+  options.filters!.userId = (req as any).user?.id;
+
+  const isPrivateSpace = (req as any).space?.is_private === true;
+  if (mirror === "true" && isPrivateSpace) {
+    options.filters!.mirror = true;
+    if (org_filter) options.filters!.orgFilter = org_filter as string;
+    if (space_filter) options.filters!.spaceFilter = space_filter as string;
+  }
 
   if (status) {
     if (!validateStatus(status)) throw new ApiError(400, "Invalid status");
@@ -152,7 +162,8 @@ export const changeTaskStatus = catchAsync(async (req: Request, res: Response) =
   if (!validateStatus(status)) throw new ApiError(400, "Invalid status");
   await assertTaskInSpace(req, asString(req.params.id));
 
-  const updated = await orgTaskService.changeTaskStatus(context, asString(req.params.id), userId, status);
+  const spaceRole = (req as any).space?.membership_role as string;
+  const updated = await orgTaskService.changeTaskStatus(context, asString(req.params.id), userId, status, spaceRole as any);
   if (!updated) throw new ApiError(404, "Task not found");
 
   res.status(200).json(new ApiResponse(200, updated, "Task status updated successfully"));
@@ -258,10 +269,11 @@ export const deleteTaskComment = catchAsync(async (req: Request, res: Response) 
   // Verify the task belongs to this org/space before allowing comment deletion
   await assertTaskInSpace(req, asString(req.params.id));
 
+  const spaceRole = (req as any).space?.membership_role as string;
   await hardDeleteComment(asString(req.params.commentId), userId, {
     org_id: context.orgId,
     space_id: context.spaceId,
-  });
+  }, spaceRole);
 
   res.status(200).json(new ApiResponse(200, {}, "Comment deleted successfully"));
 });

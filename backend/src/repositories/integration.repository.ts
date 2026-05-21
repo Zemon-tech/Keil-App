@@ -86,4 +86,92 @@ export class IntegrationRepository {
       [userId, provider]
     );
   }
+
+  // ─── 2-Way Sync Methods (added for Google Calendar push notifications) ────────
+
+  /**
+   * Persist watch channel metadata after a successful `calendar.events.watch()` call.
+   * Atomically sets watch_channel_id, watch_resource_id, watch_expires_at,
+   * gcal_sync_token (if provided), and transitions watch_status to 'active'.
+   */
+  async saveWatchChannel(
+    userId: string,
+    provider: string,
+    data: {
+      channelId: string;
+      resourceId: string;
+      expiresAt: Date;
+      syncToken?: string;
+    }
+  ): Promise<void> {
+    await pool.query(
+      `UPDATE public.user_integrations
+       SET watch_channel_id  = $3,
+           watch_resource_id = $4,
+           watch_expires_at  = $5,
+           gcal_sync_token   = COALESCE($6, gcal_sync_token),
+           watch_status      = 'active'::public.gcal_watch_status,
+           updated_at        = NOW()
+       WHERE user_id = $1 AND provider = $2`,
+      [
+        userId,
+        provider,
+        data.channelId,
+        data.resourceId,
+        data.expiresAt,
+        data.syncToken ?? null,
+      ]
+    );
+  }
+
+  /**
+   * Look up a user integration by their watch channel ID.
+   * Called on every incoming webhook notification to identify the owning user.
+   * Returns null if no integration has this channelId (unknown/stale channel).
+   */
+  async findByChannelId(channelId: string): Promise<UserIntegration | null> {
+    const result = await pool.query(
+      `SELECT * FROM public.user_integrations
+       WHERE watch_channel_id = $1
+       LIMIT 1`,
+      [channelId]
+    );
+    return result.rows.length > 0 ? (result.rows[0] as UserIntegration) : null;
+  }
+
+  /**
+   * Persist or clear the incremental sync token.
+   * Pass null to clear the token (e.g. after a 410 Gone error from Google).
+   */
+  async saveSyncToken(
+    userId: string,
+    provider: string,
+    syncToken: string | null
+  ): Promise<void> {
+    await pool.query(
+      `UPDATE public.user_integrations
+       SET gcal_sync_token = $3, updated_at = NOW()
+       WHERE user_id = $1 AND provider = $2`,
+      [userId, provider, syncToken]
+    );
+  }
+
+  /**
+   * Reset all watch channel fields on disconnect or OAuth revocation.
+   * Sets watch_channel_id, watch_resource_id, watch_expires_at, gcal_sync_token
+   * to NULL and watch_status back to 'pending'.
+   */
+  async clearWatchChannel(userId: string, provider: string): Promise<void> {
+    await pool.query(
+      `UPDATE public.user_integrations
+       SET watch_channel_id  = NULL,
+           watch_resource_id = NULL,
+           watch_expires_at  = NULL,
+           gcal_sync_token   = NULL,
+           watch_status      = 'pending'::public.gcal_watch_status,
+           updated_at        = NOW()
+       WHERE user_id = $1 AND provider = $2`,
+      [userId, provider]
+    );
+  }
 }

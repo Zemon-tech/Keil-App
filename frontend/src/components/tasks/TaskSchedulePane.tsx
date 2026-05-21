@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -169,7 +169,7 @@ function renderEventContent(arg: EventContentArg) {
   const isBacklog = arg.event.extendedProps.taskStatus === "backlog";
 
   const BacklogDot = () => (
-    <div 
+    <div
       className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#FF0000] rounded-full z-50 pointer-events-none"
       style={{ transform: "translate(50%, -50%)" }}
     />
@@ -271,7 +271,15 @@ function renderEventContent(arg: EventContentArg) {
   );
 }
 
-function QuickNavPopover({ currentViewDate, calendarApi }: { currentViewDate: Date; calendarApi: any }) {
+function QuickNavPopover({
+  currentViewDate,
+  calendarApi,
+  children,
+}: {
+  currentViewDate: Date;
+  calendarApi: any;
+  children: React.ReactNode;
+}) {
   const [navDate, setNavDate] = useState(currentViewDate);
   const [view, setView] = useState<"days" | "months" | "years">("days");
   const [isOpen, setIsOpen] = useState(false);
@@ -340,18 +348,11 @@ function QuickNavPopover({ currentViewDate, calendarApi }: { currentViewDate: Da
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 hover:bg-muted transition-colors"
-          title="Quick Navigation"
-        >
-          <Calendar className="h-4.5 w-4.5 text-muted-foreground" />
-        </Button>
+        {children}
       </PopoverTrigger>
       <PopoverContent
         className="w-auto p-3 rounded-xl shadow-xl border-border/60"
-        align="end"
+        align="center"
         sideOffset={8}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
@@ -578,8 +579,24 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
       });
 
     const allEvents = [...blockEvents, ...taskEvents];
-    console.log("✅ Events state updated:", allEvents.length);
-    setEvents(allEvents);
+    setEvents((prevEvents) => {
+      const isSame =
+        prevEvents.length === allEvents.length &&
+        prevEvents.every((evt, idx) => {
+          const nextEvt = allEvents[idx];
+          return (
+            evt.id === nextEvt.id &&
+            evt.start === nextEvt.start &&
+            evt.end === nextEvt.end &&
+            evt.title === nextEvt.title
+          );
+        });
+      if (isSame) {
+        return prevEvents;
+      }
+      console.log("✅ Events state updated:", allEvents.length);
+      return allEvents;
+    });
   }, [tasks, blocks, statusFilter]);
 
   // Handle unschedule - remove task from local events state
@@ -831,6 +848,67 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
     }
   }, [currentViewType, currentViewDate]);
 
+  // Handle month/week/day change using mouse scroll wheel or 2-finger touchpad swipe left/right
+  useEffect(() => {
+    const container = calendarContainerRef.current;
+    if (!container) return;
+
+    const lastScrollTime = { current: 0 };
+    const cooldown = 600; // ms cooldown between navigation switches
+    const threshold = 15; // minimum delta to trigger navigation
+
+    const handleWheel = (e: WheelEvent) => {
+      const calendarApi = calendarRef.current?.getApi();
+      if (!calendarApi) return;
+
+      const viewType = calendarApi.view.type;
+      const now = Date.now();
+      const absX = Math.abs(e.deltaX);
+      const absY = Math.abs(e.deltaY);
+
+      if (absX > absY) {
+        // Horizontal scroll / 2-finger touchpad swipe left/right
+        // Intercept and use for navigation in all views
+        if (absX > threshold) {
+          if (now - lastScrollTime.current < cooldown) {
+            e.preventDefault();
+            return;
+          }
+          e.preventDefault();
+          if (e.deltaX > 0) {
+            calendarApi.next();
+          } else {
+            calendarApi.prev();
+          }
+          lastScrollTime.current = now;
+        }
+      } else {
+        // Vertical scroll / mouse scroll wheel
+        // Hijack vertical scroll for navigation ONLY in month view (dayGridMonth)
+        // because vertical scroll in Day/Week views is needed to scroll hours.
+        if (viewType === "dayGridMonth") {
+          if (absY > threshold) {
+            if (now - lastScrollTime.current < cooldown) {
+              e.preventDefault();
+              return;
+            }
+            e.preventDefault();
+            if (e.deltaY > 0) {
+              calendarApi.next();
+            } else {
+              calendarApi.prev();
+            }
+            lastScrollTime.current = now;
+          }
+        }
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
 
   const initialDate = useMemo(() => {
     if (selectedTask?.plannedStartISO) return parseISO(selectedTask.plannedStartISO);
@@ -876,16 +954,14 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                   {currentViewType === "dayGridMonth" ? "Today" : "Month"}
                 </Button>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-2 rounded-l-none"
-                      aria-label="Change calendar view"
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
+                  <DropdownMenuTrigger
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      "h-8 px-2 rounded-l-none flex items-center justify-center cursor-pointer"
+                    )}
+                    aria-label="Change calendar view"
+                  >
+                    <ChevronDown className="h-4 w-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="rounded-xl">
                     <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>
@@ -906,7 +982,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="truncate text-sm font-semibold min-w-[140px] text-center">{headerTitle}</div>
+              <QuickNavPopover
+                currentViewDate={currentViewDate}
+                calendarApi={calendarRef.current?.getApi()}
+              >
+                <button
+                  type="button"
+                  className="truncate text-sm font-semibold text-center cursor-pointer transition-colors duration-200 select-none py-1 px-2.5 rounded-md hover:bg-muted/80 active:bg-muted/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {headerTitle}
+                </button>
+              </QuickNavPopover>
               <Button
                 type="button"
                 variant="outline"
@@ -918,12 +1004,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
               </Button>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
-              <QuickNavPopover
-                currentViewDate={currentViewDate}
-                calendarApi={calendarRef.current?.getApi()}
-              />
-            </div>
+            <div className="flex items-center gap-1 shrink-0 w-[88px]" />
           </div>
         </div>
 

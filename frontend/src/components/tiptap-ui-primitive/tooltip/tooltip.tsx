@@ -5,8 +5,10 @@ import {
   createContext,
   forwardRef,
   isValidElement,
+  useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   version,
 } from "react"
@@ -21,7 +23,6 @@ import {
   useDismiss,
   useRole,
   useInteractions,
-  useMergeRefs,
   FloatingPortal,
   type Placement,
   type UseFloatingReturn,
@@ -29,6 +30,36 @@ import {
   FloatingDelayGroup,
 } from "@floating-ui/react"
 import "@/components/tiptap-ui-primitive/tooltip/tooltip.scss"
+
+/**
+ * useStableMergeRefs — stable replacement for useMergeRefs from @floating-ui/react.
+ *
+ * useMergeRefs creates a NEW function reference on every render. When that function
+ * is used as a React ref, React runs cleanup (ref(null)) then setup (ref(node)) on
+ * every re-render. If any of the merged refs is a Floating UI setter (setReference /
+ * setFloating), calling it triggers internal state → re-render → new function →
+ * cleanup again → infinite loop → React Error #185.
+ *
+ * Fix: store all refs in a useRef container (always up-to-date) and return a
+ * useCallback with empty deps []. The callback identity never changes so React
+ * never runs the cleanup/setup cycle unnecessarily.
+ */
+function useStableMergeRefs(
+  refs: Array<React.Ref<any> | undefined | null>
+): React.RefCallback<any> {
+  const refsRef = useRef(refs)
+  refsRef.current = refs // always points to latest refs without changing identity
+
+  return useCallback((value: any) => {
+    refsRef.current.forEach((ref) => {
+      if (typeof ref === "function") {
+        ref(value)
+      } else if (ref != null && typeof ref === "object" && "current" in ref) {
+        ;(ref as React.MutableRefObject<any>).current = value
+      }
+    })
+  }, []) // empty deps = permanently stable function identity
+}
 
 interface TooltipProviderProps {
   children: React.ReactNode
@@ -170,7 +201,7 @@ export const TooltipTrigger = forwardRef<HTMLElement, TooltipTriggerProps>(
         : // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (children as any).ref
       : undefined
-    const ref = useMergeRefs([context.refs.setReference, propRef, childrenRef])
+    const ref = useStableMergeRefs([context.refs.setReference, propRef, childrenRef])
 
     if (asChild && isValidElement(children)) {
       const dataAttributes = {
@@ -206,7 +237,7 @@ export const TooltipContent = forwardRef<HTMLDivElement, TooltipContentProps>(
     propRef
   ) {
     const context = useTooltipContext()
-    const ref = useMergeRefs([context.refs.setFloating, propRef])
+    const ref = useStableMergeRefs([context.refs.setFloating, propRef])
 
     if (!context.open) return null
 

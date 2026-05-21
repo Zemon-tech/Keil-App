@@ -15,62 +15,100 @@ export class OrgTaskRepository extends BaseRepository<Task> {
     options: TaskQueryOptions = {},
     client?: PoolClient,
   ): Promise<Task[]> {
+    const params: any[] = [orgId, spaceId];
+
+    const isMirror = !!options.filters?.mirror && !!options.filters?.userId;
+    const userId = options.filters?.userId;
+
+    let userIdParamIndex = 0;
+    if (userId) {
+      params.push(userId);
+      userIdParamIndex = params.length;
+    }
+
     let query = `
       SELECT
         t.*,
+        o.name as org_name,
+        s.name as space_name,
         (
           SELECT COUNT(*)
           FROM public.tasks s
           WHERE s.parent_task_id = t.id
             AND s.deleted_at IS NULL
-        ) as subtask_count
+        ) as subtask_count,
+        ${userId ? `COALESCE(sm.role, 'member')` : `'member'`} as user_space_role
       FROM public.tasks t
-      WHERE t.org_id = $1
-        AND t.space_id = $2
-        AND t.deleted_at IS NULL
+      LEFT JOIN public.organisations o ON o.id = t.org_id
+      LEFT JOIN public.spaces s ON s.id = t.space_id
+      ${userId ? `LEFT JOIN public.space_members sm ON sm.space_id = t.space_id AND sm.user_id = $${userIdParamIndex}` : ''}
+      WHERE t.deleted_at IS NULL
     `;
-    const params: Array<string | number | Date | string[]> = [orgId, spaceId];
-    let paramIndex = 3;
+
+    if (isMirror) {
+      query += `
+        AND (
+          (t.org_id = $1 AND t.space_id = $2)
+          OR
+          (
+            t.space_id != $2
+            AND t.id IN (
+              SELECT task_id FROM public.task_assignees WHERE user_id = $${userIdParamIndex}
+            )
+            AND EXISTS (
+              SELECT 1 FROM public.space_members sm2
+              WHERE sm2.space_id = t.space_id AND sm2.user_id = $${userIdParamIndex}
+            )
+          )
+        )
+      `;
+    } else {
+      query += ` AND t.org_id = $1 AND t.space_id = $2`;
+    }
+
+    if (options.filters?.orgFilter) {
+      params.push(options.filters.orgFilter);
+      query += ` AND t.org_id = $${params.length}`;
+    }
+
+    if (options.filters?.spaceFilter) {
+      params.push(options.filters.spaceFilter);
+      query += ` AND t.space_id = $${params.length}`;
+    }
 
     if (options.filters?.status) {
-      query += ` AND t.status = $${paramIndex}`;
       params.push(options.filters.status);
-      paramIndex++;
+      query += ` AND t.status = $${params.length}`;
     }
 
     if (options.filters?.priority) {
-      query += ` AND t.priority = $${paramIndex}`;
       params.push(options.filters.priority);
-      paramIndex++;
+      query += ` AND t.priority = $${params.length}`;
     }
 
     if (options.filters?.assigneeId) {
-      query += ` AND t.id IN (
-        SELECT task_id FROM public.task_assignees WHERE user_id = $${paramIndex}
-      )`;
       params.push(options.filters.assigneeId);
-      paramIndex++;
+      query += ` AND t.id IN (
+        SELECT task_id FROM public.task_assignees WHERE user_id = $${params.length}
+      )`;
     }
 
     if (options.filters?.dueDateStart) {
-      query += ` AND t.due_date >= $${paramIndex}`;
       params.push(options.filters.dueDateStart);
-      paramIndex++;
+      query += ` AND t.due_date >= $${params.length}`;
     }
 
     if (options.filters?.dueDateEnd) {
-      query += ` AND t.due_date <= $${paramIndex}`;
       params.push(options.filters.dueDateEnd);
-      paramIndex++;
+      query += ` AND t.due_date <= $${params.length}`;
     }
 
     if (options.filters?.parentTaskId !== undefined) {
       if (options.filters.parentTaskId === null) {
         query += ` AND t.parent_task_id IS NULL`;
       } else {
-        query += ` AND t.parent_task_id = $${paramIndex}`;
         params.push(options.filters.parentTaskId);
-        paramIndex++;
+        query += ` AND t.parent_task_id = $${params.length}`;
       }
     }
 
@@ -81,8 +119,8 @@ export class OrgTaskRepository extends BaseRepository<Task> {
     }
 
     if (options.pagination) {
-      query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
       params.push(options.pagination.limit, options.pagination.offset);
+      query += ` LIMIT $${params.length - 1} OFFSET $${params.length}`;
     }
 
     const executor = client || this.pool;

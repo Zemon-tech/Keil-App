@@ -58,7 +58,7 @@ export class SpaceRepository extends BaseRepository<Space> {
   }
 
   /**
-   * Creates a new space inside an org and adds the creator as owner.
+   * Creates a new space inside an org and adds the creator as admin.
    * Must be called inside a transaction.
    */
   async createWithOwner(
@@ -66,18 +66,19 @@ export class SpaceRepository extends BaseRepository<Space> {
     name: string,
     createdBy: string,
     client: PoolClient,
+    isDefault: boolean = false,
   ): Promise<Space> {
     const spaceResult = await client.query<Space>(
-      `INSERT INTO public.spaces (org_id, name, visibility, created_by)
-       VALUES ($1, $2, 'private', $3)
+      `INSERT INTO public.spaces (org_id, name, visibility, created_by, is_default)
+       VALUES ($1, $2, 'private', $3, $4)
        RETURNING *`,
-      [orgId, name, createdBy],
+      [orgId, name, createdBy, isDefault],
     );
     const space = spaceResult.rows[0];
 
     await client.query(
       `INSERT INTO public.space_members (org_id, space_id, user_id, role)
-       VALUES ($1, $2, $3, 'owner')`,
+       VALUES ($1, $2, $3, 'admin')`,
       [orgId, space.id, createdBy],
     );
 
@@ -85,13 +86,27 @@ export class SpaceRepository extends BaseRepository<Space> {
   }
 
   /**
-   * Returns the first (oldest) space in an org — used as the "default" space for invites.
+   * Returns the default space in an org — used as the "default" space for invites.
    */
   async findDefaultSpace(orgId: string, client?: PoolClient): Promise<Space | null> {
     const executor = client || this.pool;
     const result = await executor.query<Space>(
       `SELECT * FROM public.spaces
-       WHERE org_id = $1 AND deleted_at IS NULL
+       WHERE org_id = $1 AND is_default = TRUE AND deleted_at IS NULL
+       LIMIT 1`,
+      [orgId],
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  /**
+   * Returns the oldest active non-private space in an organisation.
+   */
+  async findOldestNonPrivateSpace(orgId: string, client?: PoolClient): Promise<Space | null> {
+    const executor = client || this.pool;
+    const result = await executor.query<Space>(
+      `SELECT * FROM public.spaces
+       WHERE org_id = $1 AND is_private = FALSE AND deleted_at IS NULL
        ORDER BY created_at ASC
        LIMIT 1`,
       [orgId],
@@ -175,6 +190,23 @@ export class SpaceRepository extends BaseRepository<Space> {
     await client.query(
       `DELETE FROM public.space_members WHERE space_id = $1 AND user_id = $2`,
       [spaceId, userId],
+    );
+  }
+
+  async getMemberRole(spaceId: string, userId: string, client?: PoolClient): Promise<string | null> {
+    const executor = client || this.pool;
+    const result = await executor.query(
+      `SELECT role FROM public.space_members WHERE space_id = $1 AND user_id = $2`,
+      [spaceId, userId],
+    );
+    return result.rows.length > 0 ? result.rows[0].role : null;
+  }
+
+  async updateMemberRole(spaceId: string, userId: string, role: string, client?: PoolClient): Promise<void> {
+    const executor = client || this.pool;
+    await executor.query(
+      `UPDATE public.space_members SET role = $1 WHERE space_id = $2 AND user_id = $3`,
+      [role, spaceId, userId],
     );
   }
 }

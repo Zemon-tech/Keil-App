@@ -9,6 +9,7 @@ export interface OrganisationDTO {
   created_at: string;
   updated_at: string;
   role: string;
+  is_personal: boolean;
 }
 
 export interface OrgMemberDTO {
@@ -25,6 +26,7 @@ const toDTO = (row: any): OrganisationDTO => ({
   created_at: new Date(row.created_at).toISOString(),
   updated_at: new Date(row.updated_at).toISOString(),
   role: row.membership_role,
+  is_personal: !!row.is_personal,
 });
 
 export const getUserOrganisations = async (userId: string): Promise<OrganisationDTO[]> => {
@@ -34,7 +36,7 @@ export const getUserOrganisations = async (userId: string): Promise<Organisation
 
 /**
  * Creates a new organisation with a default "General" space.
- * The caller is added as owner of both.
+ * The caller is added as owner of the org and admin of the space.
  * Returns the new org (with role="owner") and the default space.
  */
 export const createOrganisation = async (
@@ -43,7 +45,7 @@ export const createOrganisation = async (
 ): Promise<{ org: OrganisationDTO; space: { id: string; name: string; org_id: string; created_at: string } }> => {
   return organisationRepository.executeInTransaction(async (client) => {
     const org = await organisationRepository.createWithOwner(name.trim(), userId, client);
-    const space = await spaceRepository.createWithOwner(org.id, "General", userId, client);
+    const space = await spaceRepository.createWithOwner(org.id, "General", userId, client, true);
 
     return {
       org: {
@@ -53,6 +55,7 @@ export const createOrganisation = async (
         created_at: new Date(org.created_at).toISOString(),
         updated_at: new Date(org.updated_at).toISOString(),
         role: "owner",
+        is_personal: false,
       },
       space: {
         id: space.id,
@@ -73,8 +76,8 @@ export const generateInviteToken = async (
   userId: string,
 ): Promise<{ inviteLink: string; token: string }> => {
   const role = await organisationRepository.getMemberRole(orgId, userId);
-  if (!role) {
-    throw new ApiError(403, "Not a member of this organisation");
+  if (role !== "owner" && role !== "admin") {
+    throw new ApiError(403, "Only organisation admins and owners can generate invite links");
   }
 
   const secret = process.env.JWT_SECRET || "fallback_secret";
@@ -114,14 +117,22 @@ export const joinOrganisation = async (
     throw new ApiError(404, "Organisation not found");
   }
 
-  const defaultSpace = await spaceRepository.findDefaultSpace(orgId);
+  let defaultSpace = await spaceRepository.findDefaultSpace(orgId);
   if (!defaultSpace) {
     throw new ApiError(500, "Organisation has no spaces");
   }
 
+  if (defaultSpace.is_private) {
+    const fallbackSpace = await spaceRepository.findOldestNonPrivateSpace(orgId);
+    if (!fallbackSpace) {
+      throw new ApiError(400, "This organisation has no joinable spaces");
+    }
+    defaultSpace = fallbackSpace;
+  }
+
   await organisationRepository.executeInTransaction(async (client) => {
     await organisationRepository.addMember(orgId, userId, "member", client);
-    await spaceRepository.addMember(orgId, defaultSpace.id, userId, "member", client);
+    await spaceRepository.addMember(orgId, defaultSpace!.id, userId, "member", client);
   });
 
   return { orgId, spaceId: defaultSpace.id };
@@ -134,34 +145,32 @@ export const getOrgMembers = async (orgId: string): Promise<OrgMemberDTO[]> => {
   return organisationRepository.findMembers(orgId);
 };
 
-const requireOrgAdmin = async (orgId: string, userId: string): Promise<string> => {
-  const role = await organisationRepository.getMemberRole(orgId, userId);
-  if (role !== "owner" && role !== "admin") {
-    throw new ApiError(403, "Only organisation admins and owners can perform this action");
-  }
-  return role;
-};
-
 export const renameOrganisation = async (
   orgId: string,
   userId: string,
   name: string,
 ): Promise<OrganisationDTO> => {
-  await requireOrgAdmin(orgId, userId);
-
   const org = await organisationRepository.update(orgId, { name: name.trim() } as any);
   if (!org) {
     throw new ApiError(404, "Organisation not found");
   }
 
   const role = await organisationRepository.getMemberRole(orgId, userId);
-  return toDTO({ ...org, membership_role: role });
+  return toDTO({ ...org, membership_role: role ?? "member" });
 };
 
 export const deleteOrganisation = async (
   orgId: string,
   userId: string,
 ): Promise<void> => {
+  const org = await organisationRepository.findById(orgId);
+  if (!org) {
+    throw new ApiError(404, "Organisation not found");
+  }
+  if (org.is_personal) {
+    throw new ApiError(400, "Personal organisation cannot be deleted");
+  }
+
   const role = await organisationRepository.getMemberRole(orgId, userId);
   if (role !== "owner") {
     throw new ApiError(403, "Only the organisation owner can delete this organisation");
@@ -176,14 +185,26 @@ export const updateOrgMemberRole = async (
   targetUserId: string,
   role: "admin" | "member",
 ): Promise<void> => {
-  await requireOrgAdmin(orgId, actorUserId);
-
+  const actorRole = await organisationRepository.getMemberRole(orgId, actorUserId);
   const targetRole = await organisationRepository.getMemberRole(orgId, targetUserId);
+
   if (!targetRole) {
     throw new ApiError(404, "Member not found");
   }
   if (targetRole === "owner") {
     throw new ApiError(400, "The organisation owner role cannot be changed here");
+  }
+  if (actorUserId === targetUserId) {
+    throw new ApiError(400, "Cannot change your own role");
+  }
+
+  if (actorRole === "admin") {
+    if (targetRole === "admin") {
+      throw new ApiError(403, "Organisation admins cannot modify other admins");
+    }
+    if (role === "admin") {
+      throw new ApiError(403, "Organisation admins cannot promote members to admin");
+    }
   }
 
   await organisationRepository.updateMemberRole(orgId, targetUserId, role);
@@ -194,8 +215,7 @@ export const removeOrgMember = async (
   actorUserId: string,
   targetUserId: string,
 ): Promise<void> => {
-  await requireOrgAdmin(orgId, actorUserId);
-
+  const actorRole = await organisationRepository.getMemberRole(orgId, actorUserId);
   if (actorUserId === targetUserId) {
     throw new ApiError(400, "You cannot remove yourself from the organisation");
   }
@@ -206,6 +226,10 @@ export const removeOrgMember = async (
   }
   if (targetRole === "owner") {
     throw new ApiError(400, "The organisation owner cannot be removed");
+  }
+
+  if (actorRole === "admin" && targetRole === "admin") {
+    throw new ApiError(403, "Organisation admins cannot remove other admins");
   }
 
   await organisationRepository.removeMember(orgId, targetUserId);

@@ -5,59 +5,82 @@
 ```text
 backend/src/
 ├── config/
-│   └── index.ts                          # Added: googleClientId, googleClientSecret,
-│                                         #        googleRedirectUri, googleOAuthStateSecret,
-│                                         #        frontendUrl
+│   └── index.ts                              # Added: backendUrl (for webhook address)
 ├── controllers/
-│   └── integration.controller.ts         # NEW: OAuth connect, callback, status, disconnect
+│   └── integration.controller.ts             # Updated: handleGoogleCallback (registerWatch),
+│                                             #          disconnectGoogle (stopWatch),
+│                                             #          handleGoogleWebhook (NEW)
 ├── migrations/
-│   └── 008_google_calendar_integration.sql  # NEW: user_integrations table + google_event_id columns
+│   ├── 008_google_calendar_integration.sql   # Original: user_integrations + google_event_id
+│   └── 011_gcal_two_way_sync.sql             # NEW: watch columns, ical_uid, receipts table
 ├── repositories/
-│   ├── index.ts                          # Updated: exports integrationRepository
-│   └── integration.repository.ts        # NEW: CRUD for user_integrations table
+│   └── integration.repository.ts             # Updated: +saveWatchChannel, +findByChannelId,
+│                                             #          +saveSyncToken, +clearWatchChannel
 ├── routes/
-│   ├── integration.routes.ts             # NEW: /integrations/google/* routes
-│   └── v1.routes.ts                      # Updated: mounts /integrations
+│   └── integration.routes.ts                 # Updated: POST /google/webhook (public)
+├── scripts/
+│   └── reset-sync-at.js                      # Utility: reset debounce lock in DB
 ├── services/
-│   ├── google-calendar.service.ts        # NEW: OAuth URL, callback, sync, delete
-│   ├── task.service.ts                   # Updated: fire-and-forget sync in updateTask/deleteTask
-│   └── personal-task.service.ts         # Updated: fire-and-forget sync in updatePersonalTask/deletePersonalTask
+│   ├── gcal-watch-renewal.service.ts         # NEW: renewal cron + self-healing
+│   ├── google-calendar.service.ts            # Updated: +registerWatch, +stopWatch,
+│                                             #          +doFullSync, +doIncrementalSync,
+│                                             #          +processIncomingGoogleEvent,
+│                                             #          syncTaskToCalendar (extendedProperties,
+│                                             #          skipGoogleSync, timeout)
+│   ├── org-task.service.ts                   # Updated: sync on create/update/delete
+│   ├── personal-task.service.ts              # Updated: sync on create (was only update)
+│   └── task.service.ts                       # Updated: skipGoogleSync option
 └── types/
-    └── entities.ts                       # Updated: google_event_id on Task and PersonalTask,
-                                          #          new UserIntegration interface
+    └── entities.ts                           # Updated: UserIntegration (watch fields),
+                                              #          PersonalTask + Task (ical_uid)
 ```
+
+---
 
 ## Database Schema
 
-### `public.user_integrations`
-
-Stores one row per user per connected provider.
-
-| Column | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | `UUID` | Yes | Primary key |
-| `user_id` | `UUID` | Yes | References `public.users(id)` — cascades on delete |
-| `provider` | `TEXT` | Yes | Integration identifier, e.g. `google_calendar` |
-| `access_token` | `TEXT` | No | Short-lived access token (refreshed automatically) |
-| `refresh_token` | `TEXT` | Yes | Long-lived token used to obtain new access tokens |
-| `token_expiry` | `TIMESTAMPTZ` | No | Expiry time of the current access token |
-| `calendar_id` | `TEXT` | Yes | Google Calendar ID to sync to. Defaults to `primary` |
-| `created_at` | `TIMESTAMPTZ` | Yes | Row creation timestamp |
-| `updated_at` | `TIMESTAMPTZ` | Yes | Auto-updated on every change via trigger |
-
-Unique constraint: `(user_id, provider)` — one row per user per provider.
-
-### `public.tasks` — added column
+### `public.user_integrations` — new columns (migration 011)
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `google_event_id` | `TEXT` | Google Calendar event ID. `NULL` if not synced. |
+| `watch_status` | `gcal_watch_status` enum | Lifecycle state: `pending`, `active`, `degraded`, `revoked` |
+| `watch_channel_id` | `TEXT` | UUID identifying the push notification channel |
+| `watch_resource_id` | `TEXT` | Returned by Google on `events.watch()`. Required to stop the channel. |
+| `watch_expires_at` | `TIMESTAMPTZ` | Channel expiry (max 7-day TTL). Renewed by cron. |
+| `gcal_sync_token` | `TEXT` | Incremental sync token. Used to fetch only changed events. |
+| `last_sync_at` | `TIMESTAMPTZ` | Timestamp of last webhook-triggered sync. Used for 10-second debounce. |
+| `sync_in_progress` | `BOOLEAN` | Flag indicating an active background sync is running. |
+| `last_sync_error` | `TEXT` | Error message from the most recent failed sync. |
+| `last_successful_sync_at` | `TIMESTAMPTZ` | Timestamp of the last fully completed sync. |
 
-### `public.personal_tasks` — added column
+### `public.tasks` and `public.personal_tasks` — new column (migration 011)
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `google_event_id` | `TEXT` | Google Calendar event ID. `NULL` if not synced. |
+| `ical_uid` | `TEXT` | Google's stable iCalUID. Persists across calendar moves and ownership transfers. |
+
+### `public.gcal_webhook_receipts` — new table (migration 011)
+
+Tracks processed webhook message numbers to prevent replay attacks.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `id` | `UUID` | Primary key |
+| `channel_id` | `TEXT` | `X-Goog-Channel-ID` header value |
+| `resource_id` | `TEXT` | `X-Goog-Resource-ID` header value |
+| `message_number` | `BIGINT` | `X-Goog-Message-Number` header value |
+| `received_at` | `TIMESTAMPTZ` | When the webhook was received |
+
+Unique constraint: `(channel_id, resource_id, message_number)`
+
+### New unique constraints (migration 011)
+
+| Table | Constraint | Columns |
+| --- | --- | --- |
+| `public.personal_tasks` | `uq_personal_tasks_user_google_event` | `(owner_user_id, google_event_id)` |
+| `public.tasks` | `uq_tasks_user_google_event` | `(created_by, google_event_id)` |
+
+---
 
 ## API Endpoints
 
@@ -66,158 +89,143 @@ All endpoints are mounted under `/api/v1/integrations`.
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | `GET` | `/integrations/google/connect` | `protect` | Returns the Google OAuth consent URL |
-| `GET` | `/integrations/google/callback` | Public | Handles Google redirect, saves tokens, redirects to frontend |
+| `GET` | `/integrations/google/callback` | Public | Handles Google redirect, saves tokens, fires registerWatch |
 | `GET` | `/integrations/google/status` | `protect` | Returns connection status for the current user |
-| `DELETE` | `/integrations/google` | `protect` | Disconnects Google Calendar, removes stored tokens |
+| `DELETE` | `/integrations/google` | `protect` | Disconnects Google Calendar, stops watch channel |
+| `POST` | `/integrations/google/webhook` | **Public** | Receives Google Calendar push notifications |
 
-### `GET /integrations/google/connect`
+### `POST /integrations/google/webhook`
 
-Returns a Google OAuth URL. The frontend redirects the browser to this URL.
+Public endpoint — Google calls this when anything changes on a watched calendar.
 
-```json
-{
-  "success": true,
-  "data": {
-    "url": "https://accounts.google.com/o/oauth2/v2/auth?..."
-  }
-}
-```
+**Headers used:**
 
-### `GET /integrations/google/callback`
+| Header | Purpose |
+| --- | --- |
+| `X-Goog-Resource-State` | `sync` = verification ping; `exists` = change notification |
+| `X-Goog-Channel-ID` | Identifies which watch channel (and therefore which user) |
+| `X-Goog-Resource-ID` | Validated against stored value to prevent spoofing |
+| `X-Goog-Message-Number` | Monotonically increasing per channel; used for deduplication |
 
-Public endpoint — Google redirects here after the user approves or denies consent. Not called by the frontend directly.
+Always responds `200 OK` immediately. All processing happens asynchronously.
 
-- On success: redirects to `FRONTEND_URL/tasks?gcal=connected`
-- On error or denial: redirects to `FRONTEND_URL/tasks?gcal=error`
-
-### `GET /integrations/google/status`
-
-```json
-// Not connected
-{ "success": true, "data": { "connected": false } }
-
-// Connected
-{
-  "success": true,
-  "data": {
-    "connected": true,
-    "calendar_id": "primary",
-    "connected_at": "2026-04-30T10:00:00.000Z"
-  }
-}
-```
-
-### `DELETE /integrations/google`
-
-```json
-{ "success": true, "data": null, "message": "Google Calendar disconnected" }
-```
+---
 
 ## Service Logic
 
-### `google-calendar.service.ts`
+### `google-calendar.service.ts` — new functions
 
-The core service. All functions are exported and used by the controller and task services.
+#### `registerWatch(userId)`
 
-#### `getAuthUrl(userId)`
+Called fire-and-forget after OAuth callback. Registers a Google Calendar push notification channel.
 
-Generates the Google OAuth consent URL. The `state` parameter is a base64-encoded JSON payload `{ userId, ts }` signed with HMAC-SHA256 using `GOOGLE_OAUTH_STATE_SECRET`.
+1. Acquires a PostgreSQL advisory lock (`pg_try_advisory_lock`) to prevent concurrent registrations
+2. Stops any existing watch channel
+3. Calls `calendar.events.watch()` with the `BACKEND_URL/api/v1/integrations/google/webhook` address
+4. Runs `doFullSync()` to get the initial `syncToken`
+5. Atomically saves channel metadata and sets `watch_status = 'active'`
+6. On failure: sets `watch_status = 'degraded'`, logs error, does NOT throw
 
-OAuth parameters:
-- `access_type: 'offline'` — requests a refresh token
-- `prompt: 'consent'` — forces Google to always return a refresh token (even on re-connect)
-- `scope: ['https://www.googleapis.com/auth/calendar.events']`
+#### `stopWatch(userId)`
 
-#### `handleCallback(code, state)`
+Called when a user disconnects Google Calendar. Stops the active watch channel and clears all channel metadata from the DB.
 
-1. Verifies the HMAC signature on the state parameter
-2. Decodes `userId` from the state payload
-3. Exchanges the auth code for tokens via `oauth2Client.getToken(code)`
-4. Upserts the tokens into `user_integrations`
+#### `doFullSync(userId, calendarId, authClient)`
 
-Throws if the state is invalid or Google does not return a refresh token.
+Fetches all events in the 30-day window (`today → today + 30 days`) using `singleEvents: true`. Follows pagination. Calls `processIncomingGoogleEvent()` for each event. Returns the `nextSyncToken`.
 
-#### `getAuthorizedClient(userId)`
+#### `doIncrementalSync(userId)`
 
-1. Loads the `user_integrations` row for the user
-2. Returns `null` if not found (user not connected)
-3. Checks if the access token expires within 5 minutes
-4. If so, calls `oauth2Client.refreshAccessToken()` and saves the new token to the DB
-5. Returns the configured `OAuth2Client`
+Called from the webhook handler via `process.nextTick`. Fetches only changed events using the stored `syncToken`.
 
-Returns `null` (silent skip) if token refresh fails — this happens when the user revokes access in their Google account settings.
+- `410 Gone`: clears token and runs `doFullSync()` to recover
+- `401/403`: sets `watch_status = 'revoked'`, clears watch fields
+- Uses PostgreSQL advisory lock to prevent concurrent runs
 
-#### `syncTaskToCalendar(userId, task)`
+#### `processIncomingGoogleEvent(userId, event)`
 
-The main sync function. Must always be called fire-and-forget:
+Applies a single incoming Google Calendar event to the KeilHQ task store.
 
-```ts
-syncTaskToCalendar(userId, { ...task, source: 'tasks' })
-  .catch(err => console.error('[gcal] sync failed:', err.message));
-```
-
-`SyncableTask` interface:
-
-```ts
-interface SyncableTask {
-  id: string;
-  title: string;
-  description?: string | null;
-  start_date?: Date | null;
-  due_date?: Date | null;
-  is_all_day?: boolean;
-  location?: string | null;
-  status?: string | null;
-  google_event_id?: string | null;
-  source: 'tasks' | 'personal_tasks';
-}
-```
-
-Event body mapping:
-
-| Task field | Google Calendar field |
+| Condition | Action |
 | --- | --- |
-| `title` | `summary` |
-| `description` | `description` |
-| `start_date` | `start.dateTime` (or `start.date` if `is_all_day`) |
-| `due_date` | `end.dateTime` (or `end.date` if `is_all_day`). Falls back to `start_date + 1 hour` if null. |
-| `location` | `location` |
-| `status` | `status` — mapped to `confirmed` / `tentative` / `cancelled` |
+| `extendedProperties.private.source = 'keilhq'` | Skip (loop prevention) |
+| Start date in the past | Skip |
+| Start date > today + 30 days | Skip |
+| `status = 'cancelled'` + matching task | Soft-delete the task |
+| No matching task + future date | Create org task in user's General space (`status: todo`, `priority: medium`) |
+| Matching task + Google is newer by >5s | Update task title/dates (`skipGoogleSync: true`) |
+| Matching task + values identical | Skip (no-op) |
 
-#### `deleteCalendarEvent(userId, googleEventId)`
+After any DB mutation, emits `gcal_tasks_updated` via Socket.io to trigger frontend refresh.
 
-Deletes a Google Calendar event. Silently ignores `404` and `410` responses (event already deleted in Google).
+#### `syncTaskToCalendar(userId, task, options?)`
 
-### Integration into task services
+Updated with two new behaviors:
 
-Both `task.service.ts` and `personal-task.service.ts` call `syncTaskToCalendar` after a successful DB update, and `deleteCalendarEvent` before a soft delete.
+1. **`options.skipGoogleSync = true`**: Returns immediately without any API call. Used by `processIncomingGoogleEvent` to prevent echo loops.
+2. **`extendedProperties` tagging**: Every event body now includes `extendedProperties.private.source = 'keilhq'` and `taskId`. This is the primary loop-prevention mechanism.
 
-```ts
-// In updateTask — after transaction completes
-syncTaskToCalendar(userId, {
-  ...updatedTask,
-  start_date: updatedTask.start_date ? new Date(updatedTask.start_date) : null,
-  due_date: updatedTask.due_date ? new Date(updatedTask.due_date) : null,
-  source: 'tasks',
-}).catch(err => console.error('[gcal] workspace task sync failed:', err.message));
+---
 
-// In deleteTask — before soft delete
-if (task.google_event_id) {
-  deleteCalendarEvent(userId, task.google_event_id)
-    .catch(err => console.error('[gcal] delete event failed:', err.message));
-}
-```
+### `gcal-watch-renewal.service.ts` — new file
 
-## Integration Repository
+Two functions called every 12 hours from `index.ts`:
 
-`integration.repository.ts` provides four methods:
+#### `renewExpiringWatchChannels()`
+
+Queries for active channels expiring within `18–30 hours` (randomised jitter to prevent thundering herd). Calls `registerWatch()` for each.
+
+#### `healDegradedWatchChannels()`
+
+Queries for users with `watch_status = 'degraded'`. Attempts `registerWatch()` for each, providing self-healing without user intervention.
+
+---
+
+### `org-task.service.ts` — updated
+
+Google Calendar sync is now wired to all three mutation operations:
+
+| Operation | Sync action |
+| --- | --- |
+| `createTask` | `syncTaskToCalendar()` fire-and-forget (if `start_date` is set) |
+| `updateTask` | `syncTaskToCalendar()` fire-and-forget (unless `skipGoogleSync: true`) |
+| `deleteTask` | `deleteCalendarEvent()` fire-and-forget (if `google_event_id` is set) |
+
+Previously, org tasks were never synced to Google Calendar. This was a pre-existing gap.
+
+---
+
+### `personal-task.service.ts` — updated
+
+`createPersonalTask` now calls `syncTaskToCalendar()` fire-and-forget when `start_date` is set. Previously, personal tasks only synced on update.
+
+---
+
+## Integration Repository — new methods
 
 | Method | Description |
 | --- | --- |
-| `findByUserAndProvider(userId, provider)` | Load the integration row. Returns `null` if not connected. |
-| `upsert(userId, provider, data)` | Insert or update tokens. Uses `ON CONFLICT DO UPDATE`. |
-| `updateTokens(userId, provider, accessToken, expiry)` | Update only the access token after a refresh. |
-| `delete(userId, provider)` | Remove the integration row (disconnect). |
+| `saveWatchChannel(userId, provider, data)` | Persist watch channel metadata + set `watch_status = 'active'` |
+| `findByChannelId(channelId)` | Look up integration by channel ID (called on every webhook) |
+| `saveSyncToken(userId, provider, syncToken)` | Persist or clear the incremental sync token |
+| `clearWatchChannel(userId, provider)` | Reset all watch fields to null/pending (on disconnect or revocation) |
+
+---
+
+## Cron Jobs
+
+### Watch channel renewal (every 12 hours)
+
+Wired in `backend/src/index.ts` via `setInterval`:
+
+```ts
+setInterval(async () => {
+  await renewExpiringWatchChannels();
+  await healDegradedWatchChannels();
+}, 12 * 60 * 60 * 1000);
+```
+
+---
 
 ## Error Handling
 
@@ -225,8 +233,12 @@ if (task.google_event_id) {
 | --- | --- |
 | User not connected | `getAuthorizedClient` returns `null` — sync silently skipped |
 | Token refresh fails (revoked) | `getAuthorizedClient` returns `null` — sync silently skipped |
-| Google event not found (404/410) | `google_event_id` cleared on task row — next sync creates a fresh event |
-| Any other Google API error | Caught by `.catch()` at call site — logged, task update unaffected |
-| Invalid OAuth state | `handleCallback` throws — callback redirects to `?gcal=error` |
-| Missing refresh token from Google | `handleCallback` throws — callback redirects to `?gcal=error` |
-| Google Calendar API not configured | `getGoogleConnectUrl` returns `500` with descriptive message |
+| Watch registration fails | `watch_status = 'degraded'` — recovery cron retries every 12 hours |
+| `syncToken` expired (410) | Clear token + run `doFullSync()` to recover |
+| OAuth revoked (401/403) | `watch_status = 'revoked'` — user must reconnect |
+| Duplicate webhook (23505) | Silently discarded via `gcal_webhook_receipts` unique constraint |
+| Webhook debounced | Delayed sync scheduled 12 seconds later — no change is lost |
+| Concurrent sync | PostgreSQL advisory lock prevents duplicate runs |
+| Duplicate task creation (23505) | Treated as idempotent success — logged and ignored |
+| Google event not found (404/410) | `google_event_id` cleared — next sync creates a fresh event |
+| Any other Google API error | Caught by `.catch()` — logged, task update unaffected |

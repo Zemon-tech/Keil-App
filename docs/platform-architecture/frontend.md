@@ -5,178 +5,183 @@
 ```text
 frontend/src/
 ├── contexts/
-│   ├── AppContext.tsx               # Global mode/org/space state (single source of truth)
+│   ├── AppContext.tsx               # Global activeOrg/activeSpace state (single source of truth)
 │   └── AuthContext.tsx              # Supabase session
 ├── hooks/api/
-│   ├── useOrganisations.ts          # useOrganisations, useOrgMembers,
-│   │                                #   useCreateOrganisation, useCreateOrgInvite,
-│   │                                #   useJoinOrganisation
-│   ├── useSpaces.ts                 # useSpaces, useSpaceMembers, useDeletedSpaces,
-│   │                                #   useCreateSpace, useRenameSpace, useDeleteSpace,
-│   │                                #   useRestoreSpace, useHardDeleteSpace,
-│   │                                #   useAddSpaceMember, useRemoveSpaceMember
-│   ├── usePersonalTasks.ts          # Full CRUD for personal tasks
-│   ├── useTasks.ts                  # Org task CRUD (legacy /v1/tasks route)
-│   ├── useChat.ts                   # Chat hooks — all accept (orgId, spaceId) params
-│   ├── useDashboard.ts              # useDashboard (personal), useOrgDashboard (org)
-│   └── useActivity.ts              # Activity feed hooks
+│   ├── useOrganisations.ts          # useOrganisations, useOrgMembers, create, join
+│   ├── useSpaces.ts                 # useSpaces, space mutations, member add/remove
+│   ├── useMyTasks.ts                # hook querying backend cross-org /my-tasks endpoint
+│   ├── useTasks.ts                  # Standard organisation task CRUD
+│   ├── useChat.ts                   # Chat hooks (scoped to orgId, spaceId)
+│   ├── useDashboard.ts              # useOrgDashboard (scoped to orgId, spaceId)
+│   └── useActivity.ts               # Activity feed hooks
 ├── components/
-│   ├── AppSidebar.tsx               # Org list with lazy space sub-menus, mode switching
-│   ├── org/
-│   │   ├── CreateOrganisationDialog.tsx
-│   │   └── JoinOrganisationDialog.tsx
+│   ├── AppSidebar.tsx               # Pins personal org, displays aggregate My Tasks nav, lazy spaces list
 │   ├── settings/
-│   │   └── SpacesTab.tsx            # Settings → Spaces tab (space list + detail panel)
+│   │   └── SpacesTab.tsx            # Settings → Spaces tab (gated details for Private space)
 │   ├── workspace/
-│   │   └── InvitePage.tsx           # /invite/:token — joins org via token
-│   ├── TasksPage.tsx                # Mode-aware task orchestrator
-│   ├── Dashboard.tsx                # Mode-aware dashboard
-│   ├── ChatDialog.tsx               # Full-screen chat dialog (org mode only)
-│   ├── ChatPage.tsx                 # /chat route
-│   ├── SettingsDialog.tsx           # Account + Organisation + Spaces settings
-│   └── chat/
-│       ├── ChannelList.tsx          # Accepts (orgId, spaceId) props
-│       ├── MessageView.tsx          # Accepts (orgId, spaceId) props
-│       ├── NewChatDialog.tsx        # Uses useSpaceMembers for DM/group creation
-│       └── GroupSettingsDialog.tsx  # Uses useSpaceMembers for member management
+│   │   └── InvitePage.tsx           # /invite/:token — joins org and navigates to default space
+│   ├── TasksPage.tsx                # Unified task dashboard
+│   ├── MyTasksPage.tsx              # Unified read-only aggregate cross-org dashboard
+│   ├── Dashboard.tsx                # Context-aware dashboard
+│   └── SettingsDialog.tsx           # General Org + Space settings (gated for system-managed rows)
 └── types/
     └── task.ts                      # Canonical types (TaskStatus, TaskPriority, etc.)
 ```
 
 ## Core Concept: `AppContext`
 
-`AppContext` is the single source of truth for the user's active context. `WorkspaceContext` has been fully removed.
+`AppContext` is the single source of truth for the user's active context. It coordinates active organisation and active space contexts with 100% type safety. Legacy "modes" and separate frontend-only states have been fully removed.
 
 ```ts
 const {
-  mode,                  // "personal" | "organisation"
   activeOrgId,           // string | null
   activeSpaceId,         // string | null
   organisations,         // Organisation[]
   spaces,                // Space[] for active org
   activeOrg,             // Organisation | null
   activeSpace,           // Space | null
-  setPersonalMode,       // () => void
-  setOrganisationMode,   // () => void  (switches mode without selecting an org)
+  isPersonalOrg,         // boolean (derived dynamically from activeOrg?.is_personal)
   setActiveOrganisation, // (orgId, spaceId?) => void
   setActiveSpace,        // (spaceId) => void
 } = useAppContext();
 ```
 
-**Rules:**
-- Personal mode: never call org-scoped APIs. `activeOrgId` and `activeSpaceId` are `null`.
-- Organisation mode: org/space queries are only enabled when both `activeOrgId` and `activeSpaceId` are set.
-- Switching org clears `activeSpaceId`; the auto-select effect picks the first available space.
-- On first load, the legacy `keil_active_workspace` localStorage key is removed automatically.
+**Auto-Select & Fallback Rules**:
+- On initial page load (or if no active workspace is selected), the application scans the user's organisation list, finds their Personal Organisation (`is_personal: true`), and automatically sets it as the active context.
+- If a user is removed from their active organisation, the context switcher automatically shifts focus back to the Personal Organisation fallback cleanly.
+- Legacy `keil_app_mode` and `keil_active_workspace` local storage keys are cleaned up automatically on first load.
 
-**Persistence keys:**
+**Persistence keys**:
 
 | Key | Value |
 | :--- | :--- |
-| `keil_app_mode` | `"personal"` \| `"organisation"` |
-| `keil_active_org` | org UUID |
-| `keil_active_space` | space UUID |
+| `keil_active_org` | active organisation UUID |
+| `keil_active_space` | active space UUID |
 
-## Sidebar: Org List with Space Sub-Menus
+## Sidebar: Personal Organisation & Aggregate "My Tasks"
 
-The profile icon dropdown in `AppSidebar` lists organisations from `AppContext`. Each org row is a `DropdownMenuSub` — hovering/clicking it reveals that org's spaces. Spaces are fetched lazily (only when the sub-menu opens) via a dedicated `OrgSpaceSubmenu` sub-component that calls `useSpaces(org.id)`.
+`AppSidebar` leverages standard styling to render the navigation:
+- **Personal Organisation Row**: Displays at the top of the sidebar org list with a custom `User` icon avatar and a subtle `(Personal)` label badge to visually separate it from shared workspaces.
+- **My Tasks aggregate navigation link**: Permanently pinned inside the main navigation sidebar (URL `/my-tasks`). Also rendered at the top of the Personal Organisation space list, above a divider.
+- **Private Space Visibility**: The system-managed `Private` space is strictly hidden inside the organisation spaces submenu for non-owners.
 
-Selecting a space calls `setActiveOrganisation(orgId, spaceId)`.
+## Aggregate View: My Tasks
 
-## Chat Hooks
+The `MyTasksPage` (`frontend/src/components/MyTasksPage.tsx`) provides a premium, unified flat list of all active tasks assigned to the user:
+- **Premium Interface**: Integrates HSL-colored glassmorphic statistics widgets (Total Assigned, Overdue, In Progress, High/Urgent) and inline filter controls.
+- **Due Date Indicator**: Pulsates with overdue warnings (e.g. "Overdue by X days") in custom rose/amber warning alerts.
+- **Touchpad Scrolling**: Wraps elements inside an `overflow-y-auto custom-scrollbar-page pb-20` scrolling block with standard page boundaries (`h-dvh overflow-hidden`), enabling native touchpad swipe gestures and styling scrollbars cleanly.
+- **Cross-Context Navigation**: Every task row exposes an "Open in Space →" link. Clicking it updates `AppContext` to switch to that task's `org_id` and `space_id` and navigates the user directly to the interactive task detail pane at `/tasks/:taskId`.
 
-All chat hooks accept `orgId` and `spaceId` as explicit parameters. The component reads them from `useAppContext()` and passes them in. This keeps hooks free of context dependencies.
+## Settings & Space Management Guards
 
-```ts
-// In ChatDialog.tsx
-const { activeOrgId, activeSpaceId } = useAppContext();
-const { data: channels } = useChatChannels(activeOrgId, activeSpaceId);
-const readChannel = useReadChannel(activeOrgId, activeSpaceId);
-useChatSocketListeners(activeChannelId, activeOrgId, activeSpaceId);
-```
+To prevent users from accidentally deleting or corrupting system-managed structures, custom UI guards are integrated:
 
-Chat query keys include `[orgId, spaceId]`, so switching spaces automatically invalidates the previous space's channel list.
+### 1. Organisation Settings (`SettingsDialog.tsx`)
+In `OrgGeneralTab`, the **Delete Organisation** container is hidden completely if `selectedOrg?.is_personal` is true. On standard organisation deletion, success routing finds the personal organisation and redirects to it contextually.
 
-## Assignee Pickers
+### 2. Spaces Settings (`SpacesTab.tsx` and `SettingsDialog.tsx`)
+When viewing settings for a system-managed `Private` space (`space.is_private` is true):
+- **Add Member** triggers and inputs are hidden.
+- **Danger Zone** (Delete/Archive Space) sections are completely hidden.
+- Role editing and member removal options are disabled in the members pane.
 
-All assignee pickers (in `OverviewTab`, `ActivityTab`, `EventOverviewTab`, `TasksPage`) use `useSpaceMembers(activeOrgId, activeSpaceId)`. The `SpaceMember` shape is:
+## API Integration & Usage Examples
 
-```ts
-interface SpaceMember {
-  user_id: string;
-  role: "owner" | "admin" | "member";
-  name: string | null;
-  email: string;
+The frontend manages data queries and mutations using TanStack Query. Cache invalidations occur automatically on successful updates.
+
+### 1. Unified Workspace Context
+Using `useAppContext` allows any component to retrieve the current tenancy state, active IDs, and derived personal flags.
+
+```tsx
+import { useAppContext } from "@/contexts/AppContext";
+
+export function ActiveIndicator() {
+  const { isPersonalOrg, activeOrg, activeSpace } = useAppContext();
+
+  return (
+    <div>
+      <p>Organisation: {activeOrg?.name} {isPersonalOrg && "(Personal)"}</p>
+      <p>Active Space: {activeSpace?.name}</p>
+    </div>
+  );
 }
 ```
 
-Pickers are hidden entirely in personal mode — not just empty.
+### 2. Fetching Aggregate "My Tasks"
+To populate a cross-org aggregate checklist (like the premium `MyTasksPage` dashboard), consume the `useMyTasks` hook:
 
-## Personal Task Status Serialisation
-
-The personal task backend stores status with underscores (`in_progress`). The frontend canonical type uses hyphens (`in-progress`). `usePersonalTasks.ts` handles conversion at the HTTP boundary:
-
-- `toApiStatus("in-progress")` → `"in_progress"` (sent to backend)
-- `fromApiStatus("in_progress")` → `"in-progress"` (received from backend)
-
-No UI component ever sees the underscore format.
-
-## Space Management Hooks (`useSpaces.ts`)
-
-All space mutation hooks follow the same pattern: accept `orgId` (and `spaceId` where needed) as parameters, invalidate the relevant cache keys on success.
-
-| Hook | Cache invalidated | Notes |
-| :--- | :--- | :--- |
-| `useCreateSpace(orgId)` | `spaceKeys.list(orgId)` | Owner/admin only |
-| `useRenameSpace(orgId)` | `spaceKeys.list(orgId)` | **Optimistic update** — cache updated instantly, rolled back on error |
-| `useDeleteSpace(orgId)` | `list` + `deleted` | Soft-delete. Caller handles active-space fallback in `onSuccess` |
-| `useRestoreSpace(orgId)` | `list` + `deleted` | Restores space row only; tasks remain soft-deleted |
-| `useHardDeleteSpace(orgId)` | `spaceKeys.deleted(orgId)` | Space must already be soft-deleted |
-| `useDeletedSpaces(orgId)` | — (query) | Only returns data for org owner/admin |
-| `useAddSpaceMember(orgId, spaceId)` | `spaceKeys.members(orgId, spaceId)` | Target must be an org member |
-| `useRemoveSpaceMember(orgId, spaceId)` | `spaceKeys.members(orgId, spaceId)` | Cannot remove self |
-
-**Active-space fallback pattern** (used in `SpacesTab`):
 ```tsx
-const del = useDeleteSpace(orgId);
-del.mutate(spaceId, {
-  onSuccess: () => {
-    if (activeSpaceId === spaceId) setActiveOrganisation(orgId); // auto-selects first remaining space
-  },
-});
+import { useMyTasks } from "@/hooks/api/useMyTasks";
+
+export function ActiveTasksList() {
+  // Query all active tasks across all organisations and spaces assigned to the user
+  const { data: tasks = [], isLoading } = useMyTasks({
+    status: "in-progress",
+    priority: "high"
+  });
+
+  if (isLoading) return <div>Loading assigned tasks...</div>;
+
+  return (
+    <ul>
+      {tasks.map(task => (
+        <li key={task.id}>
+          {task.title} - <em>{task.space_name} ({task.org_name})</em>
+        </li>
+      ))}
+    </ul>
+  );
+}
 ```
 
-## Settings → Spaces Tab
+### 3. Join Organisation Flow
+Standard collaborative or shared workspaces can be joined via signed JWT tokens. When joining succeeds, the application shifts the global workspace context to the new organisation and landing space.
 
-`SpacesTab` (`frontend/src/components/settings/SpacesTab.tsx`) is a two-column layout inside Settings:
-
-- **Left panel**: list of all active spaces + a "Deleted" section (org owner/admin only). Clicking a space opens the detail panel.
-- **Right panel**: inline rename (optimistic), members list with remove buttons, add-member popover (shows org members not already in the space), danger zone with soft-delete button (disabled when last space).
-- Deleted space detail: Restore and Delete Forever buttons with separate confirmation dialogs.
-- Non-admin users see a read-only view — no rename, no add/remove, no delete.
-
-**Check current mode before rendering org-only UI:**
 ```tsx
-const { mode, activeOrgId, activeSpaceId } = useAppContext();
-if (mode !== "organisation" || !activeOrgId || !activeSpaceId) return null;
+import { useJoinOrganisation } from "@/hooks/api/useOrganisations";
+import { useAppContext } from "@/contexts/AppContext";
+
+export function JoinWorkspace({ token }: { token: string }) {
+  const join = useJoinOrganisation();
+  const { setActiveOrganisation } = useAppContext();
+
+  const handleJoin = () => {
+    join.mutate(token, {
+      onSuccess: ({ orgId, spaceId }) => {
+        // Switches workspace active context & navigates to space
+        setActiveOrganisation(orgId, spaceId);
+      }
+    });
+  };
+
+  return <button onClick={handleJoin}>Join Workspace</button>;
+}
 ```
 
-**Create an organisation and switch to it:**
+### 4. Custom Space Management
+Spaces within an organisation support full soft-deletion and restoration, backed by strict client-side guards that prevent modifications to system-managed `Private` spaces.
+
 ```tsx
-const create = useCreateOrganisation();
-const { setActiveOrganisation } = useAppContext();
+import { useDeleteSpace } from "@/hooks/api/useSpaces";
+import { useAppContext } from "@/contexts/AppContext";
 
-create.mutate("Acme Corp", {
-  onSuccess: ({ org, space }) => setActiveOrganisation(org.id, space.id),
-});
-```
+export function SpaceDangerZone({ spaceId }: { spaceId: string }) {
+  const { activeOrgId, activeSpaceId, setActiveOrganisation } = useAppContext();
+  const deleteSpace = useDeleteSpace(activeOrgId);
 
-**Join via invite token:**
-```tsx
-const join = useJoinOrganisation();
-const { setActiveOrganisation } = useAppContext();
+  const handleDelete = () => {
+    deleteSpace.mutate(spaceId, {
+      onSuccess: () => {
+        // Fallback: If deleting the currently active space, auto-select the next available space
+        if (activeSpaceId === spaceId && activeOrgId) {
+          setActiveOrganisation(activeOrgId);
+        }
+      }
+    });
+  };
 
-join.mutate(token, {
-  onSuccess: ({ orgId, spaceId }) => setActiveOrganisation(orgId, spaceId),
-});
+  return <button onClick={handleDelete}>Delete Space</button>;
+}
 ```

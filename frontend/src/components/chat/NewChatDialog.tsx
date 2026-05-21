@@ -35,7 +35,7 @@ export function NewChatDialog({ orgId, spaceId }: NewChatDialogProps) {
   const [groupName, setGroupName] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const myId = (me as any)?.id ?? (me as any)?.user?.id;
+  const myId = me?.id;
 
   const filteredMembers = members.filter((member) => {
     if (member.user_id === myId) return false;

@@ -91,7 +91,7 @@ export const chatService = {
                     FROM messages m
                     JOIN channel_members cm_me ON m.channel_id = cm_me.channel_id AND cm_me.user_id = $1
                     WHERE m.channel_id = c.id
-                    AND m.created_at > cm_me.last_read_at
+                    AND (cm_me.last_read_at IS NULL OR m.created_at > cm_me.last_read_at)
                 ) AS unread_count,
                 COALESCE(
                     json_agg(
@@ -108,7 +108,7 @@ export const chatService = {
             ORDER BY c.last_message_at DESC NULLS LAST
         `, [userId, workspaceId]);
 
-        return result.rows.map(row => ({
+        return result.rows.map((row: any) => ({
             id: row.id,
             type: row.type,
             name: row.name,
@@ -169,18 +169,18 @@ export const chatService = {
         `;
 
         if (beforeId) {
-            query += ` AND m.created_at < (SELECT created_at FROM messages WHERE id = $2)`;
+            query += ` AND (m.created_at, m.id) < ((SELECT created_at FROM messages WHERE id = $2), $2)`;
             params.push(beforeId);
             params.push(limit);
-            query += ` ORDER BY m.created_at DESC LIMIT $3`;
+            query += ` ORDER BY m.created_at DESC, m.id DESC LIMIT $3`;
         } else {
             params.push(limit);
-            query += ` ORDER BY m.created_at DESC LIMIT $2`;
+            query += ` ORDER BY m.created_at DESC, m.id DESC LIMIT $2`;
         }
 
         const result = await pool.query(query, params);
         // Reverse to return oldest-first (chronological order for the UI)
-        return result.rows.reverse().map(row => ({
+        return result.rows.reverse().map((row: any) => ({
             ...row,
             created_at: toISO(row.created_at)
         }));
@@ -227,7 +227,7 @@ export const chatService = {
             'SELECT user_id FROM channel_members WHERE channel_id = $1',
             [channelId]
         );
-        return res.rows.map(r => r.user_id);
+        return res.rows.map((r: any) => r.user_id);
     },
 
     async addMembers(channelId: string, memberIds: string[]): Promise<void> {

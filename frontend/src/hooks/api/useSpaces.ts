@@ -11,9 +11,10 @@ export interface Space {
   created_by: string | null;
   created_at: string;
   /** The current user's role inside this space. */
-  role: "owner" | "admin" | "member";
+  role: "admin" | "manager" | "member";
   /** Compatibility: the legacy workspace_id for this space. Used by legacy chat/task hooks during transition. */
   compatibility_workspace_id: string | null;
+  is_private: boolean;
 }
 
 export interface DeletedSpace {
@@ -28,7 +29,7 @@ export interface DeletedSpace {
 
 export interface SpaceMember {
   user_id: string;
-  role: "owner" | "admin" | "member";
+  role: "admin" | "manager" | "member";
   name: string | null;
   email: string;
 }
@@ -319,6 +320,40 @@ export function useRemoveSpaceMember(orgId: string | null, spaceId: string | nul
       if (orgId && spaceId) {
         queryClient.invalidateQueries({
           queryKey: spaceKeys.members(orgId, spaceId),
+        });
+      }
+    },
+  });
+}
+
+// ─── useUpdateSpaceMemberRole ──────────────────────────────────────────────────
+
+/**
+ * Updates a member's role inside a space.
+ * Calls: PATCH /api/v1/orgs/:orgId/spaces/:spaceId/members/:userId
+ * Space admin only. Cannot demote/promote yourself.
+ */
+export function useUpdateSpaceMemberRole(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    Error,
+    { userId: string; role: "admin" | "manager" | "member" }
+  >({
+    mutationFn: async ({ userId, role }) => {
+      await api.patch(
+        `v1/orgs/${orgId}/spaces/${spaceId}/members/${userId}`,
+        { role }
+      );
+    },
+    onSuccess: () => {
+      if (orgId && spaceId) {
+        queryClient.invalidateQueries({
+          queryKey: spaceKeys.members(orgId, spaceId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: spaceKeys.list(orgId),
         });
       }
     },

@@ -56,10 +56,13 @@ export function EventDetailPane({
   }, [event?.id]);
 
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const { data: freshEvent } = useOrgTask(activeOrgId, activeSpaceId, event?.id ?? "");
+  const eventOrgId = event?.org_id ?? activeOrgId;
+  const eventSpaceId = event?.space_id ?? activeSpaceId;
 
-  const updateTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const deleteTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
+  const { data: freshEvent } = useOrgTask(eventOrgId, eventSpaceId, event?.id ?? "");
+
+  const updateTask = useUpdateOrgTask(eventOrgId, eventSpaceId);
+  const deleteTask = useDeleteOrgTask(eventOrgId, eventSpaceId);
 
   const displayEvent = freshEvent ?? event;
 
@@ -135,6 +138,8 @@ export function EventDetailPane({
         initialValues={eventToRender}
         onTaskCreated={() => {}}
         onTaskUpdated={() => setEditDialogOpen(false)}
+        orgId={eventOrgId ?? undefined}
+        spaceId={eventSpaceId ?? undefined}
       />
 
       <Tabs

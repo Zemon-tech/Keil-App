@@ -13,11 +13,18 @@ let socket: Socket | null = null;
  * Safe to call multiple times — if already connected, returns the same socket.
  */
 export function connectSocket(token: string): Socket {
-  // Guard: don't create a second socket if one already exists
-  if (socket?.connected) return socket;
+  // If already instantiated, update the auth token for subsequent connection attempts.
+  // AuthContext calls this on every session event/refresh, keeping the socket credential fresh.
+  if (socket) {
+    socket.auth = { token };
+    if (!socket.connected) {
+      socket.connect();
+    }
+    return socket;
+  }
 
   socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5001", {
-    auth: { token }, // Server reads this to verify the user
+    auth: { token }, // Server reads this in the auth middleware
   });
 
   return socket;

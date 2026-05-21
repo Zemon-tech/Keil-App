@@ -6,6 +6,12 @@ const toISO = (value: Date | string | null | undefined): string | null => {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 };
 
+export interface ChatMemberDTO {
+  id: string;
+  name: string | null;
+  role: "admin" | "member";
+}
+
 export interface ChatChannelDTO {
   id: string;
   org_id: string | null;
@@ -14,7 +20,7 @@ export interface ChatChannelDTO {
   name: string | null;
   unread_count: number;
   last_message_at: string | null;
-  members: Array<{ id: string; name: string | null }>;
+  members: ChatMemberDTO[];
 }
 
 export const findDirectChannel = async (
@@ -43,7 +49,7 @@ export const findDirectChannel = async (
 };
 
 export const createChannel = async (
-  workspaceId: string,
+  workspaceId: string | null,
   orgId: string,
   spaceId: string,
   type: "direct" | "group",
@@ -128,7 +134,7 @@ export const getUserChannels = async (
         ) AS unread_count,
         COALESCE(
           json_agg(
-            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email))
+            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
           ) FILTER (WHERE u.id IS NOT NULL),
           '[]'
         ) AS members
@@ -173,7 +179,7 @@ export const getChannelById = async (channelId: string, userId: string): Promise
         0 AS unread_count,
         COALESCE(
           json_agg(
-            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email))
+            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
           ) FILTER (WHERE u.id IS NOT NULL),
           '[]'
         ) AS members
@@ -218,7 +224,7 @@ export const getChannelMessages = async (channelId: string, limit = 50, beforeId
   `;
 
   if (beforeId) {
-    query += ` AND m.created_at < (SELECT created_at FROM public.messages WHERE id = $2)`;
+    query += ` AND (m.created_at, m.id) < ((SELECT created_at FROM public.messages WHERE id = $2), $2)`;
     params.push(beforeId, limit);
     query += ` ORDER BY m.created_at DESC LIMIT $3`;
   } else {
@@ -337,4 +343,11 @@ export const getChannelMemberIds = async (channelId: string): Promise<string[]> 
     [channelId],
   );
   return result.rows.map((row) => row.user_id as string);
+};
+
+export const deleteChannel = async (channelId: string): Promise<void> => {
+  await pool.query(
+    `DELETE FROM public.channels WHERE id = $1`,
+    [channelId],
+  );
 };

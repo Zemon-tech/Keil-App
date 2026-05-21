@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { useJoinOrganisation } from "@/hooks/api/useOrganisations";
 import { useAppContext } from "@/contexts/AppContext";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface JoinOrganisationDialogProps {
   open: boolean;
@@ -25,6 +26,8 @@ export function JoinOrganisationDialog({
   const [token, setToken] = useState("");
   const joinOrg = useJoinOrganisation();
   const { setActiveOrganisation } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const handleJoin = () => {
     const trimmed = token.trim();
@@ -34,6 +37,12 @@ export function JoinOrganisationDialog({
       onSuccess: ({ orgId, spaceId }) => {
         // Switch the app to the joined org + its default space
         setActiveOrganisation(orgId, spaceId);
+
+        // If on a detail page, reset to the new workspace's tasks list
+        if (/^\/(tasks|events)\/[^\/]+/.test(location.pathname)) {
+          navigate("/tasks");
+        }
+
         onOpenChange(false);
         setToken("");
       },

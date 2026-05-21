@@ -18,6 +18,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverClose,
 } from "@/components/ui/popover";
 import {
   DropdownMenu,
@@ -42,6 +43,8 @@ import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hoo
 import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, STATUS_COLOR } from "./task-detail-shared";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
+import { useSpaces } from "@/hooks/api/useSpaces";
 
 type Props = {
   query: string;
@@ -60,7 +63,7 @@ type Props = {
   createDialogOpen: boolean;
   onCreateDialogOpenChange: (open: boolean) => void;
   /** Called with the new task's id after a successful create */
-  onTaskCreated: (newTaskId: string) => void;
+  onTaskCreated: (newTaskId: string, taskType: "task" | "event") => void;
   onUpdateTask?: (id: string, updates: Partial<Task>) => void;
   onDeleteTask?: (id: string) => void;
   onAssignUser?: (taskId: string, userId: string) => void;
@@ -72,8 +75,10 @@ type Props = {
   isLoadingMore?: boolean;
   /** Workspace members for bulk assign */
   workspaceMembers?: Array<{ id: string; name: string | null; email: string }>;
-  /** When true, CreateTaskDialog uses personal task endpoints */
-  isPersonalMode?: boolean;
+  orgFilter?: string;
+  onOrgFilterChange?: (value: string) => void;
+  spaceFilter?: string;
+  onSpaceFilterChange?: (value: string) => void;
 };
 
 function formatTaskDateRange(start?: string, end?: string) {
@@ -169,17 +174,18 @@ function SubtaskList({
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
                   {((sub as any).type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
-                    <button
-                      key={s}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpdateTask?.(sub.id, { status: s });
-                      }}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
-                    >
-                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
-                      {s}
-                    </button>
+                    <PopoverClose asChild key={s}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateTask?.(sub.id, { status: s });
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                      >
+                        <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
+                        {s}
+                      </button>
+                    </PopoverClose>
                   ))}
                 </PopoverContent>
               </Popover>
@@ -213,6 +219,29 @@ function SubtaskList({
   );
 }
 
+type SpaceRole = "admin" | "manager" | "member";
+const SPACE_RANK: Record<SpaceRole, number> = { admin: 3, manager: 2, member: 1 };
+
+function getTaskPermissions(
+  task: { org_id?: string; space_id?: string; user_space_role?: string },
+  activeOrgId: string | null,
+  activeSpaceId: string | null,
+  activeSpaceRole: string | null
+) {
+  const spaceRole = (
+    task.org_id === activeOrgId && task.space_id === activeSpaceId
+      ? (activeSpaceRole ?? "member")
+      : (task.user_space_role ?? "member")
+  ) as SpaceRole;
+
+  const spaceRank = SPACE_RANK[spaceRole] ?? 1;
+
+  return {
+    canEditTask: spaceRank >= SPACE_RANK.manager,
+    canDeleteTask: spaceRank >= SPACE_RANK.manager,
+  };
+}
+
 export function TaskListPane({
   query,
   onQueryChange,
@@ -237,7 +266,10 @@ export function TaskListPane({
   onLoadMore,
   isLoadingMore = false,
   workspaceMembers = [],
-  isPersonalMode = false,
+  orgFilter = "all",
+  onOrgFilterChange,
+  spaceFilter = "all",
+  onSpaceFilterChange,
 }: Props) {
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -246,6 +278,11 @@ export function TaskListPane({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
+
+  const { activeOrgId, activeSpace, organisations } = useAppContext();
+  const { data: spacesForFilter = [] } = useSpaces(orgFilter !== "all" ? orgFilter : null);
+
+  const { canCreateTask } = useSpaceRole();
 
   // Toggle subtask expansion for a task
   const toggleExpanded = (e: React.MouseEvent, taskId: string) => {
@@ -288,13 +325,14 @@ export function TaskListPane({
       )
         return;
       if (e.key === "c" || e.key === "C") {
+        if (!canCreateTask) return;
         e.preventDefault();
         onCreateDialogOpenChange(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCreateDialogOpenChange]);
+  }, [onCreateDialogOpenChange, canCreateTask]);
 
   // Logic handle by useMemo above
   // const taskList = tasks.filter(t => !t.parent_task_id);
@@ -450,14 +488,16 @@ export function TaskListPane({
                 >
                   <Search className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0 shrink-0 rounded-md"
-                  onClick={() => onCreateDialogOpenChange(true)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
+                {canCreateTask && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 shrink-0 rounded-md"
+                    onClick={() => onCreateDialogOpenChange(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </>
           )}
@@ -556,6 +596,45 @@ export function TaskListPane({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Organisation & Space selectors (only when viewing private space) */}
+        {activeSpace?.is_private && (
+          <div className="flex items-center gap-1.5 mt-2 pb-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
+            {/* Organisation Filter */}
+            <Select value={orgFilter} onValueChange={onOrgFilterChange}>
+              <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
+                <SelectValue placeholder="All Workspaces" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All Workspaces</SelectItem>
+                {organisations.map((org) => (
+                  <SelectItem key={org.id} value={org.id} className="text-xs">
+                    {org.name} {org.is_personal ? "(Personal)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Space Filter */}
+            <Select 
+              value={spaceFilter} 
+              onValueChange={onSpaceFilterChange}
+              disabled={orgFilter === "all"}
+            >
+              <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
+                <SelectValue placeholder="All Spaces" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All Spaces</SelectItem>
+                {spacesForFilter.map((sp) => (
+                  <SelectItem key={sp.id} value={sp.id} className="text-xs">
+                    {sp.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* ── Task list ──────────────────────────────────────────── */}
@@ -588,6 +667,13 @@ export function TaskListPane({
             const isDone = t.status === "done" || t.status === "completed";
             const isDraggable = t.status !== "done" && t.status !== "completed";
             const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
+
+            const { canEditTask: itemCanEdit, canDeleteTask: itemCanDelete } = getTaskPermissions(
+              t,
+              activeOrgId,
+              activeSpace?.id ?? null,
+              activeSpace?.role ?? null
+            );
 
             return (
               <div key={t.id} className="group/item">
@@ -652,22 +738,23 @@ export function TaskListPane({
                           className="w-36 p-1 rounded-lg shadow-lg"
                         >
                           {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
-                            <button
-                              key={s}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onUpdateTask?.(t.id, { status: s });
-                              }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
-                            >
-                              <div
-                                className={cn(
-                                  "w-2 h-2 rounded-full shrink-0",
-                                  STATUS_COLOR[s]
-                                )}
-                              />
-                              {s}
-                            </button>
+                            <PopoverClose asChild key={s}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateTask?.(t.id, { status: s });
+                                }}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                              >
+                                <div
+                                  className={cn(
+                                    "w-2 h-2 rounded-full shrink-0",
+                                    STATUS_COLOR[s]
+                                  )}
+                                />
+                                {s}
+                              </button>
+                            </PopoverClose>
                           ))}
                         </PopoverContent>
                       </Popover>
@@ -685,13 +772,18 @@ export function TaskListPane({
                       </button>
                     </div>
 
-                    <div className="task-name-container">
+                    <div className="task-name-container flex flex-col items-start gap-0.5">
                       <span className={cn(
                         "task-name-scroll text-sm font-medium leading-snug",
                         isDone && "line-through opacity-60"
                       )}>
                         {t.title}
                       </span>
+                      {t.org_id !== activeOrgId && t.org_name && (
+                        <div className="text-[10px] font-medium text-muted-foreground/80 bg-muted/40 px-1.5 py-0.5 rounded backdrop-blur-sm border border-border/20 shadow-sm mt-0.5 transition-colors">
+                          {t.org_name} › {t.space_name ?? "General"}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -735,19 +827,23 @@ export function TaskListPane({
                             <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setEditingTask(t)}>
-                              <Pencil className="h-3.5 w-3.5 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="text-destructive focus:text-destructive" 
-                              onClick={() => {
-                                if (onDeleteTask) onDeleteTask(t.id);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
+                            {itemCanEdit && (
+                              <DropdownMenuItem onClick={() => setEditingTask(t)}>
+                                <Pencil className="h-3.5 w-3.5 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            {itemCanDelete && (
+                              <DropdownMenuItem 
+                                className="text-destructive focus:text-destructive" 
+                                onClick={() => {
+                                  if (onDeleteTask) onDeleteTask(t.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -1043,7 +1139,6 @@ export function TaskListPane({
         onOpenChange={onCreateDialogOpenChange}
         onTaskCreated={onTaskCreated}
         allTasks={allTasks ?? tasks}
-        isPersonalMode={isPersonalMode}
       />
 
       {/* ── Edit task dialog ──────────────────────────────────── */}
@@ -1056,7 +1151,8 @@ export function TaskListPane({
           initialValues={editingTask}
           onTaskUpdated={() => setEditingTask(null)}
           allTasks={allTasks ?? tasks}
-          isPersonalMode={isPersonalMode}
+          orgId={editingTask.org_id}
+          spaceId={editingTask.space_id}
         />
       )}
     </div>

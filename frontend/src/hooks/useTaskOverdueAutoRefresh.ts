@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSocket } from "@/lib/socket";
 import { taskKeys, orgTaskKeys } from "@/hooks/api/useTasks";
-import { personalTaskKeys } from "@/hooks/api/usePersonalTasks";
 import { useAppContext } from "@/contexts/AppContext";
 
 /**
@@ -13,13 +12,13 @@ import { useAppContext } from "@/contexts/AppContext";
  */
 export function useTaskOverdueAutoRefresh() {
   const queryClient = useQueryClient();
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { activeOrgId, activeSpaceId } = useAppContext();
 
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
 
-    const handleOverdueMoved = (data: { 
+    const handleOverdueMoved = (_data: { 
       id: string; 
       status: string; 
       org_id?: string; 
@@ -27,19 +26,25 @@ export function useTaskOverdueAutoRefresh() {
       owner_user_id?: string;
       is_personal?: boolean;
     }) => {
-      // Invalidate the appropriate queries
-      if (data.is_personal) {
-        queryClient.invalidateQueries({ queryKey: personalTaskKeys.all });
-      } else {
-        queryClient.invalidateQueries({ queryKey: orgTaskKeys.all });
-        // Also invalidate the old 'tasks' key if it's still being used
-        queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      }
+      // Invalidate standard org task queries
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.all });
+      // Also invalidate the old 'tasks' key if it's still being used
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
     };
 
     socket.on("task_overdue_moved", handleOverdueMoved);
+
+    // Listen for Google Calendar inbound sync updates
+    // Fired by the backend when processIncomingGoogleEvent creates/updates/deletes a task
+    const handleGcalTasksUpdated = () => {
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.all });
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    };
+    socket.on("gcal_tasks_updated", handleGcalTasksUpdated);
+
     return () => {
       socket.off("task_overdue_moved", handleOverdueMoved);
+      socket.off("gcal_tasks_updated", handleGcalTasksUpdated);
     };
   }, [queryClient]);
 
@@ -51,15 +56,10 @@ export function useTaskOverdueAutoRefresh() {
       
       // For simplicity, we just trigger an invalidation of the active task lists
       // every minute. This is safe and ensures the UI eventually catches up.
-      // But to be more "reactive", we could do it more often.
       
-      if (mode === "organisation" && activeOrgId && activeSpaceId) {
+      if (activeOrgId && activeSpaceId) {
         queryClient.invalidateQueries({ 
           queryKey: orgTaskKeys.lists(activeOrgId, activeSpaceId) 
-        });
-      } else if (mode === "personal") {
-        queryClient.invalidateQueries({ 
-          queryKey: personalTaskKeys.lists() 
         });
       }
     };
@@ -67,5 +67,5 @@ export function useTaskOverdueAutoRefresh() {
     // Check every 30 seconds
     const interval = setInterval(checkOverdueLocally, 30000);
     return () => clearInterval(interval);
-  }, [queryClient, activeOrgId, activeSpaceId, mode]);
+  }, [queryClient, activeOrgId, activeSpaceId]);
 }

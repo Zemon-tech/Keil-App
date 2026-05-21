@@ -37,13 +37,16 @@ const LEGACY_WORKSPACE_KEY = "keil_active_workspace";
 export type AppMode = "personal" | "organisation";
 
 export interface AppContextType {
-  /** Current operating mode. */
+  /** Current operating mode (derived from active organisation). */
   mode: AppMode;
 
-  /** The currently selected organisation id (null when personal mode). */
+  /** True if the active organisation is a personal organisation. */
+  isPersonalOrg: boolean;
+
+  /** The currently selected organisation id. */
   activeOrgId: string | null;
 
-  /** The currently selected space id (null when personal mode or no space chosen). */
+  /** The currently selected space id. */
   activeSpaceId: string | null;
 
   /** Full list of the user's organisations. Empty array when user has none. */
@@ -64,12 +67,12 @@ export interface AppContextType {
   /** True while the spaces list for the active org is loading. */
   isLoadingSpaces: boolean;
 
-  /** Switch to personal mode. Clears org and space selections. */
+  /** Switch to personal mode (selects the personal organisation). */
   setPersonalMode: () => void;
 
   /**
-   * Switch to organisation mode without selecting a specific org/space.
-   * Used when the user opens the Create/Join dialogs before an org is selected.
+   * Switch to organisation mode.
+   * @deprecated No-op under personal organisation model.
    */
   setOrganisationMode: () => void;
 
@@ -95,17 +98,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   // ── One-time legacy key cleanup ───────────────────────────────────────────
-  // Remove the old WorkspaceContext key so it doesn't linger in storage.
+  // Remove the old WorkspaceContext key and old mode key so they don't linger.
   useEffect(() => {
     localStorage.removeItem(LEGACY_WORKSPACE_KEY);
+    localStorage.removeItem(STORAGE_MODE);
   }, []);
 
   // ── Restore persisted state ──────────────────────────────────────────────
-  const [mode, setMode] = useState<AppMode>(() => {
-    const stored = localStorage.getItem(STORAGE_MODE);
-    return stored === "organisation" ? "organisation" : "personal";
-  });
-
   const [activeOrgId, setActiveOrgId] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_ORG_ID);
   });
@@ -116,31 +115,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // ── Remote data ───────────────────────────────────────────────────────────
   const { data: organisations = [], isLoading: isLoadingOrgs } = useOrganisations();
-  const { data: spaces = [], isLoading: isLoadingSpaces } = useSpaces(
-    mode === "organisation" ? activeOrgId : null
-  );
+  const { data: spaces = [], isLoading: isLoadingSpaces } = useSpaces(activeOrgId);
 
-  // ── Membership validation: clear stale org from storage ──────────────────
+  // ── Auto-select personal organisation on load if none active ──────────────
+  useEffect(() => {
+    if (isLoadingOrgs || organisations.length === 0) return;
+    if (!activeOrgId) {
+      const personal = organisations.find((o) => o.is_personal);
+      if (personal) {
+        setActiveOrgId(personal.id);
+        localStorage.setItem(STORAGE_ORG_ID, personal.id);
+      }
+    }
+  }, [organisations, isLoadingOrgs, activeOrgId]);
+
+  // ── Membership validation: clear stale org from storage / fallback to personal ──────────────────
   useEffect(() => {
     if (isLoadingOrgs) return;
 
     if (activeOrgId) {
       const stillMember = organisations.some((o) => o.id === activeOrgId);
       if (!stillMember) {
-        setMode("personal");
-        setActiveOrgId(null);
-        setActiveSpaceId(null);
-        localStorage.removeItem(STORAGE_MODE);
-        localStorage.removeItem(STORAGE_ORG_ID);
-        localStorage.removeItem(STORAGE_SPACE_ID);
+        const personal = organisations.find((o) => o.is_personal);
+        if (personal) {
+          setActiveOrgId(personal.id);
+          setActiveSpaceId(null);
+          localStorage.setItem(STORAGE_ORG_ID, personal.id);
+          localStorage.removeItem(STORAGE_SPACE_ID);
+        } else {
+          setActiveOrgId(null);
+          setActiveSpaceId(null);
+          localStorage.removeItem(STORAGE_ORG_ID);
+          localStorage.removeItem(STORAGE_SPACE_ID);
+        }
       }
     }
-    // Never auto-switch to org mode — the user must choose explicitly.
   }, [organisations, isLoadingOrgs, activeOrgId]);
 
   // ── Auto-select space when org becomes active ─────────────────────────────
   useEffect(() => {
-    if (mode !== "organisation" || !activeOrgId || isLoadingSpaces) return;
+    if (!activeOrgId || isLoadingSpaces) return;
     if (spaces.length === 0) return;
 
     if (activeSpaceId) {
@@ -156,7 +170,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       setActiveSpaceId(first.id);
       localStorage.setItem(STORAGE_SPACE_ID, first.id);
     }
-  }, [spaces, isLoadingSpaces, mode, activeOrgId, activeSpaceId]);
+  }, [spaces, isLoadingSpaces, activeOrgId, activeSpaceId]);
 
   // ── Derived objects ───────────────────────────────────────────────────────
   const activeOrg = useMemo(
@@ -169,27 +183,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     [spaces, activeSpaceId]
   );
 
+  const mode = useMemo<AppMode>(() => {
+    return activeOrg?.is_personal ? "personal" : "organisation";
+  }, [activeOrg]);
+
+  const isPersonalOrg = useMemo(() => {
+    return activeOrg?.is_personal ?? false;
+  }, [activeOrg]);
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const setPersonalMode = useCallback(() => {
-    setMode("personal");
-    setActiveOrgId(null);
-    setActiveSpaceId(null);
-    localStorage.setItem(STORAGE_MODE, "personal");
-    localStorage.removeItem(STORAGE_ORG_ID);
-    localStorage.removeItem(STORAGE_SPACE_ID);
-  }, []);
+    const personal = organisations.find((o) => o.is_personal);
+    if (personal) {
+      setActiveOrgId(personal.id);
+      setActiveSpaceId(null);
+      localStorage.setItem(STORAGE_ORG_ID, personal.id);
+      localStorage.removeItem(STORAGE_SPACE_ID);
+    }
+  }, [organisations]);
 
   const setOrganisationMode = useCallback(() => {
-    setMode("organisation");
-    localStorage.setItem(STORAGE_MODE, "organisation");
+    // Deprecated: no-op under personal organisation model.
   }, []);
 
   const setActiveOrganisation = useCallback(
     (orgId: string, lastSpaceId?: string | null) => {
-      setMode("organisation");
       setActiveOrgId(orgId);
-      localStorage.setItem(STORAGE_MODE, "organisation");
       localStorage.setItem(STORAGE_ORG_ID, orgId);
 
       if (lastSpaceId) {
@@ -212,6 +232,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const value: AppContextType = useMemo(
     () => ({
       mode,
+      isPersonalOrg,
       activeOrgId,
       activeSpaceId,
       organisations,
@@ -227,6 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }),
     [
       mode,
+      isPersonalOrg,
       activeOrgId,
       activeSpaceId,
       organisations,

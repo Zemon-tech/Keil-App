@@ -229,7 +229,8 @@ export const deleteComment = async (
 export const hardDeleteComment = async (
   commentId: string,
   userId: string,
-  activityContext: string | CommentActivityContext
+  activityContext: string | CommentActivityContext,
+  spaceRole?: string
 ): Promise<void> => {
   const context =
     typeof activityContext === 'string'
@@ -242,8 +243,8 @@ export const hardDeleteComment = async (
       throw new ApiError(404, 'Comment not found');
     }
 
-    // Verify user owns the comment or has permission
-    if (comment.user_id !== userId) {
+    // Verify user owns the comment or is space admin
+    if (spaceRole !== 'admin' && comment.user_id !== userId) {
       throw new ApiError(403, 'You do not have permission to delete this comment');
     }
 

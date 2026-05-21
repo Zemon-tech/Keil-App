@@ -228,7 +228,8 @@ export const updateTask = async (
   taskId: string,
   data: UpdateTaskData,
   userId: string,
-  workspaceId: string
+  workspaceId: string,
+  options?: { skipGoogleSync?: boolean }
 ): Promise<TaskDTO | null> => {
   // Note: Date validation is handled in the controller since it depends on existing dates
 
@@ -353,18 +354,21 @@ export const updateTask = async (
   if (!result) return null;
 
   // Fire-and-forget Google Calendar sync — never blocks the task update
-  syncTaskToCalendar(userId, {
-    id: result.id,
-    title: result.title,
-    description: result.description,
-    start_date: result.start_date ? new Date(result.start_date) : null,
-    due_date: result.due_date ? new Date(result.due_date) : null,
-    is_all_day: result.is_all_day,
-    location: result.location,
-    status: result.status,
-    google_event_id: result.google_event_id,
-    source: 'tasks',
-  }).catch(err => console.error('[gcal] workspace task sync failed:', err.message));
+  // Guard: skip if this update originated from an inbound Google event (prevents echo loop)
+  if (!options?.skipGoogleSync) {
+    syncTaskToCalendar(userId, {
+      id: result.id,
+      title: result.title,
+      description: result.description,
+      start_date: result.start_date ? new Date(result.start_date) : null,
+      due_date: result.due_date ? new Date(result.due_date) : null,
+      is_all_day: result.is_all_day,
+      location: result.location,
+      status: result.status,
+      google_event_id: result.google_event_id,
+      source: 'tasks',
+    }).catch(err => console.error('[gcal] workspace task sync failed:', err.message));
+  }
 
   return taskToDTO(result);
 };

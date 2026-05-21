@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,13 @@ interface AiMessage {
     role: "user" | "assistant";
     content: string;
     timestamp: Date;
+}
+
+interface AiChatResponse {
+    data: {
+        content: string;
+        model: string;
+    };
 }
 
 interface SuggestionCard {
@@ -128,21 +136,6 @@ const FULLSCREEN_SUGGESTIONS: SuggestionCard[] = [
     },
 ];
 
-// ─── Mock AI Responses ─────────────────────────────────────────────
-const getMockResponse = (userMessage: string): string => {
-    const lower = userMessage.toLowerCase();
-    if (lower.includes("summarize")) {
-        return "Here's a summary of your current dashboard:\n\n• **3 active priorities** — Finalize Homepage UX Wireframes is the most urgent, blocking the client review milestone.\n• **2 blockers** need attention — API Integration is waiting on Security API Keys (3 days).\n• **Efficiency score: 88%** — Up 5.2% this week with strong deep work metrics.\n\nWould you like me to dive deeper into any of these areas?";
-    }
-    if (lower.includes("task") || lower.includes("tracker")) {
-        return "I can help you set up a task tracker! Based on your current workstream, here are the items I'd suggest tracking:\n\n1. ⚡ **Homepage UX Wireframes** — Due Friday, urgent\n2. 📄 **Backend API Documentation** — Important for integration\n3. 🗓️ **Weekly Design Sync** — Scheduled, 30min\n4. 📊 **Budget Tracker Update** — Low priority\n\nShall I create this as a structured tracker?";
-    }
-    if (lower.includes("insight") || lower.includes("analyze")) {
-        return "Based on your dashboard data, here are key insights:\n\n📈 **Positive Trends:**\n- Deep work time is up 12% — great focus improvement\n- Overall efficiency score at 88%, trending upward\n\n⚠️ **Areas of Concern:**\n- Context switches at 4 — try to reduce to improve flow\n- 2 active blockers could cascade if not resolved\n\n💡 **Recommendation:** Prioritize resolving the API Integration blocker today to unblock downstream tasks.";
-    }
-    return "I understand your request. Let me help you with that.\n\nI'm KeilHQ's AI assistant, and I can help you with:\n• **Summarizing** your dashboard and project data\n• **Analyzing** patterns and providing insights\n• **Creating** task trackers and action items\n• **Translating** and transforming content\n\nWhat would you like to explore?";
-};
-
 // ═══════════════════════════════════════════════════════════════════
 // ─── MAIN COMPONENT ────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
@@ -184,9 +177,30 @@ export function AiAssistant() {
         return () => document.removeEventListener("keydown", handler);
     }, [mode]);
 
-    const handleSend = useCallback(() => {
+    const requestAiReply = useCallback(async (conversation: AiMessage[]) => {
+        const response = await api.post<AiChatResponse>("v1/ai/chat", {
+            messages: conversation.map((message) => ({
+                role: message.role,
+                content: message.content,
+            })),
+        });
+
+        return response.data.data.content;
+    }, []);
+
+    const appendAssistantMessage = useCallback((content: string) => {
+        const aiMsg: AiMessage = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content,
+            timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+    }, []);
+
+    const handleSend = useCallback(async () => {
         const text = inputValue.trim();
-        if (!text) return;
+        if (!text || isTyping) return;
 
         const userMsg: AiMessage = {
             id: crypto.randomUUID(),
@@ -194,47 +208,45 @@ export function AiAssistant() {
             content: text,
             timestamp: new Date(),
         };
-        setMessages((prev) => [...prev, userMsg]);
+        const conversation = [...messages, userMsg];
+        setMessages(conversation);
         setInputValue("");
         setIsTyping(true);
 
-        // Simulate AI response
-        setTimeout(() => {
-            const aiMsg: AiMessage = {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content: getMockResponse(text),
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, aiMsg]);
+        try {
+            const reply = await requestAiReply(conversation);
+            appendAssistantMessage(reply);
+        } catch (error) {
+            console.error("AI request failed:", error);
+            appendAssistantMessage("I couldn't reach the AI service. Check your connection and OpenRouter backend configuration, then try again.");
+        } finally {
             setIsTyping(false);
-        }, 1200 + Math.random() * 800);
-    }, [inputValue]);
+        }
+    }, [appendAssistantMessage, inputValue, isTyping, messages, requestAiReply]);
 
-    const handleSuggestionClick = (prompt: string) => {
-        setInputValue(prompt);
-        setTimeout(() => {
-            const userMsg: AiMessage = {
-                id: crypto.randomUUID(),
-                role: "user",
-                content: prompt,
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, userMsg]);
-            setInputValue("");
-            setIsTyping(true);
+    const handleSuggestionClick = async (prompt: string) => {
+        if (isTyping) return;
 
-            setTimeout(() => {
-                const aiMsg: AiMessage = {
-                    id: crypto.randomUUID(),
-                    role: "assistant",
-                    content: getMockResponse(prompt),
-                    timestamp: new Date(),
-                };
-                setMessages((prev) => [...prev, aiMsg]);
-                setIsTyping(false);
-            }, 1200 + Math.random() * 800);
-        }, 100);
+        const userMsg: AiMessage = {
+            id: crypto.randomUUID(),
+            role: "user",
+            content: prompt,
+            timestamp: new Date(),
+        };
+        const conversation = [...messages, userMsg];
+        setInputValue("");
+        setMessages(conversation);
+        setIsTyping(true);
+
+        try {
+            const reply = await requestAiReply(conversation);
+            appendAssistantMessage(reply);
+        } catch (error) {
+            console.error("AI request failed:", error);
+            appendAssistantMessage("I couldn't reach the AI service. Check your connection and OpenRouter backend configuration, then try again.");
+        } finally {
+            setIsTyping(false);
+        }
     };
 
     const handleNewChat = () => {
@@ -383,10 +395,10 @@ export function AiAssistant() {
                     <span className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md select-none">Auto</span>
                     <button
                         onClick={handleSend}
-                        disabled={!inputValue.trim()}
+                        disabled={!inputValue.trim() || isTyping}
                         className={cn(
                             "size-7 rounded-full flex items-center justify-center transition-all",
-                            inputValue.trim()
+                            inputValue.trim() && !isTyping
                                 ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/30"
                                 : "bg-muted text-muted-foreground cursor-not-allowed"
                         )}
@@ -728,10 +740,10 @@ export function AiAssistant() {
                                     <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md select-none">Auto</span>
                                     <button
                                         onClick={handleSend}
-                                        disabled={!inputValue.trim()}
+                                        disabled={!inputValue.trim() || isTyping}
                                         className={cn(
                                             "size-8 rounded-full flex items-center justify-center transition-all",
-                                            inputValue.trim()
+                                            inputValue.trim() && !isTyping
                                                 ? "bg-blue-500 text-white hover:bg-blue-600 shadow-sm shadow-blue-200"
                                                 : "bg-slate-200 text-slate-400 cursor-not-allowed"
                                         )}

@@ -14,7 +14,6 @@ import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import type { ContextItem } from "@/types/task";
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import { useOrgTask, useUpdateOrgTask, useDeleteOrgTask } from "@/hooks/api/useTasks";
-import { useUpdatePersonalTask, useDeletePersonalTask } from "@/hooks/api/usePersonalTasks";
 import { useAppContext } from "@/contexts/AppContext";
 
 import { TaskDetailHeader } from "./TaskDetailHeader";
@@ -38,8 +37,6 @@ type Props = {
   onNavigateToParent?: (parentTaskId: string) => void;
   /** Parent task info for breadcrumb trail */
   parentTask?: { id: string; title: string } | null;
-  /** When true, routes mutations to personal task endpoints and hides org-only tabs */
-  isPersonalMode?: boolean;
 };
 
 // ─── Tab header metadata ──────────────────────────────────────────────────────
@@ -72,7 +69,6 @@ export function TaskDetailPane({
   onNavigateToSubtask,
   onNavigateToParent,
   parentTask,
-  isPersonalMode = false,
 }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -82,20 +78,25 @@ export function TaskDetailPane({
     setActiveTab("overview");
   }, [task?.id]);
 
-  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { activeOrgId, activeSpaceId, activeOrg } = useAppContext();
 
-  // Fetch fresh server data — org mode uses org-scoped route, personal mode uses personal route
+  // Resolve the task's originating space/org contexts dynamically
+  const taskOrgId = task?.org_id ?? activeOrgId;
+  const taskSpaceId = task?.space_id ?? activeSpaceId;
+
+  // If the task belongs to another org, it's not a personal task context
+  const isPersonal = taskOrgId === activeOrgId ? (activeOrg?.is_personal ?? false) : false;
+
+  // Fetch fresh server data
   const { data: freshTask } = useOrgTask(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId,
+    taskOrgId,
+    taskSpaceId,
     task?.id ?? ""
   );
 
-  // Mutations — personal mode routes to personal task endpoints
-  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const deleteOrgTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
-  const updatePersonalTask = useUpdatePersonalTask();
-  const deletePersonalTask = useDeletePersonalTask();
+  // Mutations
+  const updateOrgTask = useUpdateOrgTask(taskOrgId, taskSpaceId);
+  const deleteOrgTask = useDeleteOrgTask(taskOrgId, taskSpaceId);
 
   // Use fresh data from server if available, fall back to prop (list data)
   const displayTask = freshTask ?? task;
@@ -123,23 +124,15 @@ export function TaskDetailPane({
     }
   };
 
-  // Centralized field-update handler — routes to correct endpoint based on mode
+  // Centralized field-update handler
   const handleUpdateField = (updates: UpdateTaskInput) => {
     if (!displayTask) return;
-    if (isPersonalMode) {
-      updatePersonalTask.mutate({ id: displayTask.id, updates });
-    } else {
-      updateOrgTask.mutate({ id: displayTask.id, updates });
-    }
+    updateOrgTask.mutate({ id: displayTask.id, updates });
   };
 
   const handleDelete = () => {
     if (!displayTask) return;
-    if (isPersonalMode) {
-      deletePersonalTask.mutate({ id: displayTask.id, title: displayTask.title });
-    } else {
-      deleteOrgTask.mutate({ id: displayTask.id, title: displayTask.title, type: displayTask.type });
-    }
+    deleteOrgTask.mutate({ id: displayTask.id, title: displayTask.title, type: displayTask.type });
     onTaskDeleted?.(displayTask.id);
   };
 
@@ -186,9 +179,10 @@ export function TaskDetailPane({
         mode="edit"
         taskId={taskToRender.id}
         initialValues={taskToRender}
-        isPersonalMode={isPersonalMode}
         onTaskCreated={() => {}}
         onTaskUpdated={() => setEditDialogOpen(false)}
+        orgId={taskOrgId ?? undefined}
+        spaceId={taskSpaceId ?? undefined}
       />
 
       {/* Zone 2 + 3: Tab bar + content */}
@@ -207,11 +201,11 @@ export function TaskDetailPane({
             </p>
           </div>
           {/* Personal mode: only show Overview tab (Activity/Deps/History need org context) */}
-          <TabsList className={`grid w-full ${isPersonalMode ? "xl:w-[200px] grid-cols-1" : "xl:w-[450px] grid-cols-4"}`}>
+          <TabsList className={`grid w-full ${isPersonal ? "xl:w-[200px] grid-cols-1" : "xl:w-[450px] grid-cols-4"}`}>
             {(
               [
                 { value: "overview", label: "Overview" },
-                ...(!isPersonalMode ? [
+                ...(!isPersonal ? [
                   { value: "activity", label: "Activity" },
                   {
                     value: "dependencies",

@@ -2,7 +2,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
 import { supabaseAdmin } from "./config/supabase";
 import pool from "./config/pg";
-import { chatService } from "./services/chat.service";
+import * as orgChatService from "./services/org-chat.service";
 import { config } from "./config";
 
 export let io: SocketIOServer;
@@ -27,7 +27,7 @@ export const initSocket = (server: HttpServer) => {
     });
 
     // Authentication middleware
-    io.use(async (socket, next) => {
+    io.use(async (socket: Socket, next: (err?: Error) => void) => {
         try {
             const token = socket.handshake.auth.token;
             if (!token) {
@@ -60,6 +60,9 @@ export const initSocket = (server: HttpServer) => {
         socket.join(`user:${user.id}`);
 
         const isChannelMember = async (channelId: string): Promise<boolean> => {
+            if (socket.rooms.has(`channel:${channelId}`)) {
+                return true;
+            }
             const result = await pool.query(
                 'SELECT 1 FROM channel_members WHERE channel_id = $1 AND user_id = $2 LIMIT 1',
                 [channelId, user.id]
@@ -70,13 +73,13 @@ export const initSocket = (server: HttpServer) => {
         // Fetch all channels user belongs to and join them
         try {
             const result = await pool.query('SELECT channel_id FROM channel_members WHERE user_id = $1', [user.id]);
-            result.rows.forEach(row => {
+            result.rows.forEach((row: any) => {
                 socket.join(`channel:${row.channel_id}`);
             });
             
             // Join space rooms
             const spacesResult = await pool.query('SELECT space_id FROM space_members WHERE user_id = $1', [user.id]);
-            spacesResult.rows.forEach(row => {
+            spacesResult.rows.forEach((row: any) => {
                 socket.join(`space:${row.space_id}`);
             });
 
@@ -94,7 +97,7 @@ export const initSocket = (server: HttpServer) => {
                 if (!(await isChannelMember(channel_id))) return;
 
                 // Save message
-                const message = await chatService.saveMessage(channel_id, user.id, content);
+                const message = await orgChatService.saveMessage(channel_id, user.id, content);
 
                 // Broadcast strictly inside the channel_id socket room
                 io.to(`channel:${channel_id}`).emit("receive_message", message);
@@ -121,6 +124,12 @@ export const initSocket = (server: HttpServer) => {
                     channel_id: payload.channel_id, 
                     user_id: user.id 
                 });
+            }
+        });
+
+        socket.on("join_channel", async (payload: { channel_id: string }) => {
+            if (payload.channel_id && await isChannelMember(payload.channel_id)) {
+                socket.join(`channel:${payload.channel_id}`);
             }
         });
 

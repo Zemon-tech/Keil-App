@@ -65,6 +65,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { useAppContext } from "@/contexts/AppContext";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   useOrgMembers,
   useCreateOrgInvite,
@@ -81,14 +82,28 @@ import {
   useRenameSpace,
   useSpaceMembers,
   useSpaces,
+  useUpdateSpaceMemberRole,
   type Space,
 } from "@/hooks/api/useSpaces";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { Loader2, Copy } from "lucide-react";
 import {
   useGoogleCalendarStatus,
   useConnectGoogleCalendar,
   useDisconnectGoogleCalendar,
 } from "@/hooks/api/useGoogleCalendar";
+import { toast } from "sonner";
+
+// ─── Helper Functions ─────────────────────────────────────────────────
+const handleCopyToClipboard = async (text: string, label: string) => {
+  try {
+    await navigator.clipboard?.writeText(text);
+    toast.success(`${label} copied to clipboard`);
+  } catch (error) {
+    toast.error("Failed to copy to clipboard");
+    console.error("Clipboard error:", error);
+  }
+};
 
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type AccountTab =
@@ -150,10 +165,11 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 function OrgGeneralTab() {
-  const { organisations, activeOrgId } = useAppContext();
+  const { organisations, activeOrgId, setActiveOrganisation } = useAppContext();
   const renameOrg = useRenameOrganisation();
   const deleteOrg = useDeleteOrganisation();
-  const { setPersonalMode } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const selectedOrg = organisations.find((org) => org.id === activeOrgId);
   const [name, setName] = useState(selectedOrg?.name || "");
@@ -180,7 +196,13 @@ function OrgGeneralTab() {
       return;
     deleteOrg.mutate(selectedOrg.id, {
       onSuccess: () => {
-        setPersonalMode();
+        const personalOrg = organisations.find((o) => o.is_personal);
+        if (personalOrg) {
+          setActiveOrganisation(personalOrg.id);
+        }
+        if (/^\/(tasks|events)\/[^\/]+/.test(location.pathname)) {
+          navigate("/tasks");
+        }
       },
     });
   };
@@ -238,7 +260,7 @@ function OrgGeneralTab() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => navigator.clipboard.writeText(selectedOrg.id)}
+              onClick={() => handleCopyToClipboard(selectedOrg.id, "Organisation ID")}
             >
               <Copy className="h-3.5 w-3.5" />
             </Button>
@@ -246,7 +268,7 @@ function OrgGeneralTab() {
         </div>
       </div>
 
-      {isOwner && (
+      {isOwner && !selectedOrg?.is_personal && (
         <div className="pt-10 border-t border-border/50">
           <div className="bg-destructive/5 rounded-2xl border border-destructive/20 p-6">
             <div className="flex items-center gap-3 text-destructive mb-4">
@@ -360,9 +382,7 @@ function OrgMembersTab() {
                         variant="secondary"
                         size="icon"
                         className="h-11 w-11 shrink-0 rounded-xl"
-                        onClick={() => {
-                          navigator.clipboard.writeText(inviteLink);
-                        }}
+                        onClick={() => handleCopyToClipboard(inviteLink, "Invite link")}
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -655,7 +675,7 @@ function SpaceDetailsSheet({
             currentUserId={user?.id || ""}
           />
 
-          {isAdmin && (
+          {isAdmin && !space.is_private && (
             <div className="pt-8 border-t border-border/50">
               <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">
                 Danger Zone
@@ -711,6 +731,9 @@ function SpaceMembersPanel({
   const { data: members = [] } = useSpaceMembers(orgId, space.id);
   const addMember = useAddSpaceMember(orgId, space.id);
   const removeMember = useRemoveSpaceMember(orgId, space.id);
+  const updateMemberRole = useUpdateSpaceMemberRole(orgId, space.id);
+  const { canManageSpaceMembers, orgRole } = useSpaceRole();
+
   const addableMembers = orgMembers.filter(
     (member) =>
       !members.some((spaceMember) => spaceMember.user_id === member.user_id) &&
@@ -725,7 +748,7 @@ function SpaceMembersPanel({
           Space members ({members.length})
         </p>
       </div>
-      {isAdmin && (
+      {isAdmin && !space.is_private && (
         <div className="rounded-lg border border-border p-2">
           <div className="flex items-center gap-2">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -767,6 +790,9 @@ function SpaceMembersPanel({
       <div className="space-y-1">
         {members.map((member) => {
           const isSelf = member.user_id === currentUserId;
+          const isTargetAdmin = member.role === "admin";
+          const canEditRole = canManageSpaceMembers && !space.is_private && !isSelf && (!isTargetAdmin || orgRole === "owner" || orgRole === "admin");
+
           return (
             <div
               key={member.user_id}
@@ -781,8 +807,46 @@ function SpaceMembersPanel({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <RoleBadge role={member.role} />
-                {isAdmin && !isSelf && (
+                {canEditRole ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        disabled={updateMemberRole.isPending}
+                        className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-border bg-muted hover:bg-accent text-[10px] uppercase font-bold tracking-widest text-muted-foreground transition-colors shrink-0"
+                      >
+                        {member.role}
+                        <span className="text-[8px] opacity-70">▼</span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-32 p-1 rounded-xl shadow-lg border border-border bg-popover text-popover-foreground" align="end">
+                      {(["admin", "manager", "member"] as const).map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => {
+                            updateMemberRole.mutate({
+                              userId: member.user_id,
+                              role: r,
+                            }, {
+                              onSuccess: () => toast.success("Role updated successfully"),
+                              onError: (err: any) => toast.error(err?.response?.data?.message ?? "Failed to update role"),
+                            });
+                          }}
+                          disabled={updateMemberRole.isPending}
+                          className={cn(
+                            "w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg hover:bg-muted transition-colors text-left capitalize font-medium",
+                            member.role === r && "text-primary font-semibold"
+                          )}
+                        >
+                          {r}
+                          {member.role === r && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <RoleBadge role={member.role} />
+                )}
+                {isAdmin && !space.is_private && !isSelf && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1982,6 +2046,19 @@ export function SettingsDialog({
   initialTab = "account",
 }: SettingsDialogProps) {
   const { organisations, activeOrgId, setActiveOrganisation } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const handleManualSwitch = (orgId: string) => {
+    const isDetailRoute = /^\/(tasks|events)\/[^\/]+/.test(location.pathname);
+    const isChanging = orgId !== activeOrgId;
+    
+    setActiveOrganisation(orgId);
+
+    if (isDetailRoute && isChanging) {
+      navigate("/tasks");
+    }
+  };
   const [mode, setMode] = useState<"account" | "workspace">("account");
   const [activeAccountTab, setActiveAccountTab] = useState<AccountTab>(
     initialTab as AccountTab || "account"
@@ -2061,9 +2138,9 @@ export function SettingsDialog({
                   >
                     <div className="space-y-1">
                       {organisations.map((org) => (
-                        <button
-                          key={org.id}
-                          onClick={() => setActiveOrganisation(org.id)}
+                         <button
+                           key={org.id}
+                           onClick={() => handleManualSwitch(org.id)}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors",
                             activeOrgId === org.id

@@ -63,9 +63,11 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const addDependency = useAddOrgDependency(activeOrgId, activeSpaceId);
-  const removeDependency = useRemoveOrgDependency(activeOrgId, activeSpaceId);
-  const { data: allTasks, isPending: isLoadingTasks } = useOrgTasks(activeOrgId, activeSpaceId);
+  const taskOrgId = task.org_id ?? activeOrgId;
+  const taskSpaceId = task.space_id ?? activeSpaceId;
+  const addDependency = useAddOrgDependency(taskOrgId, taskSpaceId);
+  const removeDependency = useRemoveOrgDependency(taskOrgId, taskSpaceId);
+  const { data: allTasks, isPending: isLoadingTasks } = useOrgTasks(taskOrgId, taskSpaceId);
 
   // Get existing dependency IDs
   const existingDepIds = useMemo(() => {

@@ -22,26 +22,25 @@ export const useComposedRef = <T extends HTMLElement>(
   libRef: React.RefObject<T | null>,
   userRef: UserRef<T>
 ) => {
-  const prevUserRef = useRef<UserRef<T>>(null)
+  // Store both refs in a container so we always have the latest values
+  // without the useCallback needing to depend on them.
+  const refsRef = useRef({ libRef, userRef })
+  refsRef.current = { libRef, userRef }
 
-  return useCallback(
-    (instance: T | null) => {
-      if (libRef && "current" in libRef) {
-        ;(libRef as { current: T | null }).current = instance
-      }
+  // Empty deps [] means this callback is created exactly once and never
+  // recreated. React will never run cleanup/setup on this ref unnecessarily,
+  // which prevents the infinite ref-loop that caused React Error #185.
+  return useCallback((instance: T | null) => {
+    const { libRef: lr, userRef: ur } = refsRef.current
 
-      if (prevUserRef.current) {
-        updateRef(prevUserRef.current, null)
-      }
+    if (lr && "current" in lr) {
+      ;(lr as { current: T | null }).current = instance
+    }
 
-      prevUserRef.current = userRef
-
-      if (userRef) {
-        updateRef(userRef, instance)
-      }
-    },
-    [libRef, userRef]
-  )
+    if (ur) {
+      updateRef(ur, instance)
+    }
+  }, [])
 }
 
 export default useComposedRef

@@ -66,7 +66,9 @@ function formatActionLabel(entry: ActivityLogEntry): string {
 
 export function HistoryTab({ task }: { task: TaskDTO }) {
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const { data: entries, isPending } = useOrgTaskActivity(activeOrgId, activeSpaceId, task.id);
+  const taskOrgId = task.org_id ?? activeOrgId;
+  const taskSpaceId = task.space_id ?? activeSpaceId;
+  const { data: entries, isPending } = useOrgTaskActivity(taskOrgId, taskSpaceId, task.id);
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 

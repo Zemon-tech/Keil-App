@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { DashboardTaskDTO } from "@/types/task";
 import { formatDistanceToNow, isToday, isTomorrow, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,9 +8,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface CurrentFocusCardProps {
   task: DashboardTaskDTO | null;
   isLoading: boolean;
+  isWheel?: boolean;
 }
 
-export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
+export function CurrentFocusCard({
+  task,
+  isLoading,
+  isWheel,
+}: CurrentFocusCardProps) {
   const getDueText = (dateString: string | null) => {
     if (!dateString) return "No due date";
     const date = parseISO(dateString);
@@ -20,7 +26,12 @@ export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
 
   if (isLoading) {
     return (
-      <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-3 gap-2">
+      <Card
+        className={cn(
+          "bg-card/90 border border-border/60 rounded-2xl p-3 gap-2 shadow-sm",
+          isWheel ? "h-full w-full" : "md:col-span-2",
+        )}
+      >
         <div className="flex justify-between items-start mb-1">
           <div>
             <Skeleton className="h-3 w-20 mb-1" />
@@ -30,51 +41,60 @@ export function CurrentFocusCard({ task, isLoading }: CurrentFocusCardProps) {
         </div>
         <div className="space-y-2 mt-2">
           <Skeleton className="h-5 w-3/4" />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Skeleton className="h-2.5 w-14 mb-1" />
-              <Skeleton className="h-3.5 w-full" />
-            </div>
-            <div>
-              <Skeleton className="h-2.5 w-14 mb-1" />
-              <Skeleton className="h-3.5 w-full" />
-            </div>
-          </div>
         </div>
       </Card>
     );
   }
 
   if (!task) {
-    return null;
+    return (
+      <Card
+        className={cn(
+          "bg-card/90 border border-border/60 rounded-2xl p-4 flex items-center justify-center text-muted-foreground text-xs italic",
+          isWheel ? "h-full w-full" : "md:col-span-2",
+        )}
+      >
+        No active focus
+      </Card>
+    );
   }
 
   return (
-    <Card className="md:col-span-2 bg-card/90 border border-border/60 rounded-2xl p-3 gap-2 hover:bg-card/95 transition-colors cursor-pointer">
+    <Card
+      className={cn(
+        "bg-card/90 border border-border/60 rounded-2xl p-4 gap-2 hover:bg-card transition-all duration-300 cursor-pointer shadow-sm group overflow-hidden relative",
+        isWheel ? "h-full w-full" : "md:col-span-2",
+      )}
+    >
+      <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+      </div>
+
       <div className="flex justify-between items-start mb-1">
         <div>
-          <h3 className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground font-bold">
+          <h3 className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground font-bold">
             Current Focus
           </h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-[0.2em]">
-            Task
-          </p>
         </div>
-        <Badge variant={task.priority === "urgent" ? "destructive" : "outline"} className="text-[10px] rounded-full px-2 py-0.5 capitalize">
+        <Badge
+          variant={task.priority === "urgent" ? "destructive" : "secondary"}
+          className="text-[9px] rounded-full px-2 py-0 h-4 border-none capitalize"
+        >
           {task.priority}
         </Badge>
       </div>
-      <div className="space-y-2 mt-2">
-        <h2 className="text-base font-semibold leading-tight">{task.title}</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-0.5">Due Date</p>
-            <p className="text-sm font-medium">{getDueText(task.due_date)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-0.5">Status</p>
-            <p className="text-sm font-medium capitalize">{task.status.replace("-", " ")}</p>
-          </div>
+      <div className="space-y-1 mt-2">
+        <h2 className="text-sm font-semibold leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+          {task.title}
+        </h2>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-[10px] text-muted-foreground font-medium">
+            {getDueText(task.due_date)}
+          </p>
+          <span className="text-[10px] text-muted-foreground/30">•</span>
+          <p className="text-[10px] text-primary font-semibold capitalize">
+            {task.status.replace("-", " ")}
+          </p>
         </div>
       </div>
     </Card>

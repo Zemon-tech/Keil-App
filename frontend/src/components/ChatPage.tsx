@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 import { useChatStore } from "@/store/useChatStore";
-import { useChatChannels, useReadChannel, useChatSocketListeners } from "@/hooks/api/useChat";
+import { useChatChannels, useReadChannel } from "@/hooks/api/useChat";
 import { useAppContext } from "@/contexts/AppContext";
 import { MessageView } from "./chat/MessageView";
 import { NewChatDialog } from "./chat/NewChatDialog";
@@ -16,9 +16,6 @@ export function ChatPage() {
   const { data: channels = [] } = useChatChannels(activeOrgId, activeSpaceId);
   const readChannel = useReadChannel(activeOrgId, activeSpaceId);
   const navigate = useNavigate();
-
-  // Mount global socket listeners at page level
-  useChatSocketListeners(activeChannelId, activeOrgId, activeSpaceId);
 
   const groupChannels = channels.filter((c) => c.type === "group");
   const directChannels = channels.filter((c) => c.type === "direct");

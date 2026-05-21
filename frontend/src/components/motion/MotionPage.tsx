@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, Undo2, History
 } from "lucide-react";
-import { MotionShareModal } from "./MotionShareModal";
+import { MotionSharePanel } from "./MotionShareModal";
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSpaceRole } from "@/hooks/useSpaceRole";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import {
   useMotionPage,
@@ -25,6 +29,7 @@ import {
   useMotionSocketListeners,
 } from "@/hooks/api/useMotionPages";
 import type { JSONContent } from "@tiptap/core";
+import { toast } from "sonner";
 
 // ─── Save status indicator ────────────────────────────────────────────────────
 
@@ -63,7 +68,28 @@ export function MotionPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
+  // -- Dropdown State --
+  const [menuSearch, setMenuSearch] = useState("");
+  const [isLocked, setIsLocked] = useState(false);
+  const [isRepositioning, setIsRepositioning] = useState(false);
+  // Draft position used only while repositioning — not saved until "Save position"
+  const [draftPosition, setDraftPosition] = useState<number>(50);
+  const coverContainerRef = useRef<HTMLDivElement>(null);
+
   const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { user } = useAuth();
+  const { spaceRole } = useSpaceRole();
+
+  const matchesSearch = (text: string) => text.toLowerCase().includes(menuSearch.toLowerCase());
+
+  const handleCopyContent = () => {
+    if (pageEditor) {
+      const text = pageEditor.getText();
+      navigator.clipboard.writeText(text);
+      toast("Content copied to clipboard");
+    }
+  };
+
   const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty } =
     useMotionStore();
 
@@ -81,7 +107,8 @@ export function MotionPage() {
   const softDelete = useSoftDeleteMotionPage(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
 
-  const { user } = useAuth();
+  // ── Space members (must be called unconditionally — before any early returns) ──
+  const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
 
   // ── Real-time ──
   useMotionSocketListeners(activeOrgId, activeSpaceId, pageId ?? null, user?.id ?? null);
@@ -103,6 +130,43 @@ export function MotionPage() {
     () => (page?.parent_id ? getPageById(page.parent_id) : null),
     [page?.parent_id, getPageById]
   );
+
+  // ── Derived display page (null-safe, used before guards) ───────────────────
+  const displayPage = page ?? serverPage ?? null;
+
+  const isPageReadOnly = spaceRole === "admin" ? false : spaceRole === "manager" ? displayPage?.created_by !== user?.id : true;
+
+  useEffect(() => {
+    if (pageEditor) {
+      pageEditor.setEditable(!isLocked && !isPageReadOnly);
+    }
+  }, [isLocked, isPageReadOnly, pageEditor]);
+
+  // ── Click outside cover to auto-save reposition ────────────────────────────
+  useEffect(() => {
+    if (!isRepositioning) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (coverContainerRef.current && !coverContainerRef.current.contains(e.target as Node)) {
+        // Auto-save when clicking outside the cover area
+        if (pageId) {
+          useMotionStore.getState().updatePageLocally(pageId, { cover_position: draftPosition });
+          updatePage.mutate({ id: pageId, updates: { cover_position: draftPosition } });
+        }
+        setIsRepositioning(false);
+      }
+    };
+
+    // Use mousedown so it fires before click handlers elsewhere
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isRepositioning, draftPosition, pageId]);
+
+  // ── Last edited member ─────────────────────────────────────────────────────
+  const lastEditedMember = useMemo(() => {
+    if (!displayPage?.updated_by) return null;
+    return members.find((m) => m.user_id === displayPage.updated_by);
+  }, [members, displayPage?.updated_by]);
 
   // ── Redirect if page not found after load ───────────────────────────────────
   useEffect(() => {
@@ -202,6 +266,20 @@ export function MotionPage() {
     }
   };
 
+  const toggleSmallText = () => {
+    if (!pageId || !displayPage) return;
+    const nextValue = !displayPage.small_text;
+    useMotionStore.getState().updatePageLocally(pageId, { small_text: nextValue });
+    updatePage.mutate({ id: pageId, updates: { small_text: nextValue } });
+  };
+
+  const toggleFullWidth = () => {
+    if (!pageId || !displayPage) return;
+    const nextValue = !displayPage.full_width;
+    useMotionStore.getState().updatePageLocally(pageId, { full_width: nextValue });
+    updatePage.mutate({ id: pageId, updates: { full_width: nextValue } });
+  };
+
   // ── Guards ──────────────────────────────────────────────────────────────────
   if (mode !== "organisation" || !activeOrgId || !activeSpaceId) {
     return (
@@ -213,13 +291,11 @@ export function MotionPage() {
     );
   }
 
-  if (isLoading || (!page && !serverPage)) {
+  if (isLoading || !displayPage) {
     return (
       <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative" />
     );
   }
-
-  const displayPage = page ?? serverPage!;
 
   return (
     <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative">
@@ -236,7 +312,7 @@ export function MotionPage() {
       {/* ── Main content ── */}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         {/* Header */}
-        <header className="flex items-center justify-between px-2 py-1 z-40 shrink-0">
+        <header className="h-12 flex items-center justify-between px-2 z-40 shrink-0">
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -290,88 +366,371 @@ export function MotionPage() {
             {/* Save status */}
             <SaveIndicator status={saveStatus} />
 
-            {/* Share button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
-              onClick={() => setShareModalOpen(true)}
-            >
-              <Share2 className="size-3.5" />
-              Share
-            </Button>
+            {/* Share button — opens panel anchored below */}
+            {!isPageReadOnly && activeOrgId && activeSpaceId && (
+              <Popover open={shareModalOpen} onOpenChange={setShareModalOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
+                  >
+                    <Share2 className="size-3.5" />
+                    Share
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  sideOffset={8}
+                  className="p-0 rounded-xl shadow-lg border border-border bg-popover overflow-hidden w-auto"
+                >
+                  <MotionSharePanel
+                    open={shareModalOpen}
+                    pageId={pageId!}
+                    pageTitle={displayPage.title}
+                    orgId={activeOrgId}
+                    spaceId={activeSpaceId}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground/50 hover:text-destructive transition-colors"
-              onClick={handleDelete}
-              disabled={softDelete.isPending}
-            >
-              <Trash2 className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground/50 hover:text-foreground transition-colors"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
+            {!isPageReadOnly && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                onClick={handleDelete}
+                disabled={softDelete.isPending}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            )}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground/50 hover:text-foreground transition-colors"
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[300px] p-0 rounded-xl shadow-lg border border-border bg-popover overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="flex flex-col overflow-y-auto custom-scrollbar">
+                  {/* Search bar */}
+                  <div className="p-2 pb-0">
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border/50 bg-muted/30 focus-within:border-primary/50 focus-within:bg-background transition-colors">
+                      <Search className="size-3.5 text-muted-foreground" />
+                      <input 
+                        placeholder="Search actions..." 
+                        className="bg-transparent border-none outline-none text-xs w-full placeholder:text-muted-foreground/60"
+                        value={menuSearch}
+                        onChange={(e) => setMenuSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Section 2 — Page Actions */}
+                  {(matchesSearch("Copy page contents") || (matchesSearch("Move to Trash") && !isPageReadOnly)) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Copy page contents") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleCopyContent}>
+                            <div className="flex items-center gap-2.5">
+                              <Copy className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Copy page contents</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Move to Trash") && !isPageReadOnly && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleDelete}>
+                            <div className="flex items-center gap-2.5">
+                              <Trash2 className="size-4 text-muted-foreground group-hover:text-destructive transition-colors" />
+                              <span className="text-xs font-medium group-hover:text-destructive transition-colors">Move to Trash</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 3 — View & Layout Toggles */}
+                  {!isPageReadOnly && (matchesSearch("Small text") || matchesSearch("Full width")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Small text") && (
+                          <div 
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                            onClick={toggleSmallText}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <AArrowDown className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Small text</span>
+                            </div>
+                            <Switch size="sm" checked={displayPage.small_text || false} className="pointer-events-none" />
+                          </div>
+                        )}
+                        {matchesSearch("Full width") && (
+                          <div 
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                            onClick={toggleFullWidth}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <MoveHorizontal className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Full width</span>
+                            </div>
+                            <Switch size="sm" checked={displayPage.full_width || false} className="pointer-events-none" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 4 — Page Settings */}
+                  {(matchesSearch("Customize page") || matchesSearch("Lock page")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Customize page") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <SlidersHorizontal className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Customize page</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Lock page") && !isPageReadOnly && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={() => setIsLocked(!isLocked)}>
+                            <div className="flex items-center gap-2.5">
+                              <Lock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Lock page</span>
+                            </div>
+                            <Switch size="sm" checked={isLocked} onCheckedChange={setIsLocked} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 5 — History & Actions */}
+                  {matchesSearch("Undo") && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Undo") && (
+                          <div 
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                            onClick={() => {
+                              if (pageEditor) {
+                                pageEditor.commands.undo();
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Undo2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Undo</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/60">Ctrl+Z</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 6 — Advanced */}
+                  {(matchesSearch("Updates & analytics") || matchesSearch("Version history")) && (
+                    <>
+                      <div className="py-1">
+                        {matchesSearch("Updates & analytics") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <Clock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Updates & analytics</span>
+                            </div>
+                          </div>
+                        )}
+                        {matchesSearch("Version history") && (
+                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                              <History className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Version history</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
+                  {/* Section 7 — Footer Meta Info */}
+                  <div className="py-2 px-3 flex flex-col gap-0.5 bg-muted/20">
+                    <span className="text-[10px] text-muted-foreground/70">
+                      Word count: {pageEditor ? pageEditor.storage.characterCount.words() : 0} words
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/70">
+                      Last edited by {lastEditedMember?.name || lastEditedMember?.email || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.email || "User"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/70">
+                      {displayPage?.updated_at ? new Date(displayPage.updated_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20 group/page">
+        <div className={cn(
+          "flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20 group/page",
+          displayPage.small_text && "motion-page-small-text",
+          displayPage.full_width && "motion-page-full-width"
+        )}>
           <div className="w-full pt-0 relative">
             {displayPage.cover_image ? (
-              <div className="h-[220px] w-full relative group/cover">
+              <div
+                ref={coverContainerRef}
+                className="h-[220px] w-full relative group/cover"
+              >
                 <img
                   src={displayPage.cover_image}
                   alt="cover"
-                  className="h-full w-full object-cover"
+                  className={cn(
+                    "h-full w-full object-cover select-none transition-none",
+                    isRepositioning ? "cursor-ns-resize" : ""
+                  )}
+                  style={{
+                    objectPosition: `center ${isRepositioning ? draftPosition : (displayPage.cover_position ?? 50)}%`,
+                  }}
+                  draggable={false}
+                  onMouseDown={isRepositioning ? (e) => {
+                    e.preventDefault();
+                    const startY = e.clientY;
+                    const startPos = draftPosition;
+                    const containerHeight = coverContainerRef.current?.getBoundingClientRect().height ?? 220;
+                    // Each pixel of drag = (100 / containerHeight) % shift, inverted:
+                    // dragging up (negative deltaY) → show lower part → increase %
+                    // dragging down (positive deltaY) → show upper part → decrease %
+                    const pxToPct = 100 / containerHeight;
+
+                    const onMouseMove = (mv: MouseEvent) => {
+                      const delta = mv.clientY - startY;
+                      const next = Math.round(Math.max(0, Math.min(100, startPos + delta * pxToPct)));
+                      setDraftPosition(next);
+                    };
+
+                    const onMouseUp = () => {
+                      document.removeEventListener("mousemove", onMouseMove);
+                      document.removeEventListener("mouseup", onMouseUp);
+                    };
+
+                    document.addEventListener("mousemove", onMouseMove);
+                    document.addEventListener("mouseup", onMouseUp);
+                  } : undefined}
                 />
-                <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
-                  <input
-                    type="file"
-                    ref={coverInputRef}
-                    className="hidden"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          const result = reader.result as string;
+
+                {/* Normal buttons — hidden while repositioning */}
+                {!isPageReadOnly && !isRepositioning && (
+                  <div className="absolute bottom-4 right-6 opacity-0 group-hover/cover:opacity-100 transition-opacity flex gap-2">
+                    <input
+                      type="file"
+                      ref={coverInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const result = reader.result as string;
+                            if (pageId) {
+                              useMotionStore.getState().updatePageLocally(pageId, { cover_image: result });
+                              updatePage.mutate({ id: pageId, updates: { cover_image: result } });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                      onClick={() => setShowCoverPicker(true)}
+                    >
+                      Change
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                      onClick={() => {
+                        setDraftPosition(displayPage.cover_position ?? 50);
+                        setIsRepositioning(true);
+                      }}
+                    >
+                      Reposition
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
+                      onClick={() => {
+                        if (pageId) {
+                          useMotionStore.getState().updatePageLocally(pageId, { cover_image: null });
+                          updatePage.mutate({ id: pageId, updates: { cover_image: null } });
+                        }
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
+
+                {/* Reposition mode — overlay with hint + Save/Cancel */}
+                {isRepositioning && (
+                  <>
+                    {/* Drag hint — center of image */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="bg-background/70 backdrop-blur-sm text-foreground/80 text-xs font-medium px-3 py-1.5 rounded-full shadow-sm">
+                        Drag image to reposition
+                      </span>
+                    </div>
+
+                    {/* Save / Cancel — top-right, always visible */}
+                    <div className="absolute top-3 right-4 flex gap-2 z-10">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="bg-background/90 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium shadow-sm"
+                        onClick={() => {
+                          // Save: commit draft to DB and local store
                           if (pageId) {
-                            useMotionStore.getState().updatePageLocally(pageId, { cover_image: result });
-                            updatePage.mutate({ id: pageId, updates: { cover_image: result } });
+                            useMotionStore.getState().updatePageLocally(pageId, { cover_position: draftPosition });
+                            updatePage.mutate({ id: pageId, updates: { cover_position: draftPosition } });
                           }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
-                    onClick={() => setShowCoverPicker(true)}
-                  >
-                    Change
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-background/80 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium"
-                    onClick={() => {
-                      if (pageId) {
-                        useMotionStore.getState().updatePageLocally(pageId, { cover_image: null });
-                        updatePage.mutate({ id: pageId, updates: { cover_image: null } });
-                      }
-                    }}
-                  >
-                    Remove
-                  </Button>
-                </div>
+                          setIsRepositioning(false);
+                        }}
+                      >
+                        Save position
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="bg-background/90 backdrop-blur-sm hover:bg-background h-8 text-xs font-medium shadow-sm"
+                        onClick={() => {
+                          // Cancel: discard draft, revert to saved position
+                          setDraftPosition(displayPage.cover_position ?? 50);
+                          setIsRepositioning(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </>
+                )}
 
                 <Dialog open={showCoverPicker} onOpenChange={setShowCoverPicker}>
                   <DialogContent showCloseButton={false} className="max-w-[540px] p-0 overflow-hidden bg-popover border-border shadow-2xl">
@@ -485,11 +844,18 @@ export function MotionPage() {
 
             {/* Icon — straddles the cover/content boundary */}
             {(displayPage.icon || showEmojiPicker) && (
-              <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16">
+              <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16 motion-page-container">
                 <div className="relative group/icon pl-4" style={{ marginTop: displayPage.cover_image ? '-40px' : '16px', marginBottom: '12px', width: 'fit-content' }}>
                     <div
-                      className="text-[78px] leading-none select-none cursor-pointer flex items-center justify-center shrink-0"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className={cn(
+                        "text-[78px] leading-none select-none flex items-center justify-center shrink-0",
+                        isPageReadOnly ? "cursor-default" : "cursor-pointer"
+                      )}
+                      onClick={() => {
+                        if (!isPageReadOnly) {
+                          setShowEmojiPicker(!showEmojiPicker);
+                        }
+                      }}
                     >
                       {displayPage.icon?.startsWith("data:image") ? (
                         <img src={displayPage.icon} alt="icon" className="size-full object-cover rounded-xl" />
@@ -681,41 +1047,43 @@ export function MotionPage() {
                 </div>
             )}
 
-            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16">
+            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16 motion-page-container">
               <div className="group/title-area">
-                <div className={cn(
-                  "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
-                  "mt-3 mb-2",
-                  "opacity-0 group-hover/title-area:opacity-100"
-                )}>
-                  {!displayPage.icon && (
-                    <button
-                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                      onClick={() => {
-                        setShowEmojiPicker(true);
-                      }}
-                    >
-                      Add icon
+                {!isPageReadOnly && (
+                  <div className={cn(
+                    "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
+                    "mt-3 mb-2",
+                    "opacity-0 group-hover/title-area:opacity-100"
+                  )}>
+                    {!displayPage.icon && (
+                      <button
+                        className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                        onClick={() => {
+                          setShowEmojiPicker(true);
+                        }}
+                      >
+                        Add icon
+                      </button>
+                    )}
+                    {!displayPage.cover_image && (
+                      <button
+                        className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                        onClick={() => {
+                          const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
+                          if (pageId) {
+                            useMotionStore.getState().updatePageLocally(pageId, { cover_image: defaultCover });
+                            updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
+                          }
+                        }}
+                      >
+                        Add cover
+                      </button>
+                    )}
+                    <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
+                      Add comment
                     </button>
-                  )}
-                  {!displayPage.cover_image && (
-                    <button
-                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                      onClick={() => {
-                        const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
-                        if (pageId) {
-                          useMotionStore.getState().updatePageLocally(pageId, { cover_image: defaultCover });
-                          updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
-                        }
-                      }}
-                    >
-                      Add cover
-                    </button>
-                  )}
-                  <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
-                    Add comment
-                  </button>
-                </div>
+                  </div>
+                )}
 
                 {/* Title */}
                 <input
@@ -727,7 +1095,11 @@ export function MotionPage() {
                     pageEditor?.commands?.focus?.("start");
                   }}
                   onBlur={handleTitleBlur}
-                  className="w-full bg-transparent text-[44px] px-4 leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25"
+                  readOnly={isPageReadOnly}
+                  className={cn(
+                    "w-full bg-transparent text-[44px] px-4 leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25",
+                    isPageReadOnly && "pointer-events-none"
+                  )}
                   placeholder="Untitled"
                 />
               </div>
@@ -753,21 +1125,44 @@ export function MotionPage() {
           .custom-scrollbar-page::-webkit-scrollbar { width: 6px; }
           .custom-scrollbar-page::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
           .custom-scrollbar-page:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); }
+
+          /* Small Text Toggle Styles */
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor {
+            font-size: 14px !important;
+            line-height: 1.5 !important;
+          }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h1 { font-size: 1.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h2 { font-size: 1.45rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h3 { font-size: 1.05rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h4 { font-size: 0.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor p,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor li,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor td,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor th,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor code,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor blockquote {
+            font-size: 14px !important;
+          }
+
+          /* Full Width Toggle Styles */
+          .motion-page-full-width .motion-page-container {
+            max-width: none !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+          }
+          .motion-page-full-width .simple-editor-content {
+            max-width: none !important;
+          }
+          @media (min-width: 1024px) {
+            .motion-page-full-width .motion-page-container {
+              padding-left: 3rem !important;
+              padding-right: 3rem !important;
+            }
+          }
         `,
         }}
       />
 
-      {/* Share modal — rendered outside the scrollable area */}
-      {activeOrgId && activeSpaceId && (
-        <MotionShareModal
-          open={shareModalOpen}
-          onOpenChange={setShareModalOpen}
-          pageId={pageId!}
-          pageTitle={displayPage.title}
-          orgId={activeOrgId!}
-          spaceId={activeSpaceId!}
-        />
-      )}
     </div>
   );
 }
