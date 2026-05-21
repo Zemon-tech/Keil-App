@@ -69,7 +69,7 @@ export function TasksPage() {
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
     if (taskIdFromUrl) {
-      setSelectedTaskId(taskIdFromUrl);
+      navigate(`/tasks/${taskIdFromUrl}`);
       setParentTaskStack([]);
       setSearchParams({}, { replace: true });
     }
