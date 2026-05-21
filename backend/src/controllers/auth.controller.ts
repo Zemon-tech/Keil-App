@@ -1,71 +1,44 @@
 import { Request, Response } from "express";
-import { google } from "googleapis";
 import { config } from "../config";
 import pino from "pino";
+import { getAuthUrl, handleCallback, registerWatch } from "../services/google-calendar.service";
 
 const logger = pino();
 
-const oauth2Client = new google.auth.OAuth2(
-    config.googleClientId,
-    config.googleClientSecret,
-    config.googleRedirectUri
-);
-
 export const getGoogleAuthUrl = (req: Request, res: Response) => {
-    // Generate a secure random state value.
-    const state = "keil_" + Math.random().toString(36).substring(7);
-    
-    // Add scopes as required (e.g., calendar, gmail, etc.)
-    const scopes = [
-        'https://www.googleapis.com/auth/userinfo.profile',
-        'https://www.googleapis.com/auth/userinfo.email',
-        // 'https://www.googleapis.com/auth/calendar.readonly' 
-    ];
-
-    const authorizationUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline', // Requests a refresh token
-        scope: scopes,
-        state: state,
-        prompt: 'consent' // Forces consent screen to ensure refresh token is provided
-    });
-
-    res.json({ url: authorizationUrl });
+    const userId = (req as any).user?.id || (req.query.userId as string);
+    if (!userId) {
+        return res.status(400).json({ error: "Missing user ID for authentication" });
+    }
+    try {
+        const url = getAuthUrl(userId);
+        res.json({ url });
+    } catch (err) {
+        logger.error(`Failed to generate Google Auth URL: ${err}`);
+        res.status(500).json({ error: "Failed to generate authentication URL" });
+    }
 };
 
 export const googleCallback = async (req: Request, res: Response) => {
     const { code, state, error } = req.query;
 
-    if (error) {
+    if (error || !code || !state) {
         logger.error(`Google OAuth Error: ${error}`);
-        return res.status(400).json({ error: 'OAuth failed' });
-    }
-
-    if (!code || typeof code !== 'string') {
-        return res.status(400).json({ error: 'Authorization code is missing' });
+        return res.redirect(`${config.frontendUrl}/tasks?gcal=error`);
     }
 
     try {
-        const { tokens } = await oauth2Client.getToken(code);
-        oauth2Client.setCredentials(tokens);
-
-        // Fetch user info to verify
-        const oauth2 = google.oauth2({
-            auth: oauth2Client,
-            version: 'v2'
-        });
-        const userInfo = await oauth2.userinfo.get();
-
-        logger.info(`Successfully authenticated Google user: ${userInfo.data.email}`);
-
-        // TODO: Save the refresh_token and access_token securely in the database
-        // associated with the currently authenticated Keil-App user.
-        // For now, we will return the tokens directly or redirect to frontend.
+        const { userId } = await handleCallback(code as string, state as string);
         
-        // Redirecting back to frontend (adjust URL as needed for your app's flow)
-        // Optionally pass tokens or a status flag via URL fragments or a session.
-        res.redirect(`${config.frontendUrl}/settings?google_sync=success`);
+        // Redirect first — watch registration must NEVER block or fail
+        res.redirect(`${config.frontendUrl}/tasks?gcal=connected`);
+
+        // Fire-and-forget push watch registration
+        registerWatch(userId).catch((err) =>
+            logger.error(`[gcal] registerWatch failed after OAuth callback for user ${userId}: ${err.message}`)
+        );
     } catch (err) {
         logger.error(`Failed to exchange token: ${err}`);
-        res.status(500).json({ error: 'Failed to exchange authorization code' });
+        res.redirect(`${config.frontendUrl}/tasks?gcal=error`);
     }
 };

@@ -200,12 +200,16 @@ export async function getAuthorizedClient(userId: string): Promise<OAuth2Client 
   if (isExpired) {
     try {
       const { credentials } = await oauth2Client.refreshAccessToken();
-      if (credentials.access_token && credentials.expiry_date) {
+      if (credentials.access_token) {
+        const expiry = credentials.expiry_date
+          ? new Date(credentials.expiry_date)
+          : new Date(Date.now() + 3600 * 1000); // 1-hour fallback
+
         await integrationRepository.updateTokens(
           userId,
           PROVIDER,
           credentials.access_token,
-          new Date(credentials.expiry_date)
+          expiry
         );
         oauth2Client.setCredentials(credentials);
       }

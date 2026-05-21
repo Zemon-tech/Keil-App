@@ -44,7 +44,6 @@ export class TaskOverdueWorkerService {
                 WHERE status = 'todo'
                   AND due_date IS NOT NULL
                   AND due_date < NOW()
-                  AND updated_at < due_date
                   AND (type = 'task' OR type IS NULL)
                 RETURNING id, org_id, space_id, title
             `);
@@ -72,7 +71,6 @@ export class TaskOverdueWorkerService {
                 WHERE status = 'todo'
                   AND due_date IS NOT NULL
                   AND due_date < NOW()
-                  AND updated_at < due_date
                 RETURNING id, owner_user_id, title
             `);
 
