@@ -1,10 +1,10 @@
 import { Response, NextFunction } from "express";
-import * as workspaceService from "../services/workspace.service";
+import * as organisationService from "../services/organisation.service";
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 
 /**
- * @desc    Get current authenticated user profile and their workspace
+ * @desc    Get current authenticated user profile and their workspace (mapped to personal organisation for compatibility)
  * @route   GET /api/users/me
  * @access  Private
  */
@@ -17,24 +17,17 @@ export const getMe = async (req: any, res: Response, next: NextFunction) => {
             throw new ApiError(401, "Unauthorized access");
         }
 
-        // 2. Find user's workspace
-        let workspace = await workspaceService.getUserWorkspace(user.id);
+        // 2. Find user's organisations
+        const organisations = await organisationService.getUserOrganisations(user.id);
 
-        // 3. If no workspace found, auto-create one
-        if (!workspace) {
-            const workspaceName = user.name ? `${user.name}'s Workspace` : "My Workspace";
-            workspace = await workspaceService.createWorkspace({
-                name: workspaceName,
-                owner_id: user.id
-            });
-        }
+        // 3. Find personal organisation, fallback to first organisation or a dummy one
+        const personalOrg = organisations.find(o => o.is_personal) || organisations[0] || {
+            id: "00000000-0000-0000-0000-000000000000",
+            name: user.name ? `${user.name}'s Org` : "My Org",
+            role: "owner"
+        };
 
-        // 4. Fetch the user's role in the workspace
-        const members = await workspaceService.getWorkspaceMembers(workspace.id);
-        const currentMember = members.find(m => m.user_id === user.id);
-        const userRole = currentMember ? currentMember.role : "owner"; // Default fallback to owner if new
-
-        // 5. Structure exactly matching the API Contract from Phase-0
+        // 4. Structure exactly matching the API Contract from Phase-0, mapping the organisation to the legacy workspace key
         return res.status(200).json(
             new ApiResponse(
                 200,
@@ -44,16 +37,17 @@ export const getMe = async (req: any, res: Response, next: NextFunction) => {
                     name: user.name,
                     created_at: user.created_at,
                     workspace: {
-                        id: workspace.id,
-                        name: workspace.name,
-                        role: userRole
+                        id: personalOrg.id,
+                        name: personalOrg.name,
+                        role: personalOrg.role
                     }
                 },
                 "User profile retrieved successfully"
             )
         );
     } catch (error) {
-        // Any error in creation passes down properly
+        // Any error in retrieval passes down properly
         next(error);
     }
 };
+
