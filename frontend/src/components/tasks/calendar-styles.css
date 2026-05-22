@@ -433,7 +433,7 @@ html,
 
 .fc-theme-standard td,
 .fc-theme-standard th {
-    border-color: oklch(1 0 0 / 5%);
+    border-color: oklch(1 0 0 / 10%);
 }
 
 .fc-header-toolbar {
@@ -518,10 +518,31 @@ html,
     height: 48px !important;
 }
 
-.fc-timegrid-slot-label-cushion {
+.fc .fc-timegrid-slot-label {
+    vertical-align: top !important;
+    border-top-style: hidden !important;
+    border-bottom-style: hidden !important;
+    border-right: 1px solid var(--fc-border-color) !important;
+}
+
+.fc .fc-timegrid-axis {
+    border-top-style: hidden !important;
+    border-bottom-style: hidden !important;
+    border-right: 1px solid var(--fc-border-color) !important;
+}
+
+.fc .fc-timegrid-slot-label-frame {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: flex-end !important;
+}
+
+.fc .fc-timegrid-slot-label-cushion {
     font-size: 0.7rem !important;
     color: var(--muted-foreground);
     text-transform: lowercase;
+    transform: translateY(-50%) !important;
+    display: inline-block !important;
 }
 
 .fc-timegrid-now-indicator-line {
@@ -735,9 +756,11 @@ html,
 .fc-event.is-backlog {
     overflow: visible !important;
 }
+
 .is-backlog .fc-event-main {
     overflow: visible !important;
 }
+
 .is-backlog .fc-daygrid-event-harness {
     overflow: visible !important;
     z-index: 5 !important;
