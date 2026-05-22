@@ -37,8 +37,6 @@ import {
   ChevronUp,
   User,
   Check,
-  CreditCard,
-  HelpCircle,
   MessageSquare,
   CheckSquare,
   Plus,
@@ -87,13 +85,11 @@ function OrgSpaceSubmenu({
   onSelectSpace,
 }: OrgSpaceSubmenuProps) {
   const [subOpen, setSubOpen] = useState(false);
-  // Only fetch spaces when the submenu is actually opened
   const { data: spaces = [], isLoading } = useSpaces(subOpen ? org.id : null);
   const { user } = useAuth();
 
   const isActiveOrg = activeOrgId === org.id;
 
-  // Filter out Private spaces for non-owners in this organisation
   const visibleSpaces = spaces.filter((space) => {
     if (space.is_private) {
       return org.owner_user_id === user?.id;
@@ -253,9 +249,12 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar collapsible="icon" className="border-r-0 bg-card">
+      <Sidebar
+        collapsible="icon"
+        className="border-r border-border/50 bg-card [&_[data-sidebar=sidebar]]:bg-card"
+      >
         {/* ── Header ── */}
-        <SidebarHeader className="h-12 justify-center px-3 group-data-[state=collapsed]:px-2 border-b border-border/50">
+        <SidebarHeader className="h-11 shrink-0 justify-center border-b border-border/50 px-2.5 py-2 group-data-[state=collapsed]:px-1.5">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -285,8 +284,8 @@ export function AppSidebar() {
         </SidebarHeader>
 
         {/* ── Navigation ── */}
-        <SidebarContent>
-          <SidebarGroup>
+        <SidebarContent className="gap-1 px-1.5 py-1.5">
+          <SidebarGroup className="p-0 px-0.5">
             <SidebarGroupLabel>Navigation</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -356,7 +355,7 @@ export function AppSidebar() {
         </SidebarContent>
 
         {/* ── Footer: profile dropdown ── */}
-        <SidebarFooter>
+        <SidebarFooter className="shrink-0 border-t border-border/50 p-1.5 px-2">
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
@@ -382,7 +381,13 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
 
-                <DropdownMenuContent side="top" className="w-72 rounded-xl p-1">
+                <DropdownMenuContent
+                  side="right"
+                  align="end"
+                  sideOffset={12}
+                  collisionPadding={16}
+                  className="w-72 rounded-xl p-1"
+                >
                   {/* ── User info header ── */}
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
@@ -403,8 +408,6 @@ export function AppSidebar() {
                   </DropdownMenuLabel>
 
                   <DropdownMenuSeparator />
-
-
 
                   {/* ── Organisation section ── */}
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
@@ -465,7 +468,7 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
-                  {/* ── Settings / Billing / Help ── */}
+                  {/* ── Settings ── */}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
                     onSelect={() => {
@@ -475,14 +478,6 @@ export function AppSidebar() {
                   >
                     <Settings className="h-4 w-4 text-muted-foreground" />
                     Settings
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    Billing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                    Help & Support
                   </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
