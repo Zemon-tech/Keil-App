@@ -5,12 +5,13 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarInput,
   useSidebar,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
@@ -47,6 +48,12 @@ import {
   Image,
   Building2,
   Mic,
+  Search,
+  BarChart3,
+  FileText,
+  Puzzle,
+  Users,
+  LifeBuoy,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -66,6 +73,12 @@ const navigationItems = [
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Meetings", action: "meetings", icon: Mic },
   { title: "Motion", url: "/motion", icon: Image },
+];
+
+const secondaryItems = [
+  { title: "Analytics", icon: BarChart3 },
+  { title: "Reports", icon: FileText, badge: "New" },
+  { title: "Extensions", icon: Puzzle },
 ];
 
 // ─── OrgSpaceSubmenu ──────────────────────────────────────────────────────────
@@ -167,6 +180,7 @@ export function AppSidebar() {
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -251,11 +265,28 @@ export function AppSidebar() {
       ? (activeSpace?.name ?? "Personal Workspace")
       : (activeSpace?.name ?? activeOrg?.name ?? "Organisation");
 
+  const visibleNavigationItems = navigationItems.filter((item) =>
+    item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+  const visibleSecondaryItems = secondaryItems.filter((item) =>
+    item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+
+  const isRouteActive = (url: string) => {
+    if (url === "/") {
+      return location.pathname === "/";
+    }
+    return location.pathname === url || location.pathname.startsWith(`${url}/`);
+  };
+
   return (
     <>
-      <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        {/* ── Header ── */}
-        <SidebarHeader className="h-12 justify-center px-3 group-data-[state=collapsed]:px-2 border-b border-border/50">
+      <Sidebar
+        collapsible="icon"
+        className="border-r border-border/70 bg-sidebar/95"
+      >
+        {/* Header */}
+        <SidebarHeader className="gap-3 px-3 py-4 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-3">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -268,55 +299,75 @@ export function AppSidebar() {
                   <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
-                <div className="flex h-8 items-center justify-between gap-3 px-1 rounded-lg">
+                <div className="flex h-9 items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 items-center justify-center text-primary font-bold">
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-background shadow-sm ring-1 ring-border/60">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
-                    <span className="text-sm font-bold tracking-tight text-foreground truncate max-w-[160px]">
+                    <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
                       KeilHQ
                     </span>
                   </div>
-                  <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-sidebar-accent" />
+                  <SidebarTrigger className="h-7 w-7 rounded-md border border-border/60 bg-background/80 shadow-sm hover:bg-sidebar-accent" />
                 </div>
               )}
             </SidebarMenuItem>
           </SidebarMenu>
+
+          {!isCollapsed && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <SidebarInput
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search..."
+                className="h-9 rounded-xl border-border/60 bg-background/75 pl-9 pr-12 text-[13px] shadow-sm"
+              />
+              <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-border/70 bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Ctrl F
+              </kbd>
+            </div>
+          )}
         </SidebarHeader>
 
-        {/* ── Navigation ── */}
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+        {/* Navigation */}
+        <SidebarContent className="gap-0 px-2 pb-2">
+          <SidebarGroup className="p-0">
             <SidebarGroupContent>
-              <SidebarMenu>
-                {navigationItems.map((item) => (
+              <SidebarMenu className="gap-1">
+                {visibleNavigationItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     {"url" in item && item.url ? (
                       <SidebarMenuButton
                         asChild
-                        isActive={location.pathname === item.url}
+                        isActive={isRouteActive(item.url)}
                         tooltip={item.title}
+                        className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >
                         <Link to={item.url}>
-                          <item.icon />
+                          <item.icon className="text-muted-foreground" />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
                     ) : (
                       <SidebarMenuButton
                         onClick={() => {
-                          console.log("Meetings button clicked, action:", "action" in item ? item.action : "none");
                           if ("action" in item && item.action === "meetings") {
                             setMeetingDialogOpen(true);
                           }
                         }}
                         isActive={meetingDialogOpen}
                         tooltip={item.title}
+                        className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >
-                        <item.icon />
+                        <item.icon className="text-muted-foreground" />
                         <span>{item.title}</span>
                       </SidebarMenuButton>
+                    )}
+                    {item.title === "Tasks" && (
+                      <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
+                        3/5
+                      </SidebarMenuBadge>
                     )}
                   </SidebarMenuItem>
                 ))}
@@ -329,44 +380,107 @@ export function AppSidebar() {
                         setNotificationDrawerOpen(false);
                       }}
                       tooltip="Chat"
+                      className="h-9 rounded-xl px-3 text-[13px] font-medium"
                     >
-                      <MessageSquare />
+                      <MessageSquare className="text-muted-foreground" />
                       <span>Chat</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-                {/* Notifications */}
+          <SidebarGroup className="mt-2 border-t border-border/50 p-0 pt-2">
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1">
+                {visibleSecondaryItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      tooltip={item.title}
+                      className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                    {item.badge && (
+                      <SidebarMenuBadge className="right-2 top-2 rounded-full bg-background px-2 text-[11px] text-foreground shadow-sm ring-1 ring-border/60">
+                        {item.badge}
+                      </SidebarMenuBadge>
+                    )}
+                  </SidebarMenuItem>
+                ))}
+
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => {
-                      setNotificationDrawerOpen(true);
-                      useChatStore.getState().closeChat();
-                    }}
-                    isActive={notificationDrawerOpen || notificationDialogOpen}
-                    tooltip="Notifications"
+                    tooltip="Companies"
+                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
                   >
-                    <Bell />
-                    <span>Notifications</span>
+                    <Building2 />
+                    <span>Companies</span>
                   </SidebarMenuButton>
+                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
+                    {organisations.length}
+                  </SidebarMenuBadge>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip="People"
+                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <Users />
+                    <span>People</span>
+                  </SidebarMenuButton>
+                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
+                    164
+                  </SidebarMenuBadge>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
 
-        {/* ── Footer: profile dropdown ── */}
-        <SidebarFooter>
-          <SidebarMenu>
+        {/* Footer */}
+        <SidebarFooter className="gap-2 px-2 pb-3">
+          <SidebarMenu className="gap-1">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Help center"
+                className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <LifeBuoy />
+                <span>Help center</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => {
+                  setNotificationDrawerOpen(true);
+                  useChatStore.getState().closeChat();
+                }}
+                isActive={notificationDrawerOpen || notificationDialogOpen}
+                tooltip="Notifications"
+                className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
+              >
+                <Bell className="text-muted-foreground" />
+                <span>Notifications</span>
+              </SidebarMenuButton>
+              <SidebarMenuBadge className="right-2 top-2 h-5 min-w-5 rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white shadow-sm">
+                3
+              </SidebarMenuBadge>
+            </SidebarMenuItem>
+
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="mt-2 h-11 rounded-xl px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-primary text-primary-foreground">
+                    <Avatar className="h-8 w-8 rounded-full ring-1 ring-border/60">
+                      <AvatarFallback className="rounded-full bg-primary text-xs text-primary-foreground">
                         {userInitials}
                       </AvatarFallback>
                     </Avatar>
@@ -378,7 +492,7 @@ export function AppSidebar() {
                         {currentSpaceLabel}
                       </span>
                     </div>
-                    <ChevronUp className="ml-auto" />
+                    <ChevronUp className="ml-auto size-4 text-muted-foreground" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
 
