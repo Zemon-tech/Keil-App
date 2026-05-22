@@ -25,6 +25,7 @@ export interface MotionPageDTO {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  share_permission?: MotionPermission;
 }
 
 export interface MotionPageShareDTO {
@@ -93,6 +94,7 @@ const toPageDTO = (page: MotionPage): MotionPageDTO => ({
   created_at: toISO(page.created_at)!,
   updated_at: toISO(page.updated_at)!,
   deleted_at: toISO(page.deleted_at),
+  share_permission: page.share_permission,
 });
 
 const toShareDTO = (share: MotionPageShare): MotionPageShareDTO => ({
@@ -118,16 +120,29 @@ const generateShareToken = (): string =>
   crypto.randomBytes(32).toString('hex');
 
 /**
- * Asserts a page exists in the given org+space. Throws 404 if not found.
+ * Asserts a page exists in the given org+space or is shared to it.
+ * Throws 404 if not found. Throws 403 if requireEditPermission is true and the user only has view access.
  * Returns the page for use in the calling function.
  */
 const assertPageInSpace = async (
   pageId: string,
   orgId: string,
   spaceId: string,
+  requireEditPermission = false,
 ): Promise<MotionPage> => {
-  const page = await motionPageRepository.findByIdInSpace(pageId, orgId, spaceId);
-  if (!page) throw new ApiError(404, 'Page not found');
+  let page = await motionPageRepository.findByIdInSpace(pageId, orgId, spaceId);
+  
+  if (!page) {
+    page = await motionPageShareRepository.findByIdSharedToSpace(pageId, orgId, spaceId);
+    if (page) {
+      if (requireEditPermission && page.share_permission !== MotionPermission.EDIT) {
+        throw new ApiError(403, 'You only have view access to this shared page');
+      }
+    } else {
+      throw new ApiError(404, 'Page not found');
+    }
+  }
+
   return page;
 };
 
@@ -154,7 +169,10 @@ export const getPageById = async (
   spaceId: string,
   pageId: string,
 ): Promise<MotionPageDTO | null> => {
-  const page = await motionPageRepository.findByIdInSpace(pageId, orgId, spaceId);
+  let page = await motionPageRepository.findByIdInSpace(pageId, orgId, spaceId);
+  if (!page) {
+    page = await motionPageShareRepository.findByIdSharedToSpace(pageId, orgId, spaceId);
+  }
   return page ? toPageDTO(page) : null;
 };
 
@@ -211,10 +229,12 @@ export const updatePage = async (
   input: UpdateMotionPageInput,
   spaceRole: string,
 ): Promise<MotionPageDTO | null> => {
-  const page = await assertPageInSpace(pageId, orgId, spaceId);
+  const page = await assertPageInSpace(pageId, orgId, spaceId, true);
 
-  if (spaceRole === 'manager' && page.created_by !== userId) {
-    throw new ApiError(403, 'Managers can only edit their own pages');
+  if (!page.share_permission) {
+    if (spaceRole === 'manager' && page.created_by !== userId) {
+      throw new ApiError(403, 'Managers can only edit their own pages');
+    }
   }
 
   // If re-parenting, verify the new parent is in the same org+space
@@ -261,6 +281,10 @@ export const softDeletePage = async (
   spaceRole: string,
 ): Promise<void> => {
   const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (page.share_permission) {
+    throw new ApiError(403, 'Cannot delete a page shared from another space');
+  }
 
   if (spaceRole === 'manager' && page.created_by !== userId) {
     throw new ApiError(403, 'Managers can only delete their own pages');
@@ -330,7 +354,10 @@ export const getSharesByPage = async (
   spaceId: string,
   pageId: string,
 ): Promise<MotionPageShareDTO[]> => {
-  await assertPageInSpace(pageId, orgId, spaceId);
+  const page = await assertPageInSpace(pageId, orgId, spaceId);
+  if (page.share_permission) {
+    throw new ApiError(403, 'Cannot view shares on a page shared from another space');
+  }
   const shares = await motionPageShareRepository.findByPage(pageId);
   return shares.map(toShareDTO);
 };
@@ -344,6 +371,10 @@ export const createShare = async (
   spaceRole: string,
 ): Promise<MotionPageShareDTO> => {
   const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (page.share_permission) {
+    throw new ApiError(403, 'Cannot share a page that was shared from another space');
+  }
 
   if (spaceRole === 'manager' && page.created_by !== userId) {
     throw new ApiError(403, 'Managers can only share their own pages');
@@ -407,6 +438,10 @@ export const revokeShare = async (
   spaceRole: string,
 ): Promise<void> => {
   const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (page.share_permission) {
+    throw new ApiError(403, 'Cannot revoke shares on a page shared from another space');
+  }
 
   if (spaceRole === 'manager' && page.created_by !== userId) {
     throw new ApiError(403, 'Managers can only revoke shares for their own pages');
