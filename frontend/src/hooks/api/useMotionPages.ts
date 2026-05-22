@@ -131,6 +131,7 @@ export function useMotionPage(
     enabled: !!orgId && !!spaceId && !!pageId,
     retry: noRetryOn4xx,
     staleTime: 10_000,
+    placeholderData: (previousData) => previousData,
   });
 }
 

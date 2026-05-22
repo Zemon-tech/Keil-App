@@ -291,7 +291,7 @@ export function MotionPage() {
     );
   }
 
-  if (isLoading || !displayPage) {
+  if (!displayPage) {
     return (
       <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative" />
     );
