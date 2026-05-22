@@ -5,13 +5,12 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarInput,
   useSidebar,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
@@ -46,12 +45,6 @@ import {
   Image,
   Building2,
   Mic,
-  Search,
-  BarChart3,
-  FileText,
-  Puzzle,
-  Users,
-  LifeBuoy,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -71,12 +64,6 @@ const navigationItems = [
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Meetings", action: "meetings", icon: Mic },
   { title: "Motion", url: "/motion", icon: Image },
-];
-
-const secondaryItems = [
-  { title: "Analytics", icon: BarChart3 },
-  { title: "Reports", icon: FileText, badge: "New" },
-  { title: "Extensions", icon: Puzzle },
 ];
 
 // ─── OrgSpaceSubmenu ──────────────────────────────────────────────────────────
@@ -172,11 +159,10 @@ export function AppSidebar() {
   >("account");
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [joinOrgOpen, setJoinOrgOpen] = useState(false);
-  const openChat = useChatStore((state: any) => state.openChat);
+  const openChat = useChatStore((state) => state.openChat);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -198,16 +184,22 @@ export function AppSidebar() {
   const { setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
 
+  // ── Auto-collapse on /motion/* routes (Option A1) ──────────────────────
+  // When the user navigates into Motion, the AppSidebar collapses so the
+  // MotionSidebar can take the full left panel without two sidebars competing.
+  // When leaving /motion, the previous open state is restored.
   const wasOpenBeforeMotion = useRef<boolean | null>(null);
   const isMotionRoute = location.pathname.startsWith("/motion");
 
   useEffect(() => {
     if (isMotionRoute) {
+      // Save current open state before collapsing
       if (wasOpenBeforeMotion.current === null) {
         wasOpenBeforeMotion.current = state === "expanded";
       }
       setOpen(false);
     } else {
+      // Restore previous state when leaving /motion
       if (wasOpenBeforeMotion.current !== null) {
         setOpen(wasOpenBeforeMotion.current);
         wasOpenBeforeMotion.current = null;
@@ -216,6 +208,7 @@ export function AppSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMotionRoute]);
 
+  // ── App context ────────────────────────────────────────────────────────
   const {
     organisations,
     activeOrgId,
@@ -227,12 +220,16 @@ export function AppSidebar() {
 
   const navigate = useNavigate();
 
+  // ── Helper for manual workspace switching with navigation reset ──────────
+  // If the user is on a detail page (/tasks/:id or /events/:id), we reset
+  // them to /tasks after switching to avoid getting trapped by auto-switch logic.
+  // We only reset if the target workspace is actually different.
   const handleManualSwitch = (
     switchFn: () => void,
     targetOrgId?: string | null,
     targetSpaceId?: string | null
   ) => {
-    const isDetailRoute = /^\/(tasks|events)\/[^\/]+/.test(location.pathname);
+    const isDetailRoute = /^\/(tasks|events)\/[^/]+/.test(location.pathname);
     const isChanging =
       targetOrgId !== activeOrgId ||
       (targetSpaceId !== undefined && targetSpaceId !== activeSpaceId);
@@ -244,32 +241,20 @@ export function AppSidebar() {
     }
   };
 
+  // Subtitle shown under the user name in the sidebar button
   const currentSpaceLabel =
     activeOrg?.is_personal
       ? (activeSpace?.name ?? "Personal Workspace")
       : (activeSpace?.name ?? activeOrg?.name ?? "Organisation");
 
-  const visibleNavigationItems = navigationItems.filter((item) =>
-    item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
-  const visibleSecondaryItems = secondaryItems.filter((item) =>
-    item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
-
-  const isRouteActive = (url: string) => {
-    if (url === "/") {
-      return location.pathname === "/";
-    }
-    return location.pathname === url || location.pathname.startsWith(`${url}/`);
-  };
-
   return (
     <>
       <Sidebar
         collapsible="icon"
-        className="border-r border-border/70 bg-sidebar/95"
+        className="border-r border-border/50 bg-card [&_[data-sidebar=sidebar]]:bg-card"
       >
-        <SidebarHeader className="gap-3 px-3 py-4 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-3">
+        {/* ── Header ── */}
+        <SidebarHeader className="h-11 shrink-0 justify-center border-b border-border/50 px-2.5 py-2 group-data-[state=collapsed]:px-1.5">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -282,52 +267,38 @@ export function AppSidebar() {
                   <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
-                <div className="flex h-9 items-center justify-between gap-3">
+                <div className="flex h-8 items-center justify-between gap-3 px-1 rounded-lg">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-background shadow-sm ring-1 ring-border/60">
+                    <div className="flex size-8 items-center justify-center text-primary font-bold">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
-                    <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
+                    <span className="text-sm font-bold tracking-tight text-foreground truncate max-w-[160px]">
                       KeilHQ
                     </span>
                   </div>
-                  <SidebarTrigger className="h-7 w-7 rounded-md border border-border/60 bg-background/80 shadow-sm hover:bg-sidebar-accent" />
+                  <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-sidebar-accent" />
                 </div>
               )}
             </SidebarMenuItem>
           </SidebarMenu>
-
-          {!isCollapsed && (
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <SidebarInput
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search..."
-                className="h-9 rounded-xl border-border/60 bg-background/75 pl-9 pr-12 text-[13px] shadow-sm"
-              />
-              <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-border/70 bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                Ctrl F
-              </kbd>
-            </div>
-          )}
         </SidebarHeader>
 
-        <SidebarContent className="gap-0 px-2 pb-2">
-          <SidebarGroup className="p-0">
+        {/* ── Navigation ── */}
+        <SidebarContent className="gap-1 px-1.5 py-1.5">
+          <SidebarGroup className="p-0 px-0.5">
+            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
-                {visibleNavigationItems.map((item) => (
+              <SidebarMenu>
+                {navigationItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     {"url" in item && item.url ? (
                       <SidebarMenuButton
                         asChild
-                        isActive={isRouteActive(item.url)}
+                        isActive={location.pathname === item.url}
                         tooltip={item.title}
-                        className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >
                         <Link to={item.url}>
-                          <item.icon className="text-muted-foreground" />
+                          <item.icon />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -340,16 +311,10 @@ export function AppSidebar() {
                         }}
                         isActive={meetingDialogOpen}
                         tooltip={item.title}
-                        className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >
-                        <item.icon className="text-muted-foreground" />
+                        <item.icon />
                         <span>{item.title}</span>
                       </SidebarMenuButton>
-                    )}
-                    {item.title === "Tasks" && (
-                      <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                        3/5
-                      </SidebarMenuBadge>
                     )}
                   </SidebarMenuItem>
                 ))}
@@ -362,106 +327,44 @@ export function AppSidebar() {
                         setNotificationDrawerOpen(false);
                       }}
                       tooltip="Chat"
-                      className="h-9 rounded-xl px-3 text-[13px] font-medium"
                     >
-                      <MessageSquare className="text-muted-foreground" />
+                      <MessageSquare />
                       <span>Chat</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
 
-          <SidebarGroup className="mt-2 border-t border-border/50 p-0 pt-2">
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
-                {visibleSecondaryItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      tooltip={item.title}
-                      className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                    {item.badge && (
-                      <SidebarMenuBadge className="right-2 top-2 rounded-full bg-background px-2 text-[11px] text-foreground shadow-sm ring-1 ring-border/60">
-                        {item.badge}
-                      </SidebarMenuBadge>
-                    )}
-                  </SidebarMenuItem>
-                ))}
-
+                {/* Notifications */}
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    tooltip="Companies"
-                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setNotificationDrawerOpen(true);
+                      useChatStore.getState().closeChat();
+                    }}
+                    isActive={notificationDrawerOpen || notificationDialogOpen}
+                    tooltip="Notifications"
                   >
-                    <Building2 />
-                    <span>Companies</span>
+                    <Bell />
+                    <span>Notifications</span>
                   </SidebarMenuButton>
-                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                    {organisations.length}
-                  </SidebarMenuBadge>
-                </SidebarMenuItem>
-
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="People"
-                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <Users />
-                    <span>People</span>
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                    164
-                  </SidebarMenuBadge>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="gap-2 px-2 pb-3">
-          <SidebarMenu className="gap-1">
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Help center"
-                className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                <LifeBuoy />
-                <span>Help center</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => {
-                  setNotificationDrawerOpen(true);
-                  useChatStore.getState().closeChat();
-                }}
-                isActive={notificationDrawerOpen || notificationDialogOpen}
-                tooltip="Notifications"
-                className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
-              >
-                <Bell className="text-muted-foreground" />
-                <span>Notifications</span>
-              </SidebarMenuButton>
-              <SidebarMenuBadge className="right-2 top-2 h-5 min-w-5 rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white shadow-sm">
-                3
-              </SidebarMenuBadge>
-            </SidebarMenuItem>
-
+        {/* ── Footer: profile dropdown ── */}
+        <SidebarFooter className="shrink-0 border-t border-border/50 p-1.5 px-2">
+          <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="mt-2 h-11 rounded-xl px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
-                    <Avatar className="h-8 w-8 rounded-full ring-1 ring-border/60">
-                      <AvatarFallback className="rounded-full bg-primary text-xs text-primary-foreground">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg bg-primary text-primary-foreground">
                         {userInitials}
                       </AvatarFallback>
                     </Avatar>
@@ -473,7 +376,7 @@ export function AppSidebar() {
                         {currentSpaceLabel}
                       </span>
                     </div>
-                    <ChevronUp className="ml-auto size-4 text-muted-foreground" />
+                    <ChevronUp className="ml-auto" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
 
@@ -484,6 +387,7 @@ export function AppSidebar() {
                   collisionPadding={16}
                   className="w-72 rounded-xl p-1"
                 >
+                  {/* ── User info header ── */}
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-7 w-7 rounded-md">
@@ -504,6 +408,7 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
+                  {/* ── Organisation section ── */}
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
                     <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <Building2 className="h-3 w-3" />
@@ -537,6 +442,7 @@ export function AppSidebar() {
                     </div>
                   </DropdownMenuLabel>
 
+                  {/* Org list — each row has a space sub-menu */}
                   {organisations.length === 0 ? (
                     <div className="px-2.5 py-2 text-xs text-muted-foreground">
                       No organisations yet
@@ -561,6 +467,7 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
+                  {/* ── Settings ── */}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
                     onSelect={() => {
@@ -574,6 +481,7 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
+                  {/* ── Sign out ── */}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-red-500 focus:text-red-500 focus:bg-red-50 dark:focus:bg-red-950/30"
                     onClick={signOut}
@@ -590,6 +498,7 @@ export function AppSidebar() {
         <SidebarRail />
       </Sidebar>
 
+      {/* ── Dialogs ── */}
       <CreateOrganisationDialog
         open={createOrgOpen}
         onOpenChange={setCreateOrgOpen}
