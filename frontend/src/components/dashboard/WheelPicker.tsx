@@ -223,7 +223,7 @@ function WheelItem({
         filter: blur,
       }}
     >
-      <div className="w-full h-full p-2">{children}</div>
+      <div className="h-full w-full">{children}</div>
     </motion.div>
   );
 }

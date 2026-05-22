@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   CheckSquare,
+  Clock3,
   MessageCircle,
 } from "lucide-react";
 
@@ -24,10 +25,10 @@ interface DashboardPanelProps {
 const REPLY_COUNT = 3;
 
 export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [now, setNow] = useState(() => new Date());
   const [dimensions, setDimensions] = useState({
     containerHeight: 154,
-    itemHeight: 136,
+    itemHeight: 154,
     radius: 76,
     perspective: 900,
   });
@@ -38,21 +39,21 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
       if (height >= 850) {
         setDimensions({
           containerHeight: 168,
-          itemHeight: 148,
+          itemHeight: 168,
           radius: 82,
           perspective: 1000,
         });
       } else if (height >= 720) {
         setDimensions({
           containerHeight: 154,
-          itemHeight: 136,
+          itemHeight: 154,
           radius: 76,
           perspective: 900,
         });
       } else {
         setDimensions({
           containerHeight: 136,
-          itemHeight: 118,
+          itemHeight: 136,
           radius: 64,
           perspective: 750,
         });
@@ -62,6 +63,11 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const wheelItems = [
@@ -80,56 +86,38 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
     />,
   ];
 
-  const focusItems = [
+  const urgentCount = data?.immediate?.length ?? 0;
+  const queuedCount = data?.today?.length ?? 0;
+  const dayLabel = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(now);
+  const timeLabel = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(now);
+
+  const stats = [
     {
       Icon: AlertTriangle,
-      label: "Immediate Blockers",
-      count: data?.immediate?.length ?? 0,
-      eyebrow: "Needs attention",
-      title:
-        (data?.immediate?.length ?? 0) > 0
-          ? `${data?.immediate?.length ?? 0} blocker${
-              data?.immediate?.length === 1 ? "" : "s"
-            } to clear`
-          : "No blockers right now",
-      description:
-        data?.immediate?.[0]?.title ??
-        "Your active work is not blocked. Keep moving through the next task.",
-      tone: "text-red-600 bg-red-50 border-red-100 dark:text-red-400 dark:bg-red-950/30 dark:border-red-900/40",
-      metricLabel: "Urgent",
+      label: "Urgent",
+      value: urgentCount,
+      tone: "text-red-500 bg-red-500/10 border-red-500/15",
     },
     {
       Icon: MessageCircle,
-      label: "Needs Reply",
-      count: REPLY_COUNT,
-      eyebrow: "Team messages",
-      title: "Threads waiting on you",
-      description:
-        "Review the latest conversations and reply where your input can unblock progress.",
-      tone: "text-blue-600 bg-blue-50 border-blue-100 dark:text-blue-400 dark:bg-blue-950/30 dark:border-blue-900/40",
-      metricLabel: "Replies",
+      label: "Replies",
+      value: REPLY_COUNT,
+      tone: "text-blue-500 bg-blue-500/10 border-blue-500/15",
     },
     {
       Icon: CheckSquare,
-      label: "Up Next",
-      count: data?.today?.length ?? 0,
-      eyebrow: "Today",
-      title:
-        (data?.today?.length ?? 0) > 0
-          ? `${data?.today?.length ?? 0} item${
-              data?.today?.length === 1 ? "" : "s"
-            } queued`
-          : "Nothing queued yet",
-      description:
-        data?.today?.[0]?.title ??
-        "Add a task when you are ready to line up the next piece of work.",
-      tone: "text-emerald-600 bg-emerald-50 border-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/40",
-      metricLabel: "Queued",
+      label: "Queued",
+      value: queuedCount,
+      tone: "text-emerald-500 bg-emerald-500/10 border-emerald-500/15",
     },
   ];
-
-  const activeFocus = focusItems[activeIndex] ?? focusItems[0];
-  const ActiveIcon = activeFocus.Icon;
 
   return (
     <div className="w-full max-w-[54rem] px-4 mt-4 sm:mt-5">
@@ -148,61 +136,64 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
             itemHeight={dimensions.itemHeight}
             radius={dimensions.radius}
             perspective={dimensions.perspective}
-            onActiveIndexChange={setActiveIndex}
           />
         </div>
 
-        <div className="relative flex min-w-0 flex-1 items-center px-5 sm:px-6">
+        <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-muted/20 via-transparent to-transparent" />
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeIndex}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="relative z-10 flex w-full min-w-0 items-center justify-between gap-4"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <div
-                  className={cn(
-                    "flex size-11 shrink-0 items-center justify-center rounded-2xl border",
-                    activeFocus.tone,
-                  )}
-                >
-                  <ActiveIcon className="size-5" />
+          <div className="relative z-10 grid min-h-0 w-full grid-cols-[1.15fr_1fr] gap-3 p-3 sm:p-4">
+            <div className="flex min-w-0 flex-col justify-between rounded-2xl border border-border/60 bg-card/55 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-xs font-medium text-muted-foreground">
+                    {dayLabel}
+                  </span>
                 </div>
-
-                <div className="min-w-0">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-                      {activeFocus.label}
-                    </span>
-                    <span className="hidden rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-flex">
-                      {activeFocus.eyebrow}
-                    </span>
-                  </div>
-                  <h2 className="truncate text-base font-semibold leading-tight text-foreground">
-                    {activeFocus.title}
-                  </h2>
-                  <p className="mt-1 max-w-[24rem] truncate text-xs leading-snug text-muted-foreground">
-                    {activeFocus.description}
-                  </p>
-                </div>
-              </div>
-
-              <div className="hidden shrink-0 items-center gap-2 md:flex">
-                <div className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
-                  {activeFocus.count} {activeFocus.metricLabel}
-                </div>
-                <div className="flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400">
+                <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-500">
                   <CheckCircle2 className="size-3" />
                   Live
                 </div>
               </div>
-            </motion.div>
-          </AnimatePresence>
+              <div>
+                <div className="flex items-end gap-2">
+                  <Clock3 className="mb-1 size-4 text-muted-foreground" />
+                  <p className="truncate text-2xl font-semibold leading-none text-foreground">
+                    {timeLabel}
+                  </p>
+                </div>
+                <p className="mt-2 truncate text-xs text-muted-foreground">
+                  Workspace snapshot
+                </p>
+              </div>
+            </div>
+
+            <div className="grid min-h-0 min-w-0 grid-rows-3 gap-2">
+              {stats.map(({ Icon, label, value, tone }) => (
+                <div
+                  key={label}
+                  className="flex min-h-0 min-w-0 items-center justify-between gap-3 rounded-xl border border-border/55 bg-card/45 px-3 py-1"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={cn(
+                        "flex size-6 shrink-0 items-center justify-center rounded-lg border",
+                        tone,
+                      )}
+                    >
+                      <Icon className="size-3" />
+                    </span>
+                    <span className="truncate text-[11px] font-medium text-muted-foreground">
+                      {label}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold text-foreground">
+                    {isLoading ? "-" : value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ export function NeedsReplyCard({ isWheel }: NeedsReplyCardProps) {
     <Card
       className={cn(
         "bg-card/90 border border-border/60 rounded-2xl p-4 gap-2 hover:bg-card transition-all duration-300 cursor-pointer shadow-sm group",
-        isWheel ? "h-full w-full" : "",
+        isWheel ? "h-full w-full rounded-none border-0" : "",
       )}
     >
       <div className="flex items-center gap-2 mb-2">

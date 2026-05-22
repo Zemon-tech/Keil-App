@@ -21,7 +21,7 @@ export function ImmediateBlockersCard({
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 gap-2",
-          isWheel ? "h-full w-full" : "",
+          isWheel ? "h-full w-full rounded-none border-0" : "",
         )}
       >
         <div className="flex items-center gap-2 mb-1">
@@ -40,7 +40,7 @@ export function ImmediateBlockersCard({
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex items-center justify-center text-muted-foreground text-xs italic",
-          isWheel ? "h-full w-full" : "",
+          isWheel ? "h-full w-full rounded-none border-0" : "",
         )}
       >
         No blockers
@@ -52,7 +52,7 @@ export function ImmediateBlockersCard({
     <Card
       className={cn(
         "bg-card/90 border border-border/60 rounded-2xl p-4 gap-2 hover:bg-card transition-all duration-300 cursor-pointer shadow-sm group",
-        isWheel ? "h-full w-full" : "",
+        isWheel ? "h-full w-full rounded-none border-0" : "",
       )}
     >
       <h3 className="text-[9px] uppercase tracking-[0.25em] text-destructive font-bold mb-2 flex items-center gap-2">

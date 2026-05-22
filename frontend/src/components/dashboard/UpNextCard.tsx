@@ -24,7 +24,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex flex-col justify-between shadow-sm",
-          isWheel ? "h-full w-full" : "h-[132px]",
+          isWheel ? "h-full w-full rounded-none border-0" : "h-[132px]",
         )}
       >
         <div>
@@ -42,7 +42,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex items-center justify-center text-muted-foreground text-xs italic",
-          isWheel ? "h-full w-full" : "h-[132px]",
+          isWheel ? "h-full w-full rounded-none border-0" : "h-[132px]",
         )}
       >
         Clear schedule
@@ -73,7 +73,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex flex-col justify-between hover:bg-card transition-all duration-300 cursor-pointer shadow-sm group",
-          isWheel ? "h-full w-full" : "h-[132px]",
+          isWheel ? "h-full w-full rounded-none border-0" : "h-[132px]",
         )}
       >
         <div className="flex flex-col h-full justify-between">
