@@ -281,7 +281,7 @@ export function MotionPage() {
   };
 
   // ── Guards ──────────────────────────────────────────────────────────────────
-  if (mode !== "organisation" || !activeOrgId || !activeSpaceId) {
+  if (!activeOrgId || !activeSpaceId) {
     return (
       <div className="flex h-dvh w-full items-center justify-center bg-background text-foreground">
         <p className="text-sm text-muted-foreground">

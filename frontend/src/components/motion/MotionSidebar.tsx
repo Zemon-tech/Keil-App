@@ -354,7 +354,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
     }
   };
 
-  const noContext = mode !== "organisation" || !activeOrgId || !activeSpaceId;
+  const noContext = !activeOrgId || !activeSpaceId;
 
   return (
     <Sidebar collapsible="none" className="w-full h-full border-r border-border/50 bg-card flex flex-col select-none">

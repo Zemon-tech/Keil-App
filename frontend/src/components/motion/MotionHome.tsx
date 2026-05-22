@@ -40,7 +40,7 @@ export function MotionHome() {
     navigate(`/motion/${newPage.id}`);
   };
 
-  const noContext = mode !== "organisation" || !activeOrgId || !activeSpaceId;
+  const noContext = !activeOrgId || !activeSpaceId;
 
   return (
     <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative">
