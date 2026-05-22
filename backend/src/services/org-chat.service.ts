@@ -114,42 +114,55 @@ export const getUserChannels = async (
   orgId: string,
   spaceId: string,
 ): Promise<ChatChannelDTO[]> => {
-  const result = await pool.query(
-    `
-      SELECT
-        c.id,
-        c.org_id,
-        c.space_id,
-        c.type,
-        c.name,
-        c.last_message_at,
-        (
-          SELECT COUNT(*)
-          FROM public.messages m
-          JOIN public.channel_members cm_me
-            ON m.channel_id = cm_me.channel_id
-           AND cm_me.user_id = $1
-          WHERE m.channel_id = c.id
-            AND m.created_at > cm_me.last_read_at
-        ) AS unread_count,
-        COALESCE(
-          json_agg(
-            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
-          ) FILTER (WHERE u.id IS NOT NULL),
-          '[]'
-        ) AS members
-      FROM public.channels c
-      JOIN public.channel_members cm ON c.id = cm.channel_id
-      JOIN public.channel_members cm_all ON c.id = cm_all.channel_id
-      JOIN public.users u ON cm_all.user_id = u.id
-      WHERE cm.user_id = $1
-        AND c.org_id = $2
-        AND c.space_id = $3
-      GROUP BY c.id
-      ORDER BY c.last_message_at DESC NULLS LAST
-    `,
-    [userId, orgId, spaceId],
+  const orgCheck = await pool.query(
+    `SELECT is_personal FROM public.organisations WHERE id = $1 LIMIT 1`,
+    [orgId],
   );
+  const isPersonal = orgCheck.rows[0]?.is_personal === true;
+
+  let query = `
+    SELECT
+      c.id,
+      c.org_id,
+      c.space_id,
+      c.type,
+      c.name,
+      c.last_message_at,
+      (
+        SELECT COUNT(*)
+        FROM public.messages m
+        JOIN public.channel_members cm_me
+          ON m.channel_id = cm_me.channel_id
+         AND cm_me.user_id = $1
+        WHERE m.channel_id = c.id
+          AND m.created_at > cm_me.last_read_at
+      ) AS unread_count,
+      COALESCE(
+        json_agg(
+          json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
+        ) FILTER (WHERE u.id IS NOT NULL),
+        '[]'
+      ) AS members
+    FROM public.channels c
+    JOIN public.channel_members cm ON c.id = cm.channel_id
+    JOIN public.channel_members cm_all ON c.id = cm_all.channel_id
+    JOIN public.users u ON cm_all.user_id = u.id
+    WHERE cm.user_id = $1
+  `;
+
+  const params: any[] = [userId];
+
+  if (!isPersonal) {
+    query += ` AND c.org_id = $2 AND c.space_id = $3`;
+    params.push(orgId, spaceId);
+  }
+
+  query += `
+    GROUP BY c.id
+    ORDER BY c.last_message_at DESC NULLS LAST
+  `;
+
+  const result = await pool.query(query, params);
 
   return result.rows.map((row) => ({
     id: row.id,

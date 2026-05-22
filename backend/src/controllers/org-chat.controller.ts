@@ -25,26 +25,72 @@ export const createDirectChannel = catchAsync(async (req: Request, res: Response
   if (!target_user_id) throw new ApiError(400, "target_user_id is required");
   if (target_user_id === userId) throw new ApiError(400, "Cannot create a direct channel with yourself");
 
-  const memberCheck = await pool.query(
-    `
-      SELECT 1
-      FROM public.space_members
-      WHERE org_id = $1
-        AND space_id = $2
-        AND user_id = $3
-      LIMIT 1
-    `,
-    [context.orgId, context.spaceId, target_user_id],
+  const orgCheck = await pool.query(
+    `SELECT is_personal FROM public.organisations WHERE id = $1 LIMIT 1`,
+    [context.orgId],
   );
-  if (memberCheck.rowCount === 0) {
-    throw new ApiError(400, "Target user is not in the same space");
+  const isPersonal = orgCheck.rows[0]?.is_personal === true;
+
+  let resolvedOrgId = context.orgId;
+  let resolvedSpaceId = context.spaceId;
+  let resolvedWorkspaceId = context.workspaceId;
+
+  if (isPersonal) {
+    const sharedRes = await pool.query(
+      `
+        SELECT 
+          o.id as org_id,
+          s.id as space_id,
+          COALESCE(s.workspace_id, o.source_workspace_id) as compatibility_workspace_id
+        FROM public.space_members sm1
+        INNER JOIN public.space_members sm2 
+          ON sm1.space_id = sm2.space_id
+        INNER JOIN public.organisations o 
+          ON o.id = sm1.org_id
+        INNER JOIN public.spaces s 
+          ON s.id = sm1.space_id
+        WHERE sm1.user_id = $1
+          AND sm2.user_id = $2
+          AND o.is_personal = FALSE
+          AND s.deleted_at IS NULL
+        ORDER BY 
+          CASE WHEN s.is_default = TRUE THEN 0 ELSE 1 END,
+          o.created_at ASC,
+          s.created_at ASC
+        LIMIT 1
+      `,
+      [userId, target_user_id],
+    );
+
+    if (sharedRes.rowCount === 0) {
+      throw new ApiError(400, "You do not share any organisations with this user");
+    }
+
+    resolvedOrgId = sharedRes.rows[0].org_id;
+    resolvedSpaceId = sharedRes.rows[0].space_id;
+    resolvedWorkspaceId = sharedRes.rows[0].compatibility_workspace_id;
+  } else {
+    const memberCheck = await pool.query(
+      `
+        SELECT 1
+        FROM public.space_members
+        WHERE org_id = $1
+          AND space_id = $2
+          AND user_id = $3
+        LIMIT 1
+      `,
+      [context.orgId, context.spaceId, target_user_id],
+    );
+    if (memberCheck.rowCount === 0) {
+      throw new ApiError(400, "Target user is not in the same space");
+    }
   }
 
   const existingChannelId = await orgChatService.findDirectChannel(
     userId,
     target_user_id,
-    context.orgId,
-    context.spaceId,
+    resolvedOrgId,
+    resolvedSpaceId,
   );
   if (existingChannelId) {
     const channel = await orgChatService.getChannelById(existingChannelId, userId);
@@ -53,9 +99,9 @@ export const createDirectChannel = catchAsync(async (req: Request, res: Response
   }
 
   const channelId = await orgChatService.createChannel(
-    context.workspaceId,
-    context.orgId,
-    context.spaceId,
+    resolvedWorkspaceId,
+    resolvedOrgId,
+    resolvedSpaceId,
     "direct",
     null,
     [userId, target_user_id],

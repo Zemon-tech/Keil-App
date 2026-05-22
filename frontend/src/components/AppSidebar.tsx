@@ -322,7 +322,7 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 ))}
 
-                {mode === "organisation" && activeOrgId && activeSpaceId && (
+                {activeOrgId && activeSpaceId && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => {

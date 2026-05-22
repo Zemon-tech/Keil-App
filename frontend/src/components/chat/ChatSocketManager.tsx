@@ -6,9 +6,9 @@ export function ChatSocketManager() {
   const { mode, activeOrgId, activeSpaceId } = useAppContext();
   const { activeChannelId } = useChatStore();
 
-  // If not in organisation mode, or missing org/space, don't mount listeners
-  const orgId = mode === "organisation" ? activeOrgId : null;
-  const spaceId = mode === "organisation" ? activeSpaceId : null;
+  // Mount listeners if we have activeOrgId and activeSpaceId
+  const orgId = activeOrgId;
+  const spaceId = activeSpaceId;
 
   useChatSocketListeners(activeChannelId, orgId, spaceId);
 

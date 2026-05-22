@@ -18,7 +18,8 @@ export const getSpaces = catchAsync(async (req: Request, res: Response) => {
 export const getSpaceMembers = catchAsync(async (req: Request, res: Response) => {
   const orgId = asString(req.params.orgId);
   const spaceId = asString(req.params.spaceId);
-  const members = await spaceService.getSpaceMembers(orgId, spaceId);
+  const userId = (req as any).user?.id as string;
+  const members = await spaceService.getSpaceMembers(orgId, spaceId, userId);
 
   res
     .status(200)
