@@ -214,7 +214,6 @@ export function AppSidebar() {
 
   // ── App context ────────────────────────────────────────────────────────
   const {
-    mode,
     organisations,
     activeOrgId,
     activeSpaceId,

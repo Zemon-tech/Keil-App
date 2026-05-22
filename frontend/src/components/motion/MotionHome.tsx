@@ -11,7 +11,7 @@ import { useMotionPages, useCreateMotionPage } from "@/hooks/api/useMotionPages"
 
 export function MotionHome() {
   const navigate = useNavigate();
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const { sidebarOpen, setSidebarOpen, hydratePages } = useMotionStore();
 
   const { data: pages = [], isLoading } = useMotionPages(activeOrgId, activeSpaceId);

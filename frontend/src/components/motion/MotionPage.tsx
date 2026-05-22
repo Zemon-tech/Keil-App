@@ -76,7 +76,7 @@ export function MotionPage() {
   const [draftPosition, setDraftPosition] = useState<number>(50);
   const coverContainerRef = useRef<HTMLDivElement>(null);
 
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const { user } = useAuth();
   const { spaceRole } = useSpaceRole();
 

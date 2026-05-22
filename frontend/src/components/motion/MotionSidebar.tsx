@@ -283,7 +283,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const navigate = useNavigate();
   const { pageId } = useParams();
 
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { activeOrgId, activeSpaceId } = useAppContext();
 
   // ── API data ────────────────────────────────────────────────────────────────
   const { data: apiPages = [], isLoading: isPagesLoading } = useMotionPages(activeOrgId, activeSpaceId);

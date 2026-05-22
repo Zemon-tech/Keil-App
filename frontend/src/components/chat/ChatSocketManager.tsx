@@ -3,7 +3,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useChatStore } from "@/store/useChatStore";
 
 export function ChatSocketManager() {
-  const { mode, activeOrgId, activeSpaceId } = useAppContext();
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const { activeChannelId } = useChatStore();
 
   // Mount listeners if we have activeOrgId and activeSpaceId
