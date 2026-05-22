@@ -132,7 +132,7 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
   const ActiveIcon = activeFocus.Icon;
 
   return (
-    <div className="w-full max-w-[54rem] px-4 -mt-3 sm:-mt-4">
+    <div className="w-full max-w-[54rem] px-4 mt-4 sm:mt-5">
       <div
         className={cn(
           "flex w-full flex-col overflow-hidden rounded-[1.45rem] border border-border/70 bg-background/92 backdrop-blur-xl",
