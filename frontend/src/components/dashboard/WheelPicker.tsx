@@ -16,6 +16,7 @@ interface WheelPickerProps {
   className?: string;
   perspective?: number;
   radius?: number;
+  onActiveIndexChange?: (index: number) => void;
 }
 
 export function WheelPicker({
@@ -25,6 +26,7 @@ export function WheelPicker({
   className,
   perspective = 1200,
   radius = 200,
+  onActiveIndexChange,
 }: WheelPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -53,6 +55,7 @@ export function WheelPicker({
     const actualIndex = rawIndex % items.length;
     if (actualIndex !== activeIndex) {
       setActiveIndex(actualIndex);
+      onActiveIndexChange?.(actualIndex);
     }
 
     // Looping logic: if we get too close to the start or end, jump to the middle
