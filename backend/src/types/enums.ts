@@ -70,3 +70,9 @@ export enum MotionPermission {
 export type OrgRole = "owner" | "admin" | "member";
 export type SpaceRole = "admin" | "manager" | "member";
 
+export enum NotificationOutboxStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  FAILED = 'failed'
+}
+

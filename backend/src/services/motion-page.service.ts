@@ -413,16 +413,49 @@ export const createShare = async (
       throw new ApiError(409, 'This page is already shared with that space');
     }
 
-    const share = await motionPageShareRepository.create({
-      page_id: pageId,
-      share_type: MotionShareType.SPACE,
-      target_org_id: input.target_org_id,
-      target_space_id: input.target_space_id,
-      share_token: null,
-      permission: input.permission ?? MotionPermission.VIEW,
-      created_by: userId,
-      expires_at: input.expires_at ? new Date(input.expires_at) : null,
-    } as Partial<MotionPageShare>);
+    const share = await motionPageShareRepository.executeInTransaction(async (client) => {
+      const createdShare = await motionPageShareRepository.create({
+        page_id: pageId,
+        share_type: MotionShareType.SPACE,
+        target_org_id: input.target_org_id,
+        target_space_id: input.target_space_id,
+        share_token: null,
+        permission: input.permission ?? MotionPermission.VIEW,
+        created_by: userId,
+        expires_at: input.expires_at ? new Date(input.expires_at) : null,
+      } as Partial<MotionPageShare>, client);
+
+      const membersRes = await client.query(
+        'SELECT user_id FROM public.space_members WHERE org_id = $1 AND space_id = $2',
+        [input.target_org_id, input.target_space_id]
+      );
+      const recipientIds = membersRes.rows.map((row: any) => row.user_id as string);
+
+      if (recipientIds.length > 0) {
+        const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+        const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+        await client.query(
+          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            null,
+            input.target_org_id,
+            input.target_space_id,
+            userId,
+            'motion_shared',
+            'motion_page',
+            pageId,
+            JSON.stringify({
+              recipient_ids: recipientIds,
+              page_title: page.title,
+              sender_name: senderName
+            })
+          ]
+        );
+      }
+      return createdShare;
+    });
     return toShareDTO(share);
   }
 

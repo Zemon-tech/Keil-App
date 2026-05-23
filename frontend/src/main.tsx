@@ -8,6 +8,7 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext'
 import { AppProvider } from './contexts/AppContext'
+import { NotificationProvider } from './contexts/NotificationContext'
 
 // TanStack Query client — 5 min stale time, 1 retry on failure
 const queryClient = new QueryClient({
@@ -24,6 +25,7 @@ const queryClient = new QueryClient({
 // BrowserRouter        → routing
 // AuthProvider         → Supabase session (must wrap AppProvider)
 // AppProvider          → org/space context (requires auth session)
+// NotificationProvider → custom notifications hook context
 // ThemeProvider        → theme
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -31,9 +33,11 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <AuthProvider>
           <AppProvider>
-            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-              <App />
-            </ThemeProvider>
+            <NotificationProvider>
+              <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+                <App />
+              </ThemeProvider>
+            </NotificationProvider>
           </AppProvider>
         </AuthProvider>
       </BrowserRouter>

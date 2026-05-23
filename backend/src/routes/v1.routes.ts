@@ -13,8 +13,12 @@ import publicTaskRoutes from "./public-task.routes";
 import meetingRoutes from "./meeting.routes";
 import aiRoutes from "./ai.routes";
 import adkRoutes from "./adk.routes"; // ← ADD THIS
+import notificationRoutes from "./notification.routes";
 
 const router = Router();
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+router.use("/notifications", notificationRoutes);
 
 // ── Public task read (no auth) — must be first to avoid auth middleware clash ──
 router.use("/public", publicTaskRoutes);

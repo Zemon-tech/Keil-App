@@ -306,6 +306,38 @@ export const updateTask = async (
         old_value: { status: oldTask.status },
         new_value: { status: data.status }
       }, client);
+
+      // Trigger task_status_changed outbox job
+      const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
+      const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
+      
+      const taskRes = await client.query('SELECT org_id, space_id, title FROM public.tasks WHERE id = $1', [taskId]);
+      const task = taskRes.rows[0];
+      
+      if (task && assigneeIds.length > 0) {
+        const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+        const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+        await client.query(
+          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            workspaceId,
+            task.org_id,
+            task.space_id,
+            userId,
+            'task_status_changed',
+            'task',
+            taskId,
+            JSON.stringify({
+              recipient_ids: assigneeIds,
+              task_title: task.title,
+              sender_name: senderName,
+              status: data.status
+            })
+          ]
+        );
+      }
     }
 
     if (data.priority !== undefined && data.priority !== oldTask.priority) {
@@ -449,6 +481,38 @@ export const changeTaskStatus = async (
       new_value: { status: newStatus }
     }, client);
 
+    // Trigger task_status_changed outbox job
+    const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
+    const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
+    
+    const taskRes = await client.query('SELECT org_id, space_id, title FROM public.tasks WHERE id = $1', [taskId]);
+    const task = taskRes.rows[0];
+    
+    if (task && assigneeIds.length > 0) {
+      const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+      const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+      await client.query(
+        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          workspaceId,
+          task.org_id,
+          task.space_id,
+          userId,
+          'task_status_changed',
+          'task',
+          taskId,
+          JSON.stringify({
+            recipient_ids: assigneeIds,
+            task_title: task.title,
+            sender_name: senderName,
+            status: newStatus
+          })
+        ]
+      );
+    }
+
     return updatedTask;
   });
 
@@ -477,6 +541,33 @@ export const assignUserToTask = async (
       old_value: null,
       new_value: { assigned_user_id: assigneeUserId }
     }, client);
+
+    // Trigger task_assigned outbox job
+    const taskRes = await client.query('SELECT org_id, space_id, title FROM public.tasks WHERE id = $1', [taskId]);
+    const task = taskRes.rows[0];
+    if (task) {
+      const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+      const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+      await client.query(
+        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          workspaceId,
+          task.org_id,
+          task.space_id,
+          userId,
+          'task_assigned',
+          'task',
+          taskId,
+          JSON.stringify({
+            recipient_ids: [assigneeUserId],
+            task_title: task.title,
+            sender_name: senderName
+          })
+        ]
+      );
+    }
   });
 };
 

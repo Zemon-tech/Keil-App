@@ -306,6 +306,30 @@ export const addSpaceMember = async (
 
   await spaceRepository.executeInTransaction(async (client) => {
     await spaceRepository.addMember(orgId, spaceId, targetUserId, "member", client);
+
+    const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+    const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+    await client.query(
+      `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        null,
+        orgId,
+        spaceId,
+        userId,
+        'membership_updates',
+        'space_member',
+        targetUserId,
+        JSON.stringify({
+          recipient_ids: [targetUserId],
+          space_name: space.name,
+          sender_name: senderName,
+          role: 'member',
+          action: 'added_space'
+        })
+      ]
+    );
   });
 };
 
@@ -348,5 +372,34 @@ export const updateSpaceMemberRole = async (
     throw new ApiError(400, "Cannot change your own role");
   }
 
-  await spaceRepository.updateMemberRole(spaceId, targetUserId, role);
+  await spaceRepository.executeInTransaction(async (client) => {
+    await spaceRepository.updateMemberRole(spaceId, targetUserId, role, client);
+
+    const space = await spaceRepository.findById(spaceId, client);
+    const spaceName = space?.name || 'Space';
+
+    const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [actorUserId]);
+    const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+    await client.query(
+      `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        null,
+        orgId,
+        spaceId,
+        actorUserId,
+        'membership_updates',
+        'space_member',
+        targetUserId,
+        JSON.stringify({
+          recipient_ids: [targetUserId],
+          space_name: spaceName,
+          sender_name: senderName,
+          role,
+          action: 'role_updated_space'
+        })
+      ]
+    );
+  });
 };

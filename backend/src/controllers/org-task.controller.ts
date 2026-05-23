@@ -23,6 +23,9 @@ const parseOptionalDate = (value: unknown, fieldName: string): Date | null | und
   return parsed;
 };
 
+const isUuid = (value: unknown): value is string =>
+  typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
 const asString = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] : (value ?? "");
 
@@ -105,13 +108,16 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
   };
 
   // Always populate userId filter so user_space_role is returned for every task query
-  options.filters!.userId = (req as any).user?.id;
+  const reqUserId = (req as any).user?.id;
+  if (reqUserId && isUuid(reqUserId)) {
+    options.filters!.userId = reqUserId;
+  }
 
   const isPrivateSpace = (req as any).space?.is_private === true;
   if (mirror === "true" && isPrivateSpace) {
     options.filters!.mirror = true;
-    if (org_filter) options.filters!.orgFilter = org_filter as string;
-    if (space_filter) options.filters!.spaceFilter = space_filter as string;
+    if (org_filter && isUuid(org_filter)) options.filters!.orgFilter = org_filter as string;
+    if (space_filter && isUuid(space_filter)) options.filters!.spaceFilter = space_filter as string;
   }
 
   if (status) {
@@ -122,11 +128,21 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
     if (!validatePriority(priority)) throw new ApiError(400, "Invalid priority");
     options.filters!.priority = priority;
   }
-  if (assignee_id) options.filters!.assigneeId = assignee_id as string;
+  if (assignee_id) {
+    const assigneeStr = assignee_id as string;
+    if (assigneeStr !== "all" && assigneeStr !== "" && assigneeStr !== "undefined" && assigneeStr !== "null") {
+      if (!isUuid(assigneeStr)) throw new ApiError(400, "Invalid assignee_id format");
+      options.filters!.assigneeId = assigneeStr;
+    }
+  }
   if (due_date_start) options.filters!.dueDateStart = parseOptionalDate(due_date_start, "due_date_start") as Date;
   if (due_date_end) options.filters!.dueDateEnd = parseOptionalDate(due_date_end, "due_date_end") as Date;
-  if (parent_task_id !== undefined) {
-    options.filters!.parentTaskId = parent_task_id === "null" ? null : (parent_task_id as string);
+  
+  if (parent_task_id !== undefined && parent_task_id !== "undefined" && parent_task_id !== "null" && parent_task_id !== "") {
+    if (!isUuid(parent_task_id as string)) throw new ApiError(400, "Invalid parentTaskId format");
+    options.filters!.parentTaskId = parent_task_id as string;
+  } else if (parent_task_id === "null") {
+    options.filters!.parentTaskId = null;
   }
   if (sort_by) {
     const field = sort_by === "due_date" ? "due_date" : sort_by === "priority" ? "priority" : "created_at";

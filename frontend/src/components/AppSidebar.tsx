@@ -29,6 +29,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppContext } from "@/contexts/AppContext";
+import { useNotifications } from "@/contexts/NotificationContext";
 import { useSpaces } from "@/hooks/api/useSpaces";
 import {
   LayoutDashboard,
@@ -45,6 +46,7 @@ import {
   Building2,
   Mic,
   Search,
+  Bell,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -64,6 +66,7 @@ const navigationItems = [
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Meetings", action: "meetings", icon: Mic },
   { title: "Motion", url: "/motion", icon: Image },
+  { title: "Notifications", action: "notifications", icon: Bell },
 ];
 
 
@@ -166,6 +169,7 @@ export function AppSidebar() {
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const { unreadCount } = useNotifications();
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -335,11 +339,23 @@ export function AppSidebar() {
                     ) : (
                       <SidebarMenuButton
                         onClick={() => {
-                          if ("action" in item && item.action === "meetings") {
-                            setMeetingDialogOpen(true);
+                          if ("action" in item) {
+                            if (item.action === "meetings") {
+                              setMeetingDialogOpen(true);
+                            } else if (item.action === "notifications") {
+                              setNotificationDrawerOpen(true);
+                            }
                           }
                         }}
-                        isActive={meetingDialogOpen}
+                        isActive={
+                          "action" in item
+                            ? item.action === "meetings"
+                              ? meetingDialogOpen
+                              : item.action === "notifications"
+                              ? (notificationDrawerOpen || notificationDialogOpen)
+                              : false
+                            : false
+                        }
                         tooltip={item.title}
                         className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >
@@ -350,6 +366,11 @@ export function AppSidebar() {
                     {item.title === "Tasks" && (
                       <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
                         3/5
+                      </SidebarMenuBadge>
+                    )}
+                    {item.title === "Notifications" && unreadCount > 0 && (
+                      <SidebarMenuBadge className="right-2 top-2 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
+                        {unreadCount}
                       </SidebarMenuBadge>
                     )}
                   </SidebarMenuItem>

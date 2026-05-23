@@ -13,6 +13,7 @@ import { PersonalTaskRepository } from './personal-task.repository';
 import { OrgTaskRepository } from './org-task.repository';
 import { IntegrationRepository } from './integration.repository';
 import { MotionPageRepository, MotionPageShareRepository } from './motion-page.repository';
+import { NotificationRepository, UserNotificationPreferenceRepository, NotificationOutboxRepository } from './notification.repository';
 
 // Instantiate repositories with the shared pool
 export const userRepository = new UserRepository();
@@ -29,6 +30,9 @@ export const orgTaskRepository = new OrgTaskRepository();
 export const integrationRepository = new IntegrationRepository();
 export const motionPageRepository = new MotionPageRepository();
 export const motionPageShareRepository = new MotionPageShareRepository();
+export const notificationRepository = new NotificationRepository();
+export const userNotificationPreferenceRepository = new UserNotificationPreferenceRepository();
+export const notificationOutboxRepository = new NotificationOutboxRepository();
 
 // Export repository classes for testing/mocking
 export {
@@ -46,4 +50,7 @@ export {
   IntegrationRepository,
   MotionPageRepository,
   MotionPageShareRepository,
+  NotificationRepository,
+  UserNotificationPreferenceRepository,
+  NotificationOutboxRepository,
 };

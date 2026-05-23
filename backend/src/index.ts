@@ -6,6 +6,7 @@ import http from "http";
 import { initSocket } from "./socket";
 import { taskOverdueWorkerService } from "./services/task-overdue-worker.service";
 import { renewExpiringWatchChannels, healDegradedWatchChannels } from "./services/gcal-watch-renewal.service";
+import { NotificationWorkerService } from "./services/notification-worker.service";
 
 const port = Number(config.port);
 
@@ -26,6 +27,9 @@ const startServer = async () => {
         // Start background worker for overdue tasks
         taskOverdueWorkerService.start();
 
+        // Start background worker for outbox notifications fanning
+        NotificationWorkerService.start();
+
         // Start Google Calendar watch channel renewal cron (every 12 hours)
         // Renews expiring channels and self-heals degraded integrations
         const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
@@ -39,6 +43,22 @@ const startServer = async () => {
         }, TWELVE_HOURS_MS);
 
         console.log('[gcal-renewal] Watch channel renewal cron scheduled (every 12 hours).');
+
+        // Register Graceful Shutdown Hooks
+        const gracefulShutdown = (signal: string) => {
+            console.log(`🛑 [server]: Received ${signal}. Shutting down gracefully...`);
+            NotificationWorkerService.stop();
+            taskOverdueWorkerService.stop();
+            server.close(() => {
+                pool.end().then(() => {
+                    console.log("🔌 [server]: Database connection pool ended cleanly.");
+                    process.exit(0);
+                });
+            });
+        };
+
+        process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+        process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
     } catch (error) {
         console.error("Failed to start server:", error);

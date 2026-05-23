@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import api from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -1726,8 +1727,107 @@ function TasksTab() {
 }
 
 function NotificationsTab() {
+  const [prefs, setPrefs] = useState<{
+    notify_task_assigned: boolean;
+    notify_message: boolean;
+    notify_motion_shared: boolean;
+    notify_status_changed: boolean;
+    notify_membership_updated: boolean;
+    notify_comment_mention: boolean;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function loadPrefs() {
+      try {
+        const res = await api.get("/v1/notifications/preferences");
+        if (active) {
+          setPrefs(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load notification preferences:", err);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+    loadPrefs();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleToggle = async (key: string, currentValue: boolean) => {
+    if (!prefs) return;
+    const newValue = !currentValue;
+    
+    // Optimistic UI update
+    setPrefs((prev: any) => ({ ...prev, [key]: newValue }));
+
+    try {
+      await api.patch("/v1/notifications/preferences", {
+        [key]: newValue,
+      });
+    } catch (err) {
+      console.error(`Failed to update preference ${key}:`, err);
+      // Rollback on error
+      setPrefs((prev: any) => ({ ...prev, [key]: currentValue }));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <p className="text-sm text-muted-foreground">Loading preferences...</p>
+      </div>
+    );
+  }
+
+  if (!prefs) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <p className="text-sm text-destructive">Failed to load notification settings.</p>
+      </div>
+    );
+  }
+
+  const preferenceItems = [
+    {
+      key: "notify_task_assigned",
+      title: "Task Assignments",
+      description: "Get notified when someone assigns a task to you"
+    },
+    {
+      key: "notify_comment_mention",
+      title: "Comment Mentions",
+      description: "Get alerted when someone @mentions you inside comments"
+    },
+    {
+      key: "notify_message",
+      title: "Chat Messages",
+      description: "Get notified when a new chat message is received"
+    },
+    {
+      key: "notify_status_changed",
+      title: "Task Status Changes",
+      description: "Get alerted when a task's workflow status transitions"
+    },
+    {
+      key: "notify_motion_shared",
+      title: "Motion Sharing",
+      description: "Get notified when a document or canvas is shared with your spaces"
+    },
+    {
+      key: "notify_membership_updated",
+      title: "Membership Updates",
+      description: "Get alerts when workspace or space member role states change"
+    }
+  ];
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Notifications</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -1737,54 +1837,29 @@ function NotificationsTab() {
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Push Notifications
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Receive push notifications in your browser
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Email Notifications
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Get notified via email for important updates
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Sound</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Play a sound when you receive a notification
-          </p>
-        </div>
-        <Switch />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Task mentions</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Notify when someone mentions you in a task
-          </p>
-        </div>
-        <Switch defaultChecked />
+      <div className="space-y-4">
+        {preferenceItems.map((item, idx) => {
+          const checked = (prefs as any)[item.key];
+          return (
+            <div key={item.key}>
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {item.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {item.description}
+                  </p>
+                </div>
+                <Switch 
+                  checked={checked} 
+                  onCheckedChange={() => handleToggle(item.key, checked)}
+                />
+              </div>
+              {idx < preferenceItems.length - 1 && <Separator className="my-4" />}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
