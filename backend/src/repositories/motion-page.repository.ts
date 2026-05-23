@@ -179,6 +179,22 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
   }
 
   /**
+   * Finds a single share by its ID.
+   * Overrides base findById because motion_page_shares has no deleted_at column.
+   */
+  async findById(id: string, client?: PoolClient): Promise<MotionPageShare | null> {
+    const query = `
+      SELECT *
+      FROM public.motion_page_shares
+      WHERE id = $1
+      LIMIT 1
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [id]);
+    return result.rows.length > 0 ? (result.rows[0] as MotionPageShare) : null;
+  }
+
+  /**
    * Returns all shares for a given page.
    */
   async findByPage(pageId: string, client?: PoolClient): Promise<MotionPageShare[]> {
@@ -221,7 +237,7 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
     client?: PoolClient,
   ): Promise<MotionPage[]> {
     const query = `
-      SELECT mp.*
+      SELECT mp.*, mps.permission as share_permission
       FROM public.motion_page_shares mps
       INNER JOIN public.motion_pages mp ON mp.id = mps.page_id
       WHERE mps.target_org_id = $1
@@ -234,6 +250,33 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
     const executor = client || this.pool;
     const result = await executor.query(query, [targetOrgId, targetSpaceId]);
     return result.rows as MotionPage[];
+  }
+
+  /**
+   * Finds a single page that has been shared INTO a given space.
+   * Joins motion_pages to return the full page data and includes the share permission.
+   */
+  async findByIdSharedToSpace(
+    pageId: string,
+    targetOrgId: string,
+    targetSpaceId: string,
+    client?: PoolClient,
+  ): Promise<MotionPage | null> {
+    const query = `
+      SELECT mp.*, mps.permission as share_permission
+      FROM public.motion_page_shares mps
+      INNER JOIN public.motion_pages mp ON mp.id = mps.page_id
+      WHERE mps.page_id = $1
+        AND mps.target_org_id = $2
+        AND mps.target_space_id = $3
+        AND mps.share_type = 'space'
+        AND (mps.expires_at IS NULL OR mps.expires_at > NOW())
+        AND mp.deleted_at IS NULL
+      LIMIT 1
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [pageId, targetOrgId, targetSpaceId]);
+    return result.rows.length > 0 ? (result.rows[0] as MotionPage) : null;
   }
 
   /**

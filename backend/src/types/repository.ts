@@ -19,6 +19,10 @@ export interface TaskFilters {
   dueDateEnd?: Date;
   parentTaskId?: string | null;
   createdBy?: string;
+  mirror?: boolean;
+  userId?: string;
+  orgFilter?: string;
+  spaceFilter?: string;
 }
 
 export interface TaskQueryOptions {

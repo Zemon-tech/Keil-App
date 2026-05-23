@@ -1,4 +1,4 @@
-import { Menu, MoreHorizontal, Clock, Plus, Loader2 } from "lucide-react";
+import { Menu, Clock, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MotionSidebar } from "./MotionSidebar";
@@ -11,7 +11,7 @@ import { useMotionPages, useCreateMotionPage } from "@/hooks/api/useMotionPages"
 
 export function MotionHome() {
   const navigate = useNavigate();
-  const { activeOrgId, activeSpaceId, mode } = useAppContext();
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const { sidebarOpen, setSidebarOpen, hydratePages } = useMotionStore();
 
   const { data: pages = [], isLoading } = useMotionPages(activeOrgId, activeSpaceId);
@@ -40,7 +40,7 @@ export function MotionHome() {
     navigate(`/motion/${newPage.id}`);
   };
 
-  const noContext = mode !== "organisation" || !activeOrgId || !activeSpaceId;
+  const noContext = !activeOrgId || !activeSpaceId;
 
   return (
     <div className="flex h-dvh w-full bg-background text-foreground overflow-hidden relative">
@@ -55,7 +55,7 @@ export function MotionHome() {
       </div>
 
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
-        <header className="flex items-center justify-between px-2 py-1.5 z-40 shrink-0">
+        <header className="h-12 flex items-center justify-between px-2 z-40 shrink-0">
           <Button
             variant="ghost"
             size="icon"
@@ -64,15 +64,6 @@ export function MotionHome() {
           >
             <Menu className="size-5" />
           </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground/50 hover:text-foreground transition-colors"
-            >
-              <MoreHorizontal className="size-5" />
-            </Button>
-          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar-page pb-20">

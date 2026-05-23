@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Breadcrumb,
@@ -72,15 +72,17 @@ function StatusBadge({
       </PopoverTrigger>
       <PopoverContent className="w-40 p-1" align="start">
         {EVENT_STATUS_OPTIONS.map((s) => (
-          <button
-            key={s}
-            onClick={() => onStatusChange(s)}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
-                       hover:bg-accent transition-colors text-left"
-          >
-            <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[s])} />
-            {s}
-          </button>
+          <PopoverClose asChild key={s}>
+            <button
+              key={s}
+              onClick={() => onStatusChange(s)}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
+                         hover:bg-accent transition-colors text-left"
+            >
+              <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[s])} />
+              {s}
+            </button>
+          </PopoverClose>
         ))}
       </PopoverContent>
     </Popover>
@@ -136,7 +138,9 @@ export function EventDetailHeader({
   onEditTask?: () => void;
 }) {
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const changeStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
+  const eventOrgId = event.org_id ?? activeOrgId;
+  const eventSpaceId = event.space_id ?? activeSpaceId;
+  const changeStatus = useChangeOrgTaskStatus(eventOrgId, eventSpaceId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleStatusChange = (newStatus: EventStatus) => {

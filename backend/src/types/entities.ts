@@ -32,6 +32,7 @@ export interface Organisation {
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
+  is_personal?: boolean;
 }
 
 export interface OrganisationMember {
@@ -53,6 +54,7 @@ export interface Space {
   created_at: Date;
   updated_at: Date | null;
   deleted_at: Date | null;
+  is_private?: boolean;
 }
 
 export interface SpaceMember {
@@ -175,15 +177,20 @@ export interface MotionPage {
   org_id: string;
   space_id: string;
   created_by: string;
+  updated_by: string;
   parent_id: string | null;
   title: string;
   content: Record<string, any>; // Tiptap JSONContent
   icon: string | null;
   cover_image: string | null;
+  cover_position: number; // 0–100, vertical %, default 50
   position: number;
+  small_text: boolean;
+  full_width: boolean;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
+  share_permission?: MotionPermission;
 }
 
 export interface MotionPageShare {

@@ -5,12 +5,13 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarInput,
   useSidebar,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
@@ -26,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaces } from "@/hooks/api/useSpaces";
@@ -37,26 +37,32 @@ import {
   ChevronUp,
   User,
   Check,
-  CreditCard,
-  HelpCircle,
   MessageSquare,
   CheckSquare,
   Plus,
-  Bell,
   Loader2,
   Image,
   Building2,
   Mic,
+  Search,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useTheme } from "next-themes";import { SettingsDialog } from "@/components/SettingsDialog";
-import { ChatDialog } from "@/components/ChatDialog";
+import { useTheme } from "next-themes";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
-import { CreateOrganisationDialog } from "@/components/org/CreateOrganisationDialog";
-import { JoinOrganisationDialog } from "@/components/org/JoinOrganisationDialog";
-import type { Organisation } from "@/hooks/api/useOrganisations";
+import { useChatStore } from "@/store/useChatStore";
 import { MeetingDialog } from "@/components/MeetingDialog";
+import type { Organisation } from "@/hooks/api/useOrganisations";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useCreateOrganisation, useJoinOrganisation } from "@/hooks/api/useOrganisations";
 
 // ─── Navigation items ─────────────────────────────────────────────────────────
 
@@ -67,11 +73,155 @@ const navigationItems = [
   { title: "Motion", url: "/motion", icon: Image },
 ];
 
+
+
+// ─── OrgManageDialog ──────────────────────────────────────────────────────────
+// Combined dialog for creating or joining an organisation.
+
+interface OrgManageDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialTab?: "create" | "join";
+}
+
+function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManageDialogProps) {
+  const [tab, setTab] = useState<"create" | "join">(initialTab);
+  const [orgName, setOrgName] = useState("");
+  const [token, setToken] = useState("");
+  const createOrg = useCreateOrganisation();
+  const joinOrg = useJoinOrganisation();
+  const { setActiveOrganisation } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Sync tab when dialog opens with a different initialTab
+  useEffect(() => {
+    if (open) setTab(initialTab);
+  }, [open, initialTab]);
+
+  const handleClose = () => {
+    setOrgName("");
+    setToken("");
+    onOpenChange(false);
+  };
+
+  const handleCreate = () => {
+    const trimmed = orgName.trim();
+    if (!trimmed) return;
+    createOrg.mutate(trimmed, {
+      onSuccess: ({ org, space }) => {
+        setActiveOrganisation(org.id, space.id);
+        if (/^\/(tasks|events)\/[^/]+/.test(location.pathname)) navigate("/tasks");
+        handleClose();
+      },
+    });
+  };
+
+  const handleJoin = () => {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    joinOrg.mutate(trimmed, {
+      onSuccess: ({ orgId, spaceId }) => {
+        setActiveOrganisation(orgId, spaceId);
+        if (/^\/(tasks|events)\/[^/]+/.test(location.pathname)) navigate("/tasks");
+        handleClose();
+      },
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Organisations</DialogTitle>
+        </DialogHeader>
+
+        {/* Tab switcher */}
+        <div className="flex rounded-lg border border-border p-0.5 bg-muted/40 gap-0.5">
+          <button
+            onClick={() => setTab("create")}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+              tab === "create"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Create
+          </button>
+          <button
+            onClick={() => setTab("join")}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+              tab === "join"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Join
+          </button>
+        </div>
+
+        {tab === "create" ? (
+          <div className="flex flex-col gap-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Give your organisation a name. A default General space will be created automatically.
+            </p>
+            <Input
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              placeholder="e.g. Acme Corp, Engineering Team"
+              autoFocus
+            />
+            {createOrg.isError && (
+              <p className="text-xs text-destructive">
+                {(createOrg.error as any)?.response?.data?.message ?? "Something went wrong."}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={handleCreate} disabled={!orgName.trim() || createOrg.isPending}>
+                {createOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Organisation
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Paste an invitation token to join an existing organisation.
+            </p>
+            <Input
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+              placeholder="Invitation token"
+              autoFocus
+            />
+            {joinOrg.isError && (
+              <p className="text-xs text-destructive">
+                {(joinOrg.error as any)?.response?.data?.message ?? "Invalid or expired invite token."}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={handleJoin} disabled={!token.trim() || joinOrg.isPending}>
+                {joinOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Join
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── OrgSpaceSubmenu ──────────────────────────────────────────────────────────
 // Lazy-loads spaces only when the submenu is opened.
 // Renders as a DropdownMenuSub trigger + content.
 
 interface OrgSpaceSubmenuProps {
+  key?: React.Key | string | number;
   org: Organisation;
   activeOrgId: string | null;
   activeSpaceId: string | null;
@@ -85,19 +235,32 @@ function OrgSpaceSubmenu({
   onSelectSpace,
 }: OrgSpaceSubmenuProps) {
   const [subOpen, setSubOpen] = useState(false);
-  // Only fetch spaces when the submenu is actually opened
   const { data: spaces = [], isLoading } = useSpaces(subOpen ? org.id : null);
+  const { user } = useAuth();
 
   const isActiveOrg = activeOrgId === org.id;
+
+  const visibleSpaces = spaces.filter((space) => {
+    if (space.is_private) {
+      return org.owner_user_id === user?.id;
+    }
+    return true;
+  });
 
   return (
     <DropdownMenuSub open={subOpen} onOpenChange={setSubOpen}>
       <DropdownMenuSubTrigger className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
-            {org.name.charAt(0).toUpperCase()}
+            {org.is_personal ? (
+              <User className="h-3.5 w-3.5" />
+            ) : (
+              org.name.charAt(0).toUpperCase()
+            )}
           </div>
-          <span className="text-sm font-medium truncate">{org.name}</span>
+          <span className="text-sm font-medium truncate">
+            {org.is_personal ? "Personal Workspace" : org.name}
+          </span>
         </div>
         {isActiveOrg && (
           <Check className="h-4 w-4 text-primary shrink-0 mr-1" />
@@ -109,12 +272,12 @@ function OrgSpaceSubmenu({
           <div className="flex items-center justify-center py-3">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
-        ) : spaces.length === 0 ? (
+        ) : visibleSpaces.length === 0 ? (
           <div className="px-2 py-3 text-xs text-muted-foreground text-center">
             No spaces yet
           </div>
         ) : (
-          spaces.map((space) => {
+          visibleSpaces.map((space) => {
             const isActiveSpace = isActiveOrg && activeSpaceId === space.id;
             return (
               <DropdownMenuItem
@@ -144,12 +307,13 @@ export function AppSidebar() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<
     "account" | "org-general"
   >("account");
-  const [createOrgOpen, setCreateOrgOpen] = useState(false);
-  const [joinOrgOpen, setJoinOrgOpen] = useState(false);
-  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [orgManageOpen, setOrgManageOpen] = useState(false);
+  const [orgManageTab, setOrgManageTab] = useState<"create" | "join">("create");
+  const openChat = useChatStore((state) => state.openChat);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -197,13 +361,11 @@ export function AppSidebar() {
 
   // ── App context ────────────────────────────────────────────────────────
   const {
-    mode,
     organisations,
     activeOrgId,
     activeSpaceId,
     activeOrg,
     activeSpace,
-    setPersonalMode,
     setActiveOrganisation,
   } = useAppContext();
 
@@ -218,11 +380,11 @@ export function AppSidebar() {
     targetOrgId?: string | null,
     targetSpaceId?: string | null
   ) => {
-    const isDetailRoute = /^\/(tasks|events)\/[^\/]+/.test(location.pathname);
-    const isChanging = 
-      targetOrgId !== activeOrgId || 
+    const isDetailRoute = /^\/(tasks|events)\/[^/]+/.test(location.pathname);
+    const isChanging =
+      targetOrgId !== activeOrgId ||
       (targetSpaceId !== undefined && targetSpaceId !== activeSpaceId);
-    
+
     switchFn();
 
     if (isDetailRoute && isChanging) {
@@ -232,15 +394,30 @@ export function AppSidebar() {
 
   // Subtitle shown under the user name in the sidebar button
   const currentSpaceLabel =
-    mode === "personal"
-      ? `${userDisplayName.split("@")[0]}'s Personal Space`
+    activeOrg?.is_personal
+      ? (activeSpace?.name ?? "Personal Workspace")
       : (activeSpace?.name ?? activeOrg?.name ?? "Organisation");
+
+  const visibleNavigationItems = navigationItems.filter((item) =>
+    item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+
+
+  const isRouteActive = (url: string) => {
+    if (url === "/") {
+      return location.pathname === "/";
+    }
+    return location.pathname === url || location.pathname.startsWith(`${url}/`);
+  };
 
   return (
     <>
-      <Sidebar collapsible="icon" className="border-r-0 bg-card">
-        {/* ── Header ── */}
-        <SidebarHeader className="px-3 py-2 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-2 border-b border-border/50">
+      <Sidebar
+        collapsible="icon"
+        className="border-r border-border/70 bg-sidebar/95"
+      >
+        {/* Header */}
+        <SidebarHeader className="gap-3 px-3 py-4 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-3">
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
@@ -253,101 +430,114 @@ export function AppSidebar() {
                   <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
-                <div className="flex h-8 items-center justify-between gap-3 px-1 rounded-lg">
+                <div className="flex h-9 items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 items-center justify-center text-primary font-bold">
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-background shadow-sm ring-1 ring-border/60">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
-                    <span className="text-sm font-bold tracking-tight text-foreground truncate max-w-[160px]">
+                    <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
                       KeilHQ
                     </span>
                   </div>
-                  <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-sidebar-accent" />
+                  <SidebarTrigger className="h-7 w-7 rounded-md border border-border/60 bg-background/80 shadow-sm hover:bg-sidebar-accent" />
                 </div>
               )}
             </SidebarMenuItem>
           </SidebarMenu>
+
+          {!isCollapsed && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <SidebarInput
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search..."
+                className="h-9 rounded-xl border-border/60 bg-background/75 pl-9 pr-12 text-[13px] shadow-sm"
+              />
+              <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-border/70 bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Ctrl F
+              </kbd>
+            </div>
+          )}
         </SidebarHeader>
 
-        {/* ── Navigation ── */}
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+        {/* Navigation */}
+        <SidebarContent className="gap-0 px-2 pb-2">
+          <SidebarGroup className="p-0">
             <SidebarGroupContent>
-              <SidebarMenu>
-                {navigationItems.map((item) => (
+              <SidebarMenu className="gap-1">
+                {visibleNavigationItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     {"url" in item && item.url ? (
                       <SidebarMenuButton
                         asChild
-                        isActive={location.pathname === item.url}
+                        isActive={isRouteActive(item.url)}
                         tooltip={item.title}
+                        className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >
                         <Link to={item.url}>
-                          <item.icon />
+                          <item.icon className="text-muted-foreground" />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
                     ) : (
                       <SidebarMenuButton
                         onClick={() => {
-                          console.log("Meetings button clicked, action:", "action" in item ? item.action : "none");
                           if ("action" in item && item.action === "meetings") {
                             setMeetingDialogOpen(true);
                           }
                         }}
                         isActive={meetingDialogOpen}
                         tooltip={item.title}
+                        className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >
-                        <item.icon />
+                        <item.icon className="text-muted-foreground" />
                         <span>{item.title}</span>
                       </SidebarMenuButton>
+                    )}
+                    {item.title === "Tasks" && (
+                      <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
+                        3/5
+                      </SidebarMenuBadge>
                     )}
                   </SidebarMenuItem>
                 ))}
 
-                {/* Chat — only in organisation mode with an active space */}
-                {mode === "organisation" && activeOrgId && activeSpaceId && (
+                {activeOrgId && activeSpaceId && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={() => setChatDialogOpen(true)}
-                      isActive={chatDialogOpen}
+                      onClick={() => {
+                        openChat();
+                        setNotificationDrawerOpen(false);
+                      }}
                       tooltip="Chat"
+                      className="h-9 rounded-xl px-3 text-[13px] font-medium"
                     >
-                      <MessageSquare />
+                      <MessageSquare className="text-muted-foreground" />
                       <span>Chat</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
 
-                {/* Notifications */}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setNotificationDrawerOpen(true)}
-                    isActive={notificationDrawerOpen || notificationDialogOpen}
-                    tooltip="Notifications"
-                  >
-                    <Bell />
-                    <span>Notifications</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+
+
         </SidebarContent>
 
         {/* ── Footer: profile dropdown ── */}
-        <SidebarFooter>
+        <SidebarFooter className="shrink-0 border-t border-border/50 p-1.5 px-2">
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="mt-2 h-11 rounded-xl px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-primary text-primary-foreground">
+                    <Avatar className="h-8 w-8 rounded-full ring-1 ring-border/60">
+                      <AvatarFallback className="rounded-full bg-primary text-xs text-primary-foreground">
                         {userInitials}
                       </AvatarFallback>
                     </Avatar>
@@ -359,11 +549,17 @@ export function AppSidebar() {
                         {currentSpaceLabel}
                       </span>
                     </div>
-                    <ChevronUp className="ml-auto" />
+                    <ChevronUp className="ml-auto size-4 text-muted-foreground" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
 
-                <DropdownMenuContent side="top" className="w-72 rounded-xl p-1">
+                <DropdownMenuContent
+                  side="right"
+                  align="end"
+                  sideOffset={12}
+                  collisionPadding={16}
+                  className="w-72 rounded-xl p-1"
+                >
                   {/* ── User info header ── */}
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
@@ -385,55 +581,23 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
-                  {/* ── Mode section ── */}
-                  <DropdownMenuLabel className="text-xs text-muted-foreground px-2 py-1.5">
-                    Mode
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
-                    onSelect={() => handleManualSwitch(setPersonalMode, null, null)}
-                  >
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Personal
-                    {mode === "personal" && (
-                      <Check className="ml-auto h-4 w-4 text-primary" />
-                    )}
-                  </DropdownMenuItem>
-
-                  <DropdownMenuSeparator />
-
                   {/* ── Organisation section ── */}
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
                     <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <Building2 className="h-3 w-3" />
-                      Organisation
+                      Organisations
                     </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setJoinOrgOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Join
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 hover:bg-muted-foreground/10"
-                        title="Create organisation"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCreateOrgOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setOrgManageTab("create");
+                        setOrgManageOpen(true);
+                      }}
+                      className="h-5 w-5 flex items-center justify-center rounded border border-dashed border-muted-foreground/40 hover:border-foreground/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title="Create or join an organisation"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
                   </DropdownMenuLabel>
 
                   {/* Org list — each row has a space sub-menu */}
@@ -461,7 +625,7 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
-                  {/* ── Settings / Billing / Help ── */}
+                  {/* ── Settings ── */}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
                     onSelect={() => {
@@ -471,14 +635,6 @@ export function AppSidebar() {
                   >
                     <Settings className="h-4 w-4 text-muted-foreground" />
                     Settings
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    Billing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                    Help & Support
                   </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
@@ -501,20 +657,16 @@ export function AppSidebar() {
       </Sidebar>
 
       {/* ── Dialogs ── */}
-      <CreateOrganisationDialog
-        open={createOrgOpen}
-        onOpenChange={setCreateOrgOpen}
-      />
-      <JoinOrganisationDialog
-        open={joinOrgOpen}
-        onOpenChange={setJoinOrgOpen}
+      <OrgManageDialog
+        open={orgManageOpen}
+        onOpenChange={setOrgManageOpen}
+        initialTab={orgManageTab}
       />
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         initialTab={settingsInitialTab}
       />
-      <ChatDialog open={chatDialogOpen} onOpenChange={setChatDialogOpen} />
       <NotificationDrawer
         open={notificationDrawerOpen}
         onOpenChange={setNotificationDrawerOpen}

@@ -2,19 +2,19 @@
 
 ## Overview
 
-Keil uses a three-boundary product model: **Platform → Organisation → Space**.
+Keil uses a unified tenant product model with a specialized tiering: **Personal Organisation & System-Managed Private Space**.
 
-- **Platform**: Owns global user identity and personal tasks. Personal work is strictly user-owned with no organisational context.
-- **Organisation**: The primary tenancy boundary. Owns members, spaces, tasks, chat, and activity. Created explicitly by users — never auto-created on signup.
-- **Space**: The team or functional unit inside an organisation (e.g., Design, Engineering). All collaborative work (tasks, chat, dashboard) is scoped to a space. Private by default.
-
-A new user who signs up lands in **Personal Mode** with no organisation. They must explicitly create or join an organisation to access collaborative features.
+- **Personal Organisation**: Every user is automatically assigned a Personal Organisation on signup. It behaves like a standard organisation but cannot be deleted and is pinned at the top of the user's workspace list.
+- **Private Space**: Within the Personal Organisation, a system-managed Private space is created automatically. It is visible only to the owner, does not allow member invitations, and acts as the secure repository for the user's personal tasks.
+- **Shared Organisation**: Standard collaborative workspaces created explicitly by users or joined via invite tokens.
+- **My Tasks**: A unified, cross-organisation read-only aggregate dashboard that pools all active tasks assigned to the user across every workspace they are a member of.
 
 ## Table of Contents
 
 - [Architecture & Design Decisions](./architecture.md)
 - [Frontend Implementation Guide](./frontend.md)
 - [Backend Implementation Guide](./backend.md)
+- [Role-Based Access Control (RBAC) System](../rbac/README.md)
 
 ## Quick Start
 
@@ -28,19 +28,20 @@ cd frontend && npm run dev
 
 ### Key Behaviours
 
-1. **Personal Mode**: Default for new users. Personal tasks are private and never visible to any organisation.
-2. **Organisation Mode**: Activated by creating or joining an org. The sidebar profile dropdown lists orgs; hovering an org reveals its spaces in a sub-menu.
-3. **Space Scope**: All org tasks, chat channels, and dashboard data are strictly scoped to the active space. Switching space changes all data.
-4. **Invite Flow**: Org owners/admins generate an invite link from Settings → Members. The token encodes the `orgId`. Joining adds the user to the org and its default General space.
-5. **Space Management**: Org owners/admins can create, rename, soft-delete, restore, and permanently delete spaces from Settings → Spaces. Members can be added (from org members) or removed per space. The last space in an org cannot be deleted.
+1. **Personal Home Context**: On first load, users automatically land in their Personal Organisation.
+2. **Standard Task Schema**: Personal tasks are normal task entities inside the `public.tasks` table, scoped to the Personal Org and Private Space. They support comments, dependencies, and history natively.
+3. **Cross-Org Aggregation**: The "My Tasks" view pulls assigned active tasks from all organisations, sorted by overdue status first, and provides "Open in Space" quick navigation.
+4. **Invite Flow**: Org owners/admins generate an invite link from Settings → Members. Joining adds the user to the target org. If the default space is private, the invite flow safely redirects to the oldest non-private space.
+5. **Settings Guards**: Settings dialogs dynamically protect system-managed items. Deleting a personal organisation, deleting/archiving a private space, or inviting members to a private space are restricted at both API and UI layers.
 
 ## Tech Stack
 
 | Component | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Frontend State** | `AppContext` (React Context) | Manages `mode`, `activeOrgId`, `activeSpaceId` globally. `WorkspaceContext` has been removed. |
-| **Data Fetching** | TanStack Query | Query keys include `orgId` and `spaceId` to strictly isolate caches per space. |
-| **Backend API** | Express.js | Explicit routes validating `:orgId` and `:spaceId`. Legacy `/workspaces` routes kept as compatibility shims. |
-| **Authentication** | Supabase Auth | Provides JWTs. `protect` middleware extracts user identity only. |
-| **Authorization** | `requireOrgMember`, `requireSpaceMember` | Enforce strict boundary checks on every org/space-scoped route. |
-| **Database** | PostgreSQL (Supabase) | `organisations`, `spaces`, `personal_tasks` tables enforce data isolation at the schema level. |
+| **Frontend State** | `AppContext` (React Context) | Manages active context. Derives `isPersonalOrg` dynamically from `activeOrg?.is_personal`. |
+| **Data Fetching** | TanStack Query | Isolated cache keys per organisation and space. Includes `my-tasks` cross-org cache. |
+| **Backend API** | Express.js | Standardized `:orgId` and `:spaceId` routes. Added `/api/v1/my-tasks` cross-org endpoint. |
+| **Authentication** | Supabase Auth | Provides JWTs. `protect` middleware attaches authenticated identity. |
+| **Authorization** | `requireOrgMember`, `requireSpaceMember` | Enforce tenant boundary checks. Service guards block actions on personal/private rows. |
+| **Database** | PostgreSQL (Supabase) | Unified `organisations`, `spaces`, and `tasks` tables with `is_personal` and `is_private` system flags. |
+

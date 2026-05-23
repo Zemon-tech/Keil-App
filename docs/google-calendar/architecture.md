@@ -2,7 +2,9 @@
 
 ## Overview
 
-The integration uses a **per-user OAuth 2.0** model. Each user independently connects their own Google account. The backend stores their refresh token and uses it to push calendar events on their behalf whenever they schedule a task.
+The integration uses a **per-user OAuth 2.0** model. Each user independently connects their own Google account. The backend stores their refresh token and uses it to push calendar events on their behalf whenever they schedule a task, and to receive push notifications when they make changes in Google Calendar.
+
+---
 
 ## OAuth Connection Flow
 
@@ -41,6 +43,11 @@ The integration uses a **per-user OAuth 2.0** model. Each user independently con
 |            | upsert into public.user_integrations              |
 |            |                                                   |
 |            | redirect to FRONTEND_URL/tasks?gcal=connected     |
+|            |                                                   |
+|            | [fire-and-forget] registerWatch(userId)           |
+|            |   → register push notification channel with Google|
+|            |   → run doFullSync() to get initial syncToken     |
+|            |   → save watch channel metadata to DB             |
 +------------|---------------------------------------------------+
              |
              v
@@ -52,22 +59,22 @@ The integration uses a **per-user OAuth 2.0** model. Each user independently con
 +----------------------------------------------------------------+
 ```
 
-## Task Sync Flow
+---
+
+## Outbound Sync Flow (KeilHQ → Google Calendar)
 
 ```text
 +-------------------------- Frontend ----------------------------+
 |                                                                |
-|  User drags task onto calendar                                 |
+|  User creates/updates/deletes a task in the workspace          |
 |            |                                                   |
-|            | handleTaskSchedule(taskId, startISO, endISO)      |
-|            | → handleUpdateTask(id, { start_date, due_date })  |
-|            | → PATCH /api/v1/tasks/:id  (or /personal/tasks)   |
+|            | PATCH /api/v1/orgs/:orgId/spaces/:spaceId/tasks   |
 +------------|---------------------------------------------------+
              |
              v
 +--------------------------- Backend ----------------------------+
 |                                                                |
-|  task.service.ts / personal-task.service.ts                    |
+|  org-task.service.ts / personal-task.service.ts                |
 |            |                                                   |
 |            | 1. Update task in PostgreSQL (awaited)            |
 |            | 2. Return updated task to frontend (HTTP response) |
@@ -77,7 +84,9 @@ The integration uses a **per-user OAuth 2.0** model. Each user independently con
 |            |      |                                            |
 |            |      | load user_integrations row                 |
 |            |      | build OAuth2 client, refresh token if needed|
-|            |      | build Google event body                    |
+|            |      | build Google event body with:              |
+|            |      |   extendedProperties.private.source='keilhq'|
+|            |      |   (loop prevention tag)                    |
 |            |      |                                            |
 |            |      | if google_event_id exists → events.update  |
 |            |      | else → events.insert                       |
@@ -85,79 +94,166 @@ The integration uses a **per-user OAuth 2.0** model. Each user independently con
 +----------------------------------------------------------------+
 ```
 
-## Sync Decision Logic
+---
+
+## Inbound Sync Flow (Google Calendar → KeilHQ)
 
 ```text
-syncTaskToCalendar(userId, task)
-│
-├── task.start_date is null?
-│   ├── task.google_event_id exists? → deleteCalendarEvent + clear ID
-│   └── return (nothing to sync)
-│
-├── getAuthorizedClient(userId) returns null?
-│   └── return (user not connected — silent skip)
-│
-├── task.google_event_id exists?
-│   └── calendar.events.update(...)
-│
-└── no google_event_id
-    └── calendar.events.insert(...)
-        └── write returned event.id → UPDATE tasks SET google_event_id = ...
++----------------------- Google Calendar ------------------------+
+|                                                                |
+|  User creates/modifies/deletes an event                        |
+|            |                                                   |
+|            | Google sends POST to registered webhook URL       |
++------------|---------------------------------------------------+
+             |
+             v
++--------------------------- Backend ----------------------------+
+|                                                                |
+|  POST /api/v1/integrations/google/webhook  (public)            |
+|            |                                                   |
+|            | 1. Respond 200 immediately                        |
+|            | 2. If X-Goog-Resource-State = 'sync' → return     |
+|            |    (Google's verification ping)                   |
+|            | 3. Look up user by X-Goog-Channel-ID              |
+|            | 4. Validate X-Goog-Resource-ID matches stored ID  |
+|            | 5. Insert into gcal_webhook_receipts (dedup)      |
+|            | 6. Check 10-second debounce on last_sync_at       |
+|            |    If debounced → schedule delayed sync (12s)     |
+|            | 7. process.nextTick → doIncrementalSync(userId)   |
+|            |                                                   |
+|  doIncrementalSync(userId)                                     |
+|            |                                                   |
+|            | 1. Acquire PostgreSQL advisory lock (per-user)    |
+|            | 2. Check watch_status = 'active'                  |
+|            | 3. calendar.events.list(syncToken)                |
+|            |    → 410 Gone: clear token + doFullSync()         |
+|            |    → 401/403: set watch_status = 'revoked'        |
+|            | 4. For each changed event:                        |
+|            |    processIncomingGoogleEvent(userId, event)      |
+|            | 5. Save new syncToken                             |
+|            | 6. Release advisory lock                          |
+|            |                                                   |
+|  processIncomingGoogleEvent(userId, event)                     |
+|            |                                                   |
+|            | 1. Skip if source = 'keilhq' (loop prevention)   |
+|            | 2. Skip if start_date is in the past              |
+|            | 3. Skip if start_date > today + 30 days           |
+|            | 4. Find matching task by google_event_id/ical_uid |
+|            |                                                   |
+|            | If cancelled → soft-delete matching task          |
+|            | If no match → create org task in General space    |
+|            |   status: todo, priority: medium                  |
+|            | If match + Google newer → update task             |
+|            |   (skipGoogleSync=true to prevent echo)           |
+|            |                                                   |
+|            | 5. Emit 'gcal_tasks_updated' via Socket.io        |
++------------|---------------------------------------------------+
+             |
+             v
++-------------------------- Frontend ----------------------------+
+|                                                                |
+|  useTaskOverdueAutoRefresh listens for 'gcal_tasks_updated'    |
+|  → invalidateQueries for org tasks and personal tasks          |
+|  → UI re-fetches and shows updated tasks                       |
++----------------------------------------------------------------+
 ```
+
+---
+
+## Watch Channel Lifecycle (State Machine)
+
+```text
+OAuth callback
+     │
+     ▼
+  pending ──── registerWatch() success ────► active
+     │                                          │
+     └──── registerWatch() failure ──► degraded │
+                                          │     │
+                                          │     │ 401/403 from Google
+                                          │     ▼
+                                          │   revoked
+                                          │     │
+                                          │     └── user reconnects ──► pending
+                                          │
+                                          └── healDegradedWatchChannels() ──► active
+```
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | OAuth tokens saved, watch not yet registered |
+| `active` | Watch registered, syncToken stored, inbound sync running |
+| `degraded` | Watch registration or renewal failed; recovery cron will retry |
+| `revoked` | User revoked OAuth access (401/403) or manually disconnected |
+
+---
+
+## Sync Loop Prevention
+
+Two-pronged guard prevents infinite echo loops:
+
+1. **`extendedProperties` tagging**: Every event pushed from KeilHQ to Google includes `extendedProperties.private.source = 'keilhq'`. The inbound processor checks this tag and skips the event immediately.
+
+2. **`skipGoogleSync` flag**: When `processIncomingGoogleEvent` updates a task, it passes `{ skipGoogleSync: true }` to the service layer. This suppresses the outbound `syncTaskToCalendar()` call that would otherwise echo the change back to Google.
+
+---
 
 ## Key Design Decisions
 
-### 1. Fire-and-forget sync
+### 1. Fire-and-forget sync (outbound)
 
-Google sync is called without `await` and errors are caught and logged. This means:
-- Task updates always succeed even if Google is down or the token is revoked.
-- The HTTP response returns before the sync completes.
-- Sync failures are visible in server logs but not surfaced to the user.
+Google sync is called without `await` and errors are caught and logged. Task updates always succeed even if Google is down or the token is revoked.
 
-**Why:** Calendar sync is a convenience feature. A Google outage or revoked token must never prevent a user from managing their tasks.
+### 2. Fire-and-forget watch registration
 
-### 2. Separate OAuth grant from Google login
+`registerWatch()` is called after the OAuth redirect is sent. Watch registration failure never prevents a successful Google Calendar connection. The user's 1-way sync continues working even if watch registration fails.
 
-Users who sign in with Google via Supabase still need to explicitly connect Google Calendar. Supabase consumes the login tokens internally and does not expose them to the backend. The Calendar integration requires a separate OAuth grant with the `calendar.events` scope.
+### 3. Inbound events go to the user's default org workspace
 
-**Why:** Google treats login identity and calendar write access as distinct permissions. This is by design and cannot be bypassed.
+Events created in Google Calendar are created as org tasks in the user's default organisation (the one auto-created on signup) and its General space. This matches where the user's other tasks live.
 
-### 3. HMAC-signed state parameter
+### 4. Past events are blocked
 
-The OAuth state parameter is a base64-encoded JSON payload (`{ userId, ts }`) signed with `GOOGLE_OAUTH_STATE_SECRET` using HMAC-SHA256. The callback verifies the signature before trusting the `userId`.
+Events with a start date in the past are silently skipped, matching KeilHQ's create dialog behavior:
+- All-day events: blocked if before today
+- Timed events: blocked if even one minute in the past
 
-**Why:** Prevents CSRF attacks where a malicious site tricks a user's browser into completing an OAuth flow that links the attacker's Google account to the victim's app account.
+### 5. 30-day sync window
 
-### 4. `google_event_id` stored on the task row
+Only events within the next 30 days are synced. This prevents quota exhaustion from historical or recurring event explosion.
 
-After creating a Google Calendar event, the returned `event.id` is written back to `tasks.google_event_id` (or `personal_tasks.google_event_id`). This is the permanent link between the app task and the Google event.
+### 6. PostgreSQL advisory locks for concurrency
 
-**Why:** Required for update and delete operations. Without it, every sync would create a duplicate event.
+`pg_try_advisory_lock(hashtext(userId))` on a dedicated pool connection prevents concurrent incremental sync runs for the same user. The lock is always released in a `finally` block.
 
-### 5. Token refresh handled transparently
+### 7. Debounce with delayed fallback
 
-`getAuthorizedClient` checks if the stored access token expires within 5 minutes. If so, it calls `oauth2Client.refreshAccessToken()` and saves the new token to the DB before returning the client. If refresh fails (token revoked), it returns `null` and sync is silently skipped.
+Google sends multiple rapid webhooks for a single change. A 10-second debounce prevents sync spam. When a webhook is debounced, a delayed sync is scheduled 12 seconds later so no change is lost.
 
-**Why:** Access tokens expire after 1 hour. Transparent refresh means sync works indefinitely without user re-authentication.
+### 8. Webhook replay protection
 
-### 6. Same Google Cloud project as login
+Each webhook notification has a unique `X-Goog-Message-Number`. This is stored in `gcal_webhook_receipts` with a unique constraint. Duplicate notifications are rejected atomically.
 
-The same `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` used for Supabase Google login are reused. Only two additional steps are needed: enable the Calendar API and add the callback redirect URI.
+### 9. HMAC-signed state parameter
+
+The OAuth state parameter is a base64-encoded JSON payload signed with HMAC-SHA256. Prevents CSRF attacks where a malicious site tricks a user into linking the attacker's Google account.
+
+### 10. Token refresh handled transparently
+
+`getAuthorizedClient` checks if the access token expires within 5 minutes and refreshes it automatically. If refresh fails (token revoked), it returns `null` and sync is silently skipped.
+
+---
 
 ## Security Boundaries
 
 | Boundary | Mechanism |
 | --- | --- |
 | OAuth CSRF protection | HMAC-SHA256 signed state parameter |
-| Refresh token storage | Stored in `public.user_integrations`, protected by Postgres RLS and app-level auth |
-| Token confidentiality | Refresh token is useless without `GOOGLE_CLIENT_SECRET`, which stays in `.env` |
+| Webhook spoofing | Validate `X-Goog-Channel-ID` + `X-Goog-Resource-ID` pair |
+| Webhook replay attacks | `gcal_webhook_receipts` unique constraint on message number |
+| Refresh token storage | Stored in `public.user_integrations`, protected by app-level auth |
+| Token confidentiality | Refresh token is useless without `GOOGLE_CLIENT_SECRET` |
 | Callback endpoint | Public route — protected by state signature verification, not JWT |
+| Webhook endpoint | Public route — protected by channel/resource ID validation |
 | All other integration endpoints | Protected by `protect` middleware (Supabase JWT) |
 | Sync errors | Caught and logged server-side, never exposed to the client |
-
-## Future: Two-Way Sync
-
-The current architecture is designed to support two-way sync without structural changes:
-
-- `google_event_id` on task rows is the key needed to match incoming Google push notifications back to app tasks.
-- Adding two-way sync requires: registering a Google push notification channel per user, a new public webhook endpoint, and a conflict resolution strategy.

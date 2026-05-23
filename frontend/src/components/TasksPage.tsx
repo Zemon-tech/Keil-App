@@ -1,3 +1,4 @@
+
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -10,38 +11,35 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { integrationKeys } from "@/hooks/api/useGoogleCalendar";
+import api from "@/lib/api";
 
 import type { AnyStatus } from "../types/task";
 import {
   useOrgTasks,
   useOrgTask,
   useLocateTask,
-  useUpdateOrgTask,
-  useDeleteOrgTask,
-  useAssignOrgUser,
-  useRemoveOrgAssignee,
   type TaskFilters,
   type SortBy,
   type SortOrder,
   type TaskDTO,
+  normalizeTaskDTO,
+  orgTaskKeys,
 } from "../hooks/api/useTasks";
 import { useSpaceMembers } from "../hooks/api/useSpaces";
-import {
-  usePersonalTasks,
-  useUpdatePersonalTask,
-  useDeletePersonalTask,
-  type PersonalTaskDTO,
-} from "../hooks/api/usePersonalTasks";
-
 const PAGE_SIZE = 20;
+const EMPTY_BLOCKS: any[] = [];
+const EMPTY_TASKS: TaskDTO[] = [];
 const INITIAL_LIMIT = 10000; // Load all tasks within current month without pagination
 
 export function TasksPage() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { user } = useAuth();
+
+  // ── App context ────────────────────────────────────────
+  const { activeOrgId, activeSpaceId, activeSpace, setActiveOrganisation } = useAppContext();
 
   // ── Read ?taskId from URL (e.g. navigated from a task preview dialog) ──
   const [searchParams, setSearchParams] = useSearchParams();
@@ -56,10 +54,31 @@ export function TasksPage() {
   const navigate = useNavigate();
   const selectedTaskId = urlTaskId ?? urlEventId ?? "";
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [orgFilter, setOrgFilter] = useState<string>("all");
+  const [spaceFilter, setSpaceFilter] = useState<string>("all");
 
   // ── Subtask navigation stack ──
   // Tracks the parent task when user navigates into a subtask
   const [parentTaskStack, setParentTaskStack] = useState<Array<{ id: string; title: string }>>([]);
+
+  // Reset org and space filters when active workspace/space changes
+  useEffect(() => {
+    setOrgFilter("all");
+    setSpaceFilter("all");
+  }, [activeOrgId, activeSpaceId]);
+
+  // When ?taskId appears in the URL (including when already on this page),
+  // select that task and immediately clean the param so the URL stays tidy.
+  useEffect(() => {
+    const taskIdFromUrl = searchParams.get("taskId");
+    if (taskIdFromUrl) {
+      navigate(`/tasks/${taskIdFromUrl}`);
+      setParentTaskStack([]);
+      setSearchParams({}, { replace: true });
+    }
+    // searchParams identity changes on every navigation — this is intentional
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Handle Google Calendar OAuth redirect back (?gcal=connected or ?gcal=error)
   // Runs once on mount — cleans the param immediately after showing the toast
@@ -75,8 +94,8 @@ export function TasksPage() {
       toast.error("Failed to connect Google Calendar. Please try again.");
       setSearchParams({}, { replace: true });
     }
-  // Run once on mount only — intentionally omitting deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Run once on mount only — intentionally omitting deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Pagination: just increase the limit to fetch more ──
@@ -103,63 +122,34 @@ export function TasksPage() {
     } else if (statusFilter === "Highest Priority") {
       // Handled client-side to show both high and urgent
     }
-    return filters;
-  }, [statusFilter, sortBy, sortOrder, limit, user?.id]);
 
-  // ── App mode ──────────────────────────────────────────
-  const { mode, activeOrgId, activeSpaceId, setActiveOrganisation } = useAppContext();
-  const isPersonalMode = mode === "personal";
+    if (activeSpace?.is_private) {
+      filters.mirror = true;
+      if (orgFilter !== "all") {
+        filters.org_filter = orgFilter;
+      }
+      if (spaceFilter !== "all") {
+        filters.space_filter = spaceFilter;
+      }
+    }
+
+    return filters;
+  }, [statusFilter, sortBy, sortOrder, limit, user?.id, activeSpace?.is_private, orgFilter, spaceFilter]);
 
   // ── Org tasks (org/space-scoped route) ──
   const { data: orgTasks, isLoading: orgLoading, isFetching: orgFetching } = useOrgTasks(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId,
-    isPersonalMode ? {} : serverFilters
+    activeOrgId,
+    activeSpaceId,
+    serverFilters
   );
 
-  // ── Personal tasks (active in personal mode) ────────────────────
-  const { data: personalTasksRaw, isLoading: personalLoading } = usePersonalTasks(
-    isPersonalMode
-      ? {
-          status: (serverFilters.status as any) ?? undefined,
-          priority: (serverFilters.priority as any) ?? undefined,
-          limit: serverFilters.limit,
-        }
-      : {}
-  );
-
-  // Shape PersonalTaskDTO into the same TaskDTO interface the list/detail panes expect.
-  const personalTasks: TaskDTO[] = useMemo(() => {
-    if (!isPersonalMode || !personalTasksRaw) return [];
-    return personalTasksRaw.map((pt: PersonalTaskDTO): TaskDTO => ({
-      id: pt.id,
-      title: pt.title,
-      type: "task",
-      description: pt.description ?? undefined,
-      objective: pt.objective ?? undefined,
-      success_criteria: pt.success_criteria ?? undefined,
-      status: pt.status,       // already TaskStatus — no cast needed
-      priority: pt.priority,   // already TaskPriority — no cast needed
-      due_date: pt.due_date ?? undefined,
-      start_date: pt.start_date ?? undefined,
-      parent_task_id: pt.parent_task_id ?? undefined,
-      workspace_id: "",        // personal tasks have no workspace
-      created_by: pt.owner_user_id,
-      created_at: pt.created_at,
-      updated_at: pt.updated_at,
-    }));
-  }, [isPersonalMode, personalTasksRaw]);
-
-  // Active task list and loading state depend on mode
-  const tasks = isPersonalMode ? personalTasks : (orgTasks ?? []);
-  const isLoading = isPersonalMode ? personalLoading : orgLoading;
-  const isFetching = isPersonalMode ? false : orgFetching;
-
-  // Stable reference — never creates a new [] on each render
-  const taskList = tasks;
+  // Active task list and loading state
+  const taskList = orgTasks ?? EMPTY_TASKS;
+  const isLoading = orgLoading;
+  const isFetching = orgFetching;
 
   // Derive pagination state from the result (no useEffect needed)
-  const hasMore = !isPersonalMode && taskList.length >= limit;
+  const hasMore = taskList.length >= limit;
 
   const handleLoadMore = useCallback(() => {
     setLimit((prev) => prev + PAGE_SIZE);
@@ -177,42 +167,11 @@ export function TasksPage() {
     setLimit(INITIAL_LIMIT);
   }, []);
 
-  // ── Org task mutations ─────────────────────────────────────────
-  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const deleteOrgTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
-  const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
-  const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
-  // Personal task mutations
-  const updatePersonalTask = useUpdatePersonalTask();
-  const deletePersonalTask = useDeletePersonalTask();
-
-  // Unified mutation helpers that dispatch to the correct endpoint
-  const handleUpdateTask = useCallback((id: string, updates: any) => {
-    if (isPersonalMode) {
-      updatePersonalTask.mutate({ id, updates });
-    } else {
-      updateOrgTask.mutate({ id, updates });
-    }
-  }, [isPersonalMode, updatePersonalTask, updateOrgTask]);
-
-  const handleDeleteTask = useCallback((id: string) => {
-    const taskToDelete = taskList.find(t => t.id === id);
-    if (!taskToDelete) return;
-
-    if (isPersonalMode) {
-      deletePersonalTask.mutate({ id, title: taskToDelete.title });
-    } else {
-      deleteOrgTask.mutate({ id, title: taskToDelete.title, type: taskToDelete.type });
-    }
-    if (id === selectedTaskId) navigate("/tasks");
-  }, [isPersonalMode, deletePersonalTask, deleteOrgTask, selectedTaskId, taskList, navigate]);
-
-  // ── Space members for assignee picker (org mode only) ─────────────
-  // In personal mode, assignees don't exist — pass null so the hook is disabled.
+  // ── Space members for assignee picker ─────────────
   const { data: spaceMembers = [] } = useSpaceMembers(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId
+    activeOrgId,
+    activeSpaceId
   );
   const workspaceMembers = spaceMembers.map((m) => ({
     id: m.user_id,
@@ -229,9 +188,9 @@ export function TasksPage() {
         const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
         if (!isBlocked) return false;
       }
-      
+
       if (statusFilter === "Highest Priority" && t.priority !== "high" && t.priority !== "urgent") return false;
-      
+
       // Type filters (client-side only)
       if (statusFilter === "Task" && t.type !== "task") return false;
       if (statusFilter === "Event" && t.type !== "event") return false;
@@ -242,17 +201,17 @@ export function TasksPage() {
       } else {
         let tStart = t.start_date ? new Date(t.start_date) : null;
         let tEnd = t.due_date ? new Date(t.due_date) : null;
-        
+
         if (!tStart && tEnd) tStart = tEnd;
         if (!tEnd && tStart) tEnd = tStart;
-        
+
         if (tStart && tEnd) {
-           const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-           const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-           
-           if (tStart > monthEnd || tEnd < monthStart) {
-              return false;
-           }
+          const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+          const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+
+          if (tStart > monthEnd || tEnd < monthStart) {
+            return false;
+          }
         }
       }
 
@@ -274,7 +233,7 @@ export function TasksPage() {
       if (sortBy === "due_date") {
         const dateA = a.due_date ? new Date(a.due_date).getTime() : Infinity;
         const dateB = b.due_date ? new Date(b.due_date).getTime() : Infinity;
-        
+
         if (dateA !== dateB) {
           return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
         }
@@ -314,26 +273,219 @@ export function TasksPage() {
   // Fetch full task data for the selected task (handles subtask detail too)
   const { 
     data: selectedTaskDetail, 
-    isLoading: isOrgTaskLoading, 
-    isError: isOrgTaskError 
+    isLoading: isSelectedTaskLoading, 
+    isError: isSelectedTaskError 
   } = useOrgTask(
-    isPersonalMode ? null : activeOrgId,
-    isPersonalMode ? null : activeSpaceId,
+    activeOrgId,
+    activeSpaceId,
     selectedTaskId
   );
 
-  const isSelectedTaskLoading = isPersonalMode ? false : isOrgTaskLoading;
-  const isSelectedTaskError = isPersonalMode ? false : isOrgTaskError;
+  // ── Helper to retrieve task's home org and space boundaries ──
+  const getTaskCoordinates = useCallback((id: string) => {
+    const task = taskList.find(t => t.id === id) || 
+                 (selectedTaskDetail?.id === id ? selectedTaskDetail : null) || 
+                 (selected?.id === id ? selected : null);
+    return {
+      orgId: task?.org_id || activeOrgId,
+      spaceId: task?.space_id || activeSpaceId,
+      title: task?.title || "",
+      type: task?.type || "task"
+    };
+  }, [taskList, selectedTaskDetail, selected, activeOrgId, activeSpaceId]);
+
+  // ── Dynamic Org Task mutations ───────────────────────────────────
+  const updateTaskMutation = useMutation<TaskDTO, Error, { id: string; updates: any }>({
+    mutationFn: async ({ id, updates }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      const res = await api.patch<{ data: TaskDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}`,
+        updates
+      );
+      return normalizeTaskDTO(res.data.data);
+    },
+    onSuccess: (data, variables) => {
+      const { orgId, spaceId } = getTaskCoordinates(variables.id);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
+      });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+    },
+    onError: () => {
+      toast.error("Failed to update task. Please try again.");
+    },
+  });
+
+  const deleteTaskMutation = useMutation<
+    void,
+    Error,
+    { id: string },
+    { previousTasksQueries?: [import("@tanstack/react-query").QueryKey, TaskDTO[] | undefined][]; previousDetail?: TaskDTO }
+  >({
+    onMutate: async ({ id: taskId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(taskId);
+      if (!orgId || !spaceId) return {};
+
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      await queryClient.cancelQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, taskId) });
+
+      // Snapshot the previous value
+      const previousTasksQueries = queryClient.getQueriesData<TaskDTO[]>({
+        queryKey: orgTaskKeys.lists(orgId, spaceId)
+      });
+      const previousDetail = queryClient.getQueryData<TaskDTO>(
+        orgTaskKeys.detail(orgId, spaceId, taskId)
+      );
+
+      // Optimistically remove from list
+      queryClient.setQueriesData<TaskDTO[]>(
+        { queryKey: orgTaskKeys.lists(orgId, spaceId) },
+        (old) => old ? old.filter((t) => t.id !== taskId) : old
+      );
+
+      // Also optimistic remove from active list if different
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.setQueriesData<TaskDTO[]>(
+          { queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) },
+          (old) => old ? old.filter((t) => t.id !== taskId) : old
+        );
+      }
+
+      return { previousTasksQueries, previousDetail };
+    },
+    mutationFn: async ({ id: taskId }) => {
+      const { orgId, spaceId, title, type } = getTaskCoordinates(taskId);
+      return new Promise((resolve, reject) => {
+        let isUndone = false;
+
+        const timerId = setTimeout(async () => {
+          if (!isUndone) {
+            try {
+              await api.delete(`v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}`);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          }
+        }, 3000);
+
+        toast(`${title} (${type}) deleted`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              isUndone = true;
+              clearTimeout(timerId);
+              reject(new Error("UNDONE"));
+            }
+          },
+          duration: 3000,
+        });
+      });
+    },
+    onSuccess: (_data, { id: taskId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(taskId);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.removeQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, taskId),
+      });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+    },
+    onError: (err, { id: taskId }, context) => {
+      const { orgId, spaceId } = getTaskCoordinates(taskId);
+      if (context?.previousTasksQueries) {
+        context.previousTasksQueries.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+      if (context?.previousDetail && orgId && spaceId) {
+        queryClient.setQueryData(
+          orgTaskKeys.detail(orgId, spaceId, taskId),
+          context.previousDetail
+        );
+      }
+      
+      if (err.message !== "UNDONE") {
+        toast.error("Failed to delete task. Please try again.");
+      }
+    },
+  });
+
+  const assignUserMutation = useMutation<void, Error, { id: string; userId: string }>({
+    mutationFn: async ({ id, userId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      await api.post(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/assignees`,
+        { user_id: userId }
+      );
+    },
+    onSuccess: (_, { id }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+      toast.success("Assignee added");
+    },
+    onError: () => {
+      toast.error("Failed to assign user");
+    },
+  });
+
+  const removeAssigneeMutation = useMutation<void, Error, { id: string; userId: string }>({
+    mutationFn: async ({ id, userId }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${id}/assignees/${userId}`
+      );
+    },
+    onSuccess: (_, { id }) => {
+      const { orgId, spaceId } = getTaskCoordinates(id);
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({
+        queryKey: orgTaskKeys.detail(orgId, spaceId, id),
+      });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
+        queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
+      }
+      toast.success("Assignee removed");
+    },
+    onError: () => {
+      toast.error("Failed to remove assignee");
+    },
+  });
+
+  // Unified mutation helpers
+  const handleUpdateTask = useCallback((id: string, updates: any) => {
+    updateTaskMutation.mutate({ id, updates });
+  }, [updateTaskMutation]);
+
+  const handleDeleteTask = useCallback((id: string) => {
+    deleteTaskMutation.mutate({ id });
+    if (id === selectedTaskId) navigate("/tasks");
+  }, [deleteTaskMutation, selectedTaskId, navigate]);
+
 
   // ── Cross-workspace auto-switch ───────────────────────────────────────────────
   // When the task is not found in the current workspace and the current workspace
   // query has finished (not just loading), try to locate the task across all orgs
   // the user belongs to. If found, silently switch to that workspace.
   const needsLocate =
-    !isPersonalMode &&
     !!selectedTaskId &&
-    !isOrgTaskLoading &&
-    (isOrgTaskError || !selectedTaskDetail) &&
+    !isSelectedTaskLoading &&
+    (isSelectedTaskError || !selectedTaskDetail) &&
     !selected; // not in the current filtered list either
 
   const {
@@ -382,13 +534,8 @@ export function TasksPage() {
 
   // Handle task scheduling from calendar
   const handleTaskSchedule = useCallback((taskId: string, startISO: string, endISO: string, isAllDay: boolean) => {
-    if (isPersonalMode) {
-      // Personal tasks have no is_all_day column — only update the dates
-      handleUpdateTask(taskId, { start_date: startISO, due_date: endISO });
-    } else {
-      handleUpdateTask(taskId, { start_date: startISO, due_date: endISO, is_all_day: isAllDay });
-    }
-  }, [isPersonalMode, handleUpdateTask]);
+    handleUpdateTask(taskId, { start_date: startISO, due_date: endISO, is_all_day: isAllDay });
+  }, [handleUpdateTask]);
 
   const containerClassName = cn(
     "h-full w-full transition-all duration-500 ease-in-out",
@@ -410,7 +557,6 @@ export function TasksPage() {
               onSortChange={handleSortChange}
               tasks={filtered}
               allTasks={taskList}
-              isPersonalMode={isPersonalMode}
               selectedTaskId={selectedTaskId}
               onSelectTask={(id) => {
                 // When selecting from list, check if it's a subtask to set the parent stack
@@ -439,15 +585,19 @@ export function TasksPage() {
               onUpdateTask={handleUpdateTask}
               onDeleteTask={handleDeleteTask}
               onAssignUser={(taskId, userId) => {
-                if (!isPersonalMode) assignUser.mutate({ id: taskId, userId });
+                assignUserMutation.mutate({ id: taskId, userId });
               }}
               onRemoveAssignee={(taskId, userId) => {
-                if (!isPersonalMode) removeAssignee.mutate({ id: taskId, userId });
+                removeAssigneeMutation.mutate({ id: taskId, userId });
               }}
               workspaceMembers={workspaceMembers}
               hasMore={hasMore}
               onLoadMore={handleLoadMore}
               isLoadingMore={isFetching && limit > PAGE_SIZE}
+              orgFilter={orgFilter}
+              onOrgFilterChange={setOrgFilter}
+              spaceFilter={spaceFilter}
+              onSpaceFilterChange={setSpaceFilter}
             />
           </div>
 
@@ -485,7 +635,6 @@ export function TasksPage() {
               ) : (
                 <TaskDetailPane
                   task={(selectedTaskDetail || selected)!}
-                  isPersonalMode={isPersonalMode}
                   onUpdateTask={handleUpdateTask}
                   onTaskDeleted={() => {
                     navigate("/tasks");
@@ -503,7 +652,7 @@ export function TasksPage() {
             ) : (
               <TaskSchedulePane
                 tasks={taskList as any}
-                blocks={[] as any}
+                blocks={EMPTY_BLOCKS}
                 selectedTask={null as any}
                 statusFilter={statusFilter}
                 onDateChange={setCalendarMonth}

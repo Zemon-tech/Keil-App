@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { format, addDays, nextMonday, startOfToday, parseISO } from "date-fns";
 import {
   CalendarIcon,
@@ -22,14 +22,17 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverClose,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
 import {
   Command,
   CommandEmpty,
@@ -44,8 +47,8 @@ import { toast } from "sonner";
 
 import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
 import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
-import { useCreatePersonalTask, useUpdatePersonalTask } from "@/hooks/api/usePersonalTasks";
 import { useAppContext } from "@/contexts/AppContext";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -67,7 +70,8 @@ interface CreateTaskDialogProps {
   onTaskUpdated?: (taskId: string) => void;
   parentTaskId?: string;
   parentTaskTitle?: string;
-  isPersonalMode?: boolean;
+  orgId?: string;
+  spaceId?: string;
 }
 
 const PRIORITY_LEVELS = [
@@ -77,24 +81,52 @@ const PRIORITY_LEVELS = [
   { label: "Urgent", value: "urgent", color: "text-red-400 bg-red-400/10", icon: Flag },
 ] as const;
 
+const EMPTY_USERS: SimpleAssigneeOption[] = [];
+
+const isValidDate = (d: any): d is Date => d instanceof Date && !isNaN(d.getTime());
+
+const safeFormat = (dateVal: Date | undefined | null, formatStr: string, fallback: string = "") => {
+  if (!dateVal || !isValidDate(dateVal)) return fallback;
+  try {
+    return format(dateVal, formatStr);
+  } catch (e) {
+    return fallback;
+  }
+};
+
 export function CreateTaskDialog({
   open,
   onOpenChange,
   onTaskCreated,
-  allUsers = [],
+  allUsers = EMPTY_USERS,
   mode = "create",
   taskId,
   initialValues,
   onTaskUpdated,
   parentTaskId,
   parentTaskTitle,
-  isPersonalMode = false,
+  orgId,
+  spaceId,
 }: CreateTaskDialogProps) {
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const createOrgTask = useCreateOrgTask(activeOrgId, activeSpaceId);
-  const updateOrgTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const createPersonalTask = useCreatePersonalTask();
-  const updatePersonalTask = useUpdatePersonalTask();
+  const resolvedOrgId = orgId ?? initialValues?.org_id ?? activeOrgId;
+  const resolvedSpaceId = spaceId ?? initialValues?.space_id ?? activeSpaceId;
+
+  const createOrgTask = useCreateOrgTask(resolvedOrgId, resolvedSpaceId);
+  const updateOrgTask = useUpdateOrgTask(resolvedOrgId, resolvedSpaceId);
+
+  const { data: spaceMembers = [] } = useSpaceMembers(
+    resolvedOrgId,
+    resolvedSpaceId
+  );
+
+  const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
+    if (allUsers && allUsers.length > 0) return allUsers;
+    return spaceMembers.map(m => ({
+      id: m.user_id,
+      name: m.name || m.email,
+    }));
+  }, [allUsers, spaceMembers]);
 
   // ── Form State ─────────────────────────────────────────────────────────────
   const [title, setTitle] = useState("");
@@ -118,11 +150,64 @@ export function CreateTaskDialog({
   const [showAgenda, setShowAgenda] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
 
+  // Ref for programmatically closing the date popover
+  const dateCloseRef = useRef<HTMLButtonElement>(null);
+
   // New metadata fields
   const [storyPoints, setStoryPoints] = useState<number | undefined>(undefined);
   const [timeEstimate, setTimeEstimate] = useState<number | undefined>(undefined); // in minutes
   const [isAllDay, setIsAllDay] = useState(true);
   const [eventType, setEventType] = useState<string>("meeting");
+
+  // Date range drag-to-select states
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<Date | null>(null);
+  const [dragEnd, setDragEnd] = useState<Date | null>(null);
+
+  const dragStartRef = useRef<Date | null>(null);
+  const isMouseDownRef = useRef(false);
+  const hasDraggedRef = useRef(false);
+
+  const getOrderedRange = (d1: Date, d2: Date) => {
+    return d1.getTime() < d2.getTime() ? { from: d1, to: d2 } : { from: d2, to: d1 };
+  };
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isMouseDownRef.current) {
+        isMouseDownRef.current = false;
+        if (hasDraggedRef.current) {
+          setIsDragging(false);
+          if (dragStartRef.current && dragEnd) {
+            const ordered = getOrderedRange(dragStartRef.current, dragEnd);
+
+            const newStart = new Date(ordered.from);
+            if (date && !isAllDay) {
+              newStart.setHours(date.getHours(), date.getMinutes());
+            }
+            setDate(newStart);
+
+            const newEnd = new Date(ordered.to);
+            if (endDate && !isAllDay) {
+              newEnd.setHours(endDate.getHours(), endDate.getMinutes());
+            } else if (!isAllDay) {
+              newEnd.setHours(newStart.getHours() + 1, newStart.getMinutes());
+            }
+            setEndDate(newEnd);
+
+            if (isAllDay) {
+              dateCloseRef.current?.click();
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [dragEnd, date, endDate, isAllDay]);
 
   // ── Smart Parsing ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -132,28 +217,42 @@ export function CreateTaskDialog({
 
     // Detect Type
     if (lowerTitle.match(/\b(meeting|call|sync|lunch|coffee|event|workshop)\b/)) {
-      setType("event");
+      if (type !== "event") {
+        setType("event");
+      }
     }
 
     // Detect Priority
-    if (lowerTitle.includes("!urgent") || lowerTitle.includes("urgent")) setPriority("urgent");
-    else if (lowerTitle.includes("!high") || lowerTitle.includes("high")) setPriority("high");
-    else if (lowerTitle.includes("!low") || lowerTitle.includes("low")) setPriority("low");
+    let detectedPriority: "urgent" | "high" | "low" | null = null;
+    if (lowerTitle.includes("!urgent") || lowerTitle.includes("urgent")) detectedPriority = "urgent";
+    else if (lowerTitle.includes("!high") || lowerTitle.includes("high")) detectedPriority = "high";
+    else if (lowerTitle.includes("!low") || lowerTitle.includes("low")) detectedPriority = "low";
+
+    if (detectedPriority && priority !== detectedPriority) {
+      setPriority(detectedPriority);
+    }
 
     // Detect Date
-    if (lowerTitle.includes("today")) setDate(startOfToday());
-    else if (lowerTitle.includes("tomorrow")) setDate(addDays(startOfToday(), 1));
-    else if (lowerTitle.includes("monday")) setDate(nextMonday(startOfToday()));
+    let detectedDate: Date | null = null;
+    if (lowerTitle.includes("today")) detectedDate = startOfToday();
+    else if (lowerTitle.includes("tomorrow")) detectedDate = addDays(startOfToday(), 1);
+    else if (lowerTitle.includes("monday")) detectedDate = nextMonday(startOfToday());
+
+    if (detectedDate) {
+      if (!date || date.getTime() !== detectedDate.getTime()) {
+        setDate(detectedDate);
+      }
+    }
 
     // Detect Assignees (simple @ match)
-    allUsers.forEach(user => {
+    resolvedUsers.forEach(user => {
       if (lowerTitle.includes(`@${user.name.toLowerCase().replace(/\s/g, "")}`)) {
         if (!assigneeIds.includes(user.id)) {
           setAssigneeIds(prev => [...prev, user.id]);
         }
       }
     });
-  }, [title, allUsers, mode, open]);
+  }, [title, resolvedUsers, mode, open]);
 
   // ── Pre-fill Mode ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -223,7 +322,7 @@ export function CreateTaskDialog({
         const today = startOfToday();
         const selectedDateOnly = new Date(date);
         selectedDateOnly.setHours(0, 0, 0, 0);
-        
+
         if (selectedDateOnly < today) {
           toast.error("Cannot create in the past", {
             description: "Please select a future time slot.",
@@ -272,33 +371,9 @@ export function CreateTaskDialog({
     };
 
     if (mode === "edit" && taskId) {
-      if (isPersonalMode) {
-          const personalUpdate = {
-          title: input.title,
-          description: input.description,
-          priority: input.priority as any,
-          status: 'todo' as any,
-          due_date: input.due_date,
-          story_points: input.story_points,
-        };
-        updatePersonalTask.mutate({ id: taskId, updates: personalUpdate }, options);
-      } else {
-        updateOrgTask.mutate({ id: taskId, updates: input }, options);
-      }
+      updateOrgTask.mutate({ id: taskId, updates: input }, options);
     } else {
-      if (isPersonalMode) {
-          const personalCreate = {
-          title: input.title,
-          description: input.description,
-          priority: input.priority as any,
-          status: 'todo' as any,
-          due_date: input.due_date,
-          story_points: input.story_points,
-        };
-        createPersonalTask.mutate(personalCreate, options);
-      } else {
-        createOrgTask.mutate(input, options);
-      }
+      createOrgTask.mutate(input, options);
     }
   };
 
@@ -308,6 +383,12 @@ export function CreateTaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[600px] bg-background border-border p-0 overflow-hidden shadow-2xl [&>button]:hidden">
         <DialogHeader className="p-6 pb-2 relative">
+          <DialogTitle className="sr-only">
+            {mode === "edit" ? "Edit Task" : "Create Task"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Use this form to define task details, assignees, dates, and priorities.
+          </DialogDescription>
           <div className="flex items-center justify-between mb-4">
             <div className="flex bg-muted/50 rounded-lg p-1">
               <button
@@ -329,7 +410,7 @@ export function CreateTaskDialog({
                 Event
               </button>
             </div>
-            
+
             <div className="flex items-center gap-3">
               {/* Top Right Actions: All Day & Date */}
               <div className="flex items-center gap-3 pr-2">
@@ -342,44 +423,132 @@ export function CreateTaskDialog({
                   <PopoverTrigger asChild>
                     <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors text-[11px] font-bold text-primary">
                       <CalendarIcon className="size-3.5" />
-                      {date ? (
-                        isAllDay 
-                          ? format(date, "MMM d, yyyy") 
-                          : format(date, "MMM d, h:mm a")
+                      {date && isValidDate(date) ? (
+                        isAllDay
+                          ? (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
+                            ? `${safeFormat(date, "MMM d")} - ${safeFormat(endDate, "MMM d, yyyy")}`
+                            : safeFormat(date, "MMM d, yyyy"))
+                          : (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
+                            ? `${safeFormat(date, "MMM d, h:mm a")} - ${safeFormat(endDate, "MMM d, h:mm a")}`
+                            : safeFormat(date, "MMM d, h:mm a"))
                       ) : "Set date"}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0 w-auto bg-background border-border shadow-xl" align="end">
                     <div className="flex flex-col">
+                      <PopoverClose ref={dateCloseRef} className="hidden" />
                       <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={(newDate) => {
-                          if (newDate && date && !isAllDay) {
-                            newDate.setHours(date.getHours(), date.getMinutes());
+                        mode="range"
+                        selected={
+                          isDragging && dragStart && dragEnd
+                            ? getOrderedRange(dragStart, dragEnd)
+                            : { from: date, to: endDate || date }
+                        }
+                        onSelect={(range) => {
+                          if (range?.from) {
+                            const newStart = new Date(range.from);
+                            if (date && !isAllDay) {
+                              newStart.setHours(date.getHours(), date.getMinutes());
+                            }
+                            setDate(newStart);
+
+                            if (range.to) {
+                              const newEnd = new Date(range.to);
+                              if (endDate && !isAllDay) {
+                                newEnd.setHours(endDate.getHours(), endDate.getMinutes());
+                              } else if (!isAllDay) {
+                                newEnd.setHours(newStart.getHours() + 1, newStart.getMinutes());
+                              }
+                              setEndDate(newEnd);
+                            } else {
+                              setEndDate(undefined);
+                            }
+
+                            // Auto-close on two-click range completion
+                            if (isAllDay && range.to) {
+                              dateCloseRef.current?.click();
+                            }
+                          } else {
+                            setDate(undefined);
+                            setEndDate(undefined);
                           }
-                          setDate(newDate);
+                        }}
+                        components={{
+                          DayButton: (props) => (
+                            <CalendarDayButton
+                              {...props}
+                              onMouseDown={(e) => {
+                                if (e.button === 0) { // left click
+                                  dragStartRef.current = props.day.date;
+                                  isMouseDownRef.current = true;
+                                  hasDraggedRef.current = false;
+                                }
+                                props.onMouseDown?.(e);
+                              }}
+                              onMouseEnter={(e) => {
+                                if (isMouseDownRef.current && dragStartRef.current) {
+                                  const dayDate = props.day.date;
+                                  if (dayDate.getTime() !== dragStartRef.current.getTime()) {
+                                    if (!hasDraggedRef.current) {
+                                      hasDraggedRef.current = true;
+                                      setIsDragging(true);
+                                      setDragStart(dragStartRef.current);
+                                    }
+                                    setDragEnd(dayDate);
+                                  }
+                                }
+                                props.onMouseEnter?.(e);
+                              }}
+                            />
+                          )
                         }}
                         initialFocus
                         className="bg-background"
                       />
                       {!isAllDay && (
-                        <div className="p-3 border-t border-border flex items-center justify-between gap-3 bg-muted/20">
-                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                            <Clock className="size-3.5" />
-                            <span>Time</span>
+                        <div className="p-3 border-t border-border flex items-center justify-between gap-4 bg-muted/20">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Start Time</span>
+                            <Input
+                              type="time"
+                              className="h-8 w-[110px] text-xs bg-background border-border focus-visible:ring-primary/20"
+                              value={date && isValidDate(date) ? safeFormat(date, "HH:mm") : ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const newDate = date && isValidDate(date) ? new Date(date) : new Date();
+                                if (!val) {
+                                  newDate.setHours(0, 0, 0, 0);
+                                } else {
+                                  const [hStr, mStr] = val.split(':');
+                                  const h = parseInt(hStr, 10);
+                                  const m = parseInt(mStr, 10);
+                                  newDate.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+                                }
+                                setDate(newDate);
+                              }}
+                            />
                           </div>
-                          <Input
-                            type="time"
-                            className="h-8 w-[100px] text-xs bg-background border-border focus-visible:ring-primary/20"
-                            value={date ? format(date, "HH:mm") : ""}
-                            onChange={(e) => {
-                              const [h, m] = e.target.value.split(':');
-                              const newDate = date ? new Date(date) : new Date();
-                              newDate.setHours(parseInt(h), parseInt(m));
-                              setDate(newDate);
-                            }}
-                          />
+                          <div className="flex flex-col gap-1 items-end">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-right">End Time</span>
+                            <Input
+                              type="time"
+                              className="h-8 w-[110px] text-xs bg-background border-border focus-visible:ring-primary/20"
+                              value={endDate && isValidDate(endDate) ? safeFormat(endDate, "HH:mm") : (date && isValidDate(date) ? safeFormat(date, "HH:mm") : "")}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const newEndDate = endDate && isValidDate(endDate) ? new Date(endDate) : (date && isValidDate(date) ? new Date(date) : new Date());
+                                if (!val) {
+                                  newEndDate.setHours(0, 0, 0, 0);
+                                } else {
+                                  const [hStr, mStr] = val.split(':');
+                                  const h = parseInt(hStr, 10);
+                                  const m = parseInt(mStr, 10);
+                                  newEndDate.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+                                }
+                                setEndDate(newEndDate);
+                              }}
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
@@ -455,13 +624,14 @@ export function CreateTaskDialog({
                 </PopoverTrigger>
                 <PopoverContent className="p-1 w-32 bg-background border-border">
                   {["meeting", "call", "birthday", "workshop", "other"].map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setEventType(t)}
-                      className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors capitalize"
-                    >
-                      {t}
-                    </button>
+                    <PopoverClose asChild key={t}>
+                      <button
+                        onClick={() => setEventType(t)}
+                        className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors capitalize"
+                      >
+                        {t}
+                      </button>
+                    </PopoverClose>
                   ))}
                 </PopoverContent>
               </Popover>
@@ -471,7 +641,7 @@ export function CreateTaskDialog({
                 <PopoverTrigger asChild>
                   <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground">
                     <Clock className="size-3.5" />
-                    {endDate ? format(endDate, "HH:mm") : "End time"}
+                    {endDate && isValidDate(endDate) ? safeFormat(endDate, "HH:mm") : "End time"}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="p-4 w-48 bg-background border-border">
@@ -479,10 +649,18 @@ export function CreateTaskDialog({
                   <Input
                     type="time"
                     className="bg-muted/50 border-border"
+                    value={endDate && isValidDate(endDate) ? safeFormat(endDate, "HH:mm") : ""}
                     onChange={(e) => {
-                      const [h, m] = e.target.value.split(':');
-                      const d = date ? new Date(date) : new Date();
-                      d.setHours(parseInt(h), parseInt(m));
+                      const val = e.target.value;
+                      const d = endDate && isValidDate(endDate) ? new Date(endDate) : (date && isValidDate(date) ? new Date(date) : new Date());
+                      if (!val) {
+                        d.setHours(0, 0, 0, 0);
+                      } else {
+                        const [hStr, mStr] = val.split(':');
+                        const h = parseInt(hStr, 10);
+                        const m = parseInt(mStr, 10);
+                        d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+                      }
                       setEndDate(d);
                     }}
                   />
@@ -506,14 +684,15 @@ export function CreateTaskDialog({
                   </PopoverTrigger>
                   <PopoverContent className="p-1 w-32 bg-background border-border">
                     {PRIORITY_LEVELS.map((p) => (
-                      <button
-                        key={p.value}
-                        onClick={() => setPriority(p.value)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
-                      >
-                        <p.icon className={cn("size-3", p.color.split(' ')[0])} />
-                        {p.label}
-                      </button>
+                      <PopoverClose asChild key={p.value}>
+                        <button
+                          onClick={() => setPriority(p.value)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+                        >
+                          <p.icon className={cn("size-3", p.color.split(' ')[0])} />
+                          {p.label}
+                        </button>
+                      </PopoverClose>
                     ))}
                   </PopoverContent>
                 </Popover>
@@ -530,23 +709,26 @@ export function CreateTaskDialog({
                     <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Story Points</div>
                     <div className="grid grid-cols-3 gap-1">
                       {[1, 2, 3, 5, 8].map(pts => (
-                        <button
-                          key={pts}
-                          onClick={() => setStoryPoints(pts)}
-                          className={cn(
-                            "h-7 rounded flex items-center justify-center text-xs transition-colors",
-                            storyPoints === pts ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                          )}
-                        >
-                          {pts}
-                        </button>
+                        <PopoverClose asChild key={pts}>
+                          <button
+                            onClick={() => setStoryPoints(pts)}
+                            className={cn(
+                              "h-7 rounded flex items-center justify-center text-xs transition-colors",
+                              storyPoints === pts ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                            )}
+                          >
+                            {pts}
+                          </button>
+                        </PopoverClose>
                       ))}
-                      <button
-                        onClick={() => setStoryPoints(undefined)}
-                        className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground"
-                      >
-                        -
-                      </button>
+                      <PopoverClose asChild>
+                        <button
+                          onClick={() => setStoryPoints(undefined)}
+                          className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground"
+                        >
+                          -
+                        </button>
+                      </PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -580,7 +762,7 @@ export function CreateTaskDialog({
                   {assigneeIds.length > 0 ? (
                     <div className="flex -space-x-1 ml-1">
                       {assigneeIds.map(id => {
-                        const user = allUsers.find(u => u.id === id);
+                        const user = resolvedUsers.find(u => u.id === id);
                         return (
                           <Avatar key={id} className="size-5 border border-background">
                             <AvatarImage src={user?.avatarUrl} />
@@ -603,7 +785,7 @@ export function CreateTaskDialog({
                   <CommandList>
                     <CommandEmpty>No members found.</CommandEmpty>
                     <CommandGroup>
-                      {allUsers.map((user) => (
+                      {resolvedUsers.map((user) => (
                         <CommandItem
                           key={user.id}
                           onSelect={() => {

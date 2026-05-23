@@ -44,7 +44,8 @@ function App() {
       <Route path="/events/:eventId" element={<TaskDetailRoute />} />
 
       {/* ── Public Motion pages (no auth, no layout) ─────────────────────── */}
-      <Route path="/notes/public/:token" element={<MotionPublicPage />} />
+      <Route path="/notes/public/:token" element={<MotionPublicPage mode="token" />} />
+      <Route path="/motion/:slug/:pageId" element={<MotionPublicPage mode="pageId" />} />
 
       {/* ── Protected Routes ─────────────────────────────────────────────── */}
       <Route element={<ProtectedRoute />}>
@@ -73,6 +74,10 @@ function App() {
               <TasksPage />
             </Layout>
           }
+        />
+        <Route
+          path="/my-tasks"
+          element={<Navigate to="/tasks" replace />}
         />
         <Route
           path="/motion"

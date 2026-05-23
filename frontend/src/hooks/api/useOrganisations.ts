@@ -11,6 +11,7 @@ export interface Organisation {
   updated_at: string;
   /** The current user's role inside this organisation. */
   role: "owner" | "admin" | "member";
+  is_personal: boolean;
 }
 
 export interface OrgMember {

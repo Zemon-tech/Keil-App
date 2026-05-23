@@ -11,10 +11,9 @@ const asString = (value: string | string[] | undefined): string =>
 const getChatContext = (req: Request) => {
   const orgId = asString(req.params.orgId);
   const spaceId = asString(req.params.spaceId);
-  const workspaceId = (req as any).space?.compatibility_workspace_id as string | undefined;
-  if (!workspaceId) {
-    throw new ApiError(500, "Compatibility workspace is missing for this space");
-  }
+  // workspaceId is optional — org-native spaces have no legacy workspace.
+  // channels.workspace_id is now nullable (migration 012).
+  const workspaceId = ((req as any).space?.compatibility_workspace_id as string | null) ?? null;
   return { orgId, spaceId, workspaceId };
 };
 
@@ -26,26 +25,72 @@ export const createDirectChannel = catchAsync(async (req: Request, res: Response
   if (!target_user_id) throw new ApiError(400, "target_user_id is required");
   if (target_user_id === userId) throw new ApiError(400, "Cannot create a direct channel with yourself");
 
-  const memberCheck = await pool.query(
-    `
-      SELECT 1
-      FROM public.space_members
-      WHERE org_id = $1
-        AND space_id = $2
-        AND user_id = $3
-      LIMIT 1
-    `,
-    [context.orgId, context.spaceId, target_user_id],
+  const orgCheck = await pool.query(
+    `SELECT is_personal FROM public.organisations WHERE id = $1 LIMIT 1`,
+    [context.orgId],
   );
-  if (memberCheck.rowCount === 0) {
-    throw new ApiError(400, "Target user is not in the same space");
+  const isPersonal = orgCheck.rows[0]?.is_personal === true;
+
+  let resolvedOrgId = context.orgId;
+  let resolvedSpaceId = context.spaceId;
+  let resolvedWorkspaceId = context.workspaceId;
+
+  if (isPersonal) {
+    const sharedRes = await pool.query(
+      `
+        SELECT 
+          o.id as org_id,
+          s.id as space_id,
+          COALESCE(s.workspace_id, o.source_workspace_id) as compatibility_workspace_id
+        FROM public.space_members sm1
+        INNER JOIN public.space_members sm2 
+          ON sm1.space_id = sm2.space_id
+        INNER JOIN public.organisations o 
+          ON o.id = sm1.org_id
+        INNER JOIN public.spaces s 
+          ON s.id = sm1.space_id
+        WHERE sm1.user_id = $1
+          AND sm2.user_id = $2
+          AND o.is_personal = FALSE
+          AND s.deleted_at IS NULL
+        ORDER BY 
+          CASE WHEN s.is_default = TRUE THEN 0 ELSE 1 END,
+          o.created_at ASC,
+          s.created_at ASC
+        LIMIT 1
+      `,
+      [userId, target_user_id],
+    );
+
+    if (sharedRes.rowCount === 0) {
+      throw new ApiError(400, "You do not share any organisations with this user");
+    }
+
+    resolvedOrgId = sharedRes.rows[0].org_id;
+    resolvedSpaceId = sharedRes.rows[0].space_id;
+    resolvedWorkspaceId = sharedRes.rows[0].compatibility_workspace_id;
+  } else {
+    const memberCheck = await pool.query(
+      `
+        SELECT 1
+        FROM public.space_members
+        WHERE org_id = $1
+          AND space_id = $2
+          AND user_id = $3
+        LIMIT 1
+      `,
+      [context.orgId, context.spaceId, target_user_id],
+    );
+    if (memberCheck.rowCount === 0) {
+      throw new ApiError(400, "Target user is not in the same space");
+    }
   }
 
   const existingChannelId = await orgChatService.findDirectChannel(
     userId,
     target_user_id,
-    context.orgId,
-    context.spaceId,
+    resolvedOrgId,
+    resolvedSpaceId,
   );
   if (existingChannelId) {
     const channel = await orgChatService.getChannelById(existingChannelId, userId);
@@ -54,9 +99,9 @@ export const createDirectChannel = catchAsync(async (req: Request, res: Response
   }
 
   const channelId = await orgChatService.createChannel(
-    context.workspaceId,
-    context.orgId,
-    context.spaceId,
+    resolvedWorkspaceId,
+    resolvedOrgId,
+    resolvedSpaceId,
     "direct",
     null,
     [userId, target_user_id],
@@ -133,6 +178,8 @@ export const addChannelMembers = catchAsync(async (req: Request, res: Response) 
     throw new ApiError(400, "member_ids must be a non-empty array");
   }
 
+  const uniqueMemberIds = Array.from(new Set(member_ids));
+
   const roleCheck = await pool.query(
     `
       SELECT cm.role, c.type
@@ -146,9 +193,9 @@ export const addChannelMembers = catchAsync(async (req: Request, res: Response) 
   if (!row || row.type !== "group") throw new ApiError(400, "Invalid channel or not a group");
   if (row.role !== "admin") throw new ApiError(403, "Only group admins can add members");
 
-  await orgChatService.addMembers(orgId, spaceId, asString(req.params.id), member_ids);
+  await orgChatService.addMembers(orgId, spaceId, asString(req.params.id), uniqueMemberIds);
   const channel = await orgChatService.getChannelById(asString(req.params.id), userId);
-  broadcastNewChannel(member_ids, channel);
+  broadcastNewChannel(uniqueMemberIds, channel);
   io.to(`channel:${asString(req.params.id)}`).emit("channel_updated", { channel_id: asString(req.params.id) });
 
   res.status(200).json({ success: true, data: { channel } });
@@ -178,4 +225,30 @@ export const removeChannelMember = catchAsync(async (req: Request, res: Response
   io.to(`channel:${asString(req.params.id)}`).emit("channel_updated", { channel_id: asString(req.params.id) });
 
   res.status(200).json({ success: true, message: "Member removed successfully" });
+});
+
+export const deleteChannel = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const channelId = asString(req.params.id);
+
+  const roleCheck = await pool.query(
+    `
+      SELECT cm.role, c.type
+      FROM public.channel_members cm
+      JOIN public.channels c ON c.id = cm.channel_id
+      WHERE cm.channel_id = $1 AND cm.user_id = $2
+    `,
+    [channelId, userId],
+  );
+  
+  const row = roleCheck.rows[0];
+  if (!row) throw new ApiError(403, "Not a member of this channel");
+  if (row.type === "group" && row.role !== "admin") {
+    throw new ApiError(403, "Only group admins can delete the group");
+  }
+
+  await orgChatService.deleteChannel(channelId);
+  io.to(`channel:${channelId}`).emit("channel_removed", { channel_id: channelId });
+  
+  res.status(200).json({ success: true, message: "Channel deleted successfully" });
 });

@@ -2,12 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { HeroSection } from "./dashboard/HeroSection";
-import { CurrentFocusCard } from "./dashboard/CurrentFocusCard";
-import { NextEventCard } from "./dashboard/NextEventCard";
-import { ImmediateBlockersCard } from "./dashboard/ImmediateBlockersCard";
-import { NeedsReplyCard } from "./dashboard/NeedsReplyCard";
-import { UpNextCard } from "./dashboard/UpNextCard";
-import { useDashboard, useOrgDashboard } from "@/hooks/api/useDashboard";
+import { DashboardPanel } from "./dashboard/DashboardPanel";
+import { useOrgDashboard } from "@/hooks/api/useDashboard";
+import api from "@/lib/api";
 import { useAppContext } from "@/contexts/AppContext";
 import { AlertCircle } from "lucide-react";
 import {
@@ -25,138 +22,125 @@ type DashboardChatMessage = {
   content: string;
 };
 
-const createAssistantResponse = (message: PromptInputMessage) => {
-  const text = message.text.trim();
-  const fileCount = message.files.length;
-
-  if (fileCount > 0 && text) {
-    return `I received your message and ${fileCount} attachment${fileCount === 1 ? "" : "s"}. I can use them as context here once the assistant backend is connected.`;
-  }
-
-  if (fileCount > 0) {
-    return `I received ${fileCount} attachment${fileCount === 1 ? "" : "s"}. Add a short instruction and I will help work through them.`;
-  }
-
-  return `I'm ready to help with: "${text}".`;
-};
-
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<DashboardChatMessage[]>([]);
   const [isAssistantThinking, setIsAssistantThinking] = useState(false);
-  const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Mode awareness ─────────────────────────────────────────
-  const { mode, activeOrgId, activeSpaceId } = useAppContext();
-  const isOrgMode = mode === "organisation" && !!activeOrgId && !!activeSpaceId;
+  // ── Dashboard Data ─────────────────────────────────────────
+  const { activeOrgId, activeSpaceId } = useAppContext();
 
-  // ── Legacy workspace dashboard (personal mode or fallback) ──
-  const { data: legacyData, isLoading: legacyLoading, isError: legacyError } = useDashboard();
-
-  // ── Org/space-scoped dashboard (organisation mode) ──────────
-  const { data: orgData, isLoading: orgLoading, isError: orgError } = useOrgDashboard(
-    isOrgMode ? activeOrgId : null,
-    isOrgMode ? activeSpaceId : null
+  // ── Org/space-scoped dashboard ──────────
+  const { data, isLoading, isError } = useOrgDashboard(
+    activeOrgId,
+    activeSpaceId,
   );
-
-  // Use the correct source based on mode
-  const data = isOrgMode ? orgData : legacyData;
-  const isLoading = isOrgMode ? orgLoading : legacyLoading;
-  const isError = isOrgMode ? orgError : legacyError;
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
   }, [messages, isAssistantThinking]);
-
-  useEffect(() => {
-    return () => {
-      if (responseTimeoutRef.current) {
-        clearTimeout(responseTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const isCollapsed = state === "collapsed";
   const hasChatStarted = messages.length > 0 || isAssistantThinking;
-  const assistantLoadingText =
-    ["Fetching the output", "Be ready", "Forging a response"][messages.length % 3];
+  const assistantLoadingText = [
+    "Fetching the output",
+    "Be ready",
+    "Forging a response",
+  ][messages.length % 3];
   const containerClassName = cn(
     "mx-auto transition-all duration-500 ease-in-out px-4 sm:px-6 lg:px-10",
-    isCollapsed ? "max-w-[1400px]" : "max-w-6xl"
+    isCollapsed ? "max-w-[1400px]" : "max-w-6xl",
   );
 
-  const handlePromptSubmit = (message: PromptInputMessage) => {
+  const handlePromptSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
     const fileCount = message.files.length;
     const content =
-      text ||
-      `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
+      text || `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        content,
-      },
-    ]);
+    const userMessage: DashboardChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content,
+    };
+
+    const conversation = [...messages, userMessage];
+
+    setMessages(conversation);
     setIsAssistantThinking(true);
 
-    if (responseTimeoutRef.current) {
-      clearTimeout(responseTimeoutRef.current);
-    }
+    try {
+      const response = await api.post<{ data: { content: string } }>(
+        "v1/ai/chat",
+        {
+          messages: conversation.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+        },
+      );
 
-    responseTimeoutRef.current = setTimeout(() => {
+      const replyContent = response.data.data.content;
+
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: createAssistantResponse(message),
+          content: replyContent,
         },
       ]);
+    } catch (error) {
+      console.error("AI request failed:", error);
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content:
+            "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
+        },
+      ]);
+    } finally {
       setIsAssistantThinking(false);
-    }, 500);
+    }
   };
 
   if (!mounted) return null;
 
   return (
-    <div
-      className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none"
-    >
+    <div className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none">
       <main
         className={cn(
           containerClassName,
-          "h-full flex flex-col items-center relative overflow-hidden overscroll-none"
+          "h-full flex flex-col items-center relative overflow-hidden overscroll-none",
         )}
       >
         {!hasChatStarted ? (
-          <div className="w-full flex flex-col items-center pt-25 lg:pt-30">
-            {/* Hero: greeting + input area */}
-            <HeroSection onSubmit={handlePromptSubmit} />
+          <div className="w-full h-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar">
+            <div className="w-full flex flex-col items-center gap-1 sm:gap-2">
+              {/* Hero: greeting + input area */}
+              <HeroSection onSubmit={handlePromptSubmit} />
 
-            {isError && (
-              <div className="w-full max-w-4xl mt-4 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
-                <AlertCircle className="w-4 h-4" />
-                <span>Failed to load dashboard data. Please try again.</span>
-              </div>
-            )}
+              {isError && (
+                <div className="w-full max-w-4xl mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Failed to load dashboard data. Please try again.</span>
+                </div>
+              )}
 
-            {/* Widgets grid */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl mt-10 opacity-90 hover:opacity-100 transition-opacity">
-              <CurrentFocusCard task={data?.immediate?.[0] ?? null} isLoading={isLoading} />
-              <NextEventCard />
-              <ImmediateBlockersCard tasks={data?.immediate ?? []} isLoading={isLoading} />
-              <NeedsReplyCard />
-              <UpNextCard tasks={data?.today ?? []} isLoading={isLoading} />
-            </section>
+              {/* Dashboard Panel with 3D Wheels */}
+              <DashboardPanel data={data} isLoading={isLoading} />
+            </div>
           </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center">
@@ -167,7 +151,7 @@ export function Dashboard() {
                     <MessageContent
                       className={cn(
                         message.role === "assistant" &&
-                          "w-full max-w-[46rem] text-[0.95rem] leading-7"
+                          "w-full max-w-[46rem] text-[0.95rem] leading-7",
                       )}
                     >
                       <MessageResponse>{message.content}</MessageResponse>

@@ -1,30 +1,25 @@
 // src/components/chat/ChatDrawer.tsx
 
 import { useChatStore } from "@/store/useChatStore";
-import { useChatSocketListeners } from "@/hooks/api/useChat";
 import { useAppContext } from "@/contexts/AppContext";
 import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
 import { X, Maximize2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 
 export function ChatDrawer() {
-  const { isChatOpen, activeChannelId, closeChat } = useChatStore();
+  const { isChatOpen, activeChannelId, closeChat, openChatDialog } =
+    useChatStore();
   const [width, setWidth] = useState(360);
   const isResizing = useRef(false);
-  const navigate = useNavigate();
 
   const { activeOrgId, activeSpaceId } = useAppContext();
 
   const handleExpandClick = () => {
-    navigate("/chat");
+    openChatDialog();
     closeChat();
   };
-
-  // ⚠️ Mount socket listeners here — once, at the drawer level.
-  useChatSocketListeners(activeChannelId, activeOrgId, activeSpaceId);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -52,12 +47,14 @@ export function ChatDrawer() {
     };
   }, [isChatOpen]);
 
-  if (!isChatOpen) return null;
+  if (!isChatOpen) {
+    return null;
+  }
 
   return (
     <div
       style={{ width: `${width}px` }}
-      className="fixed inset-y-0 right-0 z-60 flex shadow-2xl border-l border-border bg-background transition-colors duration-200"
+      className="fixed inset-y-0 right-0 z-50 flex shadow-2xl border-l border-border bg-background transition-[width] duration-300"
     >
       {/* Resize Handle */}
       <div

@@ -7,6 +7,9 @@ import type { MotionPageDTO } from "@/hooks/api/useMotionPages";
 
 // ─── MotionPublicPage ─────────────────────────────────────────────────────────
 // Unauthenticated read-only view of a page shared via public link.
+// Handles two URL patterns:
+//   1. /motion/:slug/:pageId  — new clean URL (public sharing must be enabled)
+//   2. /notes/public/:token   — legacy token-based URL (kept for compatibility)
 // Mounted outside <Layout> and <ProtectedRoute> in App.tsx.
 
 type FetchState =
@@ -15,24 +18,43 @@ type FetchState =
   | { status: "not_found" }
   | { status: "error" };
 
-export function MotionPublicPage() {
-  const { token } = useParams<{ token: string }>();
+// Props tell us which URL pattern we're in
+interface MotionPublicPageProps {
+  mode?: "token" | "pageId";
+}
+
+export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
+  // Both route patterns expose their param under different names
+  const { token, pageId } = useParams<{ token?: string; pageId?: string }>();
   const [state, setState] = useState<FetchState>({ status: "loading" });
 
   useEffect(() => {
-    if (!token) {
-      setState({ status: "not_found" });
-      return;
-    }
-
     let cancelled = false;
 
-    api
-      .get<{ data: MotionPageDTO }>(`v1/notes/public/${token}`)
-      .then((res) => {
+    const fetchPage = async () => {
+      try {
+        let res: { data: { data: MotionPageDTO } };
+
+        if (mode === "pageId") {
+          if (!pageId) {
+            setState({ status: "not_found" });
+            return;
+          }
+          res = await api.get<{ data: MotionPageDTO }>(
+            `v1/notes/public/page/${pageId}`
+          );
+        } else {
+          if (!token) {
+            setState({ status: "not_found" });
+            return;
+          }
+          res = await api.get<{ data: MotionPageDTO }>(
+            `v1/notes/public/${token}`
+          );
+        }
+
         if (!cancelled) setState({ status: "ok", page: res.data.data });
-      })
-      .catch((err) => {
+      } catch (err: any) {
         if (cancelled) return;
         const status = err?.response?.status;
         if (status === 404 || status === 400) {
@@ -40,12 +62,16 @@ export function MotionPublicPage() {
         } else {
           setState({ status: "error" });
         }
-      });
+      }
+    };
+
+    setState({ status: "loading" });
+    fetchPage();
 
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, pageId, mode]);
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (state.status === "loading") {
@@ -56,15 +82,15 @@ export function MotionPublicPage() {
     );
   }
 
-  // ── Not found / expired ──────────────────────────────────────────────────────
+  // ── Not found / disabled ─────────────────────────────────────────────────────
   if (state.status === "not_found") {
     return (
       <div className="flex h-dvh w-full flex-col items-center justify-center gap-4 bg-background text-foreground px-6 text-center">
         <AlertCircle className="size-10 text-muted-foreground/50" />
         <div>
-          <h1 className="text-xl font-bold">Link not found or expired</h1>
+          <h1 className="text-xl font-bold">Link not found or access disabled</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            This page may have been deleted or the share link has expired.
+            This page may have been deleted or public sharing has been turned off.
           </p>
         </div>
         <Link
