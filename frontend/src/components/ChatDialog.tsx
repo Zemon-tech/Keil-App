@@ -6,7 +6,7 @@ import {
 import { VisuallyHidden } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/useChatStore";
-import { useChatChannels, useReadChannel, useChatMessages, useSendMessage } from "@/hooks/api/useChat";
+import { useChatChannels, useReadChannel, useChatMessages, useSendMessage, useDeleteChannel } from "@/hooks/api/useChat";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -14,17 +14,28 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
-    Hash, X, Search, Plus, Send, MoreVertical, 
-    Phone, Video, Paperclip, Smile, CheckCheck,
-    UserPlus, Users, MessageCircle
+    Hash, Search, Send, 
+    Paperclip, Smile, CheckCheck,
+    Users, MessageCircle, Trash2
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useRef, useEffect } from "react";
 import { useMe } from "@/hooks/api/useMe";
-import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
-import { useOpenDM } from "@/hooks/api/useChat";
 import { getSocket } from "@/lib/socket";
+import { NewChatDialog } from "@/components/chat/NewChatDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { GroupSettingsDialog } from "@/components/chat/GroupSettingsDialog";
 
 interface ChatDialogProps {
     open: boolean;
@@ -40,14 +51,11 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     const readChannel = useReadChannel(activeOrgId, activeSpaceId);
     const { data: messages = [], isLoading: messagesLoading } = useChatMessages(activeChannelId || "", activeOrgId, activeSpaceId);
     const sendMessage = useSendMessage();
+    const deleteChannel = useDeleteChannel(activeOrgId, activeSpaceId);
     const { data: me } = useMe();
-    const { data: members } = useSpaceMembers(activeOrgId, activeSpaceId);
-    const openDM = useOpenDM(activeOrgId, activeSpaceId);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [messageText, setMessageText] = useState("");
-    const [showUserSearch, setShowUserSearch] = useState(false);
-    const [userSearchQuery, setUserSearchQuery] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,14 +70,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
         c.members[0]?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    // Filter users for adding new chat — SpaceMember shape: { user_id, name, email }
-    const myId = (me as any)?.id ?? (me as any)?.user?.id;
-    const filteredUsers = members?.filter(member => {
-        if (member.user_id === myId) return false;
-        const searchLower = userSearchQuery.toLowerCase();
-        return member.name?.toLowerCase().includes(searchLower) ||
-               member.email.toLowerCase().includes(searchLower);
-    });
+
 
     const currentChannel = channels.find(c => c.id === activeChannelId);
 
@@ -78,19 +79,6 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
         readChannel.mutate(id);
     };
 
-    const handleClose = () => {
-        onOpenChange(false);
-    };
-
-    const handleStartChat = (userId: string) => {
-        openDM.mutate(userId, {
-            onSuccess: (channel: any) => {
-                setActiveChannel(channel.id);
-                setShowUserSearch(false);
-                setUserSearchQuery("");
-            }
-        });
-    };
 
     const handleSendMessage = () => {
         if (!messageText.trim() || !activeChannelId) return;
@@ -121,7 +109,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                showCloseButton={false}
+                showCloseButton={true}
                 className="!max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden"
             >
                 <VisuallyHidden.Root>
@@ -134,23 +122,6 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                         {/* Sidebar Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                             <span className="text-sm font-semibold">Messages</span>
-                            <div className="flex items-center gap-1">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                    onClick={() => setShowUserSearch(true)}
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </Button>
-                                <button
-                                    onClick={handleClose}
-                                    className="text-muted-foreground hover:text-foreground transition-colors"
-                                    aria-label="Close chat dialog"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            </div>
                         </div>
 
                         {/* Search Bar */}
@@ -170,11 +141,12 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                         <ScrollArea className="flex-1">
                             {/* Group Channels Section */}
                             <div className="p-2">
-                                <div className="px-2 py-1.5">
+                                <div className="px-2 py-1.5 flex items-center justify-between">
                                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                         <Hash className="h-3 w-3" />
                                         Channels
                                     </span>
+                                    <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} defaultTab="group" />
                                 </div>
                                 {isLoading ? (
                                     <div className="space-y-2">
@@ -231,11 +203,12 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
 
                             {/* Direct Messages Section */}
                             <div className="p-2">
-                                <div className="px-2 py-1.5">
+                                <div className="px-2 py-1.5 flex items-center justify-between">
                                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                                         <Users className="h-3 w-3" />
                                         Direct Messages
                                     </span>
+                                    <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} defaultTab="direct" />
                                 </div>
                                 {isLoading ? (
                                     <div className="space-y-2">
@@ -335,16 +308,47 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             </>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                            <Phone className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                            <Video className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                            <MoreVertical className="h-4 w-4" />
-                                        </Button>
+                                    <div className="flex items-center gap-2">
+                                        {currentChannel?.type === "group" ? (
+                                            <GroupSettingsDialog
+                                                channel={currentChannel}
+                                                orgId={activeOrgId}
+                                                spaceId={activeSpaceId}
+                                            />
+                                        ) : (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <button
+                                                        className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                                        aria-label="Delete chat"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Are you sure you want to delete this direct message? This action cannot be undone.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction 
+                                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                            onClick={() => {
+                                                                if (activeChannelId) {
+                                                                    deleteChannel.mutate(activeChannelId);
+                                                                    setActiveChannel(null);
+                                                                }
+                                                            }}
+                                                        >
+                                                            Delete Chat
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        )}
                                     </div>
                                 </div>
 
@@ -447,68 +451,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                             </div>
                         )}
 
-                        {/* User Search Overlay */}
-                        {showUserSearch && (
-                            <div className="absolute inset-0 bg-background/95 backdrop-blur-sm z-50 flex flex-col">
-                                <div className="h-14 border-b border-border flex items-center justify-between px-4">
-                                    <div className="flex items-center gap-3">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => setShowUserSearch(false)}
-                                            className="h-8 w-8"
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                        <h3 className="text-sm font-semibold">Start new chat</h3>
-                                    </div>
-                                </div>
-                                <div className="p-4">
-                                    <div className="relative mb-4">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            placeholder="Search users..."
-                                            value={userSearchQuery}
-                                            onChange={(e) => setUserSearchQuery(e.target.value)}
-                                            className="pl-9"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <ScrollArea className="h-[calc(100vh-180px)]">
-                                        <div className="space-y-1">
-                                            {filteredUsers?.map((member) => {
-                                                const displayName = member.name || member.email;
-                                                const initials = displayName.charAt(0).toUpperCase();
-                                                return (
-                                                    <button
-                                                        key={member.user_id}
-                                                        onClick={() => handleStartChat(member.user_id)}
-                                                        disabled={openDM.isPending}
-                                                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/50 transition-colors text-left"
-                                                    >
-                                                        <Avatar className="h-10 w-10">
-                                                            <AvatarFallback className="text-sm font-semibold bg-primary/20">
-                                                                {initials}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-medium truncate">{displayName}</p>
-                                                            <p className="text-xs text-muted-foreground truncate">{member.email}</p>
-                                                        </div>
-                                                        <UserPlus className="h-4 w-4 text-muted-foreground" />
-                                                    </button>
-                                                );
-                                            })}
-                                            {filteredUsers?.length === 0 && (
-                                                <div className="text-center py-8 text-sm text-muted-foreground">
-                                                    {userSearchQuery ? "No users found" : "No users available"}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </ScrollArea>
-                                </div>
-                            </div>
-                        )}
+
                     </div>
                 </div>
             </DialogContent>

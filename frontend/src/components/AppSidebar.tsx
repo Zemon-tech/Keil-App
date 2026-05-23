@@ -27,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaces } from "@/hooks/api/useSpaces";
@@ -438,34 +437,8 @@ export function AppSidebar() {
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
                     <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <Building2 className="h-3 w-3" />
-                      Organisation
+                      Organisations
                     </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          setJoinOrgOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Join
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 hover:bg-muted-foreground/10"
-                        title="Create organisation"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          setCreateOrgOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
                   </DropdownMenuLabel>
 
                   {/* Org list — each row has a space sub-menu */}
@@ -490,6 +463,34 @@ export function AppSidebar() {
                       />
                     ))
                   )}
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    className="gap-2 px-2 py-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setJoinOrgOpen(true);
+                    }}
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-transparent">
+                      <Plus className="h-3 w-3" />
+                    </div>
+                    <span className="text-xs font-medium">Join an organisation</span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    className="gap-2 px-2 py-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCreateOrgOpen(true);
+                    }}
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-transparent">
+                      <Plus className="h-3 w-3" />
+                    </div>
+                    <span className="text-xs font-medium">Create organisation</span>
+                  </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
 
