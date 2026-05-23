@@ -206,6 +206,29 @@ export const createTask = async (
       for (const userId of assignee_ids) {
         await taskAssigneeRepository.assign(created.id, userId, client);
       }
+
+      // Trigger task_assigned outbox job
+      const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [input.created_by]);
+      const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+      await client.query(
+        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          created.workspace_id ?? null,
+          context.orgId,
+          context.spaceId,
+          input.created_by,
+          'task_assigned',
+          'task',
+          created.id,
+          JSON.stringify({
+            recipient_ids: assignee_ids,
+            task_title: created.title,
+            sender_name: senderName
+          })
+        ]
+      );
     }
 
     await logSpaceActivity(
@@ -275,6 +298,35 @@ export const updateTask = async (
     }
     if (input.status !== undefined && input.status !== existingTask.status) {
       await logSpaceActivity(context, userId, LogEntityType.TASK, taskId, LogActionType.STATUS_CHANGED, { status: existingTask.status }, { status: input.status }, client);
+
+      // Trigger task_status_changed outbox job
+      const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
+      const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
+      
+      if (assigneeIds.length > 0) {
+        const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+        const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+        await client.query(
+          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            existingTask.workspace_id ?? null,
+            context.orgId,
+            context.spaceId,
+            userId,
+            'task_status_changed',
+            'task',
+            taskId,
+            JSON.stringify({
+              recipient_ids: assigneeIds,
+              task_title: existingTask.title,
+              sender_name: senderName,
+              status: input.status
+            })
+          ]
+        );
+      }
     }
     if (input.priority !== undefined && input.priority !== existingTask.priority) {
       await logSpaceActivity(context, userId, LogEntityType.TASK, taskId, LogActionType.PRIORITY_CHANGED, { priority: existingTask.priority }, { priority: input.priority }, client);
@@ -346,6 +398,35 @@ export const changeTaskStatus = async (
       client,
     );
 
+    // Trigger task_status_changed outbox job
+    const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
+    const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
+    
+    if (assigneeIds.length > 0) {
+      const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+      const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+      await client.query(
+        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          existing.workspace_id ?? null,
+          context.orgId,
+          context.spaceId,
+          userId,
+          'task_status_changed',
+          'task',
+          taskId,
+          JSON.stringify({
+            recipient_ids: assigneeIds,
+            task_title: existing.title,
+            sender_name: senderName,
+            status: status
+          })
+        ]
+      );
+    }
+
     return updated;
   });
 
@@ -402,6 +483,33 @@ export const assignUser = async (
       { assigned_user_id: assigneeUserId },
       client,
     );
+
+    // Trigger task_assigned outbox job
+    const taskRes = await client.query('SELECT workspace_id, title FROM public.tasks WHERE id = $1', [taskId]);
+    const task = taskRes.rows[0];
+    if (task) {
+      const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
+      const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+      await client.query(
+        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          task.workspace_id ?? null,
+          context.orgId,
+          context.spaceId,
+          userId,
+          'task_assigned',
+          'task',
+          taskId,
+          JSON.stringify({
+            recipient_ids: [assigneeUserId],
+            task_title: task.title,
+            sender_name: senderName
+          })
+        ]
+      );
+    }
   });
 };
 

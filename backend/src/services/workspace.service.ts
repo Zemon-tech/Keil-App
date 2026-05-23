@@ -227,6 +227,35 @@ export const addWorkspaceMember = async (
       new_value: { user_id: userId, role }
     }, client);
 
+    // Fetch workspace info
+    const workspaceRes = await client.query('SELECT name FROM public.workspaces WHERE id = $1', [workspaceId]);
+    const workspaceName = workspaceRes.rows[0]?.name || 'Workspace';
+
+    const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [addedByUserId]);
+    const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+    // Trigger membership_updates outbox job
+    await client.query(
+      `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        workspaceId,
+        null,
+        null,
+        addedByUserId,
+        'membership_updates',
+        'workspace_member',
+        newMember.id,
+        JSON.stringify({
+          recipient_ids: [userId],
+          workspace_name: workspaceName,
+          sender_name: senderName,
+          role,
+          action: 'added_workspace'
+        })
+      ]
+    );
+
     // Fetch member with user details
     const members = await workspaceRepository.getMembers(workspaceId, undefined, client);
     const memberWithUser = members.find(m => m.id === newMember.id);
@@ -275,6 +304,35 @@ export const updateMemberRole = async (
       old_value: { user_id: userId, role: currentMember.role },
       new_value: { user_id: userId, role: newRole }
     }, client);
+
+    // Fetch workspace info
+    const workspaceRes = await client.query('SELECT name FROM public.workspaces WHERE id = $1', [workspaceId]);
+    const workspaceName = workspaceRes.rows[0]?.name || 'Workspace';
+
+    const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [updatedByUserId]);
+    const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+    // Trigger membership_updates outbox job
+    await client.query(
+      `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        workspaceId,
+        null,
+        null,
+        updatedByUserId,
+        'membership_updates',
+        'workspace_member',
+        updatedMember.id,
+        JSON.stringify({
+          recipient_ids: [userId],
+          workspace_name: workspaceName,
+          sender_name: senderName,
+          role: newRole,
+          action: 'role_updated_workspace'
+        })
+      ]
+    );
 
     // Fetch updated member with user details
     const updatedMembers = await workspaceRepository.getMembers(workspaceId, undefined, client);

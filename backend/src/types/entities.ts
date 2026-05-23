@@ -205,3 +205,44 @@ export interface MotionPageShare {
   created_at: Date;
   expires_at: Date | null;
 }
+
+export interface UserNotificationPreference {
+  user_id: string;
+  notify_task_assigned: boolean;
+  notify_message: boolean;
+  notify_motion_shared: boolean;
+  notify_status_changed: boolean;
+  notify_membership_updated: boolean;
+  notify_comment_mention: boolean;
+  updated_at: Date;
+}
+
+export interface Notification {
+  id: string;
+  workspace_id: string;
+  org_id: string | null;
+  space_id: string | null;
+  recipient_id: string;
+  sender_id: string | null;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  payload: Record<string, any>;
+  read_at: Date | null;
+  created_at: Date;
+}
+
+export interface NotificationOutbox {
+  id: string;
+  workspace_id: string;
+  org_id: string | null;
+  space_id: string | null;
+  sender_id: string | null;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  payload: Record<string, any>;
+  status: 'pending' | 'processing' | 'failed';
+  attempts: number;
+  created_at: Date;
+}

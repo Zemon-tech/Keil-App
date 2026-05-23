@@ -195,31 +195,90 @@ export const chatService = {
     },
 
     async saveMessage(channelId: string, senderId: string, content: string) {
-        const result = await pool.query(`
-            INSERT INTO messages (channel_id, sender_id, content)
-            VALUES ($1, $2, $3)
-            RETURNING id, channel_id, content, created_at
-        `, [channelId, senderId, content]);
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
 
-        const senderResult = await pool.query(
-            `SELECT id, name, email FROM users WHERE id = $1`,
-            [senderId]
-        );
-        const sender = senderResult.rows[0];
+            const result = await client.query(`
+                INSERT INTO messages (channel_id, sender_id, content)
+                VALUES ($1, $2, $3)
+                RETURNING id, channel_id, content, created_at
+            `, [channelId, senderId, content]);
 
-        // Sender red-dot fix: mark as read immediately for the sender
-        await this.markAsRead(channelId, senderId);
+            const senderResult = await client.query(
+                `SELECT id, name, email FROM users WHERE id = $1`,
+                [senderId]
+            );
+            const sender = senderResult.rows[0];
 
-        return {
-            id: result.rows[0].id,
-            channel_id: result.rows[0].channel_id,
-            content: result.rows[0].content,
-            created_at: toISO(result.rows[0].created_at),
-            sender: {
-                id: sender.id,
-                name: sender.name || sender.email
+            // Sender red-dot fix: mark as read immediately for the sender
+            await client.query(`
+                UPDATE channel_members
+                SET last_read_at = NOW()
+                WHERE channel_id = $1 AND user_id = $2
+            `, [channelId, senderId]);
+
+            // Get channel details
+            const channelRes = await client.query(
+                `SELECT workspace_id, type, name FROM channels WHERE id = $1`,
+                [channelId]
+            );
+            const channel = channelRes.rows[0];
+
+            if (channel) {
+                // Get all other member IDs
+                const membersRes = await client.query(
+                    `SELECT user_id FROM channel_members WHERE channel_id = $1`,
+                    [channelId]
+                );
+                const recipientIds = membersRes.rows
+                    .map((row: any) => row.user_id as string)
+                    .filter((uid: string) => uid !== senderId);
+
+                if (recipientIds.length > 0) {
+                    const senderName = sender.name || sender.email || 'Someone';
+                    
+                    await client.query(
+                        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                        [
+                            channel.workspace_id,
+                            null,
+                            null,
+                            senderId,
+                            'someone_messaged',
+                            'message',
+                            result.rows[0].id,
+                            JSON.stringify({
+                                recipient_ids: recipientIds,
+                                sender_name: senderName,
+                                channel_name: channel.name,
+                                channel_type: channel.type,
+                                message_snippet: content.substring(0, 100)
+                            })
+                        ]
+                    );
+                }
             }
-        };
+
+            await client.query("COMMIT");
+
+            return {
+                id: result.rows[0].id,
+                channel_id: result.rows[0].channel_id,
+                content: result.rows[0].content,
+                created_at: toISO(result.rows[0].created_at),
+                sender: {
+                    id: sender.id,
+                    name: sender.name || sender.email
+                }
+            };
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        } finally {
+            client.release();
+        }
     },
 
     async getChannelMemberIds(channelId: string): Promise<string[]> {

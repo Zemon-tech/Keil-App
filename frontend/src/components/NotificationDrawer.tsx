@@ -1,58 +1,24 @@
 import { useState, useRef, useEffect } from "react";
-import { Bell, X, Maximize2, Check, Trash2, CheckSquare, User, MessageCircle, Settings, ExternalLink, ChevronRight } from "lucide-react";
+import {
+    Bell,
+    X,
+    Maximize2,
+    Check,
+    Trash2,
+    CheckSquare,
+    User,
+    MessageCircle,
+    Settings,
+    ExternalLink,
+    ChevronRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
-// Mock notification data - replace with actual API call
-const mockNotifications = [
-    {
-        id: "1",
-        type: "task",
-        title: "Task assigned to you",
-        description: "You have been assigned to 'Fix login bug'",
-        time: "2 minutes ago",
-        read: false,
-        user: { name: "John Doe", email: "john@example.com" }
-    },
-    {
-        id: "2",
-        type: "mention",
-        title: "You were mentioned",
-        description: "Sarah mentioned you in 'Project Planning'",
-        time: "15 minutes ago",
-        read: false,
-        user: { name: "Sarah Smith", email: "sarah@example.com" }
-    },
-    {
-        id: "3",
-        type: "chat",
-        title: "New message in #general",
-        description: "Mike: Hey everyone, check out the new feature!",
-        time: "1 hour ago",
-        read: true,
-        user: { name: "Mike Johnson", email: "mike@example.com" }
-    },
-    {
-        id: "4",
-        type: "system",
-        title: "Organisation updated",
-        description: "Your organisation settings have been updated",
-        time: "3 hours ago",
-        read: true,
-        user: null
-    },
-    {
-        id: "5",
-        type: "task",
-        title: "Task completed",
-        description: "'Design review' has been marked as complete",
-        time: "5 hours ago",
-        read: true,
-        user: { name: "Emily Brown", email: "emily@example.com" }
-    },
-];
+import { useNotifications, type Notification } from "@/contexts/NotificationContext";
+import { formatDistanceToNow } from "date-fns";
 
 interface NotificationDrawerProps {
     open: boolean;
@@ -60,46 +26,107 @@ interface NotificationDrawerProps {
     onOpenFullView: () => void;
 }
 
-const getNotificationIcon = (type: string) => {
-    switch (type) {
-        case "task":
-            return <CheckSquare className="h-4 w-4" />;
-        case "mention":
-            return <User className="h-4 w-4" />;
-        case "chat":
-            return <MessageCircle className="h-4 w-4" />;
-        case "system":
-            return <Settings className="h-4 w-4" />;
-        default:
-            return <Bell className="h-4 w-4" />;
-    }
-};
+const notificationStyles = {
+    task_assigned: {
+        label: "Task Assigned",
+        icon: CheckSquare,
+        className: "bg-[var(--event-task-bg)] text-[var(--event-task-text)] ring-[var(--event-task-border)]",
+    },
+    someone_messaged: {
+        label: "Chat",
+        icon: MessageCircle,
+        className: "bg-[var(--event-focus-bg)] text-[var(--event-focus-text)] ring-[var(--event-focus-border)]",
+    },
+    motion_shared: {
+        label: "Motion",
+        icon: User,
+        className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
+    },
+    task_status_changed: {
+        label: "Task Update",
+        icon: CheckSquare,
+        className: "bg-[var(--event-task-bg)] text-[var(--event-task-text)] ring-[var(--event-task-border)]",
+    },
+    membership_updates: {
+        label: "System",
+        icon: Settings,
+        className: "bg-[var(--event-deadline-bg)] text-[var(--event-deadline-text)] ring-[var(--event-deadline-border)]",
+    },
+    mention_in_comment: {
+        label: "Mention",
+        icon: User,
+        className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
+    },
+} as const;
 
-const getNotificationColor = (type: string) => {
-    switch (type) {
-        case "task":
-            return "bg-blue-500/10 text-blue-500";
-        case "mention":
-            return "bg-purple-500/10 text-purple-500";
-        case "chat":
-            return "bg-green-500/10 text-green-500";
-        case "system":
-            return "bg-orange-500/10 text-orange-500";
-        default:
-            return "bg-gray-500/10 text-gray-500";
-    }
-};
+const getNotificationMeta = (eventType: string) =>
+    notificationStyles[eventType as keyof typeof notificationStyles] ?? {
+        label: "Update",
+        icon: Bell,
+        className: "bg-muted text-muted-foreground ring-border",
+    };
+
+function getNotificationTitle(n: Notification): string {
+  const actor = n.payload.sender_name || "Someone";
+  switch (n.event_type) {
+    case "task_assigned":
+      return `Task Assigned`;
+    case "someone_messaged":
+      return `New message from ${actor}`;
+    case "motion_shared":
+      return `Motion Shared`;
+    case "task_status_changed":
+      return `Task Status Updated`;
+    case "membership_updates":
+      return `Membership Update`;
+    case "mention_in_comment":
+      return `Mentioned in Comment`;
+    default:
+      return `New Notification`;
+  }
+}
+
+function getNotificationSnippet(n: Notification): string {
+  const actor = n.payload.sender_name || "Someone";
+  switch (n.event_type) {
+    case "task_assigned":
+      return `${actor} assigned you to "${n.payload.task_title}"`;
+    case "someone_messaged":
+      return n.payload.message_snippet || `New message in channel`;
+    case "motion_shared":
+      return `${actor} shared "${n.payload.page_title}" with space`;
+    case "task_status_changed":
+      return `"${n.payload.task_title}" moved to ${n.payload.status}`;
+    case "membership_updates":
+      const action = n.payload.action === 'added_space' || n.payload.action === 'added_workspace' ? 'added you to' : 'updated your role in';
+      const place = n.payload.space_name || n.payload.workspace_name || 'workspace';
+      return `${actor} ${action} ${place} as ${n.payload.role}`;
+    case "mention_in_comment":
+      return `${actor} mentioned you: "${n.payload.comment_snippet}"`;
+    default:
+      return `You have a new alert`;
+  }
+}
 
 export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: NotificationDrawerProps) {
-    const [width, setWidth] = useState(360);
+    const [width, setWidth] = useState(392);
     const isResizing = useRef(false);
-    const unreadCount = mockNotifications.filter(n => !n.read).length;
+    const [filter, setFilter] = useState<"All" | "Unread" | "Tasks" | "Mentions">("All");
+
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
+
+    // Mark all as read when drawer is opened
+    useEffect(() => {
+        if (open) {
+            markAllAsRead();
+        }
+    }, [open]);
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             if (!isResizing.current) return;
             const newWidth = window.innerWidth - e.clientX;
-            if (newWidth > 320 && newWidth < 800) {
+            if (newWidth > 340 && newWidth < 800) {
                 setWidth(newWidth);
             }
         };
@@ -123,16 +150,22 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
         };
     }, [open]);
 
+    const filteredNotifications = notifications.filter((n) => {
+        if (filter === "Unread") return !n.read_at;
+        if (filter === "Tasks") return n.event_type === "task_assigned" || n.event_type === "task_status_changed";
+        if (filter === "Mentions") return n.event_type === "mention_in_comment";
+        return true;
+    });
+
     if (!open) return null;
 
     return (
-        <div 
+        <div
             style={{ width: `${width}px` }}
-            className="fixed inset-y-0 right-0 z-[60] flex shadow-2xl border-l border-border bg-background transition-colors duration-200"
+            className="fixed inset-y-0 right-0 z-[60] flex border-l border-border/80 bg-background/95 shadow-[var(--shadow-lg)] backdrop-blur-xl transition-colors duration-200"
         >
-            {/* Resize Handle */}
             <div
-                className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-[70]"
+                className="absolute left-0 top-0 bottom-0 z-[70] w-1.5 cursor-ew-resize transition-colors hover:bg-primary/30 active:bg-primary/50"
                 onMouseDown={(e) => {
                     e.preventDefault();
                     isResizing.current = true;
@@ -141,124 +174,146 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                 }}
             />
 
-            <div className="flex flex-col w-full h-full relative">
+            <div className="relative flex h-full w-full flex-col overflow-hidden">
+                <header className="border-b border-border/70 px-5 py-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-semibold tracking-[-0.03em] text-foreground">Notification</h2>
+                            {unreadCount > 0 && (
+                                <Badge className="h-6 border-border/70 bg-card px-2 text-xs text-foreground shadow-sm">
+                                    {unreadCount} unread
+                                </Badge>
+                            )}
+                        </div>
 
-                {/* ── Header ── */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <div className="flex items-center gap-2">
-                        <Bell className="h-4 w-4" />
-                        <h2 className="font-semibold text-sm">Notifications</h2>
-                        {unreadCount > 0 && (
-                            <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-primary/10 text-primary">
-                                {unreadCount > 9 ? "9+" : unreadCount}
-                            </Badge>
-                        )}
+                        <div className="flex items-center gap-1 rounded-full border border-border/70 bg-card/80 p-1 shadow-sm">
+                            <Button 
+                                variant="ghost" 
+                                size="icon-xs" 
+                                className="rounded-full text-muted-foreground hover:text-foreground" 
+                                aria-label="Mark all as read"
+                                onClick={markAllAsRead}
+                            >
+                                <Check className="size-3.5" />
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                size="icon-xs" 
+                                className="rounded-full text-muted-foreground hover:text-destructive" 
+                                aria-label="Clear all notifications"
+                                onClick={clearAll}
+                            >
+                                <Trash2 className="size-3.5" />
+                            </Button>
+                            <button
+                                onClick={onOpenFullView}
+                                className="flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                aria-label="Open full notification view"
+                            >
+                                <Maximize2 className="size-3.5" />
+                            </button>
+                            <button
+                                onClick={() => onOpenChange(false)}
+                                className="flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                aria-label="Close notifications"
+                            >
+                                <X className="size-3.5" />
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label="Mark all as read">
-                            <Check className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" aria-label="Clear all notifications">
-                            <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <button
-                            onClick={onOpenFullView}
-                            className="text-muted-foreground hover:text-foreground"
-                            aria-label="Open full notification view"
-                        >
-                            <Maximize2 className="h-4 w-4" />
-                        </button>
-                        <button
-                            onClick={() => onOpenChange(false)}
-                            className="text-muted-foreground hover:text-foreground"
-                            aria-label="Close notifications"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
 
-                {/* ── Body ── */}
-                <div className="flex-1 overflow-hidden flex flex-col">
-                    {/* Notifications List */}
-                    <div className="flex-1 overflow-y-auto">
-                        {mockNotifications.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center">
-                                <Bell className="h-12 w-12 opacity-20 mb-3" />
-                                <p className="text-sm">No notifications</p>
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-border">
-                                {mockNotifications.map((notification) => (
-                                    <div
+                    <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                        {(["All", "Unread", "Tasks", "Mentions"] as const).map((label) => (
+                            <button
+                                key={label}
+                                onClick={() => setFilter(label)}
+                                className={cn(
+                                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                                    filter === label
+                                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                        : "border-border/70 bg-card/70 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                )}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto px-2 py-2">
+                    {filteredNotifications.length === 0 ? (
+                        <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/60 p-8 text-center text-muted-foreground">
+                            <Bell className="mb-3 size-12 opacity-25" />
+                            <p className="text-sm font-medium text-foreground">No notifications</p>
+                            <p className="mt-1 text-xs">Important workspace updates will appear here.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            {filteredNotifications.map((notification) => {
+                                const meta = getNotificationMeta(notification.event_type);
+                                const Icon = meta.icon;
+                                const isRead = !!notification.read_at;
+
+                                return (
+                                    <article
                                         key={notification.id}
+                                        onClick={() => !isRead && markAsRead(notification.id)}
                                         className={cn(
-                                            "px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer",
-                                            !notification.read && "bg-primary/5"
+                                            "group relative overflow-hidden rounded-xl px-3 py-2.5 transition-all duration-200 cursor-pointer",
+                                            isRead
+                                                ? "bg-transparent hover:bg-muted/40"
+                                                : "bg-muted/20 hover:bg-muted/30"
                                         )}
                                     >
                                         <div className="flex items-start gap-3">
-                                            {/* Icon */}
-                                            <div className={cn(
-                                                "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                                                getNotificationColor(notification.type)
-                                            )}>
-                                                {getNotificationIcon(notification.type)}
+                                            <div className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg", meta.className)}>
+                                                <Icon className="size-3.5" />
                                             </div>
 
-                                            {/* Content */}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <h4 className={cn(
-                                                                "text-xs font-semibold",
-                                                                !notification.read && "text-foreground"
+                                            <div className="min-w-0 flex-1">
+                                                <div className="mb-1 flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <h3 className={cn(
+                                                                "truncate text-sm tracking-[-0.02em]",
+                                                                isRead ? "font-medium text-foreground/80" : "font-semibold text-foreground"
                                                             )}>
-                                                                {notification.title}
-                                                            </h4>
-                                                            {!notification.read && (
-                                                                <div className="h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
-                                                            )}
+                                                                {getNotificationTitle(notification)}
+                                                            </h3>
+                                                            {!isRead && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground mb-1 line-clamp-2">
-                                                            {notification.description}
+                                                        <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                                            {getNotificationSnippet(notification)}
                                                         </p>
-                                                        <span className="text-[10px] text-muted-foreground">
-                                                            {notification.time}
-                                                        </span>
                                                     </div>
 
-                                                    {/* User Avatar (if applicable) */}
-                                                    {notification.user && (
-                                                        <Avatar className="h-6 w-6 flex-shrink-0">
-                                                            <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                                                                {notification.user.name.charAt(0).toUpperCase()}
+                                                    {notification.sender_name && (
+                                                        <Avatar className="size-6 border-none bg-muted shadow-none">
+                                                            <AvatarFallback className="bg-secondary text-[9px] font-semibold text-secondary-foreground">
+                                                                {notification.sender_name.charAt(0).toUpperCase()}
                                                             </AvatarFallback>
                                                         </Avatar>
                                                     )}
+                                                </div>
 
-                                                    {/* Category-based Action Button */}
-                                                    {notification.type === 'task' && (
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" aria-label="View task">
-                                                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        </Button>
-                                                    )}
-                                                    {notification.type === 'chat' && (
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" aria-label="View chat">
-                                                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                                                        </Button>
-                                                    )}
+                                                <div className="mt-2 flex items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="outline" className="h-5 border-none bg-muted/60 px-2 text-[9px] font-medium text-muted-foreground shadow-none">
+                                                            {meta.label}
+                                                        </Badge>
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
-
             </div>
         </div>
     );

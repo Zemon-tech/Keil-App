@@ -128,6 +128,77 @@ export const createComment = async (
       new_value: { task_id: data.task_id, parent_comment_id: data.parent_comment_id }
     }, client);
 
+    // Resolve notification recipients
+    const taskRes = await client.query('SELECT created_by, title FROM public.tasks WHERE id = $1', [data.task_id]);
+    const taskCreator = taskRes.rows[0]?.created_by;
+    const taskTitle = taskRes.rows[0]?.title || 'Task';
+    
+    const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [data.task_id]);
+    const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
+    
+    // Parse @mentions (matches name/email prefixes starting with @)
+    const mentions = data.content.match(/@([a-zA-Z0-9_.-]+)/g) || [];
+    const cleanMentions = mentions.map(m => m.substring(1).toLowerCase());
+    
+    const mentionedUserIds: string[] = [];
+    if (cleanMentions.length > 0) {
+      const usersRes = await client.query(
+        `SELECT id FROM public.users WHERE LOWER(name) = ANY($1) OR LOWER(split_part(email, '@', 1)) = ANY($2)`,
+        [cleanMentions, cleanMentions]
+      );
+      mentionedUserIds.push(...usersRes.rows.map((r: any) => r.id as string));
+    }
+    
+    const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [data.user_id]);
+    const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
+
+    if (mentionedUserIds.length > 0) {
+      // Trigger Mention notification job
+      await client.query(
+        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          context.workspace_id,
+          context.org_id ?? null,
+          context.space_id ?? null,
+          data.user_id,
+          'mention_in_comment',
+          'comment',
+          newComment.id,
+          JSON.stringify({
+            recipient_ids: mentionedUserIds,
+            task_title: taskTitle,
+            sender_name: senderName,
+            comment_snippet: data.content.substring(0, 100)
+          })
+        ]
+      );
+    } else {
+      // Standard notification job (to assignees + creator, excluding sender)
+      const recipients = Array.from(new Set([...assigneeIds, taskCreator])).filter(id => id && id !== data.user_id);
+      if (recipients.length > 0) {
+        await client.query(
+          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            context.workspace_id,
+            context.org_id ?? null,
+            context.space_id ?? null,
+            data.user_id,
+            'comment_created',
+            'comment',
+            newComment.id,
+            JSON.stringify({
+              recipient_ids: recipients,
+              task_title: taskTitle,
+              sender_name: senderName,
+              comment_snippet: data.content.substring(0, 100)
+            })
+          ]
+        );
+      }
+    }
+
     // Fetch comment with user details
     const comments = await commentRepository.findByTask(data.task_id, {}, client);
     const commentWithUser = comments.find(c => c.id === newComment.id);

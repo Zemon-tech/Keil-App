@@ -5,7 +5,19 @@ import {
 } from "@/components/ui/dialog";
 import { VisuallyHidden } from "radix-ui";
 import { cn } from "@/lib/utils";
-import { Bell, X, Check, CheckCheck, Trash2, CheckSquare, User, MessageCircle, Settings, ExternalLink, ChevronRight } from "lucide-react";
+import {
+    Bell,
+    X,
+    Check,
+    CheckCheck,
+    Trash2,
+    CheckSquare,
+    User,
+    MessageCircle,
+    Settings,
+    ExternalLink,
+    ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -15,295 +27,320 @@ interface NotificationDialogProps {
     onOpenChange: (open: boolean) => void;
 }
 
-// Mock notification data - replace with actual API call
-const mockNotifications = [
-    {
-        id: "1",
-        type: "task",
-        title: "Task assigned to you",
-        description: "You have been assigned to 'Fix login bug'",
-        time: "2 minutes ago",
-        read: false,
-        user: { name: "John Doe", email: "john@example.com" }
-    },
-    {
-        id: "2",
-        type: "mention",
-        title: "You were mentioned",
-        description: "Sarah mentioned you in 'Project Planning'",
-        time: "15 minutes ago",
-        read: false,
-        user: { name: "Sarah Smith", email: "sarah@example.com" }
-    },
-    {
-        id: "3",
-        type: "chat",
-        title: "New message in #general",
-        description: "Mike: Hey everyone, check out the new feature!",
-        time: "1 hour ago",
-        read: true,
-        user: { name: "Mike Johnson", email: "mike@example.com" }
-    },
-    {
-        id: "4",
-        type: "system",
-        title: "Organisation updated",
-        description: "Your organisation settings have been updated",
-        time: "3 hours ago",
-        read: true,
-        user: null
-    },
-    {
-        id: "5",
-        type: "task",
-        title: "Task completed",
-        description: "'Design review' has been marked as complete",
-        time: "5 hours ago",
-        read: true,
-        user: { name: "Emily Brown", email: "emily@example.com" }
-    },
-];
+import { useNotifications, type Notification } from "@/contexts/NotificationContext";
+import { formatDistanceToNow } from "date-fns";
+import { useState, useEffect } from "react";
 
-const getNotificationIcon = (type: string) => {
-    switch (type) {
-        case "task":
-            return <CheckSquare className="h-4 w-4" />;
-        case "mention":
-            return <User className="h-4 w-4" />;
-        case "chat":
-            return <MessageCircle className="h-4 w-4" />;
-        case "system":
-            return <Settings className="h-4 w-4" />;
-        default:
-            return <Bell className="h-4 w-4" />;
-    }
-};
+interface NotificationDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}
 
-const getNotificationColor = (type: string) => {
-    switch (type) {
-        case "task":
-            return "bg-blue-500/10 text-blue-500";
-        case "mention":
-            return "bg-purple-500/10 text-purple-500";
-        case "chat":
-            return "bg-green-500/10 text-green-500";
-        case "system":
-            return "bg-orange-500/10 text-orange-500";
-        default:
-            return "bg-gray-500/10 text-gray-500";
-    }
-};
+const notificationStyles = {
+    task_assigned: {
+        label: "Task Assigned",
+        icon: CheckSquare,
+        className: "bg-[var(--event-task-bg)] text-[var(--event-task-text)] ring-[var(--event-task-border)]",
+    },
+    someone_messaged: {
+        label: "Chat",
+        icon: MessageCircle,
+        className: "bg-[var(--event-focus-bg)] text-[var(--event-focus-text)] ring-[var(--event-focus-border)]",
+    },
+    motion_shared: {
+        label: "Motion",
+        icon: User,
+        className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
+    },
+    task_status_changed: {
+        label: "Task Update",
+        icon: CheckSquare,
+        className: "bg-[var(--event-task-bg)] text-[var(--event-task-text)] ring-[var(--event-task-border)]",
+    },
+    membership_updates: {
+        label: "System",
+        icon: Settings,
+        className: "bg-[var(--event-deadline-bg)] text-[var(--event-deadline-text)] ring-[var(--event-deadline-border)]",
+    },
+    mention_in_comment: {
+        label: "Mention",
+        icon: User,
+        className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
+    },
+} as const;
+
+const getNotificationMeta = (eventType: string) =>
+    notificationStyles[eventType as keyof typeof notificationStyles] ?? {
+        label: "Update",
+        icon: Bell,
+        className: "bg-muted text-muted-foreground ring-border",
+    };
+
+function getNotificationTitle(n: Notification): string {
+  const actor = n.payload.sender_name || "Someone";
+  switch (n.event_type) {
+    case "task_assigned":
+      return `Task Assigned`;
+    case "someone_messaged":
+      return `New message from ${actor}`;
+    case "motion_shared":
+      return `Motion Shared`;
+    case "task_status_changed":
+      return `Task Status Updated`;
+    case "membership_updates":
+      return `Membership Update`;
+    case "mention_in_comment":
+      return `Mentioned in Comment`;
+    default:
+      return `New Notification`;
+  }
+}
+
+function getNotificationSnippet(n: Notification): string {
+  const actor = n.payload.sender_name || "Someone";
+  switch (n.event_type) {
+    case "task_assigned":
+      return `${actor} assigned you to "${n.payload.task_title}"`;
+    case "someone_messaged":
+      return n.payload.message_snippet || `New message in channel`;
+    case "motion_shared":
+      return `${actor} shared "${n.payload.page_title}" with space`;
+    case "task_status_changed":
+      return `"${n.payload.task_title}" moved to ${n.payload.status}`;
+    case "membership_updates":
+      const action = n.payload.action === 'added_space' || n.payload.action === 'added_workspace' ? 'added you to' : 'updated your role in';
+      const place = n.payload.space_name || n.payload.workspace_name || 'workspace';
+      return `${actor} ${action} ${place} as ${n.payload.role}`;
+    case "mention_in_comment":
+      return `${actor} mentioned you: "${n.payload.comment_snippet}"`;
+    default:
+      return `You have a new alert`;
+  }
+}
 
 export function NotificationDialog({ open, onOpenChange }: NotificationDialogProps) {
-    const unreadCount = mockNotifications.filter(n => !n.read).length;
+    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
+    const [filter, setFilter] = useState<"All" | "Tasks" | "Mentions" | "Chat" | "System">("All");
+
+    // Mark all as read when dialog is opened
+    useEffect(() => {
+        if (open) {
+            markAllAsRead();
+        }
+    }, [open]);
+
+    const categories = [
+        { id: "All" as const, label: "All", icon: Bell, count: notifications.length },
+        { id: "Tasks" as const, label: "Tasks", icon: CheckSquare, count: notifications.filter((n) => n.event_type === "task_assigned" || n.event_type === "task_status_changed").length },
+        { id: "Mentions" as const, label: "Mentions", icon: User, count: notifications.filter((n) => n.event_type === "mention_in_comment").length },
+        { id: "Chat" as const, label: "Chat", icon: MessageCircle, count: notifications.filter((n) => n.event_type === "someone_messaged").length },
+        { id: "System" as const, label: "System", icon: Settings, count: notifications.filter((n) => n.event_type === "membership_updates").length },
+    ];
+
+    const filteredNotifications = notifications.filter((n) => {
+        if (filter === "Tasks") return n.event_type === "task_assigned" || n.event_type === "task_status_changed";
+        if (filter === "Mentions") return n.event_type === "mention_in_comment";
+        if (filter === "Chat") return n.event_type === "someone_messaged";
+        if (filter === "System") return n.event_type === "membership_updates";
+        return true;
+    });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 showCloseButton={false}
-                className="!max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden"
+                aria-describedby={undefined}
+                className="!h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !w-[calc(100vw-40px)] !max-w-[1180px] !gap-0 overflow-hidden !rounded-[2rem] border border-border/80 bg-background !p-0 shadow-[var(--shadow-lg)]"
             >
                 <VisuallyHidden.Root>
                     <DialogTitle>Notifications</DialogTitle>
                 </VisuallyHidden.Root>
 
-                <div className="flex h-full">
-                    {/* ── Left Sidebar: Notification Categories ── */}
-                    <div className="w-72 shrink-0 bg-card border-r border-border flex flex-col h-full">
-                        {/* Sidebar Header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                            <div className="flex items-center gap-2">
-                                <Bell className="h-4 w-4" />
-                                <span className="text-sm font-semibold">Notifications</span>
-                                {unreadCount > 0 && (
-                                    <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-primary/10 text-primary">
-                                        {unreadCount > 9 ? "9+" : unreadCount}
-                                    </Badge>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label="Mark all as read">
-                                    <CheckCheck className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" aria-label="Clear all notifications">
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                <div className="flex h-full overflow-hidden">
+                    <aside className="hidden h-full w-72 shrink-0 flex-col border-r border-border/70 bg-card/70 md:flex">
+                        <div className="border-b border-border/70 px-5 py-5">
+                            <div className="flex items-center justify-between gap-3">
+                                <h2 className="text-xl font-semibold tracking-[-0.04em] text-foreground">Notification</h2>
+
                                 <button
                                     onClick={() => onOpenChange(false)}
-                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                    className="flex size-8 items-center justify-center rounded-full border border-border/70 bg-background/70 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                                     aria-label="Close notifications"
                                 >
-                                    <X className="h-4 w-4" />
+                                    <X className="size-4" />
                                 </button>
                             </div>
                         </div>
 
-                        {/* Notification Categories */}
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                            <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-primary/10 text-primary">
-                                <div className="flex items-center gap-3">
-                                    <Bell className="h-4 w-4" />
-                                    <span className="text-sm font-medium">All</span>
-                                </div>
-                                {unreadCount > 0 && (
-                                    <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-primary/20 text-primary">
-                                        {unreadCount}
-                                    </Badge>
-                                )}
-                            </button>
+                        <div className="flex-1 overflow-y-auto p-3">
+                            <p className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Views</p>
+                            <div className="space-y-1">
+                                {categories.map((category) => {
+                                    const Icon = category.icon;
+                                    const isSelected = filter === category.id;
 
-                            <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
-                                <div className="flex items-center gap-3">
-                                    <CheckSquare className="h-4 w-4 text-blue-500" />
-                                    <span className="text-sm font-medium">Tasks</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">2</span>
-                            </button>
-
-                            <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
-                                <div className="flex items-center gap-3">
-                                    <User className="h-4 w-4 text-purple-500" />
-                                    <span className="text-sm font-medium">Mentions</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">1</span>
-                            </button>
-
-                            <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
-                                <div className="flex items-center gap-3">
-                                    <MessageCircle className="h-4 w-4 text-green-500" />
-                                    <span className="text-sm font-medium">Chat</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">1</span>
-                            </button>
-
-                            <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
-                                <div className="flex items-center gap-3">
-                                    <Settings className="h-4 w-4 text-orange-500" />
-                                    <span className="text-sm font-medium">System</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">1</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* ── Right Content Area: Notifications List ── */}
-                    <div className="flex-1 h-full overflow-hidden bg-background flex flex-col">
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                            <h2 className="text-lg font-semibold">All Notifications</h2>
-                        </div>
-
-                        {/* Notifications List */}
-                        <div className="flex-1 overflow-y-auto">
-                            {mockNotifications.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-12 text-center">
-                                    <Bell className="h-16 w-16 opacity-20 mb-4" />
-                                    <h3 className="text-lg font-semibold mb-2">No notifications</h3>
-                                    <p className="text-sm max-w-[320px]">
-                                        You're all caught up! We'll notify you when something important happens.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="divide-y divide-border">
-                                    {mockNotifications.map((notification) => (
-                                        <div
-                                            key={notification.id}
+                                    return (
+                                        <button
+                                            key={category.id}
+                                            onClick={() => setFilter(category.id)}
                                             className={cn(
-                                                "px-6 py-4 hover:bg-muted/30 transition-colors cursor-pointer",
-                                                !notification.read && "bg-primary/5"
+                                                "group flex w-full items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all cursor-pointer",
+                                                isSelected
+                                                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                                    : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-background hover:text-foreground"
                                             )}
                                         >
-                                            <div className="flex items-start gap-4 justify-between">
-                                                {/* Icon */}
-                                                <div className={cn(
-                                                    "h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                                                    getNotificationColor(notification.type)
-                                                )}>
-                                                    {getNotificationIcon(notification.type)}
-                                                </div>
+                                            <span className="flex items-center gap-3 font-medium">
+                                                <Icon className="size-4" />
+                                                {category.label}
+                                            </span>
+                                            <span className={cn(
+                                                "rounded-full px-2 py-0.5 text-xs",
+                                                isSelected ? "bg-primary-foreground/15 text-primary-foreground" : "bg-muted text-muted-foreground group-hover:text-foreground"
+                                            )}>
+                                                {category.count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </aside>
 
-                                                {/* Content */}
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-start gap-4">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <h4 className={cn(
-                                                                    "text-sm font-semibold",
-                                                                    !notification.read && "text-foreground"
-                                                                )}>
-                                                                    {notification.title}
-                                                                </h4>
-                                                                {!notification.read && (
-                                                                    <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                                                                )}
-                                                            </div>
-                                                            <p className="text-sm text-muted-foreground mb-2">
-                                                                {notification.description}
-                                                            </p>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {notification.time}
-                                                            </span>
+                    <main className="flex min-w-0 flex-1 flex-col bg-background">
+                        <header className="border-b border-border/70 px-5 py-4 md:px-7 md:py-5">
+                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <h2 className="text-2xl font-semibold tracking-[-0.04em] text-foreground md:text-3xl">
+                                            {filter === "All" ? "All Notifications" : `${filter} Notifications`}
+                                        </h2>
+                                        {unreadCount > 0 && (
+                                            <Badge className="h-6 border-border/70 bg-card px-2 text-xs text-foreground shadow-sm">
+                                                {unreadCount} unread
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="rounded-full bg-card/80 text-muted-foreground hover:text-foreground" 
+                                        aria-label="Mark all as read"
+                                        onClick={markAllAsRead}
+                                    >
+                                        <CheckCheck className="size-4" />
+                                        Mark read
+                                    </Button>
+                                    <Button 
+                                        variant="outline" 
+                                        size="icon-sm" 
+                                        className="rounded-full bg-card/80 text-muted-foreground hover:text-destructive" 
+                                        aria-label="Clear all notifications"
+                                        onClick={clearAll}
+                                    >
+                                        <Trash2 className="size-4" />
+                                    </Button>
+                                    <button
+                                        onClick={() => onOpenChange(false)}
+                                        className="flex size-8 items-center justify-center rounded-full border border-border/70 bg-card/80 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
+                                        aria-label="Close notifications"
+                                    >
+                                        <X className="size-4" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden">
+                                {categories.map((category) => (
+                                    <button
+                                        key={category.id}
+                                        onClick={() => setFilter(category.id)}
+                                        className={cn(
+                                            "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                                            filter === category.id
+                                                ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                                : "border-border/70 bg-card/70 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        )}
+                                    >
+                                        {category.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </header>
+
+                        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-7 md:py-5">
+                            {filteredNotifications.length === 0 ? (
+                                <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/60 p-12 text-center text-muted-foreground">
+                                    <Bell className="mb-4 size-16 opacity-25" />
+                                    <h3 className="text-lg font-semibold text-foreground">No notifications</h3>
+                                    <p className="mt-2 max-w-[320px] text-sm">You're all caught up. Important workspace updates will appear here.</p>
+                                </div>
+                            ) : (
+                                <div className="mx-auto max-w-3xl space-y-1">
+                                    {filteredNotifications.map((notification) => {
+                                        const meta = getNotificationMeta(notification.event_type);
+                                        const Icon = meta.icon;
+                                        const isRead = !!notification.read_at;
+
+                                        return (
+                                            <article
+                                                key={notification.id}
+                                                className={cn(
+                                                    "group relative overflow-hidden rounded-xl p-4 transition-all duration-200 cursor-pointer",
+                                                    isRead
+                                                        ? "bg-transparent hover:bg-muted/40"
+                                                        : "bg-muted/20 hover:bg-muted/30"
+                                                )}
+                                            >
+                                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div className="flex min-w-0 flex-1 gap-4">
+                                                        <div className={cn("flex size-8.5 shrink-0 items-center justify-center rounded-lg", meta.className)}>
+                                                            <Icon className="size-4" />
                                                         </div>
 
-                                                        {/* User Avatar (if applicable) */}
-                                                        {notification.user && (
-                                                            <Avatar className="h-8 w-8 flex-shrink-0">
-                                                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                                                    {notification.user.name.charAt(0).toUpperCase()}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                        )}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <h3 className={cn(
+                                                                    "text-base tracking-[-0.03em]",
+                                                                    isRead ? "font-medium text-foreground/80" : "font-semibold text-foreground"
+                                                                )}>
+                                                                    {getNotificationTitle(notification)}
+                                                                </h3>
+                                                                {!isRead && <span className="size-1.5 rounded-full bg-primary" />}
+                                                                <Badge variant="outline" className="h-5 border-none bg-muted/60 px-2 text-[9px] font-medium text-muted-foreground shadow-none">
+                                                                    {meta.label}
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                                                                {getNotificationSnippet(notification)}
+                                                            </p>
+
+                                                            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                                                <span>{formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}</span>
+                                                                {notification.sender_name && (
+                                                                    <span className="flex items-center gap-2">
+                                                                        <Avatar className="size-6 border-none bg-muted shadow-none">
+                                                                            <AvatarFallback className="bg-secondary text-[10px] font-semibold text-secondary-foreground">
+                                                                                {notification.sender_name.charAt(0).toUpperCase()}
+                                                                            </AvatarFallback>
+                                                                        </Avatar>
+                                                                        {notification.sender_name}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-
-                                                {/* Action Button */}
-                                                <div className="flex items-center gap-1 flex-shrink-0">
-                                                    {!notification.read && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            aria-label="Mark as read"
-                                                        >
-                                                            <Check className="h-4 w-4 text-muted-foreground" />
-                                                        </Button>
-                                                    )}
-                                                    {notification.type === 'task' && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            aria-label="View task"
-                                                        >
-                                                            <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                                                        </Button>
-                                                    )}
-                                                    {notification.type === 'chat' && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            aria-label="View chat"
-                                                        >
-                                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                                        </Button>
-                                                    )}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8"
-                                                        aria-label="Delete notification"
-                                                    >
-                                                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                            </article>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </main>
                 </div>
             </DialogContent>
         </Dialog>
