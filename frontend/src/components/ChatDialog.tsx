@@ -110,7 +110,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 showCloseButton={true}
-                className="!max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden"
+                className="!max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden [&_[data-slot=dialog-close]]:text-red-500 hover:[&_[data-slot=dialog-close]]:text-red-600 [&_[data-slot=dialog-close]]:opacity-90 transition-colors"
             >
                 <VisuallyHidden.Root>
                     <DialogTitle>Chat</DialogTitle>
@@ -273,7 +273,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                         {activeChannelId && currentChannel ? (
                             <>
                                 {/* Chat Header */}
-                                <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card/50 backdrop-blur-sm">
+                                <div className="h-14 border-b border-border flex items-center justify-between pl-4 pr-14 bg-card/50 backdrop-blur-sm">
                                     <div className="flex items-center gap-3">
                                         {currentChannel.type === 'direct' ? (
                                             <>
