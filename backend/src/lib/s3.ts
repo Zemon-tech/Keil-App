@@ -1,17 +1,39 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import { config } from "../config";
 
-if (!config.sevallaS3Endpoint || !config.sevallaS3AccessKeyId || !config.sevallaS3SecretAccessKey || !config.sevallaS3BucketName) {
-    throw new Error("❌ [s3]: Missing Sevalla S3 configuration in .env file");
+const s3Configured =
+    !!config.sevallaS3Endpoint &&
+    !!config.sevallaS3AccessKeyId &&
+    !!config.sevallaS3SecretAccessKey &&
+    !!config.sevallaS3BucketName;
+
+let _s3: S3Client | null = null;
+
+if (s3Configured) {
+    _s3 = new S3Client({
+        endpoint: config.sevallaS3Endpoint,
+        region: config.sevallaS3Region,
+        credentials: {
+            accessKeyId: config.sevallaS3AccessKeyId,
+            secretAccessKey: config.sevallaS3SecretAccessKey,
+        },
+    });
+    console.log("✅ [s3]: Sevalla S3 client initialized");
+} else {
+    console.warn("⚠️  [s3]: Missing Sevalla S3 configuration in .env — S3 features will be unavailable");
 }
 
-export const s3 = new S3Client({
-    endpoint: config.sevallaS3Endpoint,
-    region: config.sevallaS3Region,
-    credentials: {
-        accessKeyId: config.sevallaS3AccessKeyId,
-        secretAccessKey: config.sevallaS3SecretAccessKey,
-    },
-});
+/**
+ * Returns the S3 client, throwing if S3 is not configured.
+ * Use this instead of accessing `s3` directly so callers get
+ * a clear error only when they actually need S3.
+ */
+export function getS3Client(): S3Client {
+    if (!_s3) {
+        throw new Error("❌ [s3]: S3 is not configured. Set SEVALLA_S3_* variables in .env.");
+    }
+    return _s3;
+}
 
-console.log("✅ [s3]: Sevalla S3 client initialized");
+/** @deprecated Prefer `getS3Client()` for lazy error handling. May be null if S3 is not configured. */
+export const s3 = _s3;

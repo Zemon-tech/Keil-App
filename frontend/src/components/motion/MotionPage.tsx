@@ -134,7 +134,10 @@ export function MotionPage() {
   // ── Derived display page (null-safe, used before guards) ───────────────────
   const displayPage = page ?? serverPage ?? null;
 
-  const isPageReadOnly = spaceRole === "admin" ? false : spaceRole === "manager" ? displayPage?.created_by !== user?.id : true;
+  const isSharedPage = displayPage && (displayPage.org_id !== activeOrgId || displayPage.space_id !== activeSpaceId);
+  const isPageReadOnly = isSharedPage
+    ? displayPage.share_permission !== "edit"
+    : spaceRole === "admin" ? false : spaceRole === "manager" ? displayPage?.created_by !== user?.id : true;
 
   useEffect(() => {
     if (pageEditor) {

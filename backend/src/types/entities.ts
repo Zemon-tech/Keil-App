@@ -190,6 +190,7 @@ export interface MotionPage {
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
+  share_permission?: MotionPermission;
 }
 
 export interface MotionPageShare {
