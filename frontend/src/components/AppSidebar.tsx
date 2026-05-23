@@ -38,8 +38,6 @@ import {
   ChevronUp,
   User,
   Check,
-  CreditCard,
-  HelpCircle,
   MessageSquare,
   CheckSquare,
   Plus,
@@ -100,13 +98,11 @@ function OrgSpaceSubmenu({
   onSelectSpace,
 }: OrgSpaceSubmenuProps) {
   const [subOpen, setSubOpen] = useState(false);
-  // Only fetch spaces when the submenu is actually opened
   const { data: spaces = [], isLoading } = useSpaces(subOpen ? org.id : null);
   const { user } = useAuth();
 
   const isActiveOrg = activeOrgId === org.id;
 
-  // Filter out Private spaces for non-owners in this organisation
   const visibleSpaces = spaces.filter((space) => {
     if (space.is_private) {
       return org.owner_user_id === user?.id;
@@ -176,7 +172,7 @@ export function AppSidebar() {
   >("account");
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const [joinOrgOpen, setJoinOrgOpen] = useState(false);
-  const openChat = useChatStore((state: any) => state.openChat);
+  const openChat = useChatStore((state) => state.openChat);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
@@ -247,7 +243,7 @@ export function AppSidebar() {
     targetOrgId?: string | null,
     targetSpaceId?: string | null
   ) => {
-    const isDetailRoute = /^\/(tasks|events)\/[^\/]+/.test(location.pathname);
+    const isDetailRoute = /^\/(tasks|events)\/[^/]+/.test(location.pathname);
     const isChanging =
       targetOrgId !== activeOrgId ||
       (targetSpaceId !== undefined && targetSpaceId !== activeSpaceId);
@@ -441,37 +437,9 @@ export function AppSidebar() {
           </SidebarGroup>
         </SidebarContent>
 
-        {/* Footer */}
-        <SidebarFooter className="gap-2 px-2 pb-3">
-          <SidebarMenu className="gap-1">
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Help center"
-                className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                <LifeBuoy />
-                <span>Help center</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => {
-                  setNotificationDrawerOpen(true);
-                  useChatStore.getState().closeChat();
-                }}
-                isActive={notificationDrawerOpen || notificationDialogOpen}
-                tooltip="Notifications"
-                className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
-              >
-                <Bell className="text-muted-foreground" />
-                <span>Notifications</span>
-              </SidebarMenuButton>
-              <SidebarMenuBadge className="right-2 top-2 h-5 min-w-5 rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white shadow-sm">
-                3
-              </SidebarMenuBadge>
-            </SidebarMenuItem>
-
+        {/* ── Footer: profile dropdown ── */}
+        <SidebarFooter className="shrink-0 border-t border-border/50 p-1.5 px-2">
+          <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -496,7 +464,13 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
 
-                <DropdownMenuContent side="top" className="w-72 rounded-xl p-1">
+                <DropdownMenuContent
+                  side="right"
+                  align="end"
+                  sideOffset={12}
+                  collisionPadding={16}
+                  className="w-72 rounded-xl p-1"
+                >
                   {/* ── User info header ── */}
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
@@ -517,8 +491,6 @@ export function AppSidebar() {
                   </DropdownMenuLabel>
 
                   <DropdownMenuSeparator />
-
-
 
                   {/* ── Organisation section ── */}
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
@@ -579,7 +551,7 @@ export function AppSidebar() {
 
                   <DropdownMenuSeparator />
 
-                  {/* ── Settings / Billing / Help ── */}
+                  {/* ── Settings ── */}
                   <DropdownMenuItem
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]"
                     onSelect={() => {
@@ -589,14 +561,6 @@ export function AppSidebar() {
                   >
                     <Settings className="h-4 w-4 text-muted-foreground" />
                     Settings
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    Billing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
-                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                    Help & Support
                   </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
