@@ -168,6 +168,7 @@ type SlashItem = {
   subtitle?: string
   icon?: any
   keywords: string[]
+  shortcut?: string
   run: () => void
 }
 
@@ -226,11 +227,17 @@ export function SimpleEditor({
   onAddSubpage?: () => any
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const activeItemRef = useRef<HTMLDivElement>(null)
   const [slashOpen, setSlashOpen] = useState(false)
   const [slashQuery, setSlashQuery] = useState("")
-  const [slashPos, setSlashPos] = useState<{ left: number; top: number } | null>(
-    null
-  )
+  const [slashPos, setSlashPos] = useState<{
+    left: number
+    top: number
+    bottom: number
+    direction: "up" | "down"
+    maxHeight: number
+  } | null>(null)
   const [slashDeleteRange, setSlashDeleteRange] = useState<{
     from: number
     to: number
@@ -393,7 +400,10 @@ export function SimpleEditor({
     setSlashQuery("")
     setSlashPos(null)
     setSlashDeleteRange(null)
-  }, [])
+    if (editor && !editor.isFocused) {
+      editor.commands.focus()
+    }
+  }, [editor])
 
   useEffect(() => {
     blockMenuOpenRef.current = Boolean(blockMenu)
@@ -459,6 +469,46 @@ export function SimpleEditor({
     [clearScheduledHandleHide, hideDragHandle]
   )
 
+  const calculateSlashPosition = useCallback((coords: { left: number; top: number; bottom: number }) => {
+    const spaceBelow = window.innerHeight - coords.bottom - 8
+    const spaceAbove = coords.top - 8
+    const maxMenuHeight = 340
+
+    let direction: "up" | "down" = "down"
+    let maxHeight = maxMenuHeight
+    let top = coords.bottom + 8
+    let bottom = 0
+
+    if (spaceBelow >= maxMenuHeight) {
+      direction = "down"
+      maxHeight = maxMenuHeight
+      top = coords.bottom + 8
+    } else if (spaceAbove >= maxMenuHeight) {
+      direction = "up"
+      maxHeight = maxMenuHeight
+      bottom = window.innerHeight - coords.top + 8
+    } else {
+      if (spaceBelow >= spaceAbove) {
+        direction = "down"
+        maxHeight = Math.max(150, spaceBelow - 16)
+        top = coords.bottom + 8
+      } else {
+        direction = "up"
+        maxHeight = Math.max(150, spaceAbove - 16)
+        bottom = window.innerHeight - coords.top + 8
+      }
+    }
+
+    const menuWidth = 280
+    let left = coords.left
+    if (left + menuWidth > window.innerWidth - 16) {
+      left = window.innerWidth - menuWidth - 16
+    }
+    left = Math.max(16, left)
+
+    return { left, top, bottom, direction, maxHeight }
+  }, [])
+
   const openSlashMenuAtSelection = useCallback(
     (deleteRange: BlockTarget | null = null) => {
       if (!editor) return
@@ -471,12 +521,9 @@ export function SimpleEditor({
       setSlashOpen(true)
       setSlashQuery("")
       setSlashDeleteRange(deleteRange)
-      setSlashPos({
-        left: coords.left - wrapperRect.left,
-        top: coords.bottom - wrapperRect.top + 8,
-      })
+      setSlashPos(calculateSlashPosition(coords))
     },
-    [editor]
+    [editor, calculateSlashPosition]
   )
 
   const getTargetFromDragHandle = useCallback((): BlockTarget | null => {
@@ -867,6 +914,7 @@ export function SimpleEditor({
         subtitle: "Big section heading",
         icon: <Heading1 className="size-4" />,
         keywords: ["h1", "heading", "title"],
+        shortcut: "#",
         run: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
       },
       {
@@ -874,6 +922,7 @@ export function SimpleEditor({
         subtitle: "Medium section heading",
         icon: <Heading2 className="size-4" />,
         keywords: ["h2", "heading"],
+        shortcut: "##",
         run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
       },
       {
@@ -881,13 +930,15 @@ export function SimpleEditor({
         subtitle: "Small section heading",
         icon: <Heading3 className="size-4" />,
         keywords: ["h3", "heading"],
+        shortcut: "###",
         run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
       },
       {
         title: "Heading 4",
         subtitle: "Extra small heading",
-        icon: <Heading3 className="size-4" />, // Reusing Heading3 icon or similar
+        icon: <Heading3 className="size-4" />,
         keywords: ["h4", "heading"],
+        shortcut: "####",
         run: () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
       },
       {
@@ -895,6 +946,7 @@ export function SimpleEditor({
         subtitle: "Create a bulleted list",
         icon: <List className="size-4" />,
         keywords: ["bullet", "list", "ul"],
+        shortcut: "-",
         run: () => editor.chain().focus().toggleBulletList().run(),
       },
       {
@@ -902,6 +954,7 @@ export function SimpleEditor({
         subtitle: "Create a numbered list",
         icon: <ListOrdered className="size-4" />,
         keywords: ["ordered", "list", "ol"],
+        shortcut: "1.",
         run: () => editor.chain().focus().toggleOrderedList().run(),
       },
       {
@@ -909,6 +962,7 @@ export function SimpleEditor({
         subtitle: "Track tasks with checkboxes",
         icon: <CheckSquare className="size-4" />,
         keywords: ["todo", "task", "checkbox"],
+        shortcut: "[]",
         run: () => editor.chain().focus().toggleTaskList().run(),
       },
       {
@@ -916,6 +970,7 @@ export function SimpleEditor({
         subtitle: "Capture a quote",
         icon: <Quote className="size-4" />,
         keywords: ["quote", "blockquote"],
+        shortcut: ">",
         run: () => editor.chain().focus().toggleBlockquote().run(),
       },
       {
@@ -923,6 +978,7 @@ export function SimpleEditor({
         subtitle: "Write code with monospaced font",
         icon: <Code className="size-4" />,
         keywords: ["code", "snippet"],
+        shortcut: "```",
         run: () => editor.chain().focus().toggleCodeBlock().run(),
       },
       {
@@ -930,6 +986,7 @@ export function SimpleEditor({
         subtitle: "Insert a horizontal rule",
         icon: <Minus className="size-4" />,
         keywords: ["divider", "hr", "rule"],
+        shortcut: "---",
         run: () => editor.chain().focus().setHorizontalRule().run(),
       },
       {
@@ -1004,6 +1061,14 @@ export function SimpleEditor({
     })
   }, [slashItems, slashQuery])
 
+  const onSearchInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && slashQuery === "") {
+      e.preventDefault()
+      closeSlashMenu()
+      editor?.commands.focus()
+    }
+  }, [slashQuery, closeSlashMenu, editor])
+
   useEffect(() => {
     if (!editor) return
 
@@ -1032,10 +1097,7 @@ export function SimpleEditor({
                 ? { from: virtualStart, to: selection.from }
                 : null
             )
-            setSlashPos({
-              left: coords.left,
-              top: coords.bottom + 8,
-            })
+            setSlashPos(calculateSlashPosition(coords))
             return
           }
         }
@@ -1058,10 +1120,7 @@ export function SimpleEditor({
       setSlashOpen(true)
       setSlashQuery(query)
       setSlashDeleteRange({ from: deleteFrom, to: deleteTo })
-      setSlashPos({
-        left: coords.left,
-        top: coords.bottom + 8,
-      })
+      setSlashPos(calculateSlashPosition(coords))
     }
 
     updateSlash()
@@ -1073,7 +1132,7 @@ export function SimpleEditor({
       editor.off("update", updateSlash)
       editor.off("selectionUpdate", updateSlash)
     }
-  }, [closeSlashMenu, editor])
+  }, [closeSlashMenu, editor, calculateSlashPosition])
 
   const runSlashItem = useCallback((item: SlashItem) => {
     if (!editor) return
@@ -1123,6 +1182,71 @@ export function SimpleEditor({
     window.addEventListener("keydown", onKeyDown, true)
     return () => window.removeEventListener("keydown", onKeyDown, true)
   }, [closeSlashMenu, slashOpen, filteredSlashItems, slashSelectedIndex, runSlashItem])
+
+  useEffect(() => {
+    if (!slashOpen) return
+
+    const preventDefault = (e: Event) => {
+      const target = e.target as Element | null
+      if (target?.closest(".motion-slash-menu-list")) {
+        return
+      }
+      e.preventDefault()
+    }
+
+    window.addEventListener("wheel", preventDefault, { passive: false })
+    window.addEventListener("touchmove", preventDefault, { passive: false })
+
+    const preventScrollKeys = (e: KeyboardEvent) => {
+      const keys = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]
+      if (keys.includes(e.key)) {
+        const target = e.target as Element | null
+        if (target?.closest(".motion-slash-menu")) {
+          return
+        }
+        e.preventDefault()
+      }
+    }
+    window.addEventListener("keydown", preventScrollKeys, { passive: false })
+
+    return () => {
+      window.removeEventListener("wheel", preventDefault)
+      window.removeEventListener("touchmove", preventDefault)
+      window.removeEventListener("keydown", preventScrollKeys)
+    }
+  }, [slashOpen])
+
+  useEffect(() => {
+    if (!slashOpen) return
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null
+      if (target?.closest(".motion-slash-menu")) {
+        return
+      }
+      closeSlashMenu()
+    }
+
+    window.addEventListener("pointerdown", onPointerDown)
+    return () => window.removeEventListener("pointerdown", onPointerDown)
+  }, [slashOpen, closeSlashMenu])
+
+  useEffect(() => {
+    if (slashOpen) {
+      setTimeout(() => {
+        searchInputRef.current?.focus()
+      }, 10)
+    }
+  }, [slashOpen])
+
+  useEffect(() => {
+    if (activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({
+        behavior: "auto",
+        block: "nearest",
+      })
+    }
+  }, [slashSelectedIndex])
 
   useEffect(() => {
     if (!blockMenu) return
@@ -1814,45 +1938,81 @@ export function SimpleEditor({
 
         {slashOpen && slashPos && editor && (
           <div
-            className="fixed z-[100]"
-            style={{ left: slashPos.left, top: slashPos.top }}
+            className="fixed z-[100] motion-slash-menu w-[280px] rounded-lg border border-border/80 bg-background text-popover-foreground shadow-[0_4px_16px_rgba(0,0,0,0.08)] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1 duration-100"
+            style={{
+              left: slashPos.left,
+              ...(slashPos.direction === 'up' ? { bottom: slashPos.bottom } : { top: slashPos.top }),
+              maxHeight: `${slashPos.maxHeight}px`
+            }}
           >
-            <div className="w-[320px] rounded-xl border bg-popover/95 backdrop-blur-md text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.2)] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="max-h-[320px] overflow-y-auto p-1.5 custom-scrollbar">
-                {filteredSlashItems.length === 0 && (
-                  <div className="px-3 py-6 text-center text-sm text-muted-foreground/60 italic">
-                    No results found.
-                  </div>
-                )}
-                <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                  Basic blocks
+            {/* Inline search input */}
+            <div className="px-2.5 pt-2 pb-1.5 flex items-center border-b border-border/10 shrink-0">
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="w-full bg-transparent border-none outline-none text-[13px] placeholder:text-muted-foreground/40 text-foreground"
+                placeholder="/Type to search"
+                value={slashQuery}
+                onChange={(e) => setSlashQuery(e.target.value)}
+                onKeyDown={onSearchInputKeyDown}
+              />
+            </div>
+
+            {/* Pinned label header */}
+            {filteredSlashItems.length > 0 && (
+              <div className="px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground/50 tracking-wider uppercase select-none shrink-0">
+                Basic blocks
+              </div>
+            )}
+
+            {/* Scrollable list */}
+            <div className="motion-slash-menu-list overflow-y-auto flex-grow p-1 custom-scrollbar">
+              {filteredSlashItems.length === 0 ? (
+                <div className="px-3 py-6 text-center text-[13px] text-muted-foreground/60 italic select-none">
+                  No results
                 </div>
-                {filteredSlashItems.map((item, index) => (
+              ) : (
+                filteredSlashItems.map((item, index) => (
                   <div
                     key={item.title}
+                    ref={index === slashSelectedIndex ? activeItemRef : null}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => runSlashItem(item)}
-                    className={`px-3 py-2 flex items-center gap-3 cursor-pointer rounded-lg select-none outline-none transition-colors ${
-                      index === slashSelectedIndex ? "bg-accent text-accent-foreground shadow-sm" : "text-foreground/80 hover:bg-accent/50"
+                    className={`px-2.5 py-1.5 flex items-center justify-between cursor-pointer rounded select-none outline-none transition-colors ${
+                      index === slashSelectedIndex
+                        ? "bg-accent text-accent-foreground"
+                        : "text-foreground hover:bg-accent/40"
                     }`}
                     onMouseEnter={() => setSlashSelectedIndex(index)}
                   >
-                    <div className="size-9 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/40 text-muted-foreground shadow-sm transition-transform duration-200 group-hover:scale-105">
-                      {item.icon}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <div className="text-[13.5px] font-semibold tracking-tight">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="size-4 flex items-center justify-center shrink-0 text-muted-foreground/75">
+                        {item.icon}
+                      </span>
+                      <span className="text-[13px] font-medium tracking-tight truncate text-foreground/90">
                         {item.title}
-                      </div>
-                      {item.subtitle && (
-                        <div className="text-[11px] text-muted-foreground leading-none">
-                          {item.subtitle}
-                        </div>
-                      )}
+                      </span>
                     </div>
+                    {item.shortcut && (
+                      <span className="text-[10px] text-muted-foreground/45 font-mono select-none pl-2 shrink-0">
+                        {item.shortcut}
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
+                ))
+              )}
+            </div>
+
+            {/* Pinned dismiss footer */}
+            <div
+              onClick={() => {
+                closeSlashMenu()
+                editor?.commands.focus()
+              }}
+              className="border-t border-border/10 p-1.5 flex justify-between items-center text-[10.5px] text-muted-foreground/50 hover:text-muted-foreground/80 cursor-pointer hover:bg-accent/30 select-none shrink-0"
+            >
+              <span>Close menu</span>
+              <kbd className="font-mono text-[9px] bg-muted/60 px-1 py-0.5 rounded border border-border/30 text-muted-foreground/60">esc</kbd>
             </div>
           </div>
         )}
