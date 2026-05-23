@@ -54,7 +54,7 @@ export function ChatDrawer() {
   return (
     <div
       style={{ width: `${width}px` }}
-      className="fixed inset-y-0 right-0 z-50 flex shadow-2xl border-l border-border bg-background transition-colors duration-200"
+      className="fixed inset-y-0 right-0 z-50 flex shadow-2xl border-l border-border bg-background transition-[width] duration-300"
     >
       {/* Resize Handle */}
       <div

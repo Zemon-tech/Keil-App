@@ -37,7 +37,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const location = useLocation();
   const openChat = useChatStore((state: any) => state.openChat);
-  const { isChatDialogOpen, closeChatDialog } = useChatStore();
+  const { isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
 
   // Activate automatic task overdue refresh logic
   useTaskOverdueAutoRefresh();
@@ -93,7 +93,15 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
             </CommandGroup>
           </CommandList>
         </CommandDialog>
-        <main className={cn("flex-1", className)}>{children}</main>
+        <main
+          className={cn(
+            "flex-1 transition-all duration-300",
+            isChatOpen && "pr-[400px]",
+            className
+          )}
+        >
+          {children}
+        </main>
       </SidebarInset>
 
       {/* AI Assistant - Available on all pages except dashboard and motion */}

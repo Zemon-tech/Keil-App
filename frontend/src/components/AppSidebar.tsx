@@ -27,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaces } from "@/hooks/api/useSpaces";
@@ -46,10 +45,6 @@ import {
   Building2,
   Mic,
   Search,
-  BarChart3,
-  FileText,
-  Puzzle,
-  Users,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -71,11 +66,7 @@ const navigationItems = [
   { title: "Motion", url: "/motion", icon: Image },
 ];
 
-const secondaryItems = [
-  { title: "Analytics", icon: BarChart3 },
-  { title: "Reports", icon: FileText, badge: "New" },
-  { title: "Extensions", icon: Puzzle },
-];
+
 
 // ─── OrgSpaceSubmenu ──────────────────────────────────────────────────────────
 // Lazy-loads spaces only when the submenu is opened.
@@ -262,9 +253,7 @@ export function AppSidebar() {
   const visibleNavigationItems = navigationItems.filter((item) =>
     item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
-  const visibleSecondaryItems = secondaryItems.filter((item) =>
-    item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
+
 
   const isRouteActive = (url: string) => {
     if (url === "/") {
@@ -381,58 +370,12 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
 
-          <SidebarGroup className="mt-2 border-t border-border/50 p-0 pt-2">
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
-                {visibleSecondaryItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      tooltip={item.title}
-                      className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                    {item.badge && (
-                      <SidebarMenuBadge className="right-2 top-2 rounded-full bg-background px-2 text-[11px] text-foreground shadow-sm ring-1 ring-border/60">
-                        {item.badge}
-                      </SidebarMenuBadge>
-                    )}
-                  </SidebarMenuItem>
-                ))}
 
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="Companies"
-                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <Building2 />
-                    <span>Companies</span>
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                    {organisations.length}
-                  </SidebarMenuBadge>
-                </SidebarMenuItem>
-
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="People"
-                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <Users />
-                    <span>People</span>
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                    164
-                  </SidebarMenuBadge>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
         </SidebarContent>
 
         {/* ── Footer: profile dropdown ── */}
@@ -494,34 +437,8 @@ export function AppSidebar() {
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
                     <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <Building2 className="h-3 w-3" />
-                      Organisation
+                      Organisations
                     </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-1.5 text-[11px] hover:bg-muted-foreground/10"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          setJoinOrgOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Join
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 hover:bg-muted-foreground/10"
-                        title="Create organisation"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          setCreateOrgOpen(true);
-                        }}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
                   </DropdownMenuLabel>
 
                   {/* Org list — each row has a space sub-menu */}
@@ -546,6 +463,34 @@ export function AppSidebar() {
                       />
                     ))
                   )}
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    className="gap-2 px-2 py-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setJoinOrgOpen(true);
+                    }}
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-transparent">
+                      <Plus className="h-3 w-3" />
+                    </div>
+                    <span className="text-xs font-medium">Join an organisation</span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    className="gap-2 px-2 py-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCreateOrgOpen(true);
+                    }}
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-transparent">
+                      <Plus className="h-3 w-3" />
+                    </div>
+                    <span className="text-xs font-medium">Create organisation</span>
+                  </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
 

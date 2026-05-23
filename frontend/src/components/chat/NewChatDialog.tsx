@@ -22,9 +22,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 interface NewChatDialogProps {
   orgId: string | null;
   spaceId: string | null;
+  defaultTab?: "direct" | "group";
 }
 
-export function NewChatDialog({ orgId, spaceId }: NewChatDialogProps) {
+export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChatDialogProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { data: members = [], isLoading } = useSpaceMembers(orgId, spaceId);
@@ -149,7 +150,7 @@ export function NewChatDialog({ orgId, spaceId }: NewChatDialogProps) {
             </div>
           </div>
         ) : (
-          <Tabs defaultValue="direct" className="w-full">
+          <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="w-full grid grid-cols-2">
               <TabsTrigger value="direct">Direct Message</TabsTrigger>
               <TabsTrigger value="group">Group / Channel</TabsTrigger>
