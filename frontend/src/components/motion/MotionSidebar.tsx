@@ -10,7 +10,6 @@ import {
 import {
   Search,
   Home,
-  Inbox,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -31,6 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
 import { cn } from "@/lib/utils";
+import { MotionSearchDialog } from "./MotionSearchDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,7 +52,6 @@ import {
 
 const mainTabs = [
   { id: "home", title: "Home", icon: Home, url: "/motion" },
-  { id: "inbox", title: "Inbox", icon: Inbox, url: "#" },
   { id: "search", title: "Search", icon: Search, url: "#" },
 ];
 
@@ -324,7 +323,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const [privateOpen, setPrivateOpen] = useState(true);
   const [trashOpen, setTrashOpen] = useState(false);
   const [sharedOpen, setSharedOpen] = useState(false);
-
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleAddPage = async (parentId?: string) => {
@@ -369,7 +368,14 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 key={tab.id}
                 variant="ghost"
                 size="sm"
-                asChild
+                asChild={tab.id !== "search"}
+                onClick={() => {
+                  if (tab.id === "search") {
+                    setSearchOpen(true);
+                  } else if (window.innerWidth < 1024) {
+                    onClose?.();
+                  }
+                }}
                 className={cn(
                   "h-8 px-2.5 rounded-lg transition-all flex items-center gap-2 border border-transparent hover:bg-accent/50",
                   isActive
@@ -377,10 +383,17 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                     : "text-muted-foreground"
                 )}
               >
-                <Link to={tab.url} onClick={() => { if (window.innerWidth < 1024) onClose?.(); }}>
-                  <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
-                  {isActive && <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>}
-                </Link>
+                {tab.id === "search" ? (
+                  <div className="flex items-center gap-2 cursor-pointer w-full">
+                    <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
+                    <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>
+                  </div>
+                ) : (
+                  <Link to={tab.url}>
+                    <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
+                    {isActive && <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>}
+                  </Link>
+                )}
               </Button>
             );
           })}
@@ -617,6 +630,11 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         `,
         }}
+      />
+      <MotionSearchDialog 
+        open={searchOpen} 
+        onOpenChange={setSearchOpen} 
+        pages={apiPages as MotionPageRecord[]}
       />
     </Sidebar>
   );
