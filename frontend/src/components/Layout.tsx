@@ -37,7 +37,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const location = useLocation();
   const openChat = useChatStore((state: any) => state.openChat);
-  const { isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
+  const { isChatOpen, isChatDialogOpen, closeChatDialog, width } = useChatStore();
 
   // Activate automatic task overdue refresh logic
   useTaskOverdueAutoRefresh();
@@ -96,9 +96,9 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         <main
           className={cn(
             "flex-1 transition-all duration-300",
-            isChatOpen && "pr-[400px]",
             className
           )}
+          style={{ paddingRight: isChatOpen ? `${width}px` : "0px" }}
         >
           {children}
         </main>
@@ -106,8 +106,8 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
 
       {/* AI Assistant - Available on all pages except dashboard and motion */}
       {location.pathname !== "/" &&
-      location.pathname !== "/dashboard" &&
-      location.pathname !== "/motion" ? (
+        location.pathname !== "/dashboard" &&
+        location.pathname !== "/motion" ? (
         <AiAssistant />
       ) : null}
 

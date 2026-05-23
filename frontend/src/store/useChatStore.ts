@@ -8,6 +8,7 @@ interface ChatStore {
   isChatDialogOpen: boolean; // true = full-screen dialog is visible
   activeChannelId: string | null; // null = showing channel list, otherwise showing messages
   typingUsers: Record<string, { userId: string; name: string }[]>; // channelId -> array of users typing
+  width: number; // current drawer width in px
 
   // Actions (functions that update the state)
   openChat: () => void;
@@ -15,6 +16,7 @@ interface ChatStore {
   openChatDialog: () => void;
   closeChatDialog: () => void;
   setActiveChannel: (channelId: string | null) => void; // pass null to go back to list
+  setWidth: (w: number) => void;
   addTypingUser: (channelId: string, userId: string, name: string) => void;
   removeTypingUser: (channelId: string, userId: string) => void;
 }
@@ -26,6 +28,7 @@ export const useChatStore = create<ChatStore>((set) => ({
   isChatDialogOpen: false,
   activeChannelId: null,
   typingUsers: {},
+  width: 360,
 
   // Calling openChat() → sets isChatOpen to true
   openChat: () => set({ isChatOpen: true }),
@@ -40,6 +43,8 @@ export const useChatStore = create<ChatStore>((set) => ({
   // Calling setActiveChannel("abc-123") → opens that channel's messages
   // Calling setActiveChannel(null)      → goes back to the channel list
   setActiveChannel: (channelId) => set({ activeChannelId: channelId }),
+
+  setWidth: (w) => set({ width: w }),
 
   addTypingUser: (channelId, userId, name) =>
     set((state) => {

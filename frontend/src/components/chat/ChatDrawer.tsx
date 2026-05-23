@@ -6,12 +6,11 @@ import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
 import { X, Maximize2 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 
 export function ChatDrawer() {
-  const { isChatOpen, activeChannelId, closeChat, openChatDialog } =
+  const { isChatOpen, activeChannelId, closeChat, openChatDialog, width, setWidth } =
     useChatStore();
-  const [width, setWidth] = useState(360);
   const isResizing = useRef(false);
 
   const { activeOrgId, activeSpaceId } = useAppContext();
