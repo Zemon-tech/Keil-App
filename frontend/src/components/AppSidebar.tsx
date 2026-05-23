@@ -52,10 +52,17 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { useChatStore } from "@/store/useChatStore";
-import { CreateOrganisationDialog } from "@/components/org/CreateOrganisationDialog";
-import { JoinOrganisationDialog } from "@/components/org/JoinOrganisationDialog";
-import type { Organisation } from "@/hooks/api/useOrganisations";
 import { MeetingDialog } from "@/components/MeetingDialog";
+import type { Organisation } from "@/hooks/api/useOrganisations";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useCreateOrganisation, useJoinOrganisation } from "@/hooks/api/useOrganisations";
 
 // ─── Navigation items ─────────────────────────────────────────────────────────
 
@@ -67,6 +74,147 @@ const navigationItems = [
 ];
 
 
+
+// ─── OrgManageDialog ──────────────────────────────────────────────────────────
+// Combined dialog for creating or joining an organisation.
+
+interface OrgManageDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialTab?: "create" | "join";
+}
+
+function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManageDialogProps) {
+  const [tab, setTab] = useState<"create" | "join">(initialTab);
+  const [orgName, setOrgName] = useState("");
+  const [token, setToken] = useState("");
+  const createOrg = useCreateOrganisation();
+  const joinOrg = useJoinOrganisation();
+  const { setActiveOrganisation } = useAppContext();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Sync tab when dialog opens with a different initialTab
+  useEffect(() => {
+    if (open) setTab(initialTab);
+  }, [open, initialTab]);
+
+  const handleClose = () => {
+    setOrgName("");
+    setToken("");
+    onOpenChange(false);
+  };
+
+  const handleCreate = () => {
+    const trimmed = orgName.trim();
+    if (!trimmed) return;
+    createOrg.mutate(trimmed, {
+      onSuccess: ({ org, space }) => {
+        setActiveOrganisation(org.id, space.id);
+        if (/^\/(tasks|events)\/[^/]+/.test(location.pathname)) navigate("/tasks");
+        handleClose();
+      },
+    });
+  };
+
+  const handleJoin = () => {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    joinOrg.mutate(trimmed, {
+      onSuccess: ({ orgId, spaceId }) => {
+        setActiveOrganisation(orgId, spaceId);
+        if (/^\/(tasks|events)\/[^/]+/.test(location.pathname)) navigate("/tasks");
+        handleClose();
+      },
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Organisations</DialogTitle>
+        </DialogHeader>
+
+        {/* Tab switcher */}
+        <div className="flex rounded-lg border border-border p-0.5 bg-muted/40 gap-0.5">
+          <button
+            onClick={() => setTab("create")}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+              tab === "create"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Create
+          </button>
+          <button
+            onClick={() => setTab("join")}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
+              tab === "join"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Join
+          </button>
+        </div>
+
+        {tab === "create" ? (
+          <div className="flex flex-col gap-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Give your organisation a name. A default General space will be created automatically.
+            </p>
+            <Input
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              placeholder="e.g. Acme Corp, Engineering Team"
+              autoFocus
+            />
+            {createOrg.isError && (
+              <p className="text-xs text-destructive">
+                {(createOrg.error as any)?.response?.data?.message ?? "Something went wrong."}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={handleCreate} disabled={!orgName.trim() || createOrg.isPending}>
+                {createOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Organisation
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Paste an invitation token to join an existing organisation.
+            </p>
+            <Input
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+              placeholder="Invitation token"
+              autoFocus
+            />
+            {joinOrg.isError && (
+              <p className="text-xs text-destructive">
+                {(joinOrg.error as any)?.response?.data?.message ?? "Invalid or expired invite token."}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={handleJoin} disabled={!token.trim() || joinOrg.isPending}>
+                {joinOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Join
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ─── OrgSpaceSubmenu ──────────────────────────────────────────────────────────
 // Lazy-loads spaces only when the submenu is opened.
@@ -159,8 +307,8 @@ export function AppSidebar() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<
     "account" | "org-general"
   >("account");
-  const [createOrgOpen, setCreateOrgOpen] = useState(false);
-  const [joinOrgOpen, setJoinOrgOpen] = useState(false);
+  const [orgManageOpen, setOrgManageOpen] = useState(false);
+  const [orgManageTab, setOrgManageTab] = useState<"create" | "join">("create");
   const openChat = useChatStore((state) => state.openChat);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
@@ -439,6 +587,17 @@ export function AppSidebar() {
                       <Building2 className="h-3 w-3" />
                       Organisations
                     </span>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setOrgManageTab("create");
+                        setOrgManageOpen(true);
+                      }}
+                      className="h-5 w-5 flex items-center justify-center rounded border border-dashed border-muted-foreground/40 hover:border-foreground/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title="Create or join an organisation"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
                   </DropdownMenuLabel>
 
                   {/* Org list — each row has a space sub-menu */}
@@ -463,34 +622,6 @@ export function AppSidebar() {
                       />
                     ))
                   )}
-
-                  <DropdownMenuSeparator />
-
-                  <DropdownMenuItem
-                    className="gap-2 px-2 py-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setJoinOrgOpen(true);
-                    }}
-                  >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-transparent">
-                      <Plus className="h-3 w-3" />
-                    </div>
-                    <span className="text-xs font-medium">Join an organisation</span>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem
-                    className="gap-2 px-2 py-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setCreateOrgOpen(true);
-                    }}
-                  >
-                    <div className="flex h-6 w-6 items-center justify-center rounded-md border border-dashed border-muted-foreground/40 bg-transparent">
-                      <Plus className="h-3 w-3" />
-                    </div>
-                    <span className="text-xs font-medium">Create organisation</span>
-                  </DropdownMenuItem>
 
                   <DropdownMenuSeparator />
 
@@ -526,13 +657,10 @@ export function AppSidebar() {
       </Sidebar>
 
       {/* ── Dialogs ── */}
-      <CreateOrganisationDialog
-        open={createOrgOpen}
-        onOpenChange={setCreateOrgOpen}
-      />
-      <JoinOrganisationDialog
-        open={joinOrgOpen}
-        onOpenChange={setJoinOrgOpen}
+      <OrgManageDialog
+        open={orgManageOpen}
+        onOpenChange={setOrgManageOpen}
+        initialTab={orgManageTab}
       />
       <SettingsDialog
         open={settingsOpen}

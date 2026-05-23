@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import type { DashboardTaskDTO } from "@/types/task";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskPreviewDialog } from "@/components/tasks/TaskPreviewDialog";
-import { EventPreviewDialog } from "@/components/tasks/EventPreviewDialog";
 
 import { cn } from "@/lib/utils";
 
@@ -15,9 +14,6 @@ interface UpNextCardProps {
 
 export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<"task" | "event" | null>(
-    null,
-  );
 
   if (isLoading) {
     return (
@@ -50,22 +46,9 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
     );
   }
 
-  const handleItemClick = (
-    e: React.MouseEvent,
-    id: string,
-    type?: "task" | "event" | null,
-    status?: string,
-  ) => {
+  const handleItemClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setSelectedId(id);
-    const determinedType =
-      type ||
-      (["confirmed", "tentative", "completed", "cancelled"].includes(
-        status || "",
-      )
-        ? "event"
-        : "task");
-    setSelectedType(determinedType as "task" | "event");
   };
 
   return (
@@ -84,9 +67,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
             {tasks.slice(0, isWheel ? 1 : 2).map((task) => (
               <div
                 key={task.id}
-                onClick={(e) =>
-                  handleItemClick(e, task.id, task.type, task.status)
-                }
+                onClick={(e) => handleItemClick(e, task.id)}
                 className="group/item p-0 rounded-lg transition-all duration-200"
               >
                 <p className="text-sm font-semibold truncate group-hover/item:text-primary transition-colors leading-tight">
@@ -115,26 +96,13 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
         </div>
       </Card>
 
-      {selectedId && selectedType === "event" && (
-        <EventPreviewDialog
-          eventId={selectedId}
-          open={!!selectedId}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSelectedId(null);
-              setSelectedType(null);
-            }
-          }}
-        />
-      )}
-      {selectedId && selectedType === "task" && (
+      {selectedId && (
         <TaskPreviewDialog
           taskId={selectedId}
           open={!!selectedId}
           onOpenChange={(open) => {
             if (!open) {
               setSelectedId(null);
-              setSelectedType(null);
             }
           }}
         />

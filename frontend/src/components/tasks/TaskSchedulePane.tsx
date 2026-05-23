@@ -59,7 +59,6 @@ import {
 } from "@/components/ui/popover";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
-import { EventPreviewDialog } from "./EventPreviewDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
@@ -1383,22 +1382,7 @@ export function TaskSchedulePane({
         </div>
       </div>
 
-      {tasks.find((t) => t.id === selectedTaskId)?.type === "event" ? (
-        <EventPreviewDialog
-          eventId={selectedTaskId}
-          open={!!selectedTaskId}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSelectedTaskId("");
-              setDialogPosition(null);
-            }
-          }}
-          onUnschedule={handleTaskUnschedule}
-          onStatusChange={handleStatusChange}
-          position={dialogPosition}
-        />
-      ) : (
-        <TaskPreviewDialog
+      <TaskPreviewDialog
           taskId={selectedTaskId}
           open={!!selectedTaskId}
           onOpenChange={(open) => {
@@ -1411,7 +1395,6 @@ export function TaskSchedulePane({
           onStatusChange={handleStatusChange}
           position={dialogPosition}
         />
-      )}
 
       <CreateTaskDialog
         open={createDialogOpen}

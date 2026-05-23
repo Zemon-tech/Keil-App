@@ -38,7 +38,6 @@ import { useTaskPermissions } from "@/hooks/useTaskPermissions";
 
 import { formatRelTime } from "./task-detail-shared";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
-import { EventPreviewDialog } from "./EventPreviewDialog";
 import { renderMessageContent } from "./renderMessageContent";
 
 // ─── CommentNode ──────────────────────────────────────────────────────────────
@@ -319,20 +318,12 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-background h-full relative">
-      {/* Task preview dialog — opened when a #task-name chip is clicked */}
-      {allTasks.find(t => t.id === previewTaskId)?.type === "event" ? (
-        <EventPreviewDialog
-          eventId={previewTaskId}
-          open={previewOpen}
-          onOpenChange={setPreviewOpen}
-        />
-      ) : (
-        <TaskPreviewDialog
-          taskId={previewTaskId}
-          open={previewOpen}
-          onOpenChange={setPreviewOpen}
-        />
-      )}
+      {/* Task/event preview dialog — opened when a #task-name chip is clicked */}
+      <TaskPreviewDialog
+        taskId={previewTaskId}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
       <ScrollArea className="flex-1 min-h-0">
         <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto">
           {isPending ? (
