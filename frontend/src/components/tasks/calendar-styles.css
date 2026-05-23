@@ -449,89 +449,162 @@
 }
 
 /* ─────────────────────────────────────────────
-   PRIORITIES
+   PRIORITIES (dark mode)
 /* ───────────────────────────────────────────── */
 
 .task-priority-urgent {
-    background: rgba(120, 120, 120, 0.14);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(220, 38, 38, 0.12) 100%);
 
     color: rgba(255, 255, 255, 0.92);
 
-    border-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(239, 68, 68, 0.28) !important;
 }
 
 .task-priority-high {
-    background: rgba(160, 160, 160, 0.12);
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.1) 100%);
 
     color: rgba(255, 255, 255, 0.9);
 
-    border-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(249, 115, 22, 0.25) !important;
 }
 
 .task-priority-medium {
-    background: rgba(200, 200, 200, 0.09);
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.18) 0%, rgba(202, 138, 4, 0.08) 100%);
 
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(255, 255, 255, 0.88);
 
-    border-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(234, 179, 8, 0.22) !important;
 }
 
 .task-priority-low {
-    background: rgba(255, 255, 255, 0.04);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(79, 70, 229, 0.06) 100%);
 
-    color: rgba(255, 255, 255, 0.72);
+    color: rgba(255, 255, 255, 0.78);
 
-    border-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(99, 102, 241, 0.18) !important;
 }
 
+/* ─────────────────────────────────────────────
+   STATUS GRADIENTS (dark mode)
+/* ───────────────────────────────────────────── */
+
+/* todo — soft violet */
+.task-event.task-status-todo {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.22) 0%, rgba(109, 40, 217, 0.1) 100%) !important;
+
+    border-color: rgba(139, 92, 246, 0.3) !important;
+
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* in-progress — vivid blue */
+.task-event.task-status-in-progress {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.24) 0%, rgba(37, 99, 235, 0.12) 100%) !important;
+
+    border-color: rgba(59, 130, 246, 0.32) !important;
+
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* done / completed — emerald green */
+.task-event.task-status-done,
+.task-event.task-status-completed {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.08) 100%) !important;
+
+    border-color: rgba(16, 185, 129, 0.24) !important;
+
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* backlog — warm red */
+.task-event.task-status-backlog {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(185, 28, 28, 0.08) 100%) !important;
+
+    border-color: rgba(239, 68, 68, 0.24) !important;
+
+    color: rgba(255, 255, 255, 0.82) !important;
+}
+
+/* done/completed strikethrough */
 .task-event.is-done {
-    background: rgba(255, 255, 255, 0.03) !important;
-
-    color: rgba(255, 255, 255, 0.55) !important;
-
-    border-color: rgba(255, 255, 255, 0.04) !important;
+    opacity: 0.68 !important;
 }
 
-/* LIGHT MODE PRIORITIES */
+/* ─────────────────────────────────────────────
+   LIGHT MODE PRIORITIES
+/* ───────────────────────────────────────────── */
 
 :root .task-priority-urgent {
-    background: rgba(0, 0, 0, 0.08);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(220, 38, 38, 0.06) 100%);
 
     color: rgba(0, 0, 0, 0.88);
 
-    border-color: rgba(0, 0, 0, 0.08);
+    border-color: rgba(239, 68, 68, 0.22) !important;
 }
 
 :root .task-priority-high {
-    background: rgba(0, 0, 0, 0.06);
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.13) 0%, rgba(234, 88, 12, 0.06) 100%);
 
     color: rgba(0, 0, 0, 0.84);
 
-    border-color: rgba(0, 0, 0, 0.06);
+    border-color: rgba(249, 115, 22, 0.2) !important;
 }
 
 :root .task-priority-medium {
-    background: rgba(0, 0, 0, 0.045);
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(202, 138, 4, 0.05) 100%);
 
-    color: rgba(0, 0, 0, 0.75);
+    color: rgba(0, 0, 0, 0.78);
 
-    border-color: rgba(0, 0, 0, 0.05);
+    border-color: rgba(234, 179, 8, 0.18) !important;
 }
 
 :root .task-priority-low {
-    background: rgba(0, 0, 0, 0.03);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.04) 100%);
 
-    color: rgba(0, 0, 0, 0.6);
+    color: rgba(0, 0, 0, 0.65);
 
-    border-color: rgba(0, 0, 0, 0.04);
+    border-color: rgba(99, 102, 241, 0.14) !important;
+}
+
+/* ─────────────────────────────────────────────
+   LIGHT MODE STATUS GRADIENTS
+/* ───────────────────────────────────────────── */
+
+:root .task-event.task-status-todo {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.14) 0%, rgba(109, 40, 217, 0.06) 100%) !important;
+
+    border-color: rgba(139, 92, 246, 0.22) !important;
+
+    color: rgba(0, 0, 0, 0.82) !important;
+}
+
+:root .task-event.task-status-in-progress {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.07) 100%) !important;
+
+    border-color: rgba(59, 130, 246, 0.24) !important;
+
+    color: rgba(0, 0, 0, 0.84) !important;
+}
+
+:root .task-event.task-status-done,
+:root .task-event.task-status-completed {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.05) 100%) !important;
+
+    border-color: rgba(16, 185, 129, 0.18) !important;
+
+    color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root .task-event.task-status-backlog {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.05) 100%) !important;
+
+    border-color: rgba(239, 68, 68, 0.18) !important;
+
+    color: rgba(0, 0, 0, 0.72) !important;
 }
 
 :root .task-event.is-done {
-    background: rgba(0, 0, 0, 0.025) !important;
-
-    color: rgba(0, 0, 0, 0.45) !important;
-
-    border-color: rgba(0, 0, 0, 0.04) !important;
+    opacity: 0.62 !important;
 }
 
 /* ─────────────────────────────────────────────

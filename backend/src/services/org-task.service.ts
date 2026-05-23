@@ -58,6 +58,13 @@ export interface CreateOrgTaskInput {
   start_date?: Date | null;
   due_date?: Date | null;
   created_by: string;
+  type?: 'task' | 'event';
+  event_type?: string | null;
+  location?: string | null;
+  is_all_day?: boolean;
+  assignee_ids?: string[];
+  story_points?: number | null;
+  time_estimate?: number | null;
 }
 
 export interface UpdateOrgTaskInput {
@@ -69,6 +76,12 @@ export interface UpdateOrgTaskInput {
   priority?: TaskPriority;
   start_date?: Date | null;
   due_date?: Date | null;
+  type?: 'task' | 'event';
+  event_type?: string | null;
+  location?: string | null;
+  is_all_day?: boolean;
+  story_points?: number | null;
+  time_estimate?: number | null;
 }
 
 const toISO = (value: Date | string | null | undefined): string | null => {
@@ -182,8 +195,19 @@ export const createTask = async (
 ): Promise<OrgTaskDTO> => {
   validateDateOrder(input.start_date ?? null, input.due_date ?? null);
 
+  // Separate assignee_ids from the DB columns
+  const { assignee_ids, story_points, time_estimate, ...taskData } = input;
+
   const task = await orgTaskRepository.executeInTransaction(async (client) => {
-    const created = await orgTaskRepository.create(input as Partial<Task>, client);
+    const created = await orgTaskRepository.create(taskData as Partial<Task>, client);
+
+    // Insert assignees if provided
+    if (assignee_ids && assignee_ids.length > 0) {
+      for (const userId of assignee_ids) {
+        await taskAssigneeRepository.assign(created.id, userId, client);
+      }
+    }
+
     await logSpaceActivity(
       context,
       input.created_by,

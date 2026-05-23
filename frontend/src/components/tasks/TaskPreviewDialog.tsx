@@ -74,10 +74,11 @@ function formatTimeCompact(startISO?: string | null, endISO?: string | null, isA
 }
 
 const statusColors: Record<string, string> = {
-  todo: "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20 dark:bg-purple-500/15 dark:text-purple-300",
-  "in-progress": "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 dark:bg-blue-500/15 dark:text-blue-300",
-  done: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-300",
-  backlog: "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 dark:bg-red-500/15 dark:text-red-300",
+  todo: "bg-gradient-to-r from-violet-500/15 to-violet-600/8 text-violet-400 border-violet-500/25 hover:from-violet-500/22 hover:to-violet-600/14 dark:from-violet-500/20 dark:to-violet-600/10 dark:text-violet-300",
+  "in-progress": "bg-gradient-to-r from-blue-500/15 to-blue-600/8 text-blue-400 border-blue-500/25 hover:from-blue-500/22 hover:to-blue-600/14 dark:from-blue-500/20 dark:to-blue-600/10 dark:text-blue-300",
+  done: "bg-gradient-to-r from-emerald-500/15 to-emerald-600/8 text-emerald-500 border-emerald-500/25 hover:from-emerald-500/22 hover:to-emerald-600/14 dark:from-emerald-500/18 dark:to-emerald-600/8 dark:text-emerald-400",
+  completed: "bg-gradient-to-r from-emerald-500/15 to-emerald-600/8 text-emerald-500 border-emerald-500/25 hover:from-emerald-500/22 hover:to-emerald-600/14 dark:from-emerald-500/18 dark:to-emerald-600/8 dark:text-emerald-400",
+  backlog: "bg-gradient-to-r from-red-500/15 to-red-600/8 text-red-400 border-red-500/25 hover:from-red-500/22 hover:to-red-600/14 dark:from-red-500/18 dark:to-red-600/8 dark:text-red-300",
 };
 
 // ─── TaskPreviewDialog ────────────────────────────────────────────────────────
@@ -149,6 +150,14 @@ export function TaskPreviewDialog({
             </div>
           ) : task ? (
             <>
+              {/* Status accent bar */}
+              <div className={cn(
+                "absolute top-0 left-0 right-0 h-[3px] rounded-t-xl",
+                task.status === "todo" && "bg-gradient-to-r from-violet-500 to-violet-400",
+                task.status === "in-progress" && "bg-gradient-to-r from-blue-500 to-blue-400",
+                (task.status === "done" || task.status === "completed") && "bg-gradient-to-r from-emerald-500 to-emerald-400",
+                task.status === "backlog" && "bg-gradient-to-r from-red-500 to-red-400",
+              )} />
               {/* TOP ROW: Title, Mark Done, Actions */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">

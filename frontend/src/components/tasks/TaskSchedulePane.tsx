@@ -1250,12 +1250,12 @@ export function TaskSchedulePane({
               eventClassNames={(arg: any) => {
                 const type = arg.event.extendedProps.type as CalendarBlockType;
                 if (arg.event.extendedProps.isScheduledTask) {
-                  const isDone =
-                    arg.event.extendedProps.taskStatus === "done" ||
-                    arg.event.extendedProps.taskStatus === "completed";
+                  const status = arg.event.extendedProps.taskStatus as string;
+                  const isDone = status === "done" || status === "completed";
                   return [
                     "task-event",
                     "scheduled-task",
+                    status ? `task-status-${status}` : "",
                     isDone ? "is-done" : "",
                   ].filter(Boolean);
                 }
@@ -1317,8 +1317,14 @@ export function TaskSchedulePane({
                     DEFAULT_TIMED_DURATION_MINUTES,
                   );
                 }
+                // Respect the active filter: if the user is viewing Events, default to creating an event
+                const defaultType: "task" | "event" =
+                  statusFilter === "Event" ||
+                  EVENT_STATUS_OPTIONS.includes(statusFilter as any)
+                    ? "event"
+                    : "task";
                 setCreateInitialValues({
-                  type: "task",
+                  type: defaultType,
                   start_date: clickedDate.toISOString(),
                   due_date: defaultDueDate.toISOString(),
                   is_all_day: arg.allDay,
@@ -1348,8 +1354,14 @@ export function TaskSchedulePane({
                   startISO = start.toISOString();
                   endISO = end.toISOString();
                 }
+                // Respect the active filter: if the user is viewing Events, default to creating an event
+                const defaultType: "task" | "event" =
+                  statusFilter === "Event" ||
+                  EVENT_STATUS_OPTIONS.includes(statusFilter as any)
+                    ? "event"
+                    : "task";
                 setCreateInitialValues({
-                  type: "task",
+                  type: defaultType,
                   start_date: startISO,
                   due_date: endISO,
                   is_all_day: arg.allDay,

@@ -44,8 +44,12 @@ const assertTaskInSpace = async (req: Request, taskId: string) => {
 export const createTask = catchAsync(async (req: Request, res: Response) => {
   const context = getTaskContext(req);
   const userId = (req as any).user?.id as string;
-  const { title, status, priority, start_date, due_date, parent_task_id, description, objective, success_criteria } =
-    req.body;
+  const {
+    title, status, priority, start_date, due_date, parent_task_id,
+    description, objective, success_criteria,
+    type, event_type, location, is_all_day, assignee_ids,
+    story_points, time_estimate,
+  } = req.body;
 
   if (!title || typeof title !== "string" || title.trim() === "") {
     throw new ApiError(400, "Title is required");
@@ -76,6 +80,13 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
     priority,
     start_date: parseOptionalDate(start_date, "start_date"),
     due_date: parseOptionalDate(due_date, "due_date"),
+    type: type === "event" ? "event" : "task",
+    event_type: event_type ?? null,
+    location: location ?? null,
+    is_all_day: typeof is_all_day === "boolean" ? is_all_day : true,
+    assignee_ids: Array.isArray(assignee_ids) ? assignee_ids : undefined,
+    story_points: story_points ?? null,
+    time_estimate: time_estimate ?? null,
   });
 
   res.status(201).json(new ApiResponse(201, task, "Task created successfully"));
@@ -138,7 +149,10 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
   await assertTaskInSpace(req, asString(req.params.id));
 
   const updates: any = {};
-  const allowedFields = ["title", "description", "objective", "success_criteria", "status", "priority"];
+  const allowedFields = [
+    "title", "description", "objective", "success_criteria",
+    "status", "priority", "type", "event_type", "location", "is_all_day",
+  ];
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
       updates[field] = field === "title" ? req.body[field]?.trim() : req.body[field];
