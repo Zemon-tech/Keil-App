@@ -215,6 +215,21 @@ function getTextBeforeCursorInParent(editor: NonNullable<ReturnType<typeof useEd
   return $from.parent.textBetween(0, $from.parentOffset, "\n")
 }
 
+function selectionSpansMultipleBlocks(state: EditorState) {
+  const { selection } = state
+  if (selection.empty) return false
+
+  let blockCount = 0
+  state.doc.nodesBetween(selection.from, selection.to, (node) => {
+    if (node.isBlock) {
+      blockCount++
+    }
+    return blockCount <= 1
+  })
+
+  return blockCount > 1
+}
+
 export function SimpleEditor({
   content,
   onContentChange,
@@ -720,7 +735,15 @@ export function SimpleEditor({
       const target = currentBlockTargetRef.current
       if (!target) return
 
-      selectBlockTarget(target)
+      const { selection } = editor.state
+      const spansMultiple = selectionSpansMultipleBlocks(editor.state)
+      const isTargetInSelection = spansMultiple && 
+                                  target.from < selection.to && 
+                                  target.to > selection.from
+
+      if (!isTargetInSelection) {
+        selectBlockTarget(target)
+      }
       showDragHandle(handle, true)
 
       const rect = handle.getBoundingClientRect()
@@ -730,7 +753,7 @@ export function SimpleEditor({
       setBlockMenu({
         left: rect.right + 12,
         top: rect.top - 8,
-        target,
+        target: isTargetInSelection ? { from: selection.from, to: selection.to } : target,
         type: editor.state.doc.nodeAt(target.from)?.type.name || "text"
       })
       setActiveSubmenu('none')
@@ -1319,21 +1342,36 @@ export function SimpleEditor({
     if (!editor || !target) return
     console.log("Duplicating block at", target)
     const { from, to } = target
-    const node = editor.state.doc.nodeAt(from)
-    if (!node) return
 
-    // Clone the node content
-    const content = node.content.toJSON()
-    
-    editor
-      .chain()
-      .focus()
-      .insertContentAt(to, {
-        type: node.type.name,
-        attrs: { ...node.attrs, id: undefined }, // Let extension generate new ID
-        content: content
-      })
-      .run()
+    let blockCount = 0
+    editor.state.doc.nodesBetween(from, to, (node) => {
+      if (node.isBlock) blockCount++
+      return blockCount <= 1
+    })
+    const isMultiBlock = blockCount > 1
+
+    if (isMultiBlock) {
+      const slice = editor.state.doc.slice(from, to)
+      const content = slice.content.toJSON()
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(to, content)
+        .run()
+    } else {
+      const node = editor.state.doc.nodeAt(from)
+      if (!node) return
+      const content = node.content.toJSON()
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(to, {
+          type: node.type.name,
+          attrs: { ...node.attrs, id: undefined }, // Let extension generate new ID
+          content: content
+        })
+        .run()
+    }
       
     setBlockMenu(null)
     closeSlashMenu()
@@ -1369,17 +1407,30 @@ export function SimpleEditor({
   const executeMoveTo = useCallback((position: 'top' | 'bottom') => {
     if (!editor || !blockMenu?.target) return
     const target = blockMenu.target
-    const node = editor.state.doc.nodeAt(target.from)
-    if (!node) return
 
-    const nodeJSON = node.toJSON()
+    let blockCount = 0
+    editor.state.doc.nodesBetween(target.from, target.to, (node) => {
+      if (node.isBlock) blockCount++
+      return blockCount <= 1
+    })
+    const isMultiBlock = blockCount > 1
+
+    let contentJSON: any
+    if (isMultiBlock) {
+      const slice = editor.state.doc.slice(target.from, target.to)
+      contentJSON = slice.content.toJSON()
+    } else {
+      const node = editor.state.doc.nodeAt(target.from)
+      if (!node) return
+      contentJSON = node.toJSON()
+    }
     
     if (position === 'top') {
       editor
         .chain()
         .focus()
         .deleteRange({ from: target.from, to: target.to })
-        .insertContentAt(0, nodeJSON)
+        .insertContentAt(0, contentJSON)
         .run()
     } else {
       editor
@@ -1387,7 +1438,13 @@ export function SimpleEditor({
         .focus()
         .deleteRange({ from: target.from, to: target.to })
         .command(({ tr }) => {
-          tr.insert(tr.doc.content.size, editor.schema.nodeFromJSON(nodeJSON))
+          if (Array.isArray(contentJSON)) {
+            contentJSON.forEach((nodeObj) => {
+              tr.insert(tr.doc.content.size, editor.schema.nodeFromJSON(nodeObj))
+            })
+          } else {
+            tr.insert(tr.doc.content.size, editor.schema.nodeFromJSON(contentJSON))
+          }
           return true
         })
         .run()
@@ -1901,14 +1958,30 @@ export function SimpleEditor({
                     className="motion-block-menu__item gap-2.5"
                     onClick={() => {
                       if (blockMenu?.target && editor) {
-                        const { from } = blockMenu.target;
-                        const node = editor.state.doc.nodeAt(from);
-                        if (node) {
+                        const { from, to } = blockMenu.target;
+                        
+                        let blockCount = 0
+                        editor.state.doc.nodesBetween(from, to, (node) => {
+                          if (node.isBlock) blockCount++
+                          return blockCount <= 1
+                        })
+                        const isMultiBlock = blockCount > 1
+
+                        if (isMultiBlock) {
                           editor.chain()
                             .focus()
-                            .setNodeSelection(from)
-                            .updateAttributes(node.type.name, { color: c.color })
+                            .updateAttributes('paragraph', { color: c.color })
+                            .updateAttributes('heading', { color: c.color })
                             .run();
+                        } else {
+                          const node = editor.state.doc.nodeAt(from);
+                          if (node) {
+                            editor.chain()
+                              .focus()
+                              .setNodeSelection(from)
+                              .updateAttributes(node.type.name, { color: c.color })
+                              .run();
+                          }
                         }
                         setBlockMenu(null);
                       }
@@ -1936,14 +2009,30 @@ export function SimpleEditor({
                     className="motion-block-menu__item gap-2.5"
                     onClick={() => {
                       if (blockMenu?.target && editor) {
-                        const { from } = blockMenu.target;
-                        const node = editor.state.doc.nodeAt(from);
-                        if (node) {
+                        const { from, to } = blockMenu.target;
+                        
+                        let blockCount = 0
+                        editor.state.doc.nodesBetween(from, to, (node) => {
+                          if (node.isBlock) blockCount++
+                          return blockCount <= 1
+                        })
+                        const isMultiBlock = blockCount > 1
+
+                        if (isMultiBlock) {
                           editor.chain()
                             .focus()
-                            .setNodeSelection(from)
-                            .updateAttributes(node.type.name, { backgroundColor: c.bg })
+                            .updateAttributes('paragraph', { backgroundColor: c.bg })
+                            .updateAttributes('heading', { backgroundColor: c.bg })
                             .run();
+                        } else {
+                          const node = editor.state.doc.nodeAt(from);
+                          if (node) {
+                            editor.chain()
+                              .focus()
+                              .setNodeSelection(from)
+                              .updateAttributes(node.type.name, { backgroundColor: c.bg })
+                              .run();
+                          }
                         }
                         setBlockMenu(null);
                       }
