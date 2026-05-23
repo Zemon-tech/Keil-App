@@ -220,11 +220,13 @@ export function SimpleEditor({
   onContentChange,
   onReady,
   onAddSubpage,
+  editable,
 }: {
   content?: JSONContent
   onContentChange?: (content: JSONContent) => void
   onReady?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void
   onAddSubpage?: () => any
+  editable?: boolean
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -378,6 +380,7 @@ export function SimpleEditor({
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable: editable ?? true,
     editorProps: {
       attributes: {
         autocomplete: "off",
@@ -393,6 +396,12 @@ export function SimpleEditor({
       onContentChangeRef.current?.(editor.getJSON())
     },
   })
+
+  useEffect(() => {
+    if (editor && editable !== undefined) {
+      editor.setEditable(editable)
+    }
+  }, [editor, editable])
 
   const closeSlashMenu = useCallback(() => {
     virtualSlashStartRef.current = null
@@ -1440,8 +1449,27 @@ export function SimpleEditor({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [editor, duplicateBlockTarget, deleteBlockTarget, copyBlockTarget, commentOnBlock, moveToBlock, suggestOnBlock])
 
+  const handleWrapperClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (editor && !editor.isEditable) {
+      const target = e.target as HTMLElement
+      const detailsContainer = target.closest('[data-type="details"]')
+      if (detailsContainer) {
+        const isContentClick = target.closest('[data-type="detailsContent"]')
+        const isLinkClick = target.closest('a')
+        if (!isContentClick && !isLinkClick) {
+          const toggleButton = detailsContainer.querySelector('button[type="button"]') as HTMLButtonElement | null
+          if (toggleButton && target !== toggleButton) {
+            toggleButton.click()
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        }
+      }
+    }
+  }, [editor])
+
   return (
-    <div ref={wrapperRef} className="simple-editor-wrapper relative">
+    <div ref={wrapperRef} className="simple-editor-wrapper relative" onClick={handleWrapperClick}>
       <EditorContext.Provider value={{ editor }}>
         {editor && (
           <BubbleMenu

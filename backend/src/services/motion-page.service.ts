@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { motionPageRepository, motionPageShareRepository } from '../repositories';
+import { motionPageRepository, motionPageShareRepository, spaceRepository, organisationRepository, motionAnalyticsRepository } from '../repositories';
 import { MotionPage, MotionPageShare } from '../types/entities';
 import { MotionShareType, MotionPermission } from '../types/enums';
 import { ApiError } from '../utils/ApiError';
@@ -130,14 +130,54 @@ const assertPageInSpace = async (
   orgId: string,
   spaceId: string,
   requireEditPermission = false,
+  userId?: string,
+  spaceRole?: string,
 ): Promise<MotionPage> => {
   let page = await motionPageRepository.findByIdInSpace(pageId, orgId, spaceId);
   
   if (!page) {
     page = await motionPageShareRepository.findByIdSharedToSpace(pageId, orgId, spaceId);
     if (page) {
-      if (requireEditPermission && page.share_permission !== MotionPermission.EDIT) {
-        throw new ApiError(403, 'You only have view access to this shared page');
+      const perm = page.share_permission;
+      
+      // 1. Validate VIEW access based on share role constraints
+      if (
+        perm === MotionPermission.VIEW_ADMINS ||
+        perm === MotionPermission.EDIT_ADMINS
+      ) {
+        if (spaceRole !== 'admin') {
+          throw new ApiError(403, 'This shared page is only accessible to admins');
+        }
+      } else if (
+        perm === MotionPermission.VIEW_MANAGERS ||
+        perm === MotionPermission.EDIT_MANAGERS
+      ) {
+        if (spaceRole !== 'admin' && spaceRole !== 'manager') {
+          throw new ApiError(403, 'This shared page is only accessible to admins and managers');
+        }
+      }
+      
+      // 2. Validate EDIT access (if requested)
+      if (requireEditPermission) {
+        if (
+          !perm ||
+          perm === MotionPermission.VIEW_ALL ||
+          perm === MotionPermission.VIEW_MANAGERS ||
+          perm === MotionPermission.VIEW_ADMINS ||
+          perm === MotionPermission.VIEW
+        ) {
+          throw new ApiError(403, 'You only have view access to this shared page');
+        }
+        
+        if (perm === MotionPermission.EDIT_ADMINS) {
+          if (spaceRole !== 'admin') {
+            throw new ApiError(403, 'Only admins of the target space can edit this shared page');
+          }
+        } else if (perm === MotionPermission.EDIT_MANAGERS) {
+          if (spaceRole !== 'admin' && spaceRole !== 'manager') {
+            throw new ApiError(403, 'Only admins and managers of the target space can edit this shared page');
+          }
+        }
       }
     } else {
       throw new ApiError(404, 'Page not found');
@@ -233,9 +273,12 @@ export const updatePage = async (
   input: UpdateMotionPageInput,
   spaceRole: string,
 ): Promise<MotionPageDTO | null> => {
-  const page = await assertPageInSpace(pageId, orgId, spaceId, true);
+  const page = await assertPageInSpace(pageId, orgId, spaceId, true, userId, spaceRole);
 
   if (!page.share_permission) {
+    if (spaceRole === 'member') {
+      throw new ApiError(403, 'Members are not allowed to edit pages in this space');
+    }
     if (spaceRole === 'manager' && page.created_by !== userId) {
       throw new ApiError(403, 'Managers can only edit their own pages');
     }
@@ -399,6 +442,18 @@ export const createShare = async (
       target_org_id: null,
       target_space_id: null,
     } as Partial<MotionPageShare>);
+
+    try {
+      await motionAnalyticsRepository.logUpdate({
+        page_id: pageId,
+        user_id: userId,
+        action_type: 'share',
+        description: 'shared page via public link',
+      });
+    } catch (err) {
+      console.error('Error logging public share creation:', err);
+    }
+
     return toShareDTO(share);
   }
 
@@ -430,6 +485,23 @@ export const createShare = async (
       created_by: userId,
       expires_at: input.expires_at ? new Date(input.expires_at) : null,
     } as Partial<MotionPageShare>);
+
+    try {
+      const targetSpace = await spaceRepository.findById(input.target_space_id);
+      const targetOrg = await organisationRepository.findById(input.target_org_id);
+      const spaceName = targetSpace?.name ?? 'Unknown Space';
+      const orgName = targetOrg?.name ?? 'Unknown Organisation';
+
+      await motionAnalyticsRepository.logUpdate({
+        page_id: pageId,
+        user_id: userId,
+        action_type: 'share',
+        description: `shared page with "${spaceName}" workspace of "${orgName}" organisation`,
+      });
+    } catch (err) {
+      console.error('Error logging space share creation:', err);
+    }
+
     return toShareDTO(share);
   }
 
@@ -459,7 +531,95 @@ export const revokeShare = async (
     throw new ApiError(404, 'Share not found');
   }
 
+  try {
+    if (share.share_type === MotionShareType.SPACE) {
+      const targetSpace = await spaceRepository.findById(share.target_space_id!);
+      const targetOrg = await organisationRepository.findById(share.target_org_id!);
+      const spaceName = targetSpace?.name ?? 'Unknown Space';
+      const orgName = targetOrg?.name ?? 'Unknown Organisation';
+
+      await motionAnalyticsRepository.logUpdate({
+        page_id: pageId,
+        user_id: userId,
+        action_type: 'share_revoke',
+        description: `revoked sharing with "${spaceName}" workspace of "${orgName}" organisation`,
+      });
+    } else {
+      await motionAnalyticsRepository.logUpdate({
+        page_id: pageId,
+        user_id: userId,
+        action_type: 'share_revoke',
+        description: 'revoked public link sharing',
+      });
+    }
+  } catch (err) {
+    console.error('Error logging share revocation:', err);
+  }
+
   await motionPageShareRepository.delete(shareId);
+};
+
+export const updateShare = async (
+  orgId: string,
+  spaceId: string,
+  pageId: string,
+  shareId: string,
+  userId: string,
+  permission: MotionPermission,
+  spaceRole: string,
+): Promise<MotionPageShareDTO> => {
+  const page = await assertPageInSpace(pageId, orgId, spaceId);
+
+  if (page.share_permission) {
+    throw new ApiError(403, 'Cannot update shares on a page shared from another space');
+  }
+
+  if (spaceRole === 'manager' && page.created_by !== userId) {
+    throw new ApiError(403, 'Managers can only update shares for their own pages');
+  }
+
+  const share = await motionPageShareRepository.findById(shareId);
+  if (!share || share.page_id !== pageId) {
+    throw new ApiError(404, 'Share not found');
+  }
+
+  const updated = await motionPageShareRepository.update(shareId, {
+    permission,
+  });
+
+  try {
+    if (share.share_type === MotionShareType.SPACE) {
+      const targetSpace = await spaceRepository.findById(share.target_space_id!);
+      const targetOrg = await organisationRepository.findById(share.target_org_id!);
+      const spaceName = targetSpace?.name ?? 'Unknown Space';
+      const orgName = targetOrg?.name ?? 'Unknown Organisation';
+
+      let readablePerm = String(permission);
+      if (permission.startsWith('edit_')) {
+        readablePerm = `edit (${permission.replace('edit_', '')})`;
+      } else if (permission.startsWith('view_')) {
+        readablePerm = `view (${permission.replace('view_', '')})`;
+      }
+
+      await motionAnalyticsRepository.logUpdate({
+        page_id: pageId,
+        user_id: userId,
+        action_type: 'share_update',
+        description: `updated share permission to "${readablePerm}" for "${spaceName}" workspace of "${orgName}" organisation`,
+      });
+    } else {
+      await motionAnalyticsRepository.logUpdate({
+        page_id: pageId,
+        user_id: userId,
+        action_type: 'share_update',
+        description: `updated public link share permission to "${permission}"`,
+      });
+    }
+  } catch (err) {
+    console.error('Error logging share update:', err);
+  }
+
+  return toShareDTO(updated!);
 };
 
 // ─── Public token resolution ──────────────────────────────────────────────────

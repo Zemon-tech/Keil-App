@@ -14,6 +14,7 @@ import {
   listShares,
   createShare,
   revokeShare,
+  updateShare,
   listSharedToSpace,
 } from '../controllers/motion-page.controller';
 
@@ -28,7 +29,7 @@ router.post('/', requireSpaceRole("admin", "manager"), createPage);
 router.get('/trash', requireSpaceRole("admin", "manager", "member"), listTrash);
 router.get('/shared', requireSpaceRole("admin", "manager", "member"), listSharedToSpace);
 router.get('/:id', requireSpaceRole("admin", "manager", "member"), getPage);
-router.patch('/:id', requireSpaceRole("admin", "manager"), updatePage);
+router.patch('/:id', requireSpaceRole("admin", "manager", "member"), updatePage);
 router.delete('/:id', requireSpaceRole("admin", "manager"), softDeletePage);
 router.patch('/:id/restore', requireSpaceRole("admin", "manager"), restorePage);
 router.delete('/:id/permanent', requireSpaceRole("admin", "manager"), hardDeletePage);
@@ -37,6 +38,7 @@ router.delete('/:id/permanent', requireSpaceRole("admin", "manager"), hardDelete
 router.get('/:id/shares', requireSpaceRole("admin", "manager", "member"), listShares);
 router.post('/:id/shares', requireSpaceRole("admin", "manager"), createShare);
 router.delete('/:id/shares/:shareId', requireSpaceRole("admin", "manager"), revokeShare);
+router.patch('/:id/shares/:shareId', requireSpaceRole("admin", "manager"), updateShare);
 
 // ── Analytics & Updates ───────────────────────────────────────────────────────
 import {

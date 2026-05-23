@@ -29,7 +29,15 @@ export interface MotionPageDTO {
 }
 
 export type MotionShareType = "public_link" | "space";
-export type MotionPermission = "view" | "edit";
+export type MotionPermission =
+  | "view_all"
+  | "view_managers"
+  | "view_admins"
+  | "edit_all"
+  | "edit_managers"
+  | "edit_admins"
+  | "view"
+  | "edit";
 
 export interface MotionPageShareDTO {
   id: string;
@@ -440,6 +448,9 @@ export function useCreateMotionPageShare(
       queryClient.invalidateQueries({
         queryKey: motionPageKeys.shares(orgId, spaceId, pageId),
       });
+      queryClient.invalidateQueries({
+        queryKey: ["motion-analytics", orgId, spaceId, pageId],
+      });
     },
     onError: (err: any) => {
       const message = err?.response?.data?.message;
@@ -467,10 +478,49 @@ export function useRevokeMotionPageShare(
       queryClient.invalidateQueries({
         queryKey: motionPageKeys.shares(orgId, spaceId, pageId),
       });
+      queryClient.invalidateQueries({
+        queryKey: ["motion-analytics", orgId, spaceId, pageId],
+      });
       toast.success("Share revoked.");
     },
     onError: () => {
       toast.error("Failed to revoke share.");
+    },
+  });
+}
+
+/** Updates a share's permission. */
+export function useUpdateMotionPageShare(
+  orgId: string | null,
+  spaceId: string | null,
+  pageId: string | null
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    MotionPageShareDTO,
+    Error,
+    { shareId: string; permission: MotionPermission }
+  >({
+    mutationFn: async ({ shareId, permission }) => {
+      const res = await api.patch<{ data: MotionPageShareDTO }>(
+        `${notesBase(orgId!, spaceId!)}/${pageId}/shares/${shareId}`,
+        { permission }
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId || !pageId) return;
+      queryClient.invalidateQueries({
+        queryKey: motionPageKeys.shares(orgId, spaceId, pageId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["motion-analytics", orgId, spaceId, pageId],
+      });
+      toast.success("Share permission updated.");
+    },
+    onError: () => {
+      toast.error("Failed to update share permission.");
     },
   });
 }

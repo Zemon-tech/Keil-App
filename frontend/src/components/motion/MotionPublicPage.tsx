@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Loader2, FileText, AlertCircle } from "lucide-react";
+import { Loader2, FileText, AlertCircle, Sun, Moon } from "lucide-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
+import { Button } from "@/components/ui/button";
+import { useTheme } from "next-themes";
 import api from "@/lib/api";
 import type { MotionPageDTO } from "@/hooks/api/useMotionPages";
 
@@ -27,6 +29,7 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
   // Both route patterns expose their param under different names
   const { token, pageId } = useParams<{ token?: string; pageId?: string }>();
   const [state, setState] = useState<FetchState>({ status: "loading" });
+  const { setTheme, resolvedTheme } = useTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -120,9 +123,27 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
 
   // ── Page ─────────────────────────────────────────────────────────────────────
   const { page } = state;
+  const isDark = resolvedTheme === "dark";
 
   return (
-    <div className="min-h-dvh w-full bg-background text-foreground">
+    <div className="min-h-dvh w-full bg-background text-foreground relative">
+      {/* Floating theme toggle */}
+      <div className="absolute top-4 right-4 z-50">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setTheme(isDark ? "light" : "dark")}
+          className="h-9 w-9 rounded-lg bg-background/80 backdrop-blur border border-border/50 shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+          title={`Switch to ${isDark ? "light" : "dark"} mode`}
+        >
+          {isDark ? (
+            <Sun className="size-4 text-amber-500 shrink-0" />
+          ) : (
+            <Moon className="size-4 text-indigo-600 shrink-0" />
+          )}
+        </Button>
+      </div>
+
       {/* Cover image */}
       <div className="h-[240px] w-full overflow-hidden bg-muted">
         <img
@@ -157,6 +178,7 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
         <SimpleEditor
           key={page.id}
           content={page.content}
+          editable={false}
           // No onContentChange — read-only mode
         />
       </main>
@@ -164,8 +186,9 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-          /* Hide all editor toolbar and interactive elements in public view */
+          /* Hide all editor toolbar and interactive elements in public view, but allow toggle lists and links to be interactive */
           .tiptap { pointer-events: none; user-select: text; }
+          .tiptap [data-type="details"], .tiptap [data-type="details"] *, .tiptap a { pointer-events: auto; }
         `,
         }}
       />

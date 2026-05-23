@@ -302,4 +302,39 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
     const result = await executor.query(query, [pageId, targetOrgId, targetSpaceId]);
     return result.rows.length > 0 ? (result.rows[0] as MotionPageShare) : null;
   }
+
+  /**
+   * Updates a share record by ID.
+   * Overrides BaseRepository.update() because motion_page_shares has NO
+   * deleted_at column — the base method's "AND deleted_at IS NULL" clause
+   * would match zero rows and silently return null.
+   */
+  async update(
+    id: string,
+    data: Partial<MotionPageShare>,
+    client?: PoolClient,
+  ): Promise<MotionPageShare | null> {
+    const validData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== undefined),
+    );
+    const keys = Object.keys(validData);
+    const values = Object.values(validData);
+
+    if (keys.length === 0) {
+      return this.findById(id, client);
+    }
+
+    const setClause = keys.map((key, i) => `${key} = $${i + 2}`).join(', ');
+
+    const query = `
+      UPDATE public.motion_page_shares
+      SET ${setClause}
+      WHERE id = $1
+      RETURNING *
+    `;
+
+    const executor = client || this.pool;
+    const result = await executor.query(query, [id, ...values]);
+    return result.rows.length > 0 ? (result.rows[0] as MotionPageShare) : null;
+  }
 }

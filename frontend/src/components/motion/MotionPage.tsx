@@ -165,8 +165,23 @@ export function MotionPage() {
   const displayPage = page ?? serverPage ?? null;
 
   const isSharedPage = displayPage && (displayPage.org_id !== activeOrgId || displayPage.space_id !== activeSpaceId);
+
+  // Helper: does the share permission grant edit rights to the current user's space role?
+  const sharedPageCanEdit = (() => {
+    if (!isSharedPage || !displayPage) return false;
+    const perm = displayPage.share_permission;
+    // edit_all — any member of the target space can edit
+    if (perm === "edit_all" || perm === "edit") return true;
+    // edit_managers — only admins and managers of the target space can edit
+    if (perm === "edit_managers") return spaceRole === "admin" || spaceRole === "manager";
+    // edit_admins — only admins of the target space can edit
+    if (perm === "edit_admins") return spaceRole === "admin";
+    // view_* permissions — no edit access
+    return false;
+  })();
+
   const isPageReadOnly = isSharedPage
-    ? displayPage.share_permission !== "edit"
+    ? !sharedPageCanEdit
     : spaceRole === "admin" ? false : spaceRole === "manager" ? displayPage?.created_by !== user?.id : true;
 
   useEffect(() => {
@@ -400,7 +415,7 @@ export function MotionPage() {
             <SaveIndicator status={saveStatus} />
 
             {/* Share button — opens panel anchored below */}
-            {!isPageReadOnly && activeOrgId && activeSpaceId && (
+            {!isPageReadOnly && !isSharedPage && activeOrgId && activeSpaceId && (
               <Popover open={shareOpen || shareModalOpen} onOpenChange={(open) => { setShareOpen(open); setShareModalOpen(open); }}>
                 <PopoverTrigger asChild>
                   <Button
@@ -428,7 +443,7 @@ export function MotionPage() {
               </Popover>
             )}
 
-            {!isPageReadOnly && (
+            {!isPageReadOnly && !isSharedPage && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -465,7 +480,7 @@ export function MotionPage() {
                   </div>
 
                   {/* Section 2 — Page Actions */}
-                  {(matchesSearch("Copy page contents") || (matchesSearch("Move to Trash") && !isPageReadOnly)) && (
+                  {(matchesSearch("Copy page contents") || (matchesSearch("Move to Trash") && !isPageReadOnly && !isSharedPage)) && (
                     <>
                       <div className="py-1">
                         {matchesSearch("Copy page contents") && (
@@ -476,7 +491,7 @@ export function MotionPage() {
                             </div>
                           </div>
                         )}
-                        {matchesSearch("Move to Trash") && !isPageReadOnly && (
+                        {matchesSearch("Move to Trash") && !isPageReadOnly && !isSharedPage && (
                           <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={handleDelete}>
                             <div className="flex items-center gap-2.5">
                               <Trash2 className="size-4 text-muted-foreground group-hover:text-destructive transition-colors" />
