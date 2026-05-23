@@ -346,10 +346,8 @@ export function AppSidebar() {
                     ) : (
                       <SidebarMenuButton
                         onClick={() => {
-                          if ("action" in item && item.action === "meetings") {
-                            setMeetingDialogOpen(true);
-                          }
-                        }}
+                            navigate('/meetings');
+                          }}
                         isActive={meetingDialogOpen}
                         tooltip={item.title}
                         className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
