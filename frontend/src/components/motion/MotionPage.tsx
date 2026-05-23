@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, Undo2, History
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, SlidersHorizontal, Lock, Undo2, History, BarChart3
 } from "lucide-react";
 import { MotionSharePanel } from "./MotionShareModal";
 import { 
@@ -28,6 +28,7 @@ import {
   useCreateMotionPage,
   useMotionSocketListeners,
 } from "@/hooks/api/useMotionPages";
+import { useRecordPageView } from "@/hooks/api/useMotionAnalytics";
 import type { JSONContent } from "@tiptap/core";
 import { toast } from "sonner";
 
@@ -82,6 +83,30 @@ export function MotionPage() {
 
   const matchesSearch = (text: string) => text.toLowerCase().includes(menuSearch.toLowerCase());
 
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    getPageById,
+    upsertPages,
+    setDirty,
+    clearDirty,
+    drawerOpen,
+    setDrawerOpen,
+    drawerTab,
+    setDrawerTab,
+    shareOpen,
+    setShareOpen,
+  } = useMotionStore();
+
+  const handleToggleDrawer = (tab: "updates" | "analytics") => {
+    if (drawerOpen && drawerTab === tab) {
+      setDrawerOpen(false);
+    } else {
+      setDrawerTab(tab);
+      setDrawerOpen(true);
+    }
+  };
+
   const handleCopyContent = () => {
     if (pageEditor) {
       const text = pageEditor.getText();
@@ -89,9 +114,6 @@ export function MotionPage() {
       toast("Content copied to clipboard");
     }
   };
-
-  const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty } =
-    useMotionStore();
 
   // Stable ref so upsertPages is never a useEffect dependency
   const upsertPagesRef = useRef(upsertPages);
@@ -106,6 +128,7 @@ export function MotionPage() {
   const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
   const softDelete = useSoftDeleteMotionPage(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
+  const recordPageView = useRecordPageView(activeOrgId, activeSpaceId, pageId ?? null);
 
   // ── Space members (must be called unconditionally — before any early returns) ──
   const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
@@ -118,6 +141,13 @@ export function MotionPage() {
       upsertPagesRef.current([serverPage]);
     }
   }, [serverPage]);
+
+  // Record page view on load/navigation
+  useEffect(() => {
+    if (activeOrgId && activeSpaceId && pageId) {
+      recordPageView.mutate();
+    }
+  }, [activeOrgId, activeSpaceId, pageId]);
 
   // ── Working copy from store (optimistic) ───────────────────────────────────
   const page = useMemo(
@@ -371,7 +401,7 @@ export function MotionPage() {
 
             {/* Share button — opens panel anchored below */}
             {!isPageReadOnly && activeOrgId && activeSpaceId && (
-              <Popover open={shareModalOpen} onOpenChange={setShareModalOpen}>
+              <Popover open={shareOpen || shareModalOpen} onOpenChange={(open) => { setShareOpen(open); setShareModalOpen(open); }}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="ghost"
@@ -548,7 +578,10 @@ export function MotionPage() {
                     <>
                       <div className="py-1">
                         {matchesSearch("Updates & analytics") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
+                          <div
+                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                            onClick={() => handleToggleDrawer("updates")}
+                          >
                             <div className="flex items-center gap-2.5">
                               <Clock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                               <span className="text-xs font-medium">Updates & analytics</span>

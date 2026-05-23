@@ -38,4 +38,23 @@ router.get('/:id/shares', requireSpaceRole("admin", "manager", "member"), listSh
 router.post('/:id/shares', requireSpaceRole("admin", "manager"), createShare);
 router.delete('/:id/shares/:shareId', requireSpaceRole("admin", "manager"), revokeShare);
 
+// ── Analytics & Updates ───────────────────────────────────────────────────────
+import {
+  recordPageView,
+  getViewsSummary,
+  getViewPermission,
+  setViewPermission,
+  getViewers,
+  getUpdates,
+  getEditors
+} from '../controllers/motion-analytics.controller';
+
+router.post('/:pageId/views', requireSpaceRole("admin", "manager", "member"), recordPageView);
+router.get('/:pageId/views/summary', requireSpaceRole("admin", "manager", "member"), getViewsSummary);
+router.get('/:pageId/view-permission', requireSpaceRole("admin", "manager", "member"), getViewPermission);
+router.post('/:pageId/view-permission', requireSpaceRole("admin", "manager", "member"), setViewPermission);
+router.get('/:pageId/viewers', requireSpaceRole("admin", "manager", "member"), getViewers);
+router.get('/:pageId/updates', requireSpaceRole("admin", "manager", "member"), getUpdates);
+router.get('/:pageId/editors', requireSpaceRole("admin", "manager", "member"), getEditors);
+
 export default router;

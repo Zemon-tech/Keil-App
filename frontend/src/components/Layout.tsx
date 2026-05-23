@@ -22,10 +22,12 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useChatStore } from "@/store/useChatStore";
 import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
+import { useMotionStore } from "@/store/useMotionStore";
+import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
 
 type LayoutProps = {
   children: ReactNode;
@@ -36,8 +38,20 @@ type LayoutProps = {
 export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const location = useLocation();
+  const { pageId } = useParams<{ pageId: string }>();
   const openChat = useChatStore((state: any) => state.openChat);
   const { isChatDialogOpen, closeChatDialog } = useChatStore();
+
+  const { drawerOpen, setDrawerOpen, getPageById } = useMotionStore();
+  const page = pageId ? getPageById(pageId) : null;
+  const pageTitle = page?.title ?? "Untitled";
+
+  // Auto-close Updates & Analytics drawer if path changes away from motion page details
+  useEffect(() => {
+    if (!location.pathname.startsWith("/motion/") || !pageId) {
+      setDrawerOpen(false);
+    }
+  }, [location.pathname, pageId, setDrawerOpen]);
 
   // Activate automatic task overdue refresh logic
   useTaskOverdueAutoRefresh();
@@ -54,7 +68,9 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   }, []);
 
   return (
-    <SidebarProvider>
+    <div className="flex h-screen w-screen overflow-hidden bg-background">
+      <div className="flex-1 h-full min-w-0 flex flex-col relative transition-all duration-300 ease-in-out">
+        <SidebarProvider>
       {sidebar || <AppSidebar />}
       <SidebarInset className="bg-background">
         {/* Command Palette */}
@@ -115,6 +131,11 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
       {/* Global Socket Manager for Chat */}
       <ChatSocketManager />
       <Toaster />
-    </SidebarProvider>
+        </SidebarProvider>
+      </div>
+
+      {/* Persistent Updates & Analytics Drawer */}
+      <UpdatesAnalyticsDrawer pageId={pageId ?? null} pageTitle={pageTitle} />
+    </div>
   );
 }

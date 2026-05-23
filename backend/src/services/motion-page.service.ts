@@ -4,6 +4,7 @@ import { MotionPage, MotionPageShare } from '../types/entities';
 import { MotionShareType, MotionPermission } from '../types/enums';
 import { ApiError } from '../utils/ApiError';
 import { broadcastMotionChange } from '../socket';
+import { logPageEdit, logPageCreation } from './motion-analytics.service';
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -218,6 +219,9 @@ export const createPage = async (
   const dto = toPageDTO(page);
   broadcastMotionChange(spaceId, { type: 'create', page: dto, userId });
 
+  // Log the page creation asynchronously
+  logPageCreation(page.id, userId).catch(err => console.error("Error in logPageCreation:", err));
+
   return dto;
 };
 
@@ -263,6 +267,9 @@ export const updatePage = async (
   if (input.small_text !== undefined) updates.small_text = input.small_text;
   if (input.full_width !== undefined) updates.full_width = input.full_width;
   updates.updated_by = userId;
+
+  // Log the edit activity diffs asynchronously before database update
+  logPageEdit(pageId, userId, page, input).catch(err => console.error("Error in logPageEdit:", err));
 
   const updated = await motionPageRepository.update(pageId, updates);
   if (updated) {

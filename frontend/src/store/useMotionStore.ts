@@ -79,12 +79,21 @@ interface MotionStore {
 
   // ── UI ────────────────────────────────────────────────────────────────────────
   setSidebarOpen: (open: boolean) => void;
+  drawerOpen: boolean;
+  drawerTab: "updates" | "analytics";
+  setDrawerOpen: (open: boolean) => void;
+  setDrawerTab: (tab: "updates" | "analytics") => void;
+  shareOpen: boolean;
+  setShareOpen: (open: boolean) => void;
 }
 
 export const useMotionStore = create<MotionStore>()((set, get) => ({
   pages: [],
   dirtyPageIds: new Set<string>(),
   sidebarOpen: true,
+  drawerOpen: false,
+  drawerTab: "updates",
+  shareOpen: false,
 
   // ── Hydration ─────────────────────────────────────────────────────────────────
 
@@ -181,4 +190,7 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
   // ── UI ────────────────────────────────────────────────────────────────────────
 
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  setDrawerOpen: (open) => set({ drawerOpen: open }),
+  setDrawerTab: (tab) => set({ drawerTab: tab }),
+  setShareOpen: (open) => set({ shareOpen: open }),
 }));

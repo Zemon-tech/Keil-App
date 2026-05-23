@@ -295,6 +295,12 @@ export function useUpdateMotionPage(
         motionPageKeys.lists(orgId, spaceId),
         (old) => old?.map((p) => (p.id === serverPage.id ? serverPage : p))
       );
+      // Invalidate motion-analytics query keys to trigger fresh updates reload in the drawer
+      // Keys are structured as ["motion-analytics", orgId, spaceId, pageId, ...] so we must
+      // include orgId + spaceId in the prefix for the match to work correctly.
+      queryClient.invalidateQueries({
+        queryKey: ["motion-analytics", orgId, spaceId, serverPage.id],
+      });
     },
     onError: (_err, { id }, context) => {
       // Roll back optimistic updates on failure
