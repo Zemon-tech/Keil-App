@@ -215,19 +215,21 @@ function getTextBeforeCursorInParent(editor: NonNullable<ReturnType<typeof useEd
   return $from.parent.textBetween(0, $from.parentOffset, "\n")
 }
 
-function selectionSpansMultipleBlocks(state: EditorState) {
-  const { selection } = state
-  if (selection.empty) return false
-
+function rangeSpansMultipleBlocks(doc: any, from: number, to: number) {
   let blockCount = 0
-  state.doc.nodesBetween(selection.from, selection.to, (node) => {
+  doc.nodesBetween(from, to, (node: any) => {
     if (node.isBlock) {
       blockCount++
     }
     return blockCount <= 1
   })
-
   return blockCount > 1
+}
+
+function selectionSpansMultipleBlocks(state: EditorState) {
+  const { selection } = state
+  if (selection.empty) return false
+  return rangeSpansMultipleBlocks(state.doc, selection.from, selection.to)
 }
 
 export function SimpleEditor({
@@ -1343,12 +1345,7 @@ export function SimpleEditor({
     console.log("Duplicating block at", target)
     const { from, to } = target
 
-    let blockCount = 0
-    editor.state.doc.nodesBetween(from, to, (node) => {
-      if (node.isBlock) blockCount++
-      return blockCount <= 1
-    })
-    const isMultiBlock = blockCount > 1
+    const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, from, to)
 
     if (isMultiBlock) {
       const slice = editor.state.doc.slice(from, to)
@@ -1408,12 +1405,7 @@ export function SimpleEditor({
     if (!editor || !blockMenu?.target) return
     const target = blockMenu.target
 
-    let blockCount = 0
-    editor.state.doc.nodesBetween(target.from, target.to, (node) => {
-      if (node.isBlock) blockCount++
-      return blockCount <= 1
-    })
-    const isMultiBlock = blockCount > 1
+    const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, target.from, target.to)
 
     let contentJSON: any
     if (isMultiBlock) {
@@ -1960,12 +1952,7 @@ export function SimpleEditor({
                       if (blockMenu?.target && editor) {
                         const { from, to } = blockMenu.target;
                         
-                        let blockCount = 0
-                        editor.state.doc.nodesBetween(from, to, (node) => {
-                          if (node.isBlock) blockCount++
-                          return blockCount <= 1
-                        })
-                        const isMultiBlock = blockCount > 1
+                        const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, from, to)
 
                         if (isMultiBlock) {
                           editor.chain()
@@ -2011,12 +1998,7 @@ export function SimpleEditor({
                       if (blockMenu?.target && editor) {
                         const { from, to } = blockMenu.target;
                         
-                        let blockCount = 0
-                        editor.state.doc.nodesBetween(from, to, (node) => {
-                          if (node.isBlock) blockCount++
-                          return blockCount <= 1
-                        })
-                        const isMultiBlock = blockCount > 1
+                        const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, from, to)
 
                         if (isMultiBlock) {
                           editor.chain()
