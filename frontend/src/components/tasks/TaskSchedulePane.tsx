@@ -63,7 +63,7 @@ import { EventPreviewDialog } from "./EventPreviewDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
-import { blockTypeThemeMap, getThemeForTask } from "@/lib/calendarTheme";
+import { getThemeForTask } from "@/lib/calendarTheme";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 
 type Props = {
