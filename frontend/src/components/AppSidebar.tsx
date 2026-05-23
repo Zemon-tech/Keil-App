@@ -41,7 +41,6 @@ import {
   MessageSquare,
   CheckSquare,
   Plus,
-  Bell,
   Loader2,
   Image,
   Building2,
@@ -51,7 +50,6 @@ import {
   FileText,
   Puzzle,
   Users,
-  LifeBuoy,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
