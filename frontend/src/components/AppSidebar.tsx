@@ -46,10 +46,6 @@ import {
   Building2,
   Mic,
   Search,
-  BarChart3,
-  FileText,
-  Puzzle,
-  Users,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -71,11 +67,7 @@ const navigationItems = [
   { title: "Motion", url: "/motion", icon: Image },
 ];
 
-const secondaryItems = [
-  { title: "Analytics", icon: BarChart3 },
-  { title: "Reports", icon: FileText, badge: "New" },
-  { title: "Extensions", icon: Puzzle },
-];
+
 
 // ─── OrgSpaceSubmenu ──────────────────────────────────────────────────────────
 // Lazy-loads spaces only when the submenu is opened.
@@ -262,9 +254,7 @@ export function AppSidebar() {
   const visibleNavigationItems = navigationItems.filter((item) =>
     item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
-  const visibleSecondaryItems = secondaryItems.filter((item) =>
-    item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
+
 
   const isRouteActive = (url: string) => {
     if (url === "/") {
@@ -381,58 +371,12 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
 
-          <SidebarGroup className="mt-2 border-t border-border/50 p-0 pt-2">
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-1">
-                {visibleSecondaryItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      tooltip={item.title}
-                      className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                    {item.badge && (
-                      <SidebarMenuBadge className="right-2 top-2 rounded-full bg-background px-2 text-[11px] text-foreground shadow-sm ring-1 ring-border/60">
-                        {item.badge}
-                      </SidebarMenuBadge>
-                    )}
-                  </SidebarMenuItem>
-                ))}
 
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="Companies"
-                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <Building2 />
-                    <span>Companies</span>
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                    {organisations.length}
-                  </SidebarMenuBadge>
-                </SidebarMenuItem>
-
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    tooltip="People"
-                    className="h-9 rounded-xl px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <Users />
-                    <span>People</span>
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                    164
-                  </SidebarMenuBadge>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
         </SidebarContent>
 
         {/* ── Footer: profile dropdown ── */}
