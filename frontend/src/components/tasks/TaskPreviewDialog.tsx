@@ -1,24 +1,17 @@
 // src/components/tasks/TaskPreviewDialog.tsx
 //
-// Read-only task preview dialog — opened when a user clicks a #task-name
-// mention in the Activity tab or calendar. Shows a highly compact, scannable
-// preview of the task. The entire card is clickable and navigates to the full task.
+// Task preview dialog — opened when a user clicks a task event in the schedule or calendar.
+// Shows a premium card preview of the task matching the wireframe.
+// Clicking on the card background navigates to the full task.
 
 import { useState } from "react";
 import { format, isSameDay } from "date-fns";
 import { 
   X, 
-  Pencil, 
-  Trash2, 
   MoreHorizontal, 
-  Clock, 
   MapPin, 
-  Users, 
-  Calendar, 
-  Phone, 
-  Brain, 
-  CheckSquare,
-  Loader2
+  Loader2,
+  ChevronDown
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -28,10 +21,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -48,8 +37,8 @@ import {
   useChangeOrgTaskStatus 
 } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
-import { STATUS_COLOR } from "./task-detail-shared";
 import type { TaskStatus } from "@/types/task";
+import { CreateTaskDialog } from "./CreateTaskDialog";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -84,18 +73,11 @@ function formatTimeCompact(startISO?: string | null, endISO?: string | null, isA
   return `${dateStr} · ${timeStart}`;
 }
 
-const getEventIcon = (type?: string | null, eventType?: string | null) => {
-  if (type === "task") return <CheckSquare className="w-4 h-4 text-primary shrink-0" />;
-  switch (eventType) {
-    case "meeting":
-      return <Users className="w-4 h-4 text-muted-foreground shrink-0" />;
-    case "call":
-      return <Phone className="w-4 h-4 text-muted-foreground shrink-0" />;
-    case "focus":
-      return <Brain className="w-4 h-4 text-muted-foreground shrink-0" />;
-    default:
-      return <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />;
-  }
+const statusColors: Record<string, string> = {
+  todo: "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20 dark:bg-purple-500/15 dark:text-purple-300",
+  "in-progress": "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 dark:bg-blue-500/15 dark:text-blue-300",
+  done: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-300",
+  backlog: "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 dark:bg-red-500/15 dark:text-red-300",
 };
 
 // ─── TaskPreviewDialog ────────────────────────────────────────────────────────
@@ -116,6 +98,7 @@ export function TaskPreviewDialog({
   const changeTaskStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
 
   const [descExpanded, setDescExpanded] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const handleNavigateToTask = () => {
     onOpenChange(false);
@@ -144,13 +127,13 @@ export function TaskPreviewDialog({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/5"
+        className="fixed inset-0 z-50 bg-black/5 backdrop-blur-[0.5px]"
         onClick={() => onOpenChange(false)}
       />
 
       {/* Dialog content with absolute positioning */}
       <div
-        className="fixed z-50 max-w-[340px] w-full bg-background rounded-xl border shadow-xl flex group cursor-pointer hover:shadow-2xl transition-all duration-200 overflow-hidden"
+        className="fixed z-50 max-w-[400px] w-full bg-card text-card-foreground rounded-xl border border-border shadow-lg flex flex-col p-3.5 gap-3 group cursor-pointer hover:shadow-xl transition-all duration-200 overflow-hidden"
         style={{
           left: position?.x ?? '50%',
           top: position?.y ?? '50%',
@@ -158,15 +141,7 @@ export function TaskPreviewDialog({
         }}
         onClick={handleNavigateToTask}
       >
-        {/* Left colored border for status indication */}
-        <div 
-          className={cn(
-            "w-1.5 shrink-0 transition-colors", 
-            task ? STATUS_COLOR[task.status as TaskStatus] : "bg-border"
-          )} 
-        />
-        
-        <div className="flex-1 flex flex-col p-4 gap-3 relative min-h-[120px]">
+        <div className="flex-1 flex flex-col gap-2.5">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-6 h-full text-muted-foreground gap-2">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -174,179 +149,221 @@ export function TaskPreviewDialog({
             </div>
           ) : task ? (
             <>
-              {/* TOP RIGHT ACTIONS */}
-              <div className="absolute top-2 right-2 flex items-center gap-0.5">
-                {/* Actions that fade in on hover */}
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity mr-1">
-                  <TooltipProvider>
-                    <Tooltip delayDuration={300}>
-                      <TooltipTrigger asChild>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleNavigateToTask(); }} 
-                          className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Edit</TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip delayDuration={300}>
-                      <TooltipTrigger asChild>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleDelete(); }} 
-                          className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Delete</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-
+              {/* TOP ROW: Title, Mark Done, Actions */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <h3 className="font-semibold text-[15px] leading-tight text-foreground truncate max-w-[150px] sm:max-w-[180px]" title={task.title}>
+                    {task.title || "Untitled task"}
+                  </h3>
+                  {/* Mark Done Pill Button */}
+                  {task.status !== "done" && task.status !== "completed" ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        changeTaskStatus.mutate({ id: taskId, status: "done" as TaskStatus });
+                        onStatusChange?.(taskId, "done");
+                      }}
+                      className="px-2.5 py-0.5 text-[10px] font-medium border border-border/80 hover:border-foreground/40 rounded-full text-muted-foreground hover:text-foreground transition-all duration-200 shrink-0"
+                    >
+                      mark done
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        changeTaskStatus.mutate({ id: taskId, status: "todo" as TaskStatus });
+                        onStatusChange?.(taskId, "todo");
+                      }}
+                      className="px-2.5 py-0.5 text-[10px] font-semibold border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-full transition-all duration-200 shrink-0 flex items-center gap-0.5"
+                    >
+                      <span>✓ done</span>
+                    </button>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {/* 3-dot Menu */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button 
-                        onClick={(e) => e.stopPropagation()} 
-                        className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                        className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        <MoreHorizontal className="w-3.5 h-3.5" />
+                        <MoreHorizontal className="w-4 h-4" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleNavigateToTask}>
+                        View details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
+                        Edit
+                      </DropdownMenuItem>
                       {(task.start_date || task.due_date) && (
                         <DropdownMenuItem onClick={handleUnschedule}>
                           Unschedule
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
-                        <DropdownMenuPortal>
-                          <DropdownMenuSubContent>
-                            {["todo", "in-progress", "done", "backlog"].map((s) => (
-                              <DropdownMenuItem key={s} onClick={() => {
-                                changeTaskStatus.mutate({ id: taskId, status: s as TaskStatus });
-                                onStatusChange?.(taskId, s);
-                              }}>
-                                <span className="capitalize">{s.replace("-", " ")}</span>
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuPortal>
-                      </DropdownMenuSub>
+                      <DropdownMenuItem 
+                        onClick={handleDelete}
+                        className="text-red-500 focus:text-red-500"
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Close always visible */}
+                  <button 
+                    onClick={() => onOpenChange(false)} 
+                    className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* MIDDLE ROW: Description */}
+              {(task.description || task.objective || task.location) && (
+                <div 
+                  className="flex-1 py-0.5"
+                  onClick={(e) => {
+                    const content = task.description || task.objective || "";
+                    if (content.length > 120) {
+                      e.stopPropagation();
+                      setDescExpanded(!descExpanded);
+                    }
+                  }}
+                >
+                  {(task.description || task.objective) && (
+                    <p className={cn(
+                      "text-xs sm:text-sm text-foreground/80 leading-relaxed font-normal transition-all",
+                      !descExpanded ? "line-clamp-3" : "line-clamp-none"
+                    )}>
+                      {task.description || task.objective}
+                    </p>
+                  )}
+                  {task.location && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                      <MapPin className="w-3 h-3 shrink-0 text-muted-foreground/75" />
+                      <span className="truncate">{task.location}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* BOTTOM ROW: Assignees, Status, Timings */}
+              <div className="grid grid-cols-3 items-center gap-3 pt-2.5 border-t border-border/40 mt-0.5">
+                {/* Assignees */}
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Assignees</span>
+                  {task.assignees && task.assignees.length > 0 ? (
+                    <div className="flex items-center -space-x-1.5 overflow-hidden py-0.5" onClick={(e) => e.stopPropagation()}>
+                      {task.assignees.slice(0, 3).map(a => (
+                        <TooltipProvider key={a.id}>
+                          <Tooltip delayDuration={200}>
+                            <TooltipTrigger asChild>
+                              <Avatar className="w-5 h-5 border-[1.5px] border-background relative hover:z-10 hover:scale-105 transition-all">
+                                <AvatarFallback className="text-[8px] bg-primary/10 text-primary font-semibold">
+                                  {a.name?.charAt(0) || a.email.charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                              {a.name || a.email}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ))}
+                      {task.assignees.length > 3 && (
+                        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-semibold border-[1.5px] border-background relative z-10 text-muted-foreground">
+                          +{task.assignees.length - 3}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground/50 italic">Unassigned</span>
+                  )}
+                </div>
+
+                {/* Status Dropdown */}
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className={cn(
+                          "flex items-center justify-between px-2 py-0.5 h-6 text-[10px] font-medium rounded-md border text-left cursor-pointer transition-all duration-200 capitalize w-full",
+                          statusColors[task.status] || "bg-zinc-500/10 text-zinc-400 border-zinc-500/20 hover:bg-zinc-500/20"
+                        )}
+                      >
+                        <span className="truncate">{task.status.replace("-", " ")}</span>
+                        <ChevronDown className="w-3 h-3 shrink-0 ml-0.5 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+                      {["todo", "in-progress", "done", "backlog"].map((s) => (
+                        <DropdownMenuItem 
+                          key={s} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            changeTaskStatus.mutate({ id: taskId, status: s as TaskStatus });
+                            onStatusChange?.(taskId, s);
+                          }}
+                          className="capitalize text-xs cursor-pointer"
+                        >
+                          {s.replace("-", " ")}
+                        </DropdownMenuItem>
+                      ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
 
-                {/* Close always visible */}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onOpenChange(false); }} 
-                  className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                {/* Timings */}
+                <div className="flex flex-col gap-0.5 min-w-0 text-right">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Timings</span>
+                  <span 
+                    className="text-[11px] text-foreground/80 font-medium truncate" 
+                    title={task.start_date ? formatTimeCompact(task.start_date, task.due_date, task.is_all_day) || undefined : undefined}
+                  >
+                    {task.start_date ? (
+                      formatTimeCompact(task.start_date, task.due_date, task.is_all_day)
+                    ) : (
+                      <span className="text-muted-foreground/50 italic">Unscheduled</span>
+                    )}
+                  </span>
+                </div>
               </div>
-
-              {/* 1. TITLE & EVENT TYPE */}
-              <div className="flex items-start gap-2 pr-20">
-                <div className="mt-0.5">
-                  {getEventIcon(task.type, task.event_type)}
-                </div>
-                <h3 className="font-semibold text-[15px] leading-tight text-foreground line-clamp-2">
-                  {task.title || "Untitled task"}
-                  {task.status === "backlog" && (
-                    <span className="ml-2 text-red-600 font-bold whitespace-nowrap">Backlog</span>
-                  )}
-                </h3>
-              </div>
-
-              {/* 2. TIME */}
-              {task.start_date && (
-                <div className="flex items-center gap-2 text-[13px] text-foreground/80 font-medium">
-                  <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <span>{formatTimeCompact(task.start_date, task.due_date, task.is_all_day)}</span>
-                </div>
-              )}
-
-              {/* 3. ASSIGNED PEOPLE */}
-              {task.assignees && task.assignees.length > 0 && (
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  
-                  {task.assignees.length === 1 ? (
-                    <span className="text-xs text-muted-foreground truncate">
-                      {task.assignees[0].name || task.assignees[0].email}
-                    </span>
-                  ) : (
-                    <TooltipProvider>
-                      <Tooltip delayDuration={200}>
-                        <TooltipTrigger asChild>
-                          <div 
-                            className="flex items-center -space-x-1.5 hover:space-x-0 transition-all duration-200"
-                            onClick={(e) => e.stopPropagation()} // Prevent card click when interacting with avatars
-                          >
-                            {task.assignees.slice(0, 3).map(a => (
-                              <Avatar key={a.id} className="w-5 h-5 border-[1.5px] border-background relative hover:z-10 transition-all">
-                                <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
-                                  {a.name?.charAt(0) || a.email.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {task.assignees.length > 3 && (
-                              <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-medium border-[1.5px] border-background relative z-10">
-                                +{task.assignees.length - 3}
-                              </div>
-                            )}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent className="flex flex-col gap-1 p-2" side="bottom">
-                          {task.assignees.map(a => (
-                            <div key={a.id} className="text-xs">{a.name || a.email}</div>
-                          ))}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </div>
-              )}
-
-              {/* 4. DESCRIPTION */}
-              {(task.description || task.objective) && (
-                <div 
-                  className="mt-0.5" 
-                  onClick={(e) => { 
-                    const content = task.description || task.objective || "";
-                    if (content.length > 80) {
-                      e.stopPropagation(); 
-                      setDescExpanded(!descExpanded); 
-                    }
-                  }}
-                >
-                  <p className={cn(
-                    "text-xs text-muted-foreground leading-relaxed transition-all",
-                    !descExpanded && "line-clamp-2"
-                  )}>
-                    {(task.description || task.objective)?.replace(/^•\s*/gm, "")}
-                  </p>
-                </div>
-              )}
-
-              {/* 5. LOCATION */}
-              {task.location && (
-                <div className="flex items-start gap-2 text-xs text-muted-foreground/80 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                  <span className="truncate">{task.location}</span>
-                </div>
-              )}
             </>
           ) : (
-            <div className="flex items-center justify-center py-6 h-full">
+            <div className="flex items-center justify-center py-8 h-full">
               <p className="text-sm text-muted-foreground">Task not found.</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Edit Task Dialog */}
+      {task && (
+        <CreateTaskDialog
+          open={editDialogOpen}
+          onOpenChange={(isOpen) => {
+            setEditDialogOpen(isOpen);
+            if (!isOpen) {
+              onOpenChange(false);
+            }
+          }}
+          mode="edit"
+          taskId={taskId}
+          initialValues={task}
+          onTaskUpdated={() => {
+            setEditDialogOpen(false);
+            onOpenChange(false);
+          }}
+        />
+      )}
     </>
   );
 }
+
 
