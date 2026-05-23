@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, isSameDay, isSameMonth, isSameYear } from "date-fns";
 import { Draggable } from "@fullcalendar/interaction";
-import { Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User, AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil } from "lucide-react";
+import {
+  Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User,
+  AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil,
+  SlidersHorizontal, CalendarClock, UserCheck,
+  CalendarRange, ShieldAlert, Check,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
@@ -101,11 +99,29 @@ function formatTaskDateRange(start?: string, end?: string) {
 
 // Using STATUS_COLOR from task-detail-shared
 
-const SORT_OPTIONS: { value: SortBy; label: string }[] = [
-  { value: "created_at", label: "Created" },
-  { value: "due_date", label: "Due Date" },
-  { value: "priority", label: "Priority" },
-];
+// ── Filter state types ────────────────────────────────────────────────────────
+
+type TypeFilter = "all" | "tasks" | "events" | "blocked";
+type PriorityFilter = "all" | "urgent" | "high" | "medium" | "low";
+type SortPreset = "due-soon" | "due-latest" | "highest-priority" | "recently-created" | "oldest-created";
+type QuickPreset = "focus" | "urgent" | "meetings" | "assigned-to-me" | "upcoming" | "blocked";
+
+// Maps a SortPreset to the SortBy + SortOrder the parent expects
+const SORT_PRESET_MAP: Record<SortPreset, { by: SortBy; order: SortOrder }> = {
+  "due-soon":          { by: "due_date",   order: "asc"  },
+  "due-latest":        { by: "due_date",   order: "desc" },
+  "highest-priority":  { by: "priority",   order: "desc" },
+  "recently-created":  { by: "created_at", order: "desc" },
+  "oldest-created":    { by: "created_at", order: "asc"  },
+};
+
+const SORT_PRESET_LABELS: Record<SortPreset, string> = {
+  "due-soon":         "Due Soon",
+  "due-latest":       "Due Latest",
+  "highest-priority": "Highest Priority",
+  "recently-created": "Recently Created",
+  "oldest-created":   "Oldest Created",
+};
 
 /** Inline component to fetch & render subtasks when expanded */
 function SubtaskList({
@@ -278,11 +294,83 @@ export function TaskListPane({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Unified filter panel state
+  const [mineOnly, setMineOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
+  const [sortPreset, setSortPreset] = useState<SortPreset>("due-soon");
+  const [activeQuickPresets, setActiveQuickPresets] = useState<Set<QuickPreset>>(new Set());
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("all");
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");
 
   const { activeOrgId, activeSpace, organisations } = useAppContext();
   const { data: spacesForFilter = [] } = useSpaces(orgFilter !== "all" ? orgFilter : null);
 
   const { canCreateTask } = useSpaceRole();
+
+  // Sync internal filter state → parent props
+  useEffect(() => {
+    // Type → statusFilter
+    if (typeFilter === "tasks") onStatusFilterChange("Task");
+    else if (typeFilter === "events") onStatusFilterChange("Event");
+    else if (typeFilter === "blocked") onStatusFilterChange("Blocked");
+    else if (mineOnly) onStatusFilterChange("Mine");
+    else onStatusFilterChange("All");
+  }, [typeFilter, mineOnly]);
+
+  useEffect(() => {
+    // Sort preset → parent sortBy + sortOrder
+    const { by, order } = SORT_PRESET_MAP[sortPreset];
+    onSortChange(by, order);
+  }, [sortPreset]);
+
+  useEffect(() => {
+    // Org/space → parent
+    onOrgFilterChange?.(selectedOrgId);
+  }, [selectedOrgId]);
+
+  useEffect(() => {
+    onSpaceFilterChange?.(selectedSpaceId);
+  }, [selectedSpaceId]);
+
+  // Spaces for selected org
+  const { data: orgSpaces = [] } = useSpaces(selectedOrgId !== "all" ? selectedOrgId : null);
+
+  // Active filter chips for the "active filters" strip
+  const activeFilterChips = useMemo(() => {
+    const chips: { label: string; onRemove: () => void }[] = [];
+    if (mineOnly) chips.push({ label: "Mine", onRemove: () => setMineOnly(false) });
+    if (typeFilter !== "all") chips.push({ label: typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1), onRemove: () => setTypeFilter("all") });
+    if (priorityFilter !== "all") chips.push({ label: priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1) + " Priority", onRemove: () => setPriorityFilter("all") });
+    if (selectedOrgId !== "all") {
+      const org = organisations.find(o => o.id === selectedOrgId);
+      chips.push({ label: org?.name ?? "Workspace", onRemove: () => { setSelectedOrgId("all"); setSelectedSpaceId("all"); } });
+    }
+    if (selectedSpaceId !== "all") {
+      const sp = orgSpaces.find(s => s.id === selectedSpaceId);
+      chips.push({ label: sp?.name ?? "Space", onRemove: () => setSelectedSpaceId("all") });
+    }
+    activeQuickPresets.forEach(p => {
+      const labels: Record<QuickPreset, string> = {
+        focus: "Focus", urgent: "Urgent", meetings: "Meetings",
+        "assigned-to-me": "Assigned to Me", upcoming: "Upcoming", blocked: "Blocked",
+      };
+      chips.push({ label: labels[p], onRemove: () => {
+        const next = new Set(activeQuickPresets);
+        next.delete(p);
+        setActiveQuickPresets(next);
+      }});
+    });
+    return chips;
+  }, [mineOnly, typeFilter, priorityFilter, selectedOrgId, selectedSpaceId, activeQuickPresets, organisations, orgSpaces]);
+
+  const toggleQuickPreset = (p: QuickPreset) => {
+    const next = new Set(activeQuickPresets);
+    if (next.has(p)) next.delete(p); else next.add(p);
+    setActiveQuickPresets(next);
+  };
 
   // Toggle subtask expansion for a task
   const toggleExpanded = (e: React.MouseEvent, taskId: string) => {
@@ -445,8 +533,9 @@ export function TaskListPane({
     <div className="h-full min-h-0 flex flex-col w-full relative overflow-hidden">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="px-3 pt-3 pb-2 border-b border-border/60 shrink-0">
-        {/* Title row */}
-        <div className="flex items-center justify-between gap-2 min-h-[28px]">
+
+        {/* Top bar: Mine/All toggle + icons */}
+        <div className="flex items-center justify-between gap-2 min-h-[32px]">
           {isSearchOpen ? (
             <div className="relative flex-1 animate-in fade-in slide-in-from-right-2 duration-200">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -454,47 +543,231 @@ export function TaskListPane({
                 autoFocus
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
-                placeholder="Search tasks, projects…"
+                placeholder="Search tasks…"
                 className="pl-8 pr-8 h-8 text-xs rounded-md w-full"
-                onBlur={(e) => {
-                  if (!e.target.value) setIsSearchOpen(false);
-                }}
+                onBlur={(e) => { if (!e.target.value) setIsSearchOpen(false); }}
               />
               <Button
-                variant="ghost"
-                size="sm"
+                variant="ghost" size="sm"
                 className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
-                onClick={() => {
-                  onQueryChange("");
-                  setIsSearchOpen(false);
-                }}
+                onClick={() => { onQueryChange(""); setIsSearchOpen(false); }}
               >
                 <X className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </div>
           ) : (
             <>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold leading-tight truncate">
-                  Pick a task to focus
-                </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0 shrink-0 rounded-md"
-                  onClick={() => setIsSearchOpen(true)}
+              {/* Mine / All pill toggle */}
+              <div className="flex bg-muted/40 rounded-lg p-0.5 gap-0.5">
+                <button
+                  onClick={() => setMineOnly(false)}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                    !mineOnly ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
                 >
+                  All
+                </button>
+                <button
+                  onClick={() => setMineOnly(true)}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                    mineOnly ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Mine
+                </button>
+              </div>
+
+              {/* Icon actions */}
+              <div className="flex items-center gap-0.5 shrink-0">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 rounded-md"
+                  onClick={() => setIsSearchOpen(true)}>
                   <Search className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
+
+                {/* ── Filter dropdown menu ── */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="ghost"
+                      className={cn("h-7 w-7 p-0 rounded-md relative",
+                        activeFilterChips.length > 0 && "bg-muted"
+                      )}>
+                      <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                      {activeFilterChips.length > 0 && (
+                        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-xl">
+
+                    {/* Type */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-xs gap-2">
+                        <span className="w-3.5 h-3.5 flex items-center justify-center text-muted-foreground">
+                          <ChevronRight className="h-3 w-3" />
+                        </span>
+                        Type
+                        {typeFilter !== "all" && (
+                          <span className="ml-auto text-[10px] text-primary font-medium capitalize">{typeFilter}</span>
+                        )}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-40 rounded-xl">
+                        {(["all", "tasks", "events", "blocked"] as TypeFilter[]).map(t => (
+                          <DropdownMenuItem key={t} className="text-xs capitalize gap-2"
+                            onClick={() => setTypeFilter(t)}>
+                            {typeFilter === t && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            <span className={typeFilter === t ? "ml-0" : "ml-5"}>
+                              {t === "all" ? "All" : t.charAt(0).toUpperCase() + t.slice(1)}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
+                    {/* Priority */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-xs gap-2">
+                        <Flag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        Priority
+                        {priorityFilter !== "all" && (
+                          <span className="ml-auto text-[10px] text-primary font-medium capitalize">{priorityFilter}</span>
+                        )}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-40 rounded-xl">
+                        {(["all", "urgent", "high", "medium", "low"] as PriorityFilter[]).map(p => (
+                          <DropdownMenuItem key={p} className="text-xs capitalize gap-2"
+                            onClick={() => setPriorityFilter(p)}>
+                            {priorityFilter === p && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            <span className={priorityFilter === p ? "ml-0" : "ml-5"}>
+                              {p === "all" ? "Any" : p.charAt(0).toUpperCase() + p.slice(1)}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
+                    {/* Sort */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-xs gap-2">
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        Sort
+                        <span className="ml-auto text-[10px] text-primary font-medium truncate max-w-[60px]">
+                          {SORT_PRESET_LABELS[sortPreset].split(" ").slice(0, 2).join(" ")}
+                        </span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-44 rounded-xl">
+                        {(Object.keys(SORT_PRESET_LABELS) as SortPreset[]).map(p => (
+                          <DropdownMenuItem key={p} className="text-xs gap-2"
+                            onClick={() => setSortPreset(p)}>
+                            {sortPreset === p && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            <span className={sortPreset === p ? "ml-0" : "ml-5"}>
+                              {SORT_PRESET_LABELS[p]}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
+                    {/* Quick Filters */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-xs gap-2">
+                        <Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        Quick Filters
+                        {activeQuickPresets.size > 0 && (
+                          <span className="ml-auto text-[10px] text-primary font-medium">{activeQuickPresets.size} on</span>
+                        )}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-44 rounded-xl">
+                        {([
+                          { id: "focus",          label: "Focus",          icon: Zap },
+                          { id: "urgent",         label: "Urgent",         icon: ShieldAlert },
+                          { id: "meetings",       label: "Meetings",       icon: CalendarClock },
+                          { id: "assigned-to-me", label: "Assigned to Me", icon: UserCheck },
+                          { id: "upcoming",       label: "Upcoming",       icon: CalendarRange },
+                          { id: "blocked",        label: "Blocked",        icon: ShieldAlert },
+                        ] as { id: QuickPreset; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
+                          <DropdownMenuItem key={id} className="text-xs gap-2"
+                            onClick={(e) => { e.preventDefault(); toggleQuickPreset(id); }}>
+                            {activeQuickPresets.has(id)
+                              ? <Check className="h-3 w-3 text-primary shrink-0" />
+                              : <Icon className="h-3 w-3 text-muted-foreground shrink-0" />
+                            }
+                            {label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
+                    {/* Workspace */}
+                    {(activeSpace?.is_private || organisations.length > 1) && (
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className="text-xs gap-2">
+                          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          Workspace
+                          {selectedOrgId !== "all" && (
+                            <span className="ml-auto text-[10px] text-primary font-medium truncate max-w-[50px]">
+                              {organisations.find(o => o.id === selectedOrgId)?.name ?? ""}
+                            </span>
+                          )}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-48 rounded-xl">
+                          <DropdownMenuItem className="text-xs gap-2"
+                            onClick={() => { setSelectedOrgId("all"); setSelectedSpaceId("all"); }}>
+                            {selectedOrgId === "all" && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            <span className={selectedOrgId === "all" ? "ml-0" : "ml-5"}>All workspaces</span>
+                          </DropdownMenuItem>
+                          {organisations.map(org => (
+                            <DropdownMenuItem key={org.id} className="text-xs gap-2"
+                              onClick={() => { setSelectedOrgId(org.id); setSelectedSpaceId("all"); }}>
+                              {selectedOrgId === org.id && <Check className="h-3 w-3 text-primary shrink-0" />}
+                              <span className={selectedOrgId === org.id ? "ml-0" : "ml-5 truncate"}>
+                                {org.name}{org.is_personal ? " (Personal)" : ""}
+                              </span>
+                            </DropdownMenuItem>
+                          ))}
+                          {selectedOrgId !== "all" && orgSpaces.length > 0 && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-xs gap-2"
+                                onClick={() => setSelectedSpaceId("all")}>
+                                {selectedSpaceId === "all" && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                <span className={selectedSpaceId === "all" ? "ml-0" : "ml-5"}>All spaces</span>
+                              </DropdownMenuItem>
+                              {orgSpaces.map(sp => (
+                                <DropdownMenuItem key={sp.id} className="text-xs gap-2"
+                                  onClick={() => setSelectedSpaceId(sp.id)}>
+                                  {selectedSpaceId === sp.id && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                  <span className={selectedSpaceId === sp.id ? "ml-0" : "ml-5 truncate"}>{sp.name}</span>
+                                </DropdownMenuItem>
+                              ))}
+                            </>
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    )}
+
+                    {/* Clear all */}
+                    {activeFilterChips.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-xs text-muted-foreground"
+                          onClick={() => {
+                            setTypeFilter("all"); setPriorityFilter("all");
+                            setSelectedOrgId("all"); setSelectedSpaceId("all");
+                            setActiveQuickPresets(new Set()); setMineOnly(false);
+                          }}>
+                          <X className="h-3 w-3 mr-2" />
+                          Clear all filters
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 {canCreateTask && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0 shrink-0 rounded-md"
-                    onClick={() => onCreateDialogOpenChange(true)}
-                  >
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 rounded-md"
+                    onClick={() => onCreateDialogOpenChange(true)}>
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
                 )}
@@ -503,136 +776,30 @@ export function TaskListPane({
           )}
         </div>
 
-        {/* Filters & Sort row */}
-        <div className="flex items-center gap-1.5 mt-2.5 pb-0.5">
-          {/* Status Filter Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors justify-start font-normal capitalize">
-                {statusFilter || "Filter"}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => onStatusFilterChange("All")}>All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStatusFilterChange("Mine")}>Mine</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <div className="flex items-center w-full px-1 py-0.5">
-                  <DropdownMenuItem 
-                    className="flex-1 rounded-r-none focus:bg-accent cursor-pointer"
-                    onClick={() => onStatusFilterChange("Task")}
-                  >
-                    Task
-                  </DropdownMenuItem>
-                  <DropdownMenuSubTrigger 
-                    className="w-8 h-8 p-0 rounded-l-none border-l border-border/40 justify-center focus:bg-accent data-[state=open]:bg-accent [&>svg]:ml-0"
-                  />
-                </div>
-                <DropdownMenuSubContent>
-                  {TASK_STATUS_OPTIONS.map(s => (
-                    <DropdownMenuItem key={s} onClick={() => onStatusFilterChange(s)} className="capitalize">
-                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0 mr-2", STATUS_COLOR[s])} />
-                      {s}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              <DropdownMenuSub>
-                <div className="flex items-center w-full px-1 py-0.5">
-                  <DropdownMenuItem 
-                    className="flex-1 rounded-r-none focus:bg-accent cursor-pointer"
-                    onClick={() => onStatusFilterChange("Event")}
-                  >
-                    Event
-                  </DropdownMenuItem>
-                  <DropdownMenuSubTrigger 
-                    className="w-8 h-8 p-0 rounded-l-none border-l border-border/40 justify-center focus:bg-accent data-[state=open]:bg-accent [&>svg]:ml-0"
-                  />
-                </div>
-                <DropdownMenuSubContent>
-                  {EVENT_STATUS_OPTIONS.map(s => (
-                    <DropdownMenuItem key={s} onClick={() => onStatusFilterChange(s)} className="capitalize">
-                      <div className={cn("w-1.5 h-1.5 rounded-full shrink-0 mr-2", STATUS_COLOR[s])} />
-                      {s}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onStatusFilterChange("Blocked")}>Blocked</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStatusFilterChange("Highest Priority")}>Highest Priority</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Sort By Dropdown */}
-          <Select
-            value={sortBy}
-            onValueChange={(v) => onSortChange(v as SortBy, sortOrder)}
-          >
-            <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              {SORT_OPTIONS.map(({ value, label }) => (
-                <SelectItem key={value} value={value} className="text-xs">
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Sort Order Dropdown */}
-          <Select
-            value={sortOrder}
-            onValueChange={(v) => onSortChange(sortBy, v as SortOrder)}
-          >
-            <SelectTrigger className="h-7 w-[72px] shrink-0 text-[11px] rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="desc" className="text-xs">Desc</SelectItem>
-              <SelectItem value="asc" className="text-xs">Asc</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Organisation & Space selectors (only when viewing private space) */}
-        {activeSpace?.is_private && (
-          <div className="flex items-center gap-1.5 mt-2 pb-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
-            {/* Organisation Filter */}
-            <Select value={orgFilter} onValueChange={onOrgFilterChange}>
-              <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
-                <SelectValue placeholder="All Workspaces" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-xs">All Workspaces</SelectItem>
-                {organisations.map((org) => (
-                  <SelectItem key={org.id} value={org.id} className="text-xs">
-                    {org.name} {org.is_personal ? "(Personal)" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Space Filter */}
-            <Select 
-              value={spaceFilter} 
-              onValueChange={onSpaceFilterChange}
-              disabled={orgFilter === "all"}
+        {/* Active filter chips strip */}
+        {activeFilterChips.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2 animate-in fade-in duration-150">
+            {activeFilterChips.map(chip => (
+              <span
+                key={chip.label}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary border border-primary/20"
+              >
+                {chip.label}
+                <button onClick={chip.onRemove} className="hover:text-primary/60 transition-colors">
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={() => {
+                setTypeFilter("all"); setPriorityFilter("all");
+                setSelectedOrgId("all"); setSelectedSpaceId("all");
+                setActiveQuickPresets(new Set()); setMineOnly(false);
+              }}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1"
             >
-              <SelectTrigger className="h-7 text-[11px] flex-1 overflow-hidden min-w-0 rounded-md border-border/60 bg-muted/20 px-2.5 hover:bg-muted/50 transition-colors [&>span]:truncate">
-                <SelectValue placeholder="All Spaces" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-xs">All Spaces</SelectItem>
-                {spacesForFilter.map((sp) => (
-                  <SelectItem key={sp.id} value={sp.id} className="text-xs">
-                    {sp.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              Clear all
+            </button>
           </div>
         )}
       </div>
