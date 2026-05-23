@@ -26,6 +26,7 @@ import { useLocation } from "react-router-dom";
 import { useChatStore } from "@/store/useChatStore";
 import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
+import { StitchUpdateDialog } from "./StitchUpdateDialog";
 
 type LayoutProps = {
   children: ReactNode;
@@ -123,6 +124,9 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
       {/* Global Socket Manager for Chat */}
       <ChatSocketManager />
       <Toaster />
+
+      {/* Stitch AI feature announcement — shows once per session */}
+      <StitchUpdateDialog />
     </SidebarProvider>
   );
 }
