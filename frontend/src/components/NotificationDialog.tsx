@@ -8,15 +8,12 @@ import { cn } from "@/lib/utils";
 import {
     Bell,
     X,
-    Check,
     CheckCheck,
     Trash2,
     CheckSquare,
     User,
     MessageCircle,
     Settings,
-    ExternalLink,
-    ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -119,7 +116,7 @@ function getNotificationSnippet(n: Notification): string {
 }
 
 export function NotificationDialog({ open, onOpenChange }: NotificationDialogProps) {
-    const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
+    const { notifications, unreadCount, markAllAsRead, clearAll } = useNotifications();
     const [filter, setFilter] = useState<"All" | "Tasks" | "Mentions" | "Chat" | "System">("All");
 
     // Mark all as read when dialog is opened
