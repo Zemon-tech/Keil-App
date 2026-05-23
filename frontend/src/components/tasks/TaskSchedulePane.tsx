@@ -4,9 +4,20 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
-import type { EventReceiveArg, EventResizeDoneArg } from "@fullcalendar/interaction";
+import type {
+  EventReceiveArg,
+  EventResizeDoneArg,
+} from "@fullcalendar/interaction";
 import type { EventContentArg, EventInput } from "@fullcalendar/core";
-import { format, parseISO, isPast, addMinutes, addMonths, setMonth, setYear } from "date-fns";
+import {
+  format,
+  parseISO,
+  isPast,
+  addMinutes,
+  addMonths,
+  setMonth,
+  setYear,
+} from "date-fns";
 import {
   isAllDayRangeLocal,
   normalizeAllDayRangeLocal,
@@ -41,13 +52,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import { EventPreviewDialog } from "./EventPreviewDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
+import { blockTypeThemeMap, getThemeForTask } from "@/lib/calendarTheme";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 
 type Props = {
@@ -57,47 +73,58 @@ type Props = {
   statusFilter?: string;
   onViewChange?: (view: string) => void;
   onDateChange?: (date: Date) => void;
-  onTaskSchedule?: (taskId: string, startISO: string, endISO: string, isAllDay: boolean) => void;
+  onTaskSchedule?: (
+    taskId: string,
+    startISO: string,
+    endISO: string,
+    isAllDay: boolean,
+  ) => void;
 };
 
-type CalendarView = "timeGridDay" | "timeGridWeek" | "dayGridMonth" | "listWeek";
+type CalendarView =
+  | "timeGridDay"
+  | "timeGridWeek"
+  | "dayGridMonth"
+  | "listWeek";
 
-
-const typeMeta: Record<CalendarBlockType, { label: string; icon: any; pill: string; bg: string; border: string }> = {
+const typeMeta: Record<
+  CalendarBlockType,
+  { label: string; icon: any; pill: string; bg: string; border: string }
+> = {
   meeting: {
     label: "Meeting",
     icon: CalendarClock,
-    pill: "bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE] border-[#E4E4E7] dark:border-[#27272A]",
-    bg: "bg-[#EEF2FF] dark:bg-[#1E1B4B]",
-    border: "border-[#3730A3]/30 dark:border-[#C7D2FE]/25",
+    pill: "bg-[var(--event-meeting-bg)] text-[var(--event-meeting-text)] border-[var(--event-meeting-border)]",
+    bg: "bg-[var(--event-meeting-bg)]",
+    border: "border-[var(--event-meeting-border)]",
   },
   focus_block: {
     label: "Focus block",
     icon: Focus,
-    pill: "bg-[#F0FDF4] text-[#166534] dark:bg-[#052E16] dark:text-[#86EFAC] border-[#E4E4E7] dark:border-[#27272A]",
-    bg: "bg-[#F0FDF4] dark:bg-[#052E16]",
-    border: "border-[#166534]/30 dark:border-[#86EFAC]/25",
+    pill: "bg-[var(--event-focus-bg)] text-[var(--event-focus-text)] border-[var(--event-focus-border)]",
+    bg: "bg-[var(--event-focus-bg)]",
+    border: "border-[var(--event-focus-border)]",
   },
   task_slot: {
     label: "Task slot",
     icon: Timer,
-    pill: "bg-[#F5F3FF] text-[#5B21B6] dark:bg-[#2E1065] dark:text-[#DDD6FE] border-[#E4E4E7] dark:border-[#27272A]",
-    bg: "bg-[#F5F3FF] dark:bg-[#2E1065]",
-    border: "border-[#5B21B6]/30 dark:border-[#DDD6FE]/25",
+    pill: "bg-[var(--event-task-bg)] text-[var(--event-task-text)] border-[var(--event-task-border)]",
+    bg: "bg-[var(--event-task-bg)]",
+    border: "border-[var(--event-task-border)]",
   },
   deadline_marker: {
     label: "Deadline",
     icon: Flag,
-    pill: "bg-[#FFFBEB] text-[#92400E] dark:bg-[#451A03] dark:text-[#FCD34D] border-[#E4E4E7] dark:border-[#27272A]",
-    bg: "bg-[#FFFBEB] dark:bg-[#451A03]",
-    border: "border-[#92400E]/30 dark:border-[#FCD34D]/25",
+    pill: "bg-[var(--event-deadline-bg)] text-[var(--event-deadline-text)] border-[var(--event-deadline-border)]",
+    bg: "bg-[var(--event-deadline-bg)]",
+    border: "border-[var(--event-deadline-border)]",
   },
   reminder: {
     label: "Reminder",
     icon: Bell,
-    pill: "bg-[#FDF2F8] text-[#9D174D] dark:bg-[#4A044E] dark:text-[#F5D0FE] border-[#E4E4E7] dark:border-[#27272A]",
-    bg: "bg-[#FDF2F8] dark:bg-[#4A044E]",
-    border: "border-[#9D174D]/30 dark:border-[#F5D0FE]/25",
+    pill: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] border-[var(--event-reminder-border)]",
+    bg: "bg-[var(--event-reminder-bg)]",
+    border: "border-[var(--event-reminder-border)]",
   },
 };
 
@@ -127,9 +154,13 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
       ...base,
       allDay: false,
       start: block.startISO,
-      end: new Date(new Date(block.startISO).getTime() + 10 * 60000).toISOString(),
+      end: new Date(
+        new Date(block.startISO).getTime() + 10 * 60000,
+      ).toISOString(),
       display: "auto",
-      classNames: ["task-deadline", isBacklog ? "is-backlog" : ""].filter(Boolean),
+      classNames: ["task-deadline", isBacklog ? "is-backlog" : ""].filter(
+        Boolean,
+      ),
     };
   }
 
@@ -137,7 +168,9 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
     return {
       ...base,
       display: "background",
-      classNames: ["task-focus-bg", isBacklog ? "is-backlog" : ""].filter(Boolean),
+      classNames: ["task-focus-bg", isBacklog ? "is-backlog" : ""].filter(
+        Boolean,
+      ),
     };
   }
 
@@ -147,20 +180,8 @@ function makeEventInput(block: CalendarBlock, task?: TaskDTO): EventInput {
   };
 }
 
-function getChipStyles(type?: string, priority?: string, isDone?: boolean) {
-  if (isDone) {
-    return { bg: "#DCFCE7", text: "#166534", border: "#BBF7D0" };
-  }
-  if (type === "event") {
-    return { bg: "#E0F2FE", text: "#0369A1", border: "#BAE6FD" };
-  }
-  const styles: Record<string, { bg: string; text: string; border: string }> = {
-    urgent: { bg: "#FECACA", text: "#991B1B", border: "#FCA5A5" },
-    high: { bg: "#FED7AA", text: "#9A3412", border: "#FDBA74" },
-    medium: { bg: "#FEF9C3", text: "#A16207", border: "#FEF08A" },
-    low: { bg: "#F3F4F6", text: "#6B7280", border: "#E5E7EB" },
-  };
-  return styles[priority || "low"] || styles.low;
+function getChipStyles(type?: string, priority?: string, status?: string) {
+  return getThemeForTask(type, priority, status);
 }
 function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
@@ -170,28 +191,43 @@ function renderEventContent(arg: EventContentArg) {
 
   const BacklogDot = () => (
     <div
-      className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#FF0000] rounded-full z-50 pointer-events-none"
+      className="absolute top-0 right-0 w-2.5 h-2.5 bg-destructive rounded-full z-50 pointer-events-none"
       style={{ transform: "translate(50%, -50%)" }}
     />
   );
 
   if (isMonthView) {
     const taskType = arg.event.extendedProps.taskType;
-    const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
+    const isDone =
+      arg.event.extendedProps.taskStatus === "done" ||
+      arg.event.extendedProps.taskStatus === "completed";
     return (
       <div className="relative w-full h-full overflow-visible">
         {isBacklog && <BacklogDot />}
-        <div className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
-          {isScheduledTask && (
-            taskType === "event"
-              ? isDone
-                ? <CalendarCheck className="h-3 w-3 shrink-0 opacity-70" />
-                : <Calendar className="h-3 w-3 shrink-0 opacity-70" />
-              : isDone
-                ? <CheckSquare className="h-3 w-3 shrink-0 opacity-70" />
-                : <Square className="h-3 w-3 shrink-0 opacity-70" />
-          )}
-          <span className={cn("truncate", isDone && "line-through italic opacity-70")}>{arg.event.title}</span>
+        <div
+          className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5"
+          style={{ color: arg.textColor || "inherit" }}
+        >
+          {isScheduledTask &&
+            (taskType === "event" ? (
+              isDone ? (
+                <CalendarCheck className="h-3 w-3 shrink-0 opacity-70" />
+              ) : (
+                <Calendar className="h-3 w-3 shrink-0 opacity-70" />
+              )
+            ) : isDone ? (
+              <CheckSquare className="h-3 w-3 shrink-0 opacity-70" />
+            ) : (
+              <Square className="h-3 w-3 shrink-0 opacity-70" />
+            ))}
+          <span
+            className={cn(
+              "truncate",
+              isDone && "line-through italic opacity-70",
+            )}
+          >
+            {arg.event.title}
+          </span>
         </div>
       </div>
     );
@@ -200,20 +236,35 @@ function renderEventContent(arg: EventContentArg) {
   // Handle scheduled tasks (no type metadata)
   if (isScheduledTask) {
     const taskType = arg.event.extendedProps.taskType;
-    const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
+    const isDone =
+      arg.event.extendedProps.taskStatus === "done" ||
+      arg.event.extendedProps.taskStatus === "completed";
     return (
       <div className="relative h-full w-full overflow-visible">
         {isBacklog && <BacklogDot />}
-        <div className="h-full w-full p-2 overflow-hidden flex items-center gap-1.5" style={{ color: arg.textColor || "inherit" }}>
-          {taskType === "event"
-            ? isDone
-              ? <CalendarCheck className="h-3.5 w-3.5 shrink-0 opacity-70" />
-              : <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
-            : isDone
-              ? <CheckSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
-              : <Square className="h-3.5 w-3.5 shrink-0 opacity-70" />
-          }
-          <div className={cn("text-[11px] font-bold leading-tight truncate flex-1", isDone && "line-through italic opacity-70")}>{arg.event.title}</div>
+        <div
+          className="h-full w-full p-2 overflow-hidden flex items-center gap-1.5"
+          style={{ color: arg.textColor || "inherit" }}
+        >
+          {taskType === "event" ? (
+            isDone ? (
+              <CalendarCheck className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            ) : (
+              <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            )
+          ) : isDone ? (
+            <CheckSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
+          ) : (
+            <Square className="h-3.5 w-3.5 shrink-0 opacity-70" />
+          )}
+          <div
+            className={cn(
+              "text-[11px] font-bold leading-tight truncate flex-1",
+              isDone && "line-through italic opacity-70",
+            )}
+          >
+            {arg.event.title}
+          </div>
         </div>
       </div>
     );
@@ -240,7 +291,9 @@ function renderEventContent(arg: EventContentArg) {
         <div className="h-full w-full px-2 py-1.5 opacity-40 overflow-hidden">
           <div className="flex items-center gap-2">
             <Icon className="h-3 w-3" />
-            <span className="text-[10px] font-bold uppercase tracking-wider truncate">{arg.event.title}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider truncate">
+              {arg.event.title}
+            </span>
           </div>
         </div>
       </div>
@@ -250,14 +303,18 @@ function renderEventContent(arg: EventContentArg) {
   return (
     <div className="relative h-full w-full overflow-visible">
       {isBacklog && <BacklogDot />}
-      <div className={cn(
-        "h-full w-full p-2 border-l-4 overflow-hidden",
-        meta.bg,
-        meta.border.replace("border-", "border-l-")
-      )}>
+      <div
+        className={cn(
+          "h-full w-full p-2 border-l-4 overflow-hidden",
+          meta.bg,
+          meta.border.replace("border-", "border-l-"),
+        )}
+      >
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold leading-tight truncate">{arg.event.title}</div>
+            <div className="text-[11px] font-bold leading-tight truncate">
+              {arg.event.title}
+            </div>
             <div className="mt-1 flex items-center gap-1.5">
               <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
                 {meta.label}
@@ -303,7 +360,7 @@ function QuickNavPopover({
       if (selectedDateRef.current) {
         calendarApi.gotoDate(selectedDateRef.current);
       } else {
-        // If the user browsed to a different month/year but didn't pick a day, 
+        // If the user browsed to a different month/year but didn't pick a day,
         // still navigate to that period on close.
         calendarApi.gotoDate(navDate);
       }
@@ -325,8 +382,18 @@ function QuickNavPopover({
   };
 
   const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
   ];
 
   const handleMonthSelect = (monthIndex: number) => {
@@ -347,9 +414,7 @@ function QuickNavPopover({
 
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        {children}
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
         className="w-auto p-3 rounded-xl shadow-xl border-border/60"
         align="center"
@@ -390,10 +455,20 @@ function QuickNavPopover({
                 </Button>
               </div>
               <div className="flex items-center gap-0.5">
-                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={() => setNavDate(addMonths(navDate, -1))}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  onClick={() => setNavDate(addMonths(navDate, -1))}
+                >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" onClick={() => setNavDate(addMonths(navDate, 1))}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  onClick={() => setNavDate(addMonths(navDate, 1))}
+                >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -410,7 +485,7 @@ function QuickNavPopover({
                 nav: "hidden",
                 month_caption: "hidden",
                 today: "bg-primary text-primary-foreground rounded-full",
-                selected: "bg-accent text-accent-foreground rounded-md"
+                selected: "bg-accent text-accent-foreground rounded-md",
               }}
             />
           </div>
@@ -436,7 +511,9 @@ function QuickNavPopover({
                   size="sm"
                   className={cn(
                     "h-9 text-xs font-medium rounded-md",
-                    navDate.getMonth() === i ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                    navDate.getMonth() === i
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent",
                   )}
                   onClick={() => handleMonthSelect(i)}
                 >
@@ -454,7 +531,9 @@ function QuickNavPopover({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 rounded-md"
-                onClick={() => setNavDate(setYear(navDate, navDate.getFullYear() - 12))}
+                onClick={() =>
+                  setNavDate(setYear(navDate, navDate.getFullYear() - 12))
+                }
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -465,7 +544,9 @@ function QuickNavPopover({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 rounded-md"
-                onClick={() => setNavDate(setYear(navDate, navDate.getFullYear() + 12))}
+                onClick={() =>
+                  setNavDate(setYear(navDate, navDate.getFullYear() + 12))
+                }
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -478,7 +559,9 @@ function QuickNavPopover({
                   size="sm"
                   className={cn(
                     "h-9 text-xs font-medium rounded-md",
-                    navDate.getFullYear() === y ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                    navDate.getFullYear() === y
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent",
                   )}
                   onClick={() => handleYearSelect(y)}
                 >
@@ -495,12 +578,26 @@ function QuickNavPopover({
 
 import "./calendar-styles.css";
 
-export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "All", onViewChange, onDateChange, onTaskSchedule }: Props) {
+export function TaskSchedulePane({
+  tasks,
+  blocks,
+  selectedTask,
+  statusFilter = "All",
+  onViewChange,
+  onDateChange,
+  onTaskSchedule,
+}: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
-  const [dialogPosition, setDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [dialogPosition, setDialogPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createInitialValues, setCreateInitialValues] = useState<Partial<TaskDTO> | undefined>(undefined);
-  const [currentViewType, setCurrentViewType] = useState<CalendarView>("dayGridMonth");
+  const [createInitialValues, setCreateInitialValues] = useState<
+    Partial<TaskDTO> | undefined
+  >(undefined);
+  const [currentViewType, setCurrentViewType] =
+    useState<CalendarView>("dayGridMonth");
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<EventInput[]>([]);
   const unscheduledTaskIds = useRef<Set<string>>(new Set());
@@ -509,21 +606,33 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
 
   // Sync local events state with props (tasks and blocks)
   useEffect(() => {
-    console.log("🔄 Syncing events state with props", { tasks: tasks.length, blocks: blocks.length, unscheduledIds: unscheduledTaskIds.current.size });
+    console.log("🔄 Syncing events state with props", {
+      tasks: tasks.length,
+      blocks: blocks.length,
+      unscheduledIds: unscheduledTaskIds.current.size,
+    });
 
     const blockEvents = blocks.map((block) => {
-      const task = tasks.find(t => t.id === block.taskId);
+      const task = tasks.find((t) => t.id === block.taskId);
       return makeEventInput(block, task);
     });
 
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
     // Determine if we are filtering by type (Status sub-filters also count as type filtering)
-    const isTaskFiltered = statusFilter === "Task" || STATUS_OPTIONS.includes(statusFilter as any);
-    const isEventFiltered = statusFilter === "Event" || EVENT_STATUS_OPTIONS.includes(statusFilter as any);
+    const isTaskFiltered =
+      statusFilter === "Task" || STATUS_OPTIONS.includes(statusFilter as any);
+    const isEventFiltered =
+      statusFilter === "Event" ||
+      EVENT_STATUS_OPTIONS.includes(statusFilter as any);
 
     const taskEvents = tasks
       .filter((t) => {
-        if (!t.start_date || !t.due_date || unscheduledTaskIds.current.has(t.id)) return false;
+        if (
+          !t.start_date ||
+          !t.due_date ||
+          unscheduledTaskIds.current.has(t.id)
+        )
+          return false;
         if (isTaskFiltered) return t.type === "task";
         if (isEventFiltered) return t.type === "event";
         return true;
@@ -539,7 +648,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
         // All-day detection should match FullCalendar semantics:
         // - allDay events use an *exclusive* end at the start of a day boundary.
         // - timed events can cross midnight and should remain timed.
-        const isAllDay = t.is_all_day !== undefined ? t.is_all_day : isAllDayRangeLocal(startDate, endDate);
+        const isAllDay =
+          t.is_all_day !== undefined
+            ? t.is_all_day
+            : isAllDayRangeLocal(startDate, endDate);
 
         console.log("🔍 All-day detection:", {
           taskId: t.id,
@@ -549,7 +661,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
         });
 
         const isDone = t.status === "done" || t.status === "completed";
-        const chipStyles = getChipStyles(t.type, t.priority, isDone);
+        const chipStyles = getChipStyles(t.type, t.priority, t.status);
 
         return {
           id: t.id,
@@ -558,12 +670,14 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
           end: t.due_date!,
           allDay: isAllDay,
           display: "block",
-          backgroundColor: chipStyles.bg,
+          backgroundColor: chipStyles.background,
           borderColor: chipStyles.border,
           textColor: chipStyles.text,
           classNames: [
-            t.type === "event" ? "task-event-block" : `task-priority-${t.priority}`,
-            t.status === "backlog" ? "is-backlog" : ""
+            t.type === "event"
+              ? "task-event-block"
+              : `task-priority-${t.priority}`,
+            t.status === "backlog" ? "is-backlog" : "",
           ].filter(Boolean),
           extendedProps: {
             taskId: t.id,
@@ -604,9 +718,13 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
     console.log("🗑️ Unschedule clicked:", taskId);
     // Optimistic update: add to unscheduled ref immediately
     unscheduledTaskIds.current.add(taskId);
-    console.log("📝 Added to unscheduled ref:", taskId, unscheduledTaskIds.current);
+    console.log(
+      "📝 Added to unscheduled ref:",
+      taskId,
+      unscheduledTaskIds.current,
+    );
     // Remove from events state
-    setEvents(prev => prev.filter(e => e.id !== taskId));
+    setEvents((prev) => prev.filter((e) => e.id !== taskId));
     console.log("✅ Event removed from state:", taskId);
     // Clear from ref after 5 seconds to allow backend to sync
     setTimeout(() => {
@@ -657,13 +775,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
 
       if (isAllDayDrop) {
         if (startDate && onTaskSchedule) {
-          const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
+          const { start: allDayStart, end: allDayEnd } =
+            normalizeAllDayRangeLocal(startDate, endDate);
           const startISO = allDayStart.toISOString();
           const endISO = allDayEnd.toISOString();
 
           onTaskSchedule(taskId, startISO, endISO, true);
 
-          const isMultiDay = allDayEnd.getTime() - allDayStart.getTime() > 24 * 60 * 60 * 1000;
+          const isMultiDay =
+            allDayEnd.getTime() - allDayStart.getTime() > 24 * 60 * 60 * 1000;
           toast.success("Task scheduled", {
             description: isMultiDay
               ? `${info.event.title} scheduled from ${format(allDayStart, "MMM dd")} to ${format(new Date(allDayEnd.getTime() - 86400000), "MMM dd")}`
@@ -680,8 +800,16 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
       } else {
         // Handle day/week view drop: use the dropped time directly
         if (startDate && endDate && onTaskSchedule) {
-          const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
-          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
+          const { start: timedStart, end: timedEnd } = normalizeTimedRange(
+            startDate,
+            endDate,
+          );
+          onTaskSchedule(
+            taskId,
+            timedStart.toISOString(),
+            timedEnd.toISOString(),
+            false,
+          );
 
           toast.success("Task scheduled", {
             description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
@@ -717,11 +845,25 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
       if (onTaskSchedule) {
         const isAllDay = !!(info.event as any).allDay;
         if (isAllDay) {
-          const { start: allDayStart, end: allDayEnd } = normalizeAllDayRangeLocal(startDate, endDate);
-          onTaskSchedule(taskId, allDayStart.toISOString(), allDayEnd.toISOString(), true);
+          const { start: allDayStart, end: allDayEnd } =
+            normalizeAllDayRangeLocal(startDate, endDate);
+          onTaskSchedule(
+            taskId,
+            allDayStart.toISOString(),
+            allDayEnd.toISOString(),
+            true,
+          );
         } else {
-          const { start: timedStart, end: timedEnd } = normalizeTimedRange(startDate, endDate);
-          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
+          const { start: timedStart, end: timedEnd } = normalizeTimedRange(
+            startDate,
+            endDate,
+          );
+          onTaskSchedule(
+            taskId,
+            timedStart.toISOString(),
+            timedEnd.toISOString(),
+            false,
+          );
         }
         toast.success("Task duration updated");
       }
@@ -741,7 +883,12 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
 
       if (!taskId || !startDate) return;
 
-      console.log("🔄 Task moved:", { taskId, newStart: startDate, newEnd: endDate, viewType });
+      console.log("🔄 Task moved:", {
+        taskId,
+        newStart: startDate,
+        newEnd: endDate,
+        viewType,
+      });
 
       // Check if moved to past
       if (isPast(startDate)) {
@@ -764,9 +911,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
         }
       } else {
         const clampedRange = clampTimedRange(startDate, endDate);
-        const { start: timedStart, end: timedEnd } = normalizeTimedRange(clampedRange.start, clampedRange.end);
+        const { start: timedStart, end: timedEnd } = normalizeTimedRange(
+          clampedRange.start,
+          clampedRange.end,
+        );
         if (onTaskSchedule) {
-          onTaskSchedule(taskId, timedStart.toISOString(), timedEnd.toISOString(), false);
+          onTaskSchedule(
+            taskId,
+            timedStart.toISOString(),
+            timedEnd.toISOString(),
+            false,
+          );
           toast.success("Task rescheduled");
         }
       }
@@ -777,10 +932,14 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
   };
 
   const headerTitle = useMemo(() => {
-    if (currentViewType === "dayGridMonth") return format(currentViewDate, "MMMM yyyy");
-    if (currentViewType === "timeGridWeek") return format(currentViewDate, "MMMM yyyy");
-    if (currentViewType === "timeGridDay") return format(currentViewDate, "EEEE, do MMMM yyyy");
-    if (currentViewType === "listWeek") return format(currentViewDate, "MMMM yyyy");
+    if (currentViewType === "dayGridMonth")
+      return format(currentViewDate, "MMMM yyyy");
+    if (currentViewType === "timeGridWeek")
+      return format(currentViewDate, "MMMM yyyy");
+    if (currentViewType === "timeGridDay")
+      return format(currentViewDate, "EEEE, do MMMM yyyy");
+    if (currentViewType === "listWeek")
+      return format(currentViewDate, "MMMM yyyy");
     return format(currentViewDate, "MMMM yyyy");
   }, [currentViewDate, currentViewType]);
 
@@ -835,15 +994,17 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
 
   // Imperatively update the FullCalendar toolbar title with a custom formatted date
   useEffect(() => {
-    const titleEl = (calendarRef.current as any)?.el?.querySelector?.('.fc-toolbar-title') as HTMLElement | null;
+    const titleEl = (calendarRef.current as any)?.el?.querySelector?.(
+      ".fc-toolbar-title",
+    ) as HTMLElement | null;
     if (!titleEl) return;
-    if (currentViewType === 'dayGridMonth') {
-      titleEl.textContent = format(currentViewDate, 'MMMM yyyy');
-    } else if (currentViewType === 'timeGridDay') {
-      titleEl.textContent = format(currentViewDate, 'do MMMM yyyy');
-    } else if (currentViewType === 'timeGridWeek') {
+    if (currentViewType === "dayGridMonth") {
+      titleEl.textContent = format(currentViewDate, "MMMM yyyy");
+    } else if (currentViewType === "timeGridDay") {
+      titleEl.textContent = format(currentViewDate, "do MMMM yyyy");
+    } else if (currentViewType === "timeGridWeek") {
       titleEl.textContent = format(currentViewDate, "'Week of' do MMMM yyyy");
-    } else if (currentViewType === 'listWeek') {
+    } else if (currentViewType === "listWeek") {
       titleEl.textContent = format(currentViewDate, "'Week of' do MMMM yyyy");
     }
   }, [currentViewType, currentViewDate]);
@@ -911,7 +1072,8 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
   }, []);
 
   const initialDate = useMemo(() => {
-    if (selectedTask?.plannedStartISO) return parseISO(selectedTask.plannedStartISO);
+    if (selectedTask?.plannedStartISO)
+      return parseISO(selectedTask.plannedStartISO);
     return new Date();
   }, [selectedTask?.plannedStartISO]);
 
@@ -949,7 +1111,11 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                   variant="outline"
                   size="sm"
                   className="h-8 px-2.5 text-xs rounded-r-none border-r-0"
-                  onClick={currentViewType === "dayGridMonth" ? goToday : () => setView("dayGridMonth")}
+                  onClick={
+                    currentViewType === "dayGridMonth"
+                      ? goToday
+                      : () => setView("dayGridMonth")
+                  }
                 >
                   {currentViewType === "dayGridMonth" ? "Today" : "Month"}
                 </Button>
@@ -957,7 +1123,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                   <DropdownMenuTrigger
                     className={cn(
                       buttonVariants({ variant: "outline", size: "sm" }),
-                      "h-8 px-2 rounded-l-none flex items-center justify-center cursor-pointer"
+                      "h-8 px-2 rounded-l-none flex items-center justify-center cursor-pointer",
                     )}
                     aria-label="Change calendar view"
                   >
@@ -965,8 +1131,12 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="rounded-xl">
                     <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setView("timeGridWeek")}>Week</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setView("dayGridMonth")}>Month</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setView("timeGridWeek")}>
+                      Week
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setView("dayGridMonth")}>
+                      Month
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -1009,10 +1179,18 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
         </div>
 
         <div className="flex-1 min-h-0">
-          <div ref={calendarContainerRef} className="task-schedule-calendar h-full min-h-0">
+          <div
+            ref={calendarContainerRef}
+            className="task-schedule-calendar h-full min-h-0"
+          >
             <FullCalendar
               ref={calendarRef}
-              plugins={[timeGridPlugin, dayGridPlugin, listPlugin, interactionPlugin]}
+              plugins={[
+                timeGridPlugin,
+                dayGridPlugin,
+                listPlugin,
+                interactionPlugin,
+              ]}
               initialView="dayGridMonth"
               initialDate={initialDate}
               height="100%"
@@ -1022,18 +1200,30 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
               droppable
               weekends
               navLinks={true}
-              slotLabelFormat={{ hour: "numeric", minute: "2-digit", omitZeroMinute: true, hour12: true }}
+              slotLabelFormat={{
+                hour: "numeric",
+                minute: "2-digit",
+                omitZeroMinute: true,
+                hour12: true,
+              }}
               views={{
                 dayGridMonth: {
                   dayHeaderFormat: { weekday: "short" },
                   eventResizableFromStart: true,
-                  durationEditable: true,
                 },
                 timeGridWeek: {
-                  dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
+                  dayHeaderFormat: {
+                    weekday: "short",
+                    day: "numeric",
+                    omitCommas: true,
+                  },
                 },
                 timeGridDay: {
-                  dayHeaderFormat: { weekday: "short", day: "numeric", omitCommas: true },
+                  dayHeaderFormat: {
+                    weekday: "short",
+                    day: "numeric",
+                    omitCommas: true,
+                  },
                 },
               }}
               scrollTime={scrollTime}
@@ -1041,20 +1231,33 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
               headerToolbar={false}
               dayMaxEvents={2}
               moreLinkContent={(args) => `${args.num} more`}
-
               events={events}
               eventOrder={(a: any, b: any) => {
                 const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-                const priorityA = a.extendedProps.taskPriority ? priorityOrder[a.extendedProps.taskPriority as keyof typeof priorityOrder] ?? 4 : 4;
-                const priorityB = b.extendedProps.taskPriority ? priorityOrder[b.extendedProps.taskPriority as keyof typeof priorityOrder] ?? 4 : 4;
+                const priorityA = a.extendedProps.taskPriority
+                  ? (priorityOrder[
+                      a.extendedProps.taskPriority as keyof typeof priorityOrder
+                    ] ?? 4)
+                  : 4;
+                const priorityB = b.extendedProps.taskPriority
+                  ? (priorityOrder[
+                      b.extendedProps.taskPriority as keyof typeof priorityOrder
+                    ] ?? 4)
+                  : 4;
                 return priorityA - priorityB;
               }}
               eventContent={renderEventContent}
               eventClassNames={(arg: any) => {
                 const type = arg.event.extendedProps.type as CalendarBlockType;
                 if (arg.event.extendedProps.isScheduledTask) {
-                  const isDone = arg.event.extendedProps.taskStatus === "done" || arg.event.extendedProps.taskStatus === "completed";
-                  return ["task-event", "scheduled-task", isDone ? "is-done" : ""].filter(Boolean);
+                  const isDone =
+                    arg.event.extendedProps.taskStatus === "done" ||
+                    arg.event.extendedProps.taskStatus === "completed";
+                  return [
+                    "task-event",
+                    "scheduled-task",
+                    isDone ? "is-done" : "",
+                  ].filter(Boolean);
                 }
                 if (!type) return ["task-event"];
                 return [`fc-type-${type}`, "task-event"];
@@ -1064,7 +1267,9 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                 if (isScheduledTask) {
                   const taskId = arg.event.extendedProps.taskId;
                   // Capture position for dialog relative to the date cell if possible, fallback to event pill
-                  const cellEl = (arg.el as HTMLElement).closest('.fc-daygrid-day, .fc-timegrid-col') as HTMLElement | null;
+                  const cellEl = (arg.el as HTMLElement).closest(
+                    ".fc-daygrid-day, .fc-timegrid-col",
+                  ) as HTMLElement | null;
                   const rect = (cellEl || arg.el).getBoundingClientRect();
 
                   const screenWidth = window.innerWidth;
@@ -1086,7 +1291,10 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                     y = screenHeight - dialogHeight - 10;
                   }
                   // Ensure y is within bounds
-                  y = Math.max(10, Math.min(y, screenHeight - dialogHeight - 10));
+                  y = Math.max(
+                    10,
+                    Math.min(y, screenHeight - dialogHeight - 10),
+                  );
 
                   setDialogPosition({ x, y });
                   setSelectedTaskId(taskId);
@@ -1099,11 +1307,15 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                 let defaultDueDate: Date;
                 if (arg.allDay) {
                   // Month view or all-day row click → schedule as a full-day event (exclusive end = next midnight)
-                  const { end: allDayEnd } = normalizeAllDayRangeLocal(clickedDate);
+                  const { end: allDayEnd } =
+                    normalizeAllDayRangeLocal(clickedDate);
                   defaultDueDate = allDayEnd;
                 } else {
                   // Timed view click → default to 1-hour slot (matches DEFAULT_TIMED_DURATION_MINUTES)
-                  defaultDueDate = addMinutes(clickedDate, DEFAULT_TIMED_DURATION_MINUTES);
+                  defaultDueDate = addMinutes(
+                    clickedDate,
+                    DEFAULT_TIMED_DURATION_MINUTES,
+                  );
                 }
                 setCreateInitialValues({
                   type: "task",
@@ -1121,12 +1333,18 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
                 let endISO: string;
                 if (arg.allDay) {
                   // All-day selection (month view or all-day row drag)
-                  const { start, end } = normalizeAllDayRangeLocal(arg.start, arg.end);
+                  const { start, end } = normalizeAllDayRangeLocal(
+                    arg.start,
+                    arg.end,
+                  );
                   startISO = start.toISOString();
                   endISO = end.toISOString();
                 } else {
                   // Timed selection (day/week view drag)
-                  const { start, end } = normalizeTimedRange(arg.start, arg.end);
+                  const { start, end } = normalizeTimedRange(
+                    arg.start,
+                    arg.end,
+                  );
                   startISO = start.toISOString();
                   endISO = end.toISOString();
                 }
@@ -1153,7 +1371,7 @@ export function TaskSchedulePane({ tasks, blocks, selectedTask, statusFilter = "
         </div>
       </div>
 
-      {tasks.find(t => t.id === selectedTaskId)?.type === "event" ? (
+      {tasks.find((t) => t.id === selectedTaskId)?.type === "event" ? (
         <EventPreviewDialog
           eventId={selectedTaskId}
           open={!!selectedTaskId}

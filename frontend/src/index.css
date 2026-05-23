@@ -113,6 +113,61 @@ body {
 
     /* Shadows */
 
+    /* ─────────────────────────────────────────────
+     CALENDAR & TASK SEMANTIC TOKENS
+     Muted • Low Saturation • Premium
+     ───────────────────────────────────────────── */
+
+    /* Calendar Block Types */
+
+    --event-meeting-bg: #f1f3f9;
+    --event-meeting-text: #334155;
+    --event-meeting-border: rgba(51, 65, 85, 0.08);
+
+    --event-focus-bg: #f0f4f1;
+    --event-focus-text: #3f4e41;
+    --event-focus-border: rgba(63, 78, 65, 0.08);
+
+    --event-task-bg: #f2f2f7;
+    --event-task-text: #535370;
+    --event-task-border: rgba(83, 83, 112, 0.08);
+
+    --event-deadline-bg: #f7f3f0;
+    --event-deadline-text: #78350f;
+    --event-deadline-border: rgba(120, 53, 15, 0.08);
+
+    --event-reminder-bg: #f6f1f4;
+    --event-reminder-text: #831843;
+    --event-reminder-border: rgba(131, 24, 67, 0.08);
+
+    /* Priorities & States */
+
+    --priority-urgent-bg: #fff1f2;
+    --priority-urgent-text: #9f1239;
+    --priority-urgent-border: rgba(159, 18, 57, 0.12);
+
+    --priority-high-bg: #fffbeb;
+    --priority-high-text: #92400e;
+    --priority-high-border: rgba(146, 64, 14, 0.1);
+
+    --priority-medium-bg: #f9f9f8;
+    --priority-medium-text: #44403c;
+    --priority-medium-border: rgba(68, 64, 60, 0.1);
+
+    --priority-low-bg: #f5f5f5;
+    --priority-low-text: #737373;
+    --priority-low-border: rgba(115, 115, 115, 0.1);
+
+    --priority-done-bg: #f0fdf4;
+    --priority-done-text: #166534;
+    --priority-done-border: rgba(22, 101, 52, 0.1);
+
+    --event-generic-bg: #f0f9ff;
+    --event-generic-text: #0369a1;
+    --event-generic-border: rgba(3, 105, 161, 0.1);
+
+    /* Shadows */
+
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
 
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -210,6 +265,59 @@ body {
 
     --sidebar-border: rgba(255, 255, 255, 0.04);
     --sidebar-ring: #7c7c7c;
+
+    /* ─────────────────────────────────────────────
+     CALENDAR & TASK SEMANTIC TOKENS (DARK)
+     Translucent • Muted • Premium
+     ───────────────────────────────────────────── */
+
+    /* Calendar Block Types */
+
+    --event-meeting-bg: rgba(148, 163, 184, 0.1);
+    --event-meeting-text: #cbd5e1;
+    --event-meeting-border: rgba(148, 163, 184, 0.15);
+
+    --event-focus-bg: rgba(74, 222, 128, 0.08);
+    --event-focus-text: #86efac;
+    --event-focus-border: rgba(74, 222, 128, 0.15);
+
+    --event-task-bg: rgba(167, 139, 250, 0.08);
+    --event-task-text: #c4b5fd;
+    --event-task-border: rgba(167, 139, 250, 0.15);
+
+    --event-deadline-bg: rgba(251, 191, 36, 0.08);
+    --event-deadline-text: #fcd34d;
+    --event-deadline-border: rgba(251, 191, 36, 0.15);
+
+    --event-reminder-bg: rgba(244, 114, 182, 0.08);
+    --event-reminder-text: #f9a8d4;
+    --event-reminder-border: rgba(244, 114, 182, 0.15);
+
+    /* Priorities & States */
+
+    --priority-urgent-bg: rgba(244, 63, 94, 0.1);
+    --priority-urgent-text: #fda4af;
+    --priority-urgent-border: rgba(244, 63, 94, 0.2);
+
+    --priority-high-bg: rgba(245, 158, 11, 0.1);
+    --priority-high-text: #fcd34d;
+    --priority-high-border: rgba(245, 158, 11, 0.2);
+
+    --priority-medium-bg: rgba(120, 113, 108, 0.1);
+    --priority-medium-text: #d6d3d1;
+    --priority-medium-border: rgba(120, 113, 108, 0.2);
+
+    --priority-low-bg: rgba(82, 82, 82, 0.1);
+    --priority-low-text: #a3a3a3;
+    --priority-low-border: rgba(82, 82, 82, 0.2);
+
+    --priority-done-bg: rgba(34, 197, 94, 0.1);
+    --priority-done-text: #86efac;
+    --priority-done-border: rgba(34, 197, 94, 0.2);
+
+    --event-generic-bg: rgba(14, 165, 233, 0.1);
+    --event-generic-text: #7dd3fc;
+    --event-generic-border: rgba(14, 165, 233, 0.2);
 
     /* Shadows */
 
