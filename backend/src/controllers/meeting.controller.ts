@@ -4,7 +4,7 @@ import { catchAsync } from "../utils/catchAsync";
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import { config } from "../config";
-import { s3 } from "../lib/s3";
+import { getS3Client } from "../lib/s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
@@ -47,7 +47,7 @@ export const getUploadUrl = catchAsync(async (req: Request, res: Response) => {
             ContentType: sanitizeMimeType(contentType),
         });
 
-        const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+        const uploadUrl = await getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
 
         // Create database row in pending state
         const recording = await meetingService.createRecording(userId, dbMeetingId, s3Key);
@@ -87,7 +87,7 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             Bucket: config.sevallaS3BucketName,
             Key: s3Key,
         });
-        const presignedAudioUrl = await getSignedUrl(s3, getCommand, { expiresIn: 3600 });
+        const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
         console.log(`[transcribe] S3 GET URL generated successfully.`);
 
         const sarvamHeaders = {

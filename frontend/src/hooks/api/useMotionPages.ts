@@ -25,6 +25,7 @@ export interface MotionPageDTO {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  share_permission?: MotionPermission;
 }
 
 export type MotionShareType = "public_link" | "space";
