@@ -23,7 +23,7 @@ export const getMe = async (req: any, res: Response, next: NextFunction) => {
         // 3. Find personal organisation, fallback to first organisation or a dummy one
         const personalOrg = organisations.find(o => o.is_personal) || organisations[0] || {
             id: "00000000-0000-0000-0000-000000000000",
-            name: user.name ? `${user.name}'s Org` : "My Org",
+            name: user.name ? `${user.name.split(" ")[0]} Workspace` : "Workspace",
             role: "owner"
         };
 

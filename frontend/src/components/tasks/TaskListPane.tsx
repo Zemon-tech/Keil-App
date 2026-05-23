@@ -261,10 +261,7 @@ function getTaskPermissions(
 export function TaskListPane({
   query,
   onQueryChange,
-  statusFilter,
   onStatusFilterChange,
-  sortBy,
-  sortOrder,
   onSortChange,
   tasks,
   allTasks,
@@ -282,9 +279,7 @@ export function TaskListPane({
   onLoadMore,
   isLoadingMore = false,
   workspaceMembers = [],
-  orgFilter = "all",
   onOrgFilterChange,
-  spaceFilter = "all",
   onSpaceFilterChange,
 }: Props) {
   const draggableRef = useRef<Draggable | null>(null);
@@ -294,7 +289,6 @@ export function TaskListPane({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Unified filter panel state
   const [mineOnly, setMineOnly] = useState(false);
@@ -306,7 +300,7 @@ export function TaskListPane({
   const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");
 
   const { activeOrgId, activeSpace, organisations } = useAppContext();
-  const { data: spacesForFilter = [] } = useSpaces(orgFilter !== "all" ? orgFilter : null);
+
 
   const { canCreateTask } = useSpaceRole();
 
