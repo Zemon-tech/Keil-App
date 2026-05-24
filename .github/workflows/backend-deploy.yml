@@ -52,7 +52,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
+  deploy-sevalla:
     name: Deploy to Sevalla
     runs-on: ubuntu-latest
     needs: build-and-push
@@ -66,3 +66,120 @@ jobs:
           app-id: 926a001f-850a-4cf9-b7d8-d6973e053ddb
           docker-image: ghcr.io/zemon-tech/keil-backend:latest
           wait-for-finish: true
+
+  deploy-lightsail:
+    name: Deploy to AWS Lightsail
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # 1. Install AWS Lightsail Control Plugin (lightsailctl)
+      - name: Install lightsailctl
+        run: |
+          curl https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl -o /usr/local/bin/lightsailctl
+          chmod +x /usr/local/bin/lightsailctl
+
+      # 2. Authenticate with AWS CLI
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      # 3. Pull image from GitHub Container Registry (where it was pushed in build-and-push)
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Pull Docker image from GHCR
+        run: |
+          docker pull ghcr.io/zemon-tech/keil-backend:latest
+
+      # 4. Push Image to Lightsail Private Registry
+      - name: Push Image to Lightsail
+        id: push-image
+        run: |
+          echo "📤 Pushing image to Lightsail Container Service..."
+          push_output=$(aws lightsail push-container-image \
+            --service-name keil-backend-service \
+            --label keil-backend \
+            --image ghcr.io/zemon-tech/keil-backend:latest)
+          
+          echo "Parsed Push Output: $push_output"
+          
+          # Extract the released image name (e.g. :keil-backend-service.keil-backend.1)
+          image_name=$(echo "$push_output" | grep -o ':[a-zA-Z0-9.-]*' | head -n 1)
+          echo "IMAGE_NAME=$image_name" >> $GITHUB_ENV
+          echo "✅ Pushed image name is: $image_name"
+
+      # 5. Fetch current deployment config, swap the image, and trigger a rolling update
+      - name: Dynamic Deployment (Preserving Environment Variables)
+        run: |
+          echo "🔄 Fetching current active deployment to preserve your environment variables..."
+          
+          # Get the active deployment JSON
+          current_deploy=$(aws lightsail get-container-service-deployments \
+            --service-name keil-backend-service \
+            --query "deployments[0]" \
+            --output json)
+          
+          # If no deployments exist yet (first deploy), fallback to a default structure
+          if [ "$current_deploy" = "null" ] || [ -z "$current_deploy" ]; then
+            echo "⚠️ No active deployment found. Creating your first default configuration..."
+            jq -n \
+              --arg svc "keil-backend-service" \
+              --arg img "$IMAGE_NAME" \
+              '{
+                serviceName: $svc,
+                containers: {
+                  "keil-backend": {
+                    image: $img,
+                    ports: {
+                      "5000": "HTTP"
+                    }
+                  }
+                },
+                publicEndpoint: {
+                  containerName: "keil-backend",
+                  containerPort: 5000,
+                  healthCheck: {
+                    path: "/api/health",
+                    intervalSeconds: 30,
+                    successCodes: "200"
+                  }
+                }
+              }' > deployment.json
+          else
+            echo "🚀 Active deployment found! Extracting configuration..."
+            
+            # Extract current configurations
+            containers=$(echo "$current_deploy" | jq '.containers')
+            public_endpoint=$(echo "$current_deploy" | jq '.publicEndpoint')
+            
+            # Swap the image URL inside the 'keil-backend' container configuration
+            updated_containers=$(echo "$containers" | jq --arg img "$IMAGE_NAME" '.["keil-backend"].image = $img')
+            
+            # Formulate the final deployment payload
+            jq -n \
+              --arg svc "keil-backend-service" \
+              --argjson conts "$updated_containers" \
+              --argjson endpt "$public_endpoint" \
+              '{serviceName: $svc, containers: $conts, publicEndpoint: $endpt}' > deployment.json
+          fi
+          
+          echo "📦 Final Deployment JSON:"
+          cat deployment.json
+          
+          echo "🚀 Deploying to AWS Lightsail..."
+          aws lightsail create-container-service-deployment --cli-input-json file://deployment.json
+          
+          echo "🎉 Deployment initiated successfully!"
+
+
