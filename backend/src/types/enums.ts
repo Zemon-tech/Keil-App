@@ -63,6 +63,12 @@ export enum MotionShareType {
 }
 
 export enum MotionPermission {
+  VIEW_ALL = 'view_all',
+  VIEW_MANAGERS = 'view_managers',
+  VIEW_ADMINS = 'view_admins',
+  EDIT_ALL = 'edit_all',
+  EDIT_MANAGERS = 'edit_managers',
+  EDIT_ADMINS = 'edit_admins',
   VIEW = 'view',
   EDIT = 'edit',
 }

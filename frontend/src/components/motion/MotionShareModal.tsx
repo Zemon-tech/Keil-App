@@ -22,6 +22,7 @@ import {
   useMotionPageShares,
   useCreateMotionPageShare,
   useRevokeMotionPageShare,
+  useUpdateMotionPageShare,
   type MotionPageShareDTO,
   type MotionPermission,
 } from "@/hooks/api/useMotionPages";
@@ -101,13 +102,17 @@ function SpaceShareSection({
   const spaceShares = shares.filter((s) => s.share_type === "space");
   const createShare = useCreateMotionPageShare(orgId, spaceId, pageId);
   const revokeShare = useRevokeMotionPageShare(orgId, spaceId, pageId);
+  const updateShare = useUpdateMotionPageShare(orgId, spaceId, pageId);
 
   const { organisations } = useAppContext();
   const [targetOrgId, setTargetOrgId] = useState<string>(
     organisations[0]?.id ?? ""
   );
   const [targetSpaceId, setTargetSpaceId] = useState<string>("");
-  const [permission, setPermission] = useState<MotionPermission>("view");
+
+  // Views & Edit levels representation states
+  const [viewPerm, setViewPerm] = useState<"all" | "managers" | "admins">("all");
+  const [editPerm, setEditPerm] = useState<"none" | "all" | "managers" | "admins">("none");
 
   const { data: targetSpaces = [], isLoading: spacesLoading } = useSpaces(
     targetOrgId || null
@@ -119,17 +124,59 @@ function SpaceShareSection({
 
   const handleShare = () => {
     if (!targetOrgId || !targetSpaceId) return;
+    const finalPerm = (editPerm === "none" ? `view_${viewPerm}` : `edit_${editPerm}`) as MotionPermission;
     createShare.mutate({
       share_type: "space",
-      permission,
+      permission: finalPerm,
       target_org_id: targetOrgId,
       target_space_id: targetSpaceId,
     });
     setTargetSpaceId("");
+    setViewPerm("all");
+    setEditPerm("none");
+  };
+
+  const handleViewChange = (v: "all" | "managers" | "admins") => {
+    setViewPerm(v);
+    if (v === "admins") {
+      if (editPerm === "managers" || editPerm === "all") {
+        setEditPerm("admins");
+      }
+    } else if (v === "managers") {
+      if (editPerm === "all") {
+        setEditPerm("managers");
+      }
+    }
+  };
+
+  const handleEditChange = (e: "none" | "all" | "managers" | "admins") => {
+    setEditPerm(e);
+    if (e === "all") {
+      setViewPerm("all");
+    } else if (e === "managers") {
+      if (viewPerm === "admins") {
+        setViewPerm("managers");
+      }
+    }
+  };
+
+  const getPermStates = (permission: MotionPermission) => {
+    if (permission.startsWith("edit_")) {
+      const edit = permission.replace("edit_", "") as "all" | "managers" | "admins";
+      const view = edit;
+      return { view, edit };
+    } else if (permission.startsWith("view_")) {
+      const view = permission.replace("view_", "") as "all" | "managers" | "admins";
+      return { view, edit: "none" as const };
+    } else if (permission === "edit") {
+      return { view: "all" as const, edit: "all" as const };
+    } else {
+      return { view: "all" as const, edit: "none" as const };
+    }
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Building2 className="size-4 text-muted-foreground shrink-0" />
         <div className="flex-1 min-w-0">
@@ -141,7 +188,7 @@ function SpaceShareSection({
       </div>
 
       {/* Share form */}
-      <div className="pl-6">
+      <div className="pl-6 space-y-3">
         <div className="flex flex-wrap gap-2">
           <Select
             value={targetOrgId}
@@ -185,23 +232,41 @@ function SpaceShareSection({
               )}
             </SelectContent>
           </Select>
+        </div>
 
-          <Select
-            value={permission}
-            onValueChange={(v) => setPermission(v as MotionPermission)}
-          >
-            <SelectTrigger className="h-8 w-24 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="view">Can view</SelectItem>
-              <SelectItem value="edit">Can edit</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-end gap-3 bg-muted/20 border border-border/40 rounded-lg p-2.5 max-w-fit">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-muted-foreground/80 font-medium pl-0.5">View access</span>
+            <Select value={viewPerm} onValueChange={handleViewChange}>
+              <SelectTrigger className="h-8 w-28 text-xs bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">all</SelectItem>
+                <SelectItem value="managers">managers</SelectItem>
+                <SelectItem value="admins">admins</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-muted-foreground/80 font-medium pl-0.5">Edit access</span>
+            <Select value={editPerm} onValueChange={handleEditChange}>
+              <SelectTrigger className="h-8 w-36 text-xs bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">none (read only)</SelectItem>
+                <SelectItem value="all" disabled={viewPerm === "managers" || viewPerm === "admins"}>all</SelectItem>
+                <SelectItem value="managers" disabled={viewPerm === "admins"}>managers</SelectItem>
+                <SelectItem value="admins">admins</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <Button
             size="sm"
-            className="h-8 text-xs"
+            className="h-8 text-xs shrink-0"
             disabled={!targetOrgId || !targetSpaceId || createShare.isPending}
             onClick={handleShare}
           >
@@ -215,43 +280,107 @@ function SpaceShareSection({
 
       {/* Existing space shares */}
       {spaceShares.length > 0 && (
-        <div className="pl-6 space-y-1.5">
+        <div className="pl-6 space-y-2">
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
             Shared with
           </p>
-          {spaceShares.map((share) => {
-            const org = organisations.find(
-              (o) => o.id === share.target_org_id
-            );
-            return (
-              <div
-                key={share.id}
-                className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
-              >
-                <div className="h-5 w-5 rounded bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                  {(org?.name ?? "?").charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">
-                    {org?.name ?? share.target_org_id}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/60">
-                    {share.permission === "edit" ? "Can edit" : "Can view"}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
-                  disabled={revokeShare.isPending}
-                  onClick={() => revokeShare.mutate(share.id)}
-                  title="Revoke"
+          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+            {spaceShares.map((share) => {
+              const org = organisations.find(
+                (o) => o.id === share.target_org_id
+              );
+              const { view: sView, edit: sEdit } = getPermStates(share.permission);
+              const isItemPending = updateShare.isPending && updateShare.variables?.shareId === share.id;
+
+              return (
+                <div
+                  key={share.id}
+                  className="flex flex-col gap-2 rounded-lg border border-border/50 bg-muted/30 p-2.5 relative"
                 >
-                  <X className="size-3" />
-                </Button>
-              </div>
-            );
-          })}
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-5 rounded bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                      {(org?.name ?? "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold truncate">
+                        {org?.name ?? share.target_org_id}
+                      </p>
+                    </div>
+                    {isItemPending && (
+                      <Loader2 className="size-3 animate-spin text-muted-foreground shrink-0" />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                      disabled={revokeShare.isPending || updateShare.isPending}
+                      onClick={() => revokeShare.mutate(share.id)}
+                      title="Revoke"
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2 border-t border-border/30 pt-2">
+                    <div className="flex flex-col gap-0.5 flex-1">
+                      <span className="text-[9px] text-muted-foreground/80 font-medium pl-0.5">View access</span>
+                      <Select
+                        value={sView}
+                        disabled={updateShare.isPending}
+                        onValueChange={(v: "all" | "managers" | "admins") => {
+                          let newEdit = sEdit;
+                          if (v === "admins") {
+                            if (sEdit === "managers" || sEdit === "all") newEdit = "admins";
+                          } else if (v === "managers") {
+                            if (sEdit === "all") newEdit = "managers";
+                          }
+                          const finalPerm = (newEdit === "none" ? `view_${v}` : `edit_${newEdit}`) as MotionPermission;
+                          updateShare.mutate({ shareId: share.id, permission: finalPerm });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-[10px] px-2 py-0 bg-background/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">all</SelectItem>
+                          <SelectItem value="managers">managers</SelectItem>
+                          <SelectItem value="admins">admins</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5 flex-1">
+                      <span className="text-[9px] text-muted-foreground/80 font-medium pl-0.5">Edit access</span>
+                      <Select
+                        value={sEdit}
+                        disabled={updateShare.isPending}
+                        onValueChange={(e: "none" | "all" | "managers" | "admins") => {
+                          let newView = sView;
+                          if (e === "all") {
+                            newView = "all";
+                          } else if (e === "managers") {
+                            if (sView === "admins") newView = "managers";
+                          }
+                          const finalPerm = (e === "none" ? `view_${newView}` : `edit_${e}`) as MotionPermission;
+                          updateShare.mutate({ shareId: share.id, permission: finalPerm });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-[10px] px-2 py-0 bg-background/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">none (read only)</SelectItem>
+                          <SelectItem value="all" disabled={sView === "managers" || sView === "admins"}>all</SelectItem>
+                          <SelectItem value="managers" disabled={sView === "admins"}>managers</SelectItem>
+                          <SelectItem value="admins">admins</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

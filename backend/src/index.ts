@@ -17,6 +17,19 @@ const startServer = async () => {
         // Verify PostgreSQL connection before accepting traffic
         await pool.query('SELECT NOW()');
 
+        // Ensure new motion_permission values exist
+        try {
+            await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'view_all'");
+            await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'view_managers'");
+            await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'view_admins'");
+            await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_all'");
+            await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_managers'");
+            await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_admins'");
+            console.log('[database]: Successfully added new motion_permission values');
+        } catch (err: any) {
+            console.warn('[database]: Note on altering motion_permission enum:', err.message);
+        }
+
         server.listen(port, '0.0.0.0', () => {
             console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
         });

@@ -20,7 +20,14 @@ const validateShareType = (value: unknown): value is MotionShareType =>
   value === MotionShareType.PUBLIC_LINK || value === MotionShareType.SPACE;
 
 const validatePermission = (value: unknown): value is MotionPermission =>
-  value === MotionPermission.VIEW || value === MotionPermission.EDIT;
+  value === MotionPermission.VIEW_ALL ||
+  value === MotionPermission.VIEW_MANAGERS ||
+  value === MotionPermission.VIEW_ADMINS ||
+  value === MotionPermission.EDIT_ALL ||
+  value === MotionPermission.EDIT_MANAGERS ||
+  value === MotionPermission.EDIT_ADMINS ||
+  value === MotionPermission.VIEW ||
+  value === MotionPermission.EDIT;
 
 // ─── Page CRUD ────────────────────────────────────────────────────────────────
 
@@ -145,7 +152,7 @@ export const createShare = catchAsync(async (req: Request, res: Response) => {
     throw new ApiError(400, 'share_type must be "public_link" or "space"');
   }
   if (permission !== undefined && !validatePermission(permission)) {
-    throw new ApiError(400, 'permission must be "view" or "edit"');
+    throw new ApiError(400, 'Invalid permission value');
   }
 
   const spaceRole = (req as any).space?.membership_role as string;
@@ -168,6 +175,21 @@ export const revokeShare = catchAsync(async (req: Request, res: Response) => {
   const spaceRole = (req as any).space?.membership_role as string;
   await motionPageService.revokeShare(orgId, spaceId, pageId, shareId, userId, spaceRole);
   res.status(200).json(new ApiResponse(200, {}, 'Share revoked successfully'));
+});
+
+export const updateShare = catchAsync(async (req: Request, res: Response) => {
+  const { orgId, spaceId, userId } = getContext(req);
+  const pageId = asString(req.params.id);
+  const shareId = asString(req.params.shareId);
+  const { permission } = req.body;
+
+  if (permission === undefined || !validatePermission(permission)) {
+    throw new ApiError(400, 'Invalid permission value');
+  }
+
+  const spaceRole = (req as any).space?.membership_role as string;
+  const share = await motionPageService.updateShare(orgId, spaceId, pageId, shareId, userId, permission, spaceRole);
+  res.status(200).json(new ApiResponse(200, share, 'Share updated successfully'));
 });
 
 // ─── Shared-to-space list ─────────────────────────────────────────────────────

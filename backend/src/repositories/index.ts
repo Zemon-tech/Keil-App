@@ -14,6 +14,7 @@ import { OrgTaskRepository } from './org-task.repository';
 import { IntegrationRepository } from './integration.repository';
 import { MotionPageRepository, MotionPageShareRepository } from './motion-page.repository';
 import { NotificationRepository, UserNotificationPreferenceRepository, NotificationOutboxRepository } from './notification.repository';
+import { MotionAnalyticsRepository } from './motion-analytics.repository';
 
 // Instantiate repositories with the shared pool
 export const userRepository = new UserRepository();
@@ -33,6 +34,7 @@ export const motionPageShareRepository = new MotionPageShareRepository();
 export const notificationRepository = new NotificationRepository();
 export const userNotificationPreferenceRepository = new UserNotificationPreferenceRepository();
 export const notificationOutboxRepository = new NotificationOutboxRepository();
+export const motionAnalyticsRepository = new MotionAnalyticsRepository();
 
 // Export repository classes for testing/mocking
 export {
@@ -53,4 +55,5 @@ export {
   NotificationRepository,
   UserNotificationPreferenceRepository,
   NotificationOutboxRepository,
+  MotionAnalyticsRepository,
 };

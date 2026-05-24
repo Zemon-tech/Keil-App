@@ -831,3 +831,8 @@ body.ai-sidebar-open {
         background-position: 200% 0;
     }
 }
+
+/* Updates & Analytics Right-Side Drawer Transitions */
+.drawer-transition {
+    transition: width 300ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
