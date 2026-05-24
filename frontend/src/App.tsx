@@ -15,12 +15,19 @@ import { MotionProfile } from "./components/motion/MotionProfile";
 import { MotionPublicPage } from "./components/motion/MotionPublicPage";
 import { useMotionStore } from "./store/useMotionStore";
 
+import { useAppContext } from "./contexts/AppContext";
+
 /**
  * Redirects /motion to the last opened page if one exists,
  * otherwise falls through to MotionHome.
  */
 function MotionIndexRoute() {
-  const lastOpenedPageId = useMotionStore((s) => s.lastOpenedPageId);
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const lastOpenedPages = useMotionStore((s) => s.lastOpenedPages);
+
+  const key = activeOrgId && activeSpaceId ? `${activeOrgId}:${activeSpaceId}` : "";
+  const lastOpenedPageId = lastOpenedPages[key];
+
   if (lastOpenedPageId) {
     return <Navigate to={`/motion/${lastOpenedPageId}`} replace />;
   }

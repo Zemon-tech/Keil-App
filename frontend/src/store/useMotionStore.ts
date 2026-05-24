@@ -35,10 +35,10 @@ interface MotionStore {
   sidebarOpen: boolean;
 
   /**
-   * The last motion page the user visited.
-   * Persisted to localStorage so /motion can redirect back to it on next visit.
+   * Scoped dictionary tracking the last opened page per workspace.
+   * Persisted to localStorage as an orgId:spaceId -> pageId dictionary.
    */
-  lastOpenedPageId: string | null;
+  lastOpenedPages: Record<string, string>;
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -86,16 +86,19 @@ interface MotionStore {
   // ── UI ────────────────────────────────────────────────────────────────────────
   setSidebarOpen: (open: boolean) => void;
 
-  /** Records the last visited page id and persists it to localStorage. */
-  setLastOpenedPageId: (id: string) => void;
+  /** Records the last visited page id for the active org/space and persists it to localStorage. */
+  setLastOpenedPageId: (orgId: string, spaceId: string, pageId: string | null) => void;
 }
 
 export const useMotionStore = create<MotionStore>()((set, get) => ({
   pages: [],
   dirtyPageIds: new Set<string>(),
   sidebarOpen: true,
-  lastOpenedPageId: (() => {
-    try { return localStorage.getItem("motion:lastOpenedPageId"); } catch { return null; }
+  lastOpenedPages: (() => {
+    try {
+      const saved = localStorage.getItem("motion:lastOpenedPages");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
   })(),
 
   // ── Hydration ─────────────────────────────────────────────────────────────────
@@ -194,8 +197,20 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
 
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
-  setLastOpenedPageId: (id) => {
-    try { localStorage.setItem("motion:lastOpenedPageId", id); } catch { /* ignore */ }
-    set({ lastOpenedPageId: id });
+  setLastOpenedPageId: (orgId, spaceId, pageId) => {
+    if (!orgId || !spaceId) return;
+    const key = `${orgId}:${spaceId}`;
+    set((state) => {
+      const updated = { ...state.lastOpenedPages };
+      if (pageId) {
+        updated[key] = pageId;
+      } else {
+        delete updated[key];
+      }
+      try {
+        localStorage.setItem("motion:lastOpenedPages", JSON.stringify(updated));
+      } catch { /* ignore */ }
+      return { lastOpenedPages: updated };
+    });
   },
 }));

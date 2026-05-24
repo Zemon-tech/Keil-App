@@ -3,6 +3,9 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import api from "@/lib/api";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { useQueryClient } from "@tanstack/react-query";
+import { del, createStore } from "idb-keyval";
+import { useMotionStore } from "@/store/useMotionStore";
 
 /**
  * Type definition for the Authentication Context.
@@ -31,6 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const suppressAutoLoginRef = useRef(false);
+    const queryClient = useQueryClient();
 
     const setSuppressAutoLogin = (value: boolean) => {
         suppressAutoLoginRef.current = value;
@@ -83,6 +87,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const signOut = async () => {
         disconnectSocket();            // MUST be called BEFORE signOut — JWT is still valid here
+
+        // 1. Clear active TanStack Query memory cache
+        queryClient.clear();
+
+        // 2. Clear persistent IndexedDB store cache
+        try {
+            const customStore = createStore('keil-database', 'query-cache');
+            await del('keil-query-cache', customStore);
+        } catch (e) {
+            console.error("Failed to delete IndexedDB query cache on logout:", e);
+        }
+
+        // 3. Clear Zustand store's optimistic and routing cache
+        try {
+            localStorage.removeItem("motion:lastOpenedPages");
+        } catch { /* ignore */ }
+        useMotionStore.setState({
+            pages: [],
+            dirtyPageIds: new Set<string>(),
+            lastOpenedPages: {}
+        });
+
         await supabase.auth.signOut(); // then clear the Supabase session
     };
 

@@ -66,6 +66,7 @@ temp/
 *.tar.gz
 docs/ClarityOS_Team_Brief.docx
 .kiro/
+.commandcode/
 docs/tasks/
 skills-lock.json
 .agent\rules\merge-conflict-resolution.md
