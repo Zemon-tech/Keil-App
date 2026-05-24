@@ -71,9 +71,11 @@ createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
           <AuthProvider>
             <AppProvider>
-              <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-                <App />
-              </ThemeProvider>
+              <NotificationProvider>
+                <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+                  <App />
+                </ThemeProvider>
+              </NotificationProvider>
             </AppProvider>
           </AuthProvider>
         </BrowserRouter>
