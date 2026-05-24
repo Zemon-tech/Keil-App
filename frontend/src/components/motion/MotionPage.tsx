@@ -90,8 +90,13 @@ export function MotionPage() {
     }
   };
 
-  const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty } =
+  const { sidebarOpen, setSidebarOpen, getPageById, upsertPages, setDirty, clearDirty, setLastOpenedPageId } =
     useMotionStore();
+
+  // Track last opened page so /motion can redirect back to it
+  useEffect(() => {
+    if (pageId) setLastOpenedPageId(pageId);
+  }, [pageId, setLastOpenedPageId]);
 
   // Stable ref so upsertPages is never a useEffect dependency
   const upsertPagesRef = useRef(upsertPages);

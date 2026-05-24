@@ -131,7 +131,7 @@ export function useMotionPage(
     },
     enabled: !!orgId && !!spaceId && !!pageId,
     retry: noRetryOn4xx,
-    staleTime: 10_000,
+    staleTime: 5 * 60 * 1000, // 5 min — cache survives refresh via persister
     placeholderData: (previousData) => previousData,
   });
 }

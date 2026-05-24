@@ -34,6 +34,12 @@ interface MotionStore {
   // ── UI state ─────────────────────────────────────────────────────────────────
   sidebarOpen: boolean;
 
+  /**
+   * The last motion page the user visited.
+   * Persisted to localStorage so /motion can redirect back to it on next visit.
+   */
+  lastOpenedPageId: string | null;
+
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   /**
@@ -79,12 +85,18 @@ interface MotionStore {
 
   // ── UI ────────────────────────────────────────────────────────────────────────
   setSidebarOpen: (open: boolean) => void;
+
+  /** Records the last visited page id and persists it to localStorage. */
+  setLastOpenedPageId: (id: string) => void;
 }
 
 export const useMotionStore = create<MotionStore>()((set, get) => ({
   pages: [],
   dirtyPageIds: new Set<string>(),
   sidebarOpen: true,
+  lastOpenedPageId: (() => {
+    try { return localStorage.getItem("motion:lastOpenedPageId"); } catch { return null; }
+  })(),
 
   // ── Hydration ─────────────────────────────────────────────────────────────────
 
@@ -181,4 +193,9 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
   // ── UI ────────────────────────────────────────────────────────────────────────
 
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+
+  setLastOpenedPageId: (id) => {
+    try { localStorage.setItem("motion:lastOpenedPageId", id); } catch { /* ignore */ }
+    set({ lastOpenedPageId: id });
+  },
 }));

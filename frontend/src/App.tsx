@@ -13,6 +13,23 @@ import { MotionPage } from "./components/motion/MotionPage";
 import { MotionHome } from "./components/motion/MotionHome";
 import { MotionProfile } from "./components/motion/MotionProfile";
 import { MotionPublicPage } from "./components/motion/MotionPublicPage";
+import { useMotionStore } from "./store/useMotionStore";
+
+/**
+ * Redirects /motion to the last opened page if one exists,
+ * otherwise falls through to MotionHome.
+ */
+function MotionIndexRoute() {
+  const lastOpenedPageId = useMotionStore((s) => s.lastOpenedPageId);
+  if (lastOpenedPageId) {
+    return <Navigate to={`/motion/${lastOpenedPageId}`} replace />;
+  }
+  return (
+    <Layout>
+      <MotionHome />
+    </Layout>
+  );
+}
 
 /**
  * Main application component.
@@ -81,11 +98,7 @@ function App() {
         />
         <Route
           path="/motion"
-          element={
-            <Layout>
-              <MotionHome />
-            </Layout>
-          }
+          element={<MotionIndexRoute />}
         />
         <Route
           path="/motion/profile"
