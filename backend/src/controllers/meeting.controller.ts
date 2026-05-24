@@ -356,3 +356,58 @@ export const getMeetingRecordings = catchAsync(async (req: Request, res: Respons
         return res.status(500).json({ error: "Failed to retrieve meeting recordings" });
     }
 });
+
+/**
+ * Retrieves paginated meeting history for the authenticated user
+ */
+export const getMeetingHistory = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+
+    try {
+        const { recordings, total } = await meetingService.getMeetingHistory(user.id, page, limit);
+
+        return res.status(200).json(
+            new ApiResponse(200, {
+                recordings,
+                pagination: { page, limit, total, hasMore: page * limit < total }
+            }, "Meeting history retrieved successfully")
+        );
+    } catch (err: any) {
+        console.error(`❌ [getMeetingHistory] Error:`, err);
+        return res.status(500).json({ error: "Failed to retrieve meeting history" });
+    }
+});
+
+/**
+ * Searches meetings by transcript content
+ */
+export const searchMeetings = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const q = req.query.q as string;
+    if (!q || q.trim().length === 0) {
+        return res.status(400).json({ error: "Search query required" });
+    }
+
+    try {
+        const recordings = await meetingService.searchMeetings(user.id, q.trim());
+
+        return res.status(200).json(
+            new ApiResponse(200, recordings, "Search results retrieved successfully")
+        );
+    } catch (err: any) {
+        console.error(`❌ [searchMeetings] Error:`, err);
+        return res.status(500).json({ error: "Search failed" });
+    }
+});

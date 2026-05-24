@@ -196,29 +196,31 @@ export function AppSidebar() {
   const { setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
 
-  // ── Auto-collapse on /motion/* routes (Option A1) ──────────────────────
-  // When the user navigates into Motion, the AppSidebar collapses so the
-  // MotionSidebar can take the full left panel without two sidebars competing.
-  // When leaving /motion, the previous open state is restored.
+  // ── Auto-collapse on /motion/* and /meetings/* routes ────────────────────
+  // When the user navigates into Motion or Meetings, the AppSidebar collapses
+  // so the feature sidebar can take the full left panel without two sidebars competing.
+  // When leaving, the previous open state is restored.
   const wasOpenBeforeMotion = useRef<boolean | null>(null);
   const isMotionRoute = location.pathname.startsWith("/motion");
+  const isMeetingsRoute = location.pathname.startsWith("/meetings");
+  const isFeatureSidebarRoute = isMotionRoute || isMeetingsRoute;
 
   useEffect(() => {
-    if (isMotionRoute) {
+    if (isFeatureSidebarRoute) {
       // Save current open state before collapsing
       if (wasOpenBeforeMotion.current === null) {
         wasOpenBeforeMotion.current = state === "expanded";
       }
       setOpen(false);
     } else {
-      // Restore previous state when leaving /motion
+      // Restore previous state when leaving
       if (wasOpenBeforeMotion.current !== null) {
         setOpen(wasOpenBeforeMotion.current);
         wasOpenBeforeMotion.current = null;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMotionRoute]);
+  }, [isFeatureSidebarRoute]);
 
   // ── App context ────────────────────────────────────────────────────────
   const {
@@ -348,7 +350,7 @@ export function AppSidebar() {
                         onClick={() => {
                             navigate('/meetings');
                           }}
-                        isActive={meetingDialogOpen}
+                        isActive={isRouteActive('/meetings')}
                         tooltip={item.title}
                         className="h-9 rounded-xl px-3 text-[13px] font-medium data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60"
                       >

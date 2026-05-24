@@ -37,6 +37,7 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [isPipMode, setIsPipMode] = useState(false);
 
   // Audio recording references
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -350,7 +351,28 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
   };
 
   return (
-    <div className="w-full max-w-[780px] bg-white dark:bg-[#0f0f11] rounded-[14px] border border-black/8 dark:border-white/8 shadow-2xl overflow-hidden flex flex-col text-foreground select-none relative">
+    <>
+      {/* PiP (Picture-in-Picture) floating mini-recorder */}
+      {isPipMode && status === "recording" && (
+        <div className="pip-mode fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-full bg-black/90 dark:bg-white/10 backdrop-blur-xl px-4 py-2.5 shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+          <span className="text-sm font-mono text-white tabular-nums">
+            {formatTime(duration)}
+          </span>
+          <button
+            onClick={() => {
+              stopRecording();
+              setIsPipMode(false);
+            }}
+            className="ml-1 h-7 w-7 rounded-full bg-rose-600 hover:bg-rose-500 flex items-center justify-center transition-colors cursor-pointer"
+            title="Stop recording"
+          >
+            <div className="h-2.5 w-2.5 rounded-sm bg-white" />
+          </button>
+        </div>
+      )}
+
+      <div className={`w-full max-w-[780px] bg-white dark:bg-[#0f0f11] rounded-[14px] border border-black/8 dark:border-white/8 shadow-2xl overflow-hidden flex flex-col text-foreground select-none relative ${isPipMode ? "hidden" : ""}`}>
       
       {/* Dynamic Keyframes Injection */}
       <style dangerouslySetInnerHTML={{ __html: `
@@ -385,6 +407,15 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
         </div>
         
         <div className="flex items-center gap-1">
+          {status === "recording" && (
+            <button
+              onClick={() => setIsPipMode(true)}
+              title="Picture-in-Picture mode"
+              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors text-[10px] font-semibold tracking-wide uppercase border border-black/8 dark:border-white/8"
+            >
+              PiP
+            </button>
+          )}
           {status === "completed" && (
             <>
               <button
@@ -698,5 +729,6 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
         )}
       </div>
     </div>
+    </>
   );
 };
