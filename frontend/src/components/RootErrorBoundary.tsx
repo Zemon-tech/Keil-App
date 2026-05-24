@@ -39,14 +39,14 @@ export class RootErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-6">
           <div className="max-w-md w-full text-center space-y-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 text-destructive mb-4">
+            <div className="inline-flex items-center justify-center size-16 rounded-full bg-destructive/10 text-destructive mb-4">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
                 strokeWidth={1.5}
                 stroke="currentColor"
-                className="w-8 h-8"
+                className="size-8"
               >
                 <path
                   strokeLinecap="round"

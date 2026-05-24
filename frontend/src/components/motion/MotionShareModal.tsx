@@ -228,7 +228,7 @@ function SpaceShareSection({
                 key={share.id}
                 className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
               >
-                <div className="h-5 w-5 rounded bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                <div className="size-5 rounded bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
                   {(org?.name ?? "?").charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -242,7 +242,7 @@ function SpaceShareSection({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                  className="size-6 text-muted-foreground hover:text-destructive shrink-0"
                   disabled={revokeShare.isPending}
                   onClick={() => revokeShare.mutate(share.id)}
                   title="Revoke"

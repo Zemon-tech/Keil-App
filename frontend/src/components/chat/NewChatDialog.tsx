@@ -86,9 +86,9 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          className="size-6 text-muted-foreground hover:text-foreground"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="size-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -99,7 +99,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
         {mode === "personal" ? (
           <div className="mt-2">
             <div className="flex items-center px-3 border rounded-md focus-within:ring-1 focus-within:ring-ring">
-              <Search className="h-4 w-4 text-muted-foreground mr-2" />
+              <Search className="size-4 text-muted-foreground mr-2" />
               <input
                 type="text"
                 className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
@@ -112,7 +112,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
             <div className="min-h-[200px] max-h-[300px] overflow-y-auto mt-2">
               {isLoading ? (
                 <div className="flex h-full items-center justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
                 </div>
               ) : filteredMembers.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -130,7 +130,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
                           disabled={openDM.isPending}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
                         >
-                          <Avatar className="h-8 w-8">
+                          <Avatar className="size-8">
                             <AvatarFallback className="bg-primary/20 text-xs text-foreground font-semibold">
                               {initials}
                             </AvatarFallback>
@@ -159,7 +159,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
             {/* DIRECT MESSAGE TAB */}
             <TabsContent value="direct" className="mt-4">
               <div className="flex items-center px-3 border rounded-md focus-within:ring-1 focus-within:ring-ring">
-                <Search className="h-4 w-4 text-muted-foreground mr-2" />
+                <Search className="size-4 text-muted-foreground mr-2" />
                 <input
                   type="text"
                   className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
@@ -172,7 +172,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
               <div className="min-h-[200px] max-h-[300px] overflow-y-auto mt-2">
                 {isLoading ? (
                   <div className="flex h-full items-center justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : filteredMembers.length === 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -190,7 +190,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
                             disabled={openDM.isPending}
                             className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
                           >
-                            <Avatar className="h-8 w-8">
+                            <Avatar className="size-8">
                               <AvatarFallback className="bg-primary/20 text-xs text-foreground font-semibold">
                                 {initials}
                               </AvatarFallback>
@@ -227,7 +227,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-foreground">Select Members</label>
                   <div className="flex items-center px-2 py-1 text-xs border rounded-md">
-                    <Search className="h-3 w-3 text-muted-foreground mr-1" />
+                    <Search className="size-3 text-muted-foreground mr-1" />
                     <input
                       type="text"
                       className="w-24 bg-transparent outline-none"
@@ -241,7 +241,7 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
                 <div className="min-h-[140px] max-h-[180px] overflow-y-auto border rounded-md p-1 space-y-1">
                   {isLoading ? (
                     <div className="flex h-full items-center justify-center py-4">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
                     filteredMembers.map((member) => {
@@ -273,9 +273,9 @@ export function NewChatDialog({ orgId, spaceId, defaultTab = "direct" }: NewChat
                 onClick={handleCreateGroup}
               >
                 {createGroup.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 size-4 animate-spin" />
                 ) : (
-                  <Users className="mr-2 h-4 w-4" />
+                  <Users className="mr-2 size-4" />
                 )}
                 Create Group Channel ({selectedIds.size} members)
               </Button>

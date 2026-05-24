@@ -612,7 +612,7 @@ export function MotionPage() {
                   src={displayPage.cover_image}
                   alt="cover"
                   className={cn(
-                    "h-full w-full object-cover select-none transition-none",
+                    "size-full object-cover select-none transition-none",
                     isRepositioning ? "cursor-ns-resize" : ""
                   )}
                   style={{

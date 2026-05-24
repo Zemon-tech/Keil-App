@@ -180,7 +180,7 @@ function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManag
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={handleClose}>Cancel</Button>
               <Button onClick={handleCreate} disabled={!orgName.trim() || createOrg.isPending}>
-                {createOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {createOrg.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Create Organisation
               </Button>
             </div>
@@ -205,7 +205,7 @@ function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManag
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={handleClose}>Cancel</Button>
               <Button onClick={handleJoin} disabled={!token.trim() || joinOrg.isPending}>
-                {joinOrg.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {joinOrg.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Join
               </Button>
             </div>
@@ -251,9 +251,9 @@ function OrgSpaceSubmenu({
     <DropdownMenuSub open={subOpen} onOpenChange={setSubOpen}>
       <DropdownMenuSubTrigger className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px]">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="h-6 w-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
+          <div className="size-6 rounded bg-primary/20 flex items-center justify-center text-xs font-medium text-primary shrink-0">
             {org.is_personal ? (
-              <User className="h-3.5 w-3.5" />
+              <User className="size-3.5" />
             ) : (
               org.name.charAt(0).toUpperCase()
             )}
@@ -263,14 +263,14 @@ function OrgSpaceSubmenu({
           </span>
         </div>
         {isActiveOrg && (
-          <Check className="h-4 w-4 text-primary shrink-0 mr-1" />
+          <Check className="size-4 text-primary shrink-0 mr-1" />
         )}
       </DropdownMenuSubTrigger>
 
       <DropdownMenuSubContent className="w-48 rounded-xl p-1">
         {isLoading ? (
           <div className="flex items-center justify-center py-3">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
           </div>
         ) : visibleSpaces.length === 0 ? (
           <div className="px-2 py-3 text-xs text-muted-foreground text-center">
@@ -287,7 +287,7 @@ function OrgSpaceSubmenu({
               >
                 <span className="flex-1 truncate">{space.name}</span>
                 {isActiveSpace && (
-                  <Check className="h-4 w-4 text-primary shrink-0" />
+                  <Check className="size-4 text-primary shrink-0" />
                 )}
               </DropdownMenuItem>
             );
@@ -421,7 +421,7 @@ export function AppSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               {isCollapsed ? (
-                <div className="relative group/trigger flex items-center justify-center h-8 w-8 mx-auto transition-all duration-300">
+                <div className="relative group/trigger flex items-center justify-center size-8 mx-auto transition-all duration-300">
                   <img
                     src={logoSrc}
                     alt="Keil HQ"
@@ -439,7 +439,7 @@ export function AppSidebar() {
                       KeilHQ
                     </span>
                   </div>
-                  <SidebarTrigger className="h-7 w-7 rounded-md border border-border/60 bg-background/80 shadow-sm hover:bg-sidebar-accent" />
+                  <SidebarTrigger className="size-7 rounded-md border border-border/60 bg-background/80 shadow-sm hover:bg-sidebar-accent" />
                 </div>
               )}
             </SidebarMenuItem>
@@ -536,7 +536,7 @@ export function AppSidebar() {
                     size="lg"
                     className="mt-2 h-11 rounded-xl px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
-                    <Avatar className="h-8 w-8 rounded-full ring-1 ring-border/60">
+                    <Avatar className="size-8 rounded-full ring-1 ring-border/60">
                       <AvatarFallback className="rounded-full bg-primary text-xs text-primary-foreground">
                         {userInitials}
                       </AvatarFallback>
@@ -563,7 +563,7 @@ export function AppSidebar() {
                   {/* ── User info header ── */}
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
-                      <Avatar className="h-7 w-7 rounded-md">
+                      <Avatar className="size-7 rounded-md">
                         <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-xs">
                           {userInitials}
                         </AvatarFallback>
@@ -584,7 +584,7 @@ export function AppSidebar() {
                   {/* ── Organisation section ── */}
                   <DropdownMenuLabel className="flex items-center justify-between px-2 py-1.5">
                     <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <Building2 className="h-3 w-3" />
+                      <Building2 className="size-3" />
                       Organisations
                     </span>
                     <button
@@ -593,10 +593,10 @@ export function AppSidebar() {
                         setOrgManageTab("create");
                         setOrgManageOpen(true);
                       }}
-                      className="h-5 w-5 flex items-center justify-center rounded border border-dashed border-muted-foreground/40 hover:border-foreground/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      className="size-5 flex items-center justify-center rounded border border-dashed border-muted-foreground/40 hover:border-foreground/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                       title="Create or join an organisation"
                     >
-                      <Plus className="h-3 w-3" />
+                      <Plus className="size-3" />
                     </button>
                   </DropdownMenuLabel>
 
@@ -633,7 +633,7 @@ export function AppSidebar() {
                       setSettingsOpen(true);
                     }}
                   >
-                    <Settings className="h-4 w-4 text-muted-foreground" />
+                    <Settings className="size-4 text-muted-foreground" />
                     Settings
                   </DropdownMenuItem>
 
@@ -644,7 +644,7 @@ export function AppSidebar() {
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-red-500 focus:text-red-500 focus:bg-red-50 dark:focus:bg-red-950/30"
                     onClick={signOut}
                   >
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="size-4" />
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>

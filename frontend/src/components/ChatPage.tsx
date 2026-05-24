@@ -42,7 +42,7 @@ export function ChatPage() {
               className="text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Close chat page"
             >
-              <X className="h-4 w-4" />
+              <X className="size-4" />
             </button>
           </div>
         </div>
@@ -67,7 +67,7 @@ export function ChatPage() {
               >
                 <Hash
                   className={cn(
-                    "h-4 w-4 flex-shrink-0",
+                    "size-4 flex-shrink-0",
                     activeChannelId === channel.id ? "text-primary" : "text-muted-foreground"
                   )}
                 />
@@ -118,12 +118,12 @@ export function ChatPage() {
                   )}
                 >
                   <div className="relative flex-shrink-0">
-                    <Avatar className="h-6 w-6">
+                    <Avatar className="size-6">
                       <AvatarFallback className="text-xs">
                         {displayName.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="absolute -bottom-0.5 -right-0.5 h-2 w-2 bg-green-500 rounded-full border border-card" />
+                    <div className="absolute -bottom-0.5 -right-0.5 size-2 bg-green-500 rounded-full border border-card" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -164,8 +164,8 @@ export function ChatPage() {
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground bg-card p-12 text-center relative overflow-hidden group">
             <div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02]" />
-            <div className="h-24 w-24 bg-primary/10 rounded-3xl flex items-center justify-center mb-6 ring-4 ring-background shadow-xs relative z-10 transition-transform duration-500 group-hover:scale-105">
-              <MessageCircle className="h-10 w-10 text-primary opacity-80" />
+            <div className="size-24 bg-primary/10 rounded-3xl flex items-center justify-center mb-6 ring-4 ring-background shadow-xs relative z-10 transition-transform duration-500 group-hover:scale-105">
+              <MessageCircle className="size-10 text-primary opacity-80" />
             </div>
             <h3 className="text-xl font-bold text-foreground relative z-10 mb-2">
               Smart Organisation Comms

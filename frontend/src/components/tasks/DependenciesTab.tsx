@@ -30,12 +30,12 @@ function DependencyRow({ dep, onRemove }: { dep: Dependency; onRemove?: () => vo
           : "border-border bg-muted/20"
       )}
     >
-      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATUS_COLOR[dep.status as TaskStatus] ?? "bg-zinc-500")} />
+      <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_COLOR[dep.status as TaskStatus] ?? "bg-zinc-500")} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{dep.title}</p>
           <Badge variant="outline" className={cn("h-4 shrink-0 px-1 gap-1 text-[9px]", priorityCfg.color)}>
-            <Flag className="h-2 w-2" />
+            <Flag className="size-2" />
             {dep.priority}
           </Badge>
         </div>
@@ -49,7 +49,7 @@ function DependencyRow({ dep, onRemove }: { dep: Dependency; onRemove?: () => vo
           onClick={onRemove}
           className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md shrink-0"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="size-3.5" />
         </button>
       )}
     </div>
@@ -128,7 +128,7 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
         {/* Impact Summary Banner */}
         {(task.dependencies ?? []).length > 0 && (
           <div className="flex items-start gap-3 rounded-md border border-border bg-muted/30 p-3">
-            <Zap className="mt-0.5 h-4 w-4 shrink-0 text-yellow-400" />
+            <Zap className="mt-0.5 size-4 shrink-0 text-yellow-400" />
             <div>
               <p className="mb-0.5 text-xs font-semibold">Impact Summary</p>
               <p className="text-xs leading-relaxed text-muted-foreground">
@@ -152,7 +152,7 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
           <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
             <PopoverTrigger asChild>
               <button className="mb-3 w-full flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-background hover:bg-accent/50 transition-colors text-left">
-                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Search className="size-4 text-muted-foreground shrink-0" />
                 <span className="text-sm text-muted-foreground flex-1">
                   Search tasks to add dependency...
                 </span>
@@ -166,7 +166,7 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
             <PopoverContent className="w-80 p-2" align="start">
               {/* Search Input */}
               <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
-                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Search className="size-4 text-muted-foreground shrink-0" />
                 <Input
                   placeholder="Search tasks by title..."
                   value={searchQuery}
@@ -179,7 +179,7 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
               <div className="max-h-60 overflow-y-auto space-y-0.5">
                 {isLoadingTasks ? (
                   <div className="flex justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : filteredTasks.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
@@ -201,7 +201,7 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
                         <p className="text-sm font-medium truncate">{t.title}</p>
                         <p className="text-xs text-muted-foreground font-mono">{t.id}</p>
                       </div>
-                      <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_COLOR[t.status])} />
+                      <span className={cn("size-2 rounded-full shrink-0", STATUS_COLOR[t.status])} />
                     </button>
                   ))
                 )}
@@ -217,7 +217,7 @@ export function DependenciesTab({ task }: { task: TaskDTO }) {
                     disabled={addDependency.isPending}
                   >
                     {addDependency.isPending ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                      <Loader2 className="size-3 animate-spin mr-2" />
                     ) : null}
                     Add {selectedTasks.size} task{selectedTasks.size !== 1 ? "s" : ""}
                   </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { FileUIPart, SourceDocumentUIPart } from "ai";
+
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,25 +19,18 @@ import {
   VideoIcon,
   XIcon,
 } from "lucide-react";
-import { createContext, useCallback, useContext, useMemo } from "react";
+import { createContext, useCallback, use, useMemo } from "react";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type AttachmentData =
-  | (FileUIPart & { id: string })
-  | (SourceDocumentUIPart & { id: string });
-
-export type AttachmentMediaCategory =
-  | "image"
-  | "video"
-  | "audio"
-  | "document"
-  | "source"
-  | "unknown";
-
-export type AttachmentVariant = "grid" | "inline" | "list";
+import type {
+  AttachmentData,
+  AttachmentMediaCategory,
+  AttachmentVariant,
+} from "./attachments-utils";
+import { getMediaCategory } from "./attachments-utils";
 
 const mediaCategoryIcons: Record<AttachmentMediaCategory, typeof ImageIcon> = {
   audio: Music2Icon,
@@ -52,32 +45,7 @@ const mediaCategoryIcons: Record<AttachmentMediaCategory, typeof ImageIcon> = {
 // Utility Functions
 // ============================================================================
 
-export const getMediaCategory = (
-  data: AttachmentData
-): AttachmentMediaCategory => {
-  if (data.type === "source-document") {
-    return "source";
-  }
-
-  const mediaType = data.mediaType ?? "";
-
-  if (mediaType.startsWith("image/")) {
-    return "image";
-  }
-  if (mediaType.startsWith("video/")) {
-    return "video";
-  }
-  if (mediaType.startsWith("audio/")) {
-    return "audio";
-  }
-  if (mediaType.startsWith("application/") || mediaType.startsWith("text/")) {
-    return "document";
-  }
-
-  return "unknown";
-};
-
-export const getAttachmentLabel = (data: AttachmentData): string => {
+const getAttachmentLabel = (data: AttachmentData): string => {
   if (data.type === "source-document") {
     return data.title || data.filename || "Source";
   }
@@ -132,11 +100,11 @@ const AttachmentContext = createContext<AttachmentContextValue | null>(null);
 // Hooks
 // ============================================================================
 
-export const useAttachmentsContext = () =>
-  useContext(AttachmentsContext) ?? { variant: "grid" as const };
+const useAttachmentsContext = () =>
+  use(AttachmentsContext) ?? { variant: "grid" as const };
 
-export const useAttachmentContext = () => {
-  const ctx = useContext(AttachmentContext);
+const useAttachmentContext = () => {
+  const ctx = use(AttachmentContext);
   if (!ctx) {
     throw new Error("Attachment components must be used within <Attachment>");
   }

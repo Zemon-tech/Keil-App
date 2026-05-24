@@ -63,15 +63,15 @@ interface NotificationDrawerProps {
 const getNotificationIcon = (type: string) => {
     switch (type) {
         case "task":
-            return <CheckSquare className="h-4 w-4" />;
+            return <CheckSquare className="size-4" />;
         case "mention":
-            return <User className="h-4 w-4" />;
+            return <User className="size-4" />;
         case "chat":
-            return <MessageCircle className="h-4 w-4" />;
+            return <MessageCircle className="size-4" />;
         case "system":
-            return <Settings className="h-4 w-4" />;
+            return <Settings className="size-4" />;
         default:
-            return <Bell className="h-4 w-4" />;
+            return <Bell className="size-4" />;
     }
 };
 
@@ -107,8 +107,10 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
         const handleMouseUp = () => {
             if (isResizing.current) {
                 isResizing.current = false;
-                document.body.style.cursor = "default";
-                document.body.style.userSelect = "auto";
+                Object.assign(document.body.style, {
+                    cursor: "default",
+                    userSelect: "auto",
+                });
             }
         };
 
@@ -136,17 +138,19 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                 onMouseDown={(e) => {
                     e.preventDefault();
                     isResizing.current = true;
-                    document.body.style.cursor = "ew-resize";
-                    document.body.style.userSelect = "none";
+                    Object.assign(document.body.style, {
+                        cursor: "ew-resize",
+                        userSelect: "none",
+                    });
                 }}
             />
 
-            <div className="flex flex-col w-full h-full relative">
+            <div className="flex flex-col size-full relative">
 
                 {/* ── Header ── */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                     <div className="flex items-center gap-2">
-                        <Bell className="h-4 w-4" />
+                        <Bell className="size-4" />
                         <h2 className="font-semibold text-sm">Notifications</h2>
                         {unreadCount > 0 && (
                             <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-primary/10 text-primary">
@@ -155,25 +159,25 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                         )}
                     </div>
                     <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label="Mark all as read">
-                            <Check className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-foreground" aria-label="Mark all as read">
+                            <Check className="size-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" aria-label="Clear all notifications">
-                            <Trash2 className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="icon" className="size-7 text-red-500 hover:text-red-600" aria-label="Clear all notifications">
+                            <Trash2 className="size-3.5" />
                         </Button>
                         <button
                             onClick={onOpenFullView}
                             className="text-muted-foreground hover:text-foreground"
                             aria-label="Open full notification view"
                         >
-                            <Maximize2 className="h-4 w-4" />
+                            <Maximize2 className="size-4" />
                         </button>
                         <button
                             onClick={() => onOpenChange(false)}
                             className="text-muted-foreground hover:text-foreground"
                             aria-label="Close notifications"
                         >
-                            <X className="h-4 w-4" />
+                            <X className="size-4" />
                         </button>
                     </div>
                 </div>
@@ -184,7 +188,7 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                     <div className="flex-1 overflow-y-auto">
                         {mockNotifications.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center">
-                                <Bell className="h-12 w-12 opacity-20 mb-3" />
+                                <Bell className="size-12 opacity-20 mb-3" />
                                 <p className="text-sm">No notifications</p>
                             </div>
                         ) : (
@@ -200,7 +204,7 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                                         <div className="flex items-start gap-3">
                                             {/* Icon */}
                                             <div className={cn(
-                                                "h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                                                "size-8 rounded-lg flex items-center justify-center flex-shrink-0",
                                                 getNotificationColor(notification.type)
                                             )}>
                                                 {getNotificationIcon(notification.type)}
@@ -218,7 +222,7 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                                                                 {notification.title}
                                                             </h4>
                                                             {!notification.read && (
-                                                                <div className="h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
+                                                                <div className="size-1.5 rounded-full bg-primary flex-shrink-0" />
                                                             )}
                                                         </div>
                                                         <p className="text-xs text-muted-foreground mb-1 line-clamp-2">
@@ -231,7 +235,7 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
 
                                                     {/* User Avatar (if applicable) */}
                                                     {notification.user && (
-                                                        <Avatar className="h-6 w-6 flex-shrink-0">
+                                                        <Avatar className="size-6 flex-shrink-0">
                                                             <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
                                                                 {notification.user.name.charAt(0).toUpperCase()}
                                                             </AvatarFallback>
@@ -240,13 +244,13 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
 
                                                     {/* Category-based Action Button */}
                                                     {notification.type === 'task' && (
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" aria-label="View task">
-                                                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        <Button variant="ghost" size="icon" className="size-6 flex-shrink-0" aria-label="View task">
+                                                            <ExternalLink className="size-3.5 text-muted-foreground" />
                                                         </Button>
                                                     )}
                                                     {notification.type === 'chat' && (
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" aria-label="View chat">
-                                                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        <Button variant="ghost" size="icon" className="size-6 flex-shrink-0" aria-label="View chat">
+                                                            <ChevronRight className="size-3.5 text-muted-foreground" />
                                                         </Button>
                                                     )}
                                                 </div>

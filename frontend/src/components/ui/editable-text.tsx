@@ -100,7 +100,7 @@ export function EditableText({
       )}
     >
       {value || <span className="italic text-muted-foreground">{placeholder}</span>}
-      <Pencil className="ml-1.5 inline-block h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover/editable:opacity-60" />
+      <Pencil className="ml-1.5 inline-block size-3 text-muted-foreground opacity-0 transition-opacity group-hover/editable:opacity-60" />
     </span>
   );
 }
@@ -214,7 +214,7 @@ export function EditableTextarea({
       <span className="text-sm leading-relaxed">
         {value || <span className="italic text-muted-foreground">{placeholder}</span>}
       </span>
-      <Pencil className="ml-1.5 inline-block h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover/editable:opacity-60" />
+      <Pencil className="ml-1.5 inline-block size-3 text-muted-foreground opacity-0 transition-opacity group-hover/editable:opacity-60" />
     </div>
   );
 }

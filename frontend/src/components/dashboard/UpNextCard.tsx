@@ -20,7 +20,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex flex-col justify-between shadow-sm",
-          isWheel ? "h-full w-full rounded-none border-0" : "h-[132px]",
+          isWheel ? "size-full rounded-none border-0" : "h-[132px]",
         )}
       >
         <div>
@@ -38,7 +38,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex items-center justify-center text-muted-foreground text-xs italic",
-          isWheel ? "h-full w-full rounded-none border-0" : "h-[132px]",
+          isWheel ? "size-full rounded-none border-0" : "h-[132px]",
         )}
       >
         Clear schedule
@@ -56,7 +56,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex flex-col justify-between hover:bg-card transition-all duration-300 cursor-pointer shadow-sm group",
-          isWheel ? "h-full w-full rounded-none border-0" : "h-[132px]",
+          isWheel ? "size-full rounded-none border-0" : "h-[132px]",
         )}
       >
         <div className="flex flex-col h-full justify-between">
@@ -65,10 +65,11 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
           </h3>
           <div className="flex-1 flex flex-col justify-center space-y-2">
             {tasks.slice(0, isWheel ? 1 : 2).map((task) => (
-              <div
+              <button
+                type="button"
                 key={task.id}
                 onClick={(e) => handleItemClick(e, task.id)}
-                className="group/item p-0 rounded-lg transition-all duration-200"
+                className="w-full text-left group/item p-0 rounded-lg transition-all duration-200 block bg-transparent border-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <p className="text-sm font-semibold truncate group-hover/item:text-primary transition-colors leading-tight">
                   {task.title}
@@ -76,7 +77,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
                 <div className="flex gap-1.5 text-[10px] text-muted-foreground flex-wrap mt-1">
                   <span className="flex items-center gap-1 capitalize">
                     <span
-                      className={`w-1 h-1 rounded-full ${
+                      className={`size-1 rounded-full ${
                         task.status === "done" || task.status === "completed"
                           ? "bg-green-500"
                           : task.status === "in-progress"
@@ -90,7 +91,7 @@ export function UpNextCard({ tasks, isLoading, isWheel }: UpNextCardProps) {
                     P:{task.priority}
                   </span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

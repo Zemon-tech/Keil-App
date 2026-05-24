@@ -66,7 +66,7 @@ function StatusBadge({
           variant="outline"
           className="h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors"
         >
-          <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[status])} />
+          <span className={cn("size-1.5 rounded-full", STATUS_COLOR[status])} />
           {status}
         </Badge>
       </PopoverTrigger>
@@ -79,7 +79,7 @@ function StatusBadge({
               className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm
                          hover:bg-accent transition-colors text-left"
             >
-              <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_COLOR[s])} />
+              <span className={cn("size-1.5 rounded-full", STATUS_COLOR[s])} />
               {s}
             </button>
           </PopoverClose>
@@ -99,7 +99,7 @@ function AttendeesChip({ assignees }: { assignees: { id: string, name: string | 
         {assignees.slice(0, 3).map((a) => (
           <Tooltip key={a.id}>
             <TooltipTrigger asChild>
-              <Avatar className="h-5 w-5 cursor-default ring-1 ring-background">
+              <Avatar className="size-5 cursor-default ring-1 ring-background">
                 <AvatarFallback className="text-[9px] font-semibold bg-accent">
                   {(a.name || a.email).charAt(0).toUpperCase()}
                 </AvatarFallback>
@@ -111,7 +111,7 @@ function AttendeesChip({ assignees }: { assignees: { id: string, name: string | 
           </Tooltip>
         ))}
         {assignees.length > 3 && (
-          <Avatar className="h-5 w-5 ring-1 ring-background">
+          <Avatar className="size-5 ring-1 ring-background">
             <AvatarFallback className="text-[9px] bg-muted text-muted-foreground">
               +{assignees.length - 3}
             </AvatarFallback>
@@ -161,11 +161,11 @@ export function EventDetailHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              className="size-6 p-0 text-muted-foreground hover:text-foreground"
               onClick={onClose}
               title="Close detail pane"
             >
-              <PanelRightClose className="h-3.5 w-3.5" />
+              <PanelRightClose className="size-3.5" />
             </Button>
           )}
 
@@ -180,7 +180,7 @@ export function EventDetailHeader({
                 </span>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden sm:block">
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="size-4" />
               </BreadcrumbSeparator>
               <BreadcrumbItem>
                 <span className="font-medium text-muted-foreground">
@@ -188,7 +188,7 @@ export function EventDetailHeader({
                 </span>
               </BreadcrumbItem>
               <BreadcrumbSeparator>
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="size-4" />
               </BreadcrumbSeparator>
               <BreadcrumbItem className="flex-1 min-w-0">
                 <EditableText
@@ -217,13 +217,13 @@ export function EventDetailHeader({
           {/* Actions dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                <MoreVertical className="h-3.5 w-3.5" />
+              <Button variant="ghost" size="sm" className="size-6 p-0">
+                <MoreVertical className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onClick={() => onEditTask?.()}>
-                <Pencil className="mr-2 h-3.5 w-3.5" />
+                <Pencil className="mr-2 size-3.5" />
                 Edit event
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -231,7 +231,7 @@ export function EventDetailHeader({
                 className="text-destructive focus:text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                <Trash2 className="mr-2 size-3.5" />
                 Delete event
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -251,7 +251,7 @@ export function EventDetailHeader({
 
         {(event.start_date || event.due_date || event.dueDateISO) && (
           <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[11px]">
-            <Calendar className="h-3 w-3" />
+            <Calendar className="size-3" />
             {formatDate(event.start_date || event.due_date || event.dueDateISO!)}
           </Badge>
         )}

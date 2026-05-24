@@ -119,7 +119,7 @@ export const EventOverviewTab = ({
                 return (
                   <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 -mx-1">
                     <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
+                      <Avatar className="size-6">
                         <AvatarFallback className="text-[10px] font-semibold bg-accent">
                           {name.charAt(0).toUpperCase()}
                         </AvatarFallback>
@@ -130,7 +130,7 @@ export const EventOverviewTab = ({
                       onClick={() => handleRemoveAssignee(a.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="size-3.5" />
                     </button>
                   </div>
                 );
@@ -141,13 +141,13 @@ export const EventOverviewTab = ({
               <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                    <Plus className="h-3 w-3" />
+                    <Plus className="size-3" />
                     Add attendee
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-2" align="start">
                   <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
-                    <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Search className="size-4 text-muted-foreground shrink-0" />
                     <Input
                       placeholder="Search members..."
                       value={assigneeSearch}
@@ -170,7 +170,7 @@ export const EventOverviewTab = ({
                             }}
                             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
                           >
-                            <Avatar className="h-5 w-5 shrink-0">
+                            <Avatar className="size-5 shrink-0">
                               <AvatarFallback className="text-[9px] bg-accent">
                                 {mName.charAt(0).toUpperCase()}
                               </AvatarFallback>

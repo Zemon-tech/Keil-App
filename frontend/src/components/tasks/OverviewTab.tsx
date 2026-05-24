@@ -151,7 +151,7 @@ export const OverviewTab = ({
                   <div className="space-y-1.5 px-2 py-1">
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="flex items-center gap-2 animate-pulse">
-                        <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
+                        <div className="size-2 rounded-full bg-muted-foreground/20" />
                         <div className="h-3 rounded bg-muted-foreground/15 flex-1" />
                       </div>
                     ))}
@@ -170,7 +170,7 @@ export const OverviewTab = ({
                       {/* Status dot */}
                       <span
                         className={cn(
-                          "h-2 w-2 rounded-full shrink-0",
+                          "size-2 rounded-full shrink-0",
                           statusColorMap[sub.status] || "bg-zinc-500"
                         )}
                       />
@@ -187,7 +187,7 @@ export const OverviewTab = ({
 
                       {/* Priority flag */}
                       {(sub.priority === "high" || sub.priority === "urgent") && (
-                        <Flag className="w-3 h-3 text-orange-400 shrink-0" />
+                        <Flag className="size-3 text-orange-400 shrink-0" />
                       )}
 
                       {/* Due date */}
@@ -201,7 +201,7 @@ export const OverviewTab = ({
                       </span>
 
                       {/* Chevron */}
-                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      <ChevronRight className="size-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </div>
                   );
                 })}
@@ -217,7 +217,7 @@ export const OverviewTab = ({
                     onClick={() => setCreateSubtaskOpen(true)}
                     className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="size-3.5" />
                     Add subtask
                   </button>
                 )}
@@ -255,7 +255,7 @@ export const OverviewTab = ({
                 return (
                   <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 -mx-1">
                     <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
+                      <Avatar className="size-6">
                         <AvatarFallback className="text-[10px] font-semibold bg-accent">
                           {name.charAt(0).toUpperCase()}
                         </AvatarFallback>
@@ -267,7 +267,7 @@ export const OverviewTab = ({
                         onClick={() => handleRemoveAssignee(a.id)}
                         className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <X className="size-3.5" />
                       </button>
                     )}
                   </div>
@@ -279,13 +279,13 @@ export const OverviewTab = ({
               <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
                 <PopoverTrigger asChild>
                   <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                    <Plus className="h-3 w-3" />
+                    <Plus className="size-3" />
                     Add assignee
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-56 p-2" align="start">
                   <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
-                    <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Search className="size-4 text-muted-foreground shrink-0" />
                     <Input
                       placeholder="Search members..."
                       value={assigneeSearch}
@@ -294,12 +294,18 @@ export const OverviewTab = ({
                     />
                   </div>
                   <div className="max-h-40 overflow-y-auto space-y-1">
-                    {members
-                      .filter(m => !(task.assignees ?? []).some(a => a.id === m.user_id))
-                      .filter(m => (m.name || m.email).toLowerCase().includes(assigneeSearch.toLowerCase()))
-                      .map((m) => {
+                    {(() => {
+                      const elements = [];
+                      const assignees = task.assignees ?? [];
+                      const searchLower = assigneeSearch.toLowerCase();
+                      for (const m of members) {
+                        const isAlreadyAssigned = assignees.some(a => a.id === m.user_id);
+                        if (isAlreadyAssigned) continue;
+                        
                         const mName = m.name || m.email;
-                        return (
+                        if (!mName.toLowerCase().includes(searchLower)) continue;
+                        
+                        elements.push(
                           <button
                             key={m.user_id}
                             onClick={() => {
@@ -308,7 +314,7 @@ export const OverviewTab = ({
                             }}
                             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
                           >
-                            <Avatar className="h-5 w-5 shrink-0">
+                            <Avatar className="size-5 shrink-0">
                               <AvatarFallback className="text-[9px] bg-accent">
                                 {mName.charAt(0).toUpperCase()}
                               </AvatarFallback>
@@ -316,8 +322,9 @@ export const OverviewTab = ({
                             <span className="truncate">{mName}</span>
                           </button>
                         );
-                      })
-                    }
+                      }
+                      return elements;
+                    })()}
                   </div>
                 </PopoverContent>
               </Popover>

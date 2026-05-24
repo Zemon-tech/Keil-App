@@ -253,16 +253,16 @@ function OrgGeneralTab() {
           </Label>
           <div className="flex items-center gap-2 group">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50 font-mono text-xs text-muted-foreground">
-              <Hash className="h-3 w-3" />
+              <Hash className="size-3" />
               {selectedOrg.id}
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => handleCopyToClipboard(selectedOrg.id, "Organisation ID")}
             >
-              <Copy className="h-3.5 w-3.5" />
+              <Copy className="size-3.5" />
             </Button>
           </div>
         </div>
@@ -272,7 +272,7 @@ function OrgGeneralTab() {
         <div className="pt-10 border-t border-border/50">
           <div className="bg-destructive/5 rounded-2xl border border-destructive/20 p-6">
             <div className="flex items-center gap-3 text-destructive mb-4">
-              <AlertTriangle className="h-5 w-5" />
+              <AlertTriangle className="size-5" />
               <h3 className="font-semibold">Danger Zone</h3>
             </div>
             <div className="flex items-center justify-between gap-6">
@@ -292,9 +292,9 @@ function OrgGeneralTab() {
                 disabled={deleteOrg.isPending}
               >
                 {deleteOrg.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="size-4 animate-spin mr-2" />
                 ) : (
-                  <Archive className="h-4 w-4 mr-2" />
+                  <Archive className="size-4 mr-2" />
                 )}
                 Delete Organisation
               </Button>
@@ -343,7 +343,7 @@ function OrgMembersTab() {
           <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
             <DialogTrigger asChild>
               <Button className="rounded-xl shadow-lg shadow-primary/20">
-                <UserPlus className="h-4 w-4 mr-2" />
+                <UserPlus className="size-4 mr-2" />
                 Invite Member
               </Button>
             </DialogTrigger>
@@ -364,9 +364,9 @@ function OrgMembersTab() {
                     disabled={createInvite.isPending}
                   >
                     {createInvite.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <Loader2 className="size-4 animate-spin mr-2" />
                     ) : (
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="size-4 mr-2" />
                     )}
                     Generate Invite Link
                   </Button>
@@ -381,10 +381,10 @@ function OrgMembersTab() {
                       <Button
                         variant="secondary"
                         size="icon"
-                        className="h-11 w-11 shrink-0 rounded-xl"
+                        className="size-11 shrink-0 rounded-xl"
                         onClick={() => handleCopyToClipboard(inviteLink, "Invite link")}
                       >
-                        <Copy className="h-4 w-4" />
+                        <Copy className="size-4" />
                       </Button>
                     </div>
                     <p className="text-[11px] text-muted-foreground text-center">
@@ -411,7 +411,7 @@ function OrgMembersTab() {
               className="flex items-center justify-between p-3 rounded-2xl hover:bg-muted/40 transition-colors group"
             >
               <div className="flex items-center gap-4">
-                <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                <Avatar className="size-10 border-2 border-background shadow-sm">
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                     {(member.name || member.email).charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -431,7 +431,7 @@ function OrgMembersTab() {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-                    <Mail className="h-3 w-3" />
+                    <Mail className="size-3" />
                     {member.email}
                   </div>
                 </div>
@@ -451,7 +451,7 @@ function OrgMembersTab() {
                     >
                       <RoleBadge role={member.role} />
                       {canEdit && (
-                        <ChevronRight className="h-3 w-3 text-muted-foreground rotate-90" />
+                        <ChevronRight className="size-3 text-muted-foreground rotate-90" />
                       )}
                     </button>
                   </PopoverTrigger>
@@ -472,7 +472,7 @@ function OrgMembersTab() {
                       >
                         Member
                         {member.role === "member" && (
-                          <Check className="h-3 w-3" />
+                          <Check className="size-3" />
                         )}
                       </button>
                       <button
@@ -489,7 +489,7 @@ function OrgMembersTab() {
                       >
                         Admin
                         {member.role === "admin" && (
-                          <Check className="h-3 w-3" />
+                          <Check className="size-3" />
                         )}
                       </button>
                     </PopoverContent>
@@ -502,9 +502,9 @@ function OrgMembersTab() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 rounded-lg text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="size-8 rounded-lg text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        <MoreVertical className="h-4 w-4" />
+                        <MoreVertical className="size-4" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-48 p-1 rounded-xl" align="end">
@@ -512,7 +512,7 @@ function OrgMembersTab() {
                         onClick={() => removeMember.mutate(member.user_id)}
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="size-3.5" />
                         Remove from Organisation
                       </button>
                     </PopoverContent>
@@ -567,14 +567,14 @@ function OrgSpacesTab() {
             />
             <Button
               size="icon"
-              className="absolute right-1.5 top-1.5 h-9 w-9 rounded-xl opacity-0 group-focus-within:opacity-100 transition-opacity"
+              className="absolute right-1.5 top-1.5 size-9 rounded-xl opacity-0 group-focus-within:opacity-100 transition-opacity"
               onClick={handleCreateSpace}
               disabled={!newSpaceName.trim() || createSpace.isPending}
             >
               {createSpace.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <Plus className="size-4" />
               )}
             </Button>
           </div>
@@ -588,15 +588,15 @@ function OrgSpacesTab() {
               className="group flex items-center justify-between p-4 rounded-2xl border border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-primary/20 transition-all text-left"
             >
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                  <Layers className="h-5 w-5" />
+                <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <Layers className="size-5" />
                 </div>
                 <div>
                   <p className="font-semibold text-sm">{space.name}</p>
                   <p className="text-xs text-muted-foreground">Active space</p>
                 </div>
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+              <ChevronRight className="size-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
             </button>
           ))}
         </div>
@@ -641,8 +641,8 @@ function SpaceDetailsSheet({
       <SheetContent className="w-[400px] sm:w-[540px] p-0 gap-0 border-l border-border/50">
         <SheetHeader className="p-6 border-b border-border/50 bg-muted/10">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-              <Layers className="h-5 w-5" />
+            <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <Layers className="size-5" />
             </div>
             <div className="flex-1">
               <VisuallyHidden.Root>
@@ -751,7 +751,7 @@ function SpaceMembersPanel({
       {isAdmin && !space.is_private && (
         <div className="rounded-lg border border-border p-2">
           <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
+            <Search className="size-4 text-muted-foreground" />
             <Input
               value={memberSearch}
               onChange={(e) => setMemberSearch(e.target.value)}
@@ -779,7 +779,7 @@ function SpaceMembersPanel({
                     <span className="truncate">
                       {member.name || member.email}
                     </span>
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="size-3.5" />
                   </button>
                 ))
               )}
@@ -838,7 +838,7 @@ function SpaceMembersPanel({
                           )}
                         >
                           {r}
-                          {member.role === r && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                          {member.role === r && <Check className="size-3.5 text-primary shrink-0" />}
                         </button>
                       ))}
                     </PopoverContent>
@@ -850,10 +850,10 @@ function SpaceMembersPanel({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => removeMember.mutate(member.user_id)}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="size-3.5" />
                   </Button>
                 )}
               </div>
@@ -1099,9 +1099,9 @@ function AccountTab() {
       {/* Profile Section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Avatar className="h-14 w-14 rounded-full ring-2 ring-background shadow-sm">
+          <Avatar className="size-14 rounded-full ring-2 ring-background shadow-sm">
             {avatarUrl ? (
-              <img src={avatarUrl} alt={userDisplayName} className="h-full w-full object-cover rounded-full" />
+              <img src={avatarUrl} alt={userDisplayName} className="size-full object-cover rounded-full" />
             ) : (
               <AvatarFallback className="rounded-full bg-emerald-600 text-white text-lg font-semibold">
                 {userInitials}
@@ -1130,7 +1130,7 @@ function AccountTab() {
             onClick={handleAvatarClick}
             disabled={loading}
           >
-            {loading ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+            {loading ? <Loader2 className="size-3 animate-spin mr-2" /> : null}
             Change avatar
           </Button>
         </div>
@@ -1236,7 +1236,7 @@ function AccountTab() {
       {/* Security */}
       <div>
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Shield className="h-4 w-4 text-muted-foreground" />
+          <Shield className="size-4 text-muted-foreground" />
           Security
         </h3>
         <div className="mt-4 space-y-4">
@@ -1283,7 +1283,7 @@ function AccountTab() {
                         onClick={() => setShowPasswords(!showPasswords)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        {showPasswords ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        {showPasswords ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                       </button>
                     </div>
                     <button 
@@ -1332,7 +1332,7 @@ function AccountTab() {
                     onClick={handlePasswordAction}
                     disabled={loading || !password || !confirmPassword || (passwordFlow === 'change' && !oldPassword)}
                   >
-                    {loading && <Loader2 className="h-3 w-3 animate-spin mr-2" />}
+                    {loading && <Loader2 className="size-3 animate-spin mr-2" />}
                     Confirm
                   </Button>
                   <Button 
@@ -1383,7 +1383,7 @@ function AccountTab() {
           className="text-xs rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200 dark:border-red-800/40"
           onClick={signOut}
         >
-          <LogOut className="h-3.5 w-3.5 mr-1.5" />
+          <LogOut className="size-3.5 mr-1.5" />
           Sign out
         </Button>
       </div>
@@ -1408,7 +1408,7 @@ function PreferencesTab() {
       {/* Theme */}
       <div>
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Palette className="h-4 w-4 text-muted-foreground" />
+          <Palette className="size-4 text-muted-foreground" />
           Appearance
         </h3>
         <div className="mt-4 grid grid-cols-3 gap-3">
@@ -1421,8 +1421,8 @@ function PreferencesTab() {
                 : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
             )}
           >
-            <div className="h-10 w-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-sm">
-              <Sun className="h-5 w-5 text-amber-500" />
+            <div className="size-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+              <Sun className="size-5 text-amber-500" />
             </div>
             <span className="text-xs font-medium text-foreground">Light</span>
           </button>
@@ -1435,8 +1435,8 @@ function PreferencesTab() {
                 : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
             )}
           >
-            <div className="h-10 w-10 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shadow-sm">
-              <Moon className="h-5 w-5 text-indigo-400" />
+            <div className="size-10 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center shadow-sm">
+              <Moon className="size-5 text-indigo-400" />
             </div>
             <span className="text-xs font-medium text-foreground">Dark</span>
           </button>
@@ -1449,8 +1449,8 @@ function PreferencesTab() {
                 : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
             )}
           >
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-white to-slate-900 border border-slate-300 flex items-center justify-center shadow-sm">
-              <Monitor className="h-5 w-5 text-slate-500" />
+            <div className="size-10 rounded-lg bg-gradient-to-br from-white to-slate-900 border border-slate-300 flex items-center justify-center shadow-sm">
+              <Monitor className="size-5 text-slate-500" />
             </div>
             <span className="text-xs font-medium text-foreground">System</span>
           </button>
@@ -1462,7 +1462,7 @@ function PreferencesTab() {
       {/* Language */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Globe className="h-4 w-4 text-muted-foreground" />
+          <Globe className="size-4 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium text-foreground">Language</p>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -1472,7 +1472,7 @@ function PreferencesTab() {
         </div>
         <Button variant="outline" size="sm" className="text-xs rounded-lg">
           English
-          <ChevronRight className="h-3 w-3 ml-1" />
+          <ChevronRight className="size-3 ml-1" />
         </Button>
       </div>
 
@@ -1819,8 +1819,8 @@ function ConnectorsTab() {
         {/* Google Calendar — live integration */}
         <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-              <Plug className="h-4 w-4 text-muted-foreground" />
+            <div className="size-10 rounded-lg bg-muted flex items-center justify-center">
+              <Plug className="size-4 text-muted-foreground" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -1830,7 +1830,7 @@ function ConnectorsTab() {
                 {!gcalLoading && (
                   <span
                     className={cn(
-                      "inline-block h-2 w-2 rounded-full",
+                      "inline-block size-2 rounded-full",
                       gcalStatus?.connected
                         ? "bg-emerald-500"
                         : "bg-muted-foreground/40",
@@ -1854,7 +1854,7 @@ function ConnectorsTab() {
               onClick={() => disconnectGcal.mutate()}
             >
               {disconnectGcal.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
                 "Disconnect"
               )}
@@ -1868,7 +1868,7 @@ function ConnectorsTab() {
               onClick={connectGcal}
             >
               {gcalLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
                 "Connect"
               )}
@@ -1883,8 +1883,8 @@ function ConnectorsTab() {
             className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
           >
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-                <Plug className="h-4 w-4 text-muted-foreground" />
+              <div className="size-10 rounded-lg bg-muted flex items-center justify-center">
+                <Plug className="size-4 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">
@@ -1982,7 +1982,7 @@ function EnterpriseTab() {
       <Separator />
 
       <div className="p-6 rounded-xl border border-border bg-gradient-to-br from-muted/30 to-muted/10 text-center">
-        <Building2 className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+        <Building2 className="size-10 text-muted-foreground mx-auto mb-3" />
         <h3 className="text-sm font-semibold text-foreground">
           Upgrade to Enterprise
         </h3>
@@ -2006,7 +2006,7 @@ function EnterpriseTab() {
         </div>
         <Button variant="outline" size="sm" className="text-xs rounded-lg">
           Manage team
-          <ChevronRight className="h-3 w-3 ml-1" />
+          <ChevronRight className="size-3 ml-1" />
         </Button>
       </div>
     </div>
@@ -2089,7 +2089,7 @@ export function SettingsDialog({
           <DialogTitle>Settings</DialogTitle>
         </VisuallyHidden.Root>
 
-        <div className="flex h-full w-full overflow-hidden rounded-2xl">
+        <div className="flex size-full overflow-hidden rounded-2xl">
           {/* ── Sidebar ─────────────────────────────────── */}
           <aside className="w-[280px] shrink-0 border-r border-border bg-sidebar flex flex-col h-full rounded-l-2xl">
             {/* Back / Home */}
@@ -2098,7 +2098,7 @@ export function SettingsDialog({
                 onClick={() => mode === "workspace" ? setMode("account") : onOpenChange(false)}
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer group"
               >
-                <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+                <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
                 <span className="font-medium">
                   {mode === "workspace" ? "Back to App Settings" : "Back"}
                 </span>
@@ -2115,7 +2115,7 @@ export function SettingsDialog({
                       className="w-full justify-between px-2 h-12 hover:bg-muted/50 rounded-xl border border-border/50"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold shrink-0">
+                        <div className="size-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold shrink-0">
                           {selectedOrg?.name?.charAt(0).toUpperCase() || "W"}
                         </div>
                         <div className="flex flex-col items-start min-w-0 text-left">
@@ -2127,7 +2127,7 @@ export function SettingsDialog({
                           </span>
                         </div>
                       </div>
-                      <ChevronUp className="h-4 w-4 text-muted-foreground rotate-180" />
+                      <ChevronUp className="size-4 text-muted-foreground rotate-180" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
@@ -2150,7 +2150,7 @@ export function SettingsDialog({
                         >
                           <div
                             className={cn(
-                              "h-6 w-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0",
+                              "size-6 rounded flex items-center justify-center text-[10px] font-bold shrink-0",
                               activeOrgId === org.id
                                 ? "bg-primary-foreground/20"
                                 : "bg-primary/10 text-primary",
@@ -2162,7 +2162,7 @@ export function SettingsDialog({
                             {org.name}
                           </span>
                           {activeOrgId === org.id && (
-                            <Check className="h-3.5 w-3.5" />
+                            <Check className="size-3.5" />
                           )}
                         </button>
                       ))}
@@ -2184,7 +2184,7 @@ export function SettingsDialog({
                     onClick={() => setMode("workspace")}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/60"
                   >
-                    <Building2 className="h-4 w-4 shrink-0" />
+                    <Building2 className="size-4 shrink-0" />
                     Organisation
                   </button>
                 </div>
@@ -2211,7 +2211,7 @@ export function SettingsDialog({
                               : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                           )}
                         >
-                          <Icon className="h-4 w-4 shrink-0" />
+                          <Icon className="size-4 shrink-0" />
                           {item.label}
                         </button>
                       );
@@ -2237,7 +2237,7 @@ export function SettingsDialog({
                               : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                           )}
                         >
-                          <Icon className="h-4 w-4 shrink-0" />
+                          <Icon className="size-4 shrink-0" />
                           {item.label}
                         </button>
                       );

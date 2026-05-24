@@ -67,15 +67,15 @@ const mockNotifications = [
 const getNotificationIcon = (type: string) => {
     switch (type) {
         case "task":
-            return <CheckSquare className="h-4 w-4" />;
+            return <CheckSquare className="size-4" />;
         case "mention":
-            return <User className="h-4 w-4" />;
+            return <User className="size-4" />;
         case "chat":
-            return <MessageCircle className="h-4 w-4" />;
+            return <MessageCircle className="size-4" />;
         case "system":
-            return <Settings className="h-4 w-4" />;
+            return <Settings className="size-4" />;
         default:
-            return <Bell className="h-4 w-4" />;
+            return <Bell className="size-4" />;
     }
 };
 
@@ -113,7 +113,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                         {/* Sidebar Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                             <div className="flex items-center gap-2">
-                                <Bell className="h-4 w-4" />
+                                <Bell className="size-4" />
                                 <span className="text-sm font-semibold">Notifications</span>
                                 {unreadCount > 0 && (
                                     <Badge variant="secondary" className="h-5 px-1.5 text-xs bg-primary/10 text-primary">
@@ -122,18 +122,18 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                 )}
                             </div>
                             <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label="Mark all as read">
-                                    <CheckCheck className="h-3.5 w-3.5" />
+                                <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-foreground" aria-label="Mark all as read">
+                                    <CheckCheck className="size-3.5" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600" aria-label="Clear all notifications">
-                                    <Trash2 className="h-3.5 w-3.5" />
+                                <Button variant="ghost" size="icon" className="size-7 text-red-500 hover:text-red-600" aria-label="Clear all notifications">
+                                    <Trash2 className="size-3.5" />
                                 </Button>
                                 <button
                                     onClick={() => onOpenChange(false)}
                                     className="text-muted-foreground hover:text-foreground transition-colors"
                                     aria-label="Close notifications"
                                 >
-                                    <X className="h-4 w-4" />
+                                    <X className="size-4" />
                                 </button>
                             </div>
                         </div>
@@ -142,7 +142,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                         <div className="flex-1 overflow-y-auto p-2 space-y-1">
                             <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-primary/10 text-primary">
                                 <div className="flex items-center gap-3">
-                                    <Bell className="h-4 w-4" />
+                                    <Bell className="size-4" />
                                     <span className="text-sm font-medium">All</span>
                                 </div>
                                 {unreadCount > 0 && (
@@ -154,7 +154,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
 
                             <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
                                 <div className="flex items-center gap-3">
-                                    <CheckSquare className="h-4 w-4 text-blue-500" />
+                                    <CheckSquare className="size-4 text-blue-500" />
                                     <span className="text-sm font-medium">Tasks</span>
                                 </div>
                                 <span className="text-xs text-muted-foreground">2</span>
@@ -162,7 +162,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
 
                             <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
                                 <div className="flex items-center gap-3">
-                                    <User className="h-4 w-4 text-purple-500" />
+                                    <User className="size-4 text-purple-500" />
                                     <span className="text-sm font-medium">Mentions</span>
                                 </div>
                                 <span className="text-xs text-muted-foreground">1</span>
@@ -170,7 +170,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
 
                             <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
                                 <div className="flex items-center gap-3">
-                                    <MessageCircle className="h-4 w-4 text-green-500" />
+                                    <MessageCircle className="size-4 text-green-500" />
                                     <span className="text-sm font-medium">Chat</span>
                                 </div>
                                 <span className="text-xs text-muted-foreground">1</span>
@@ -178,7 +178,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
 
                             <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-foreground">
                                 <div className="flex items-center gap-3">
-                                    <Settings className="h-4 w-4 text-orange-500" />
+                                    <Settings className="size-4 text-orange-500" />
                                     <span className="text-sm font-medium">System</span>
                                 </div>
                                 <span className="text-xs text-muted-foreground">1</span>
@@ -197,7 +197,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                         <div className="flex-1 overflow-y-auto">
                             {mockNotifications.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-12 text-center">
-                                    <Bell className="h-16 w-16 opacity-20 mb-4" />
+                                    <Bell className="size-16 opacity-20 mb-4" />
                                     <h3 className="text-lg font-semibold mb-2">No notifications</h3>
                                     <p className="text-sm max-w-[320px]">
                                         You're all caught up! We'll notify you when something important happens.
@@ -216,7 +216,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                             <div className="flex items-start gap-4 justify-between">
                                                 {/* Icon */}
                                                 <div className={cn(
-                                                    "h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                                                    "size-10 rounded-lg flex items-center justify-center flex-shrink-0",
                                                     getNotificationColor(notification.type)
                                                 )}>
                                                     {getNotificationIcon(notification.type)}
@@ -234,7 +234,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                                                     {notification.title}
                                                                 </h4>
                                                                 {!notification.read && (
-                                                                    <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                                                                    <div className="size-2 rounded-full bg-primary flex-shrink-0" />
                                                                 )}
                                                             </div>
                                                             <p className="text-sm text-muted-foreground mb-2">
@@ -247,7 +247,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
 
                                                         {/* User Avatar (if applicable) */}
                                                         {notification.user && (
-                                                            <Avatar className="h-8 w-8 flex-shrink-0">
+                                                            <Avatar className="size-8 flex-shrink-0">
                                                                 <AvatarFallback className="text-xs bg-primary/10 text-primary">
                                                                     {notification.user.name.charAt(0).toUpperCase()}
                                                                 </AvatarFallback>
@@ -262,39 +262,39 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8"
+                                                            className="size-8"
                                                             aria-label="Mark as read"
                                                         >
-                                                            <Check className="h-4 w-4 text-muted-foreground" />
+                                                            <Check className="size-4 text-muted-foreground" />
                                                         </Button>
                                                     )}
                                                     {notification.type === 'task' && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8"
+                                                            className="size-8"
                                                             aria-label="View task"
                                                         >
-                                                            <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                                            <ExternalLink className="size-4 text-muted-foreground" />
                                                         </Button>
                                                     )}
                                                     {notification.type === 'chat' && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8"
+                                                            className="size-8"
                                                             aria-label="View chat"
                                                         >
-                                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                            <ChevronRight className="size-4 text-muted-foreground" />
                                                         </Button>
                                                     )}
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8"
+                                                        className="size-8"
                                                         aria-label="Delete notification"
                                                     >
-                                                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                                        <Trash2 className="size-4 text-muted-foreground" />
                                                     </Button>
                                                 </div>
                                             </div>

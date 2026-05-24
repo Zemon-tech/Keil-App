@@ -125,7 +125,7 @@ export function LoginForm({
                   <img 
                     src="https://cdn.brandfetch.io/id6O2oGzv-/theme/dark/symbol.svg?c=1bxid64Mup7aczewSAYMX&t=1755835725776" 
                     alt="Google" 
-                    className="h-5 w-5"
+                    className="size-5"
                   />
                   <span className="sr-only">Login with Google</span>
                 </Button>
@@ -155,7 +155,7 @@ export function LoginForm({
             <img
               src="/placeholder.png"
               alt="Image"
-              className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+              className="absolute inset-0 size-full object-cover dark:brightness-[0.2] dark:grayscale"
             />
           </div>
         </CardContent>

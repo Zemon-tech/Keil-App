@@ -84,14 +84,14 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setActiveChannel(null)}
-            className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="size-4" />
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
-              {currentChannel?.type === "group" ? <Users className="w-4 h-4" /> : channelName.charAt(0).toUpperCase()}
+            <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
+              {currentChannel?.type === "group" ? <Users className="size-4" /> : channelName.charAt(0).toUpperCase()}
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-foreground leading-none">{channelName}</span>
@@ -113,10 +113,10 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <button
-                  className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                   aria-label="Delete chat"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="size-4" />
                 </button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -191,7 +191,7 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
                       minute: "2-digit",
                     })}
                   </span>
-                  {isMine && <Check className="w-3 h-3 text-primary" />}
+                  {isMine && <Check className="size-3 text-primary" />}
                 </div>
               </motion.div>
             );
@@ -205,9 +205,9 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
             className="flex gap-2 items-center text-[11px] text-muted-foreground italic px-2"
           >
             <div className="flex gap-1">
-              <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-              <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-              <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce"></span>
+              <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+              <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+              <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce"></span>
             </div>
             {typingUsers[channelId].map((u) => u.name).join(", ")} is typing...
           </motion.div>
@@ -228,10 +228,10 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
         <button
           onClick={handleSend}
           disabled={!text.trim()}
-          className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary transition-all active:scale-95"
+          className="flex items-center justify-center size-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary transition-all active:scale-95"
           aria-label="Send message"
         >
-          <Send className="h-4 w-4 ml-0.5" />
+          <Send className="size-4 ml-0.5" />
         </button>
       </div>
     </div>

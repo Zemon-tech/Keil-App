@@ -58,16 +58,31 @@ export function ChatDrawer() {
     >
       {/* Resize Handle */}
       <div
-        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-[70]"
+        role="separator"
+        aria-label="Resize chat drawer"
+        aria-valuenow={width}
+        aria-valuemin={320}
+        aria-valuemax={800}
+        tabIndex={0}
+        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-[70] outline-none focus-visible:bg-primary/40"
         onMouseDown={(e) => {
           e.preventDefault();
           isResizing.current = true;
           document.body.style.cursor = "ew-resize";
           document.body.style.userSelect = "none";
         }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            setWidth((w) => Math.max(320, w - 10));
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            setWidth((w) => Math.min(800, w + 10));
+          }
+        }}
       />
 
-      <div className="flex flex-col w-full h-full relative">
+      <div className="flex flex-col size-full relative">
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
@@ -80,14 +95,14 @@ export function ChatDrawer() {
               className="text-muted-foreground hover:text-foreground"
               aria-label="Open full chat page"
             >
-              <Maximize2 className="h-4 w-4" />
+              <Maximize2 className="size-4" />
             </button>
             <button
               onClick={closeChat}
               className="text-muted-foreground hover:text-foreground"
               aria-label="Close chat"
             >
-              <X className="h-4 w-4" />
+              <X className="size-4" />
             </button>
           </div>
         </div>

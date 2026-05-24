@@ -378,7 +378,7 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
       {/* Header bar */}
       <header className="h-11 px-5 border-b border-black/7 dark:border-white/7 flex items-center justify-between shrink-0 bg-white dark:bg-[#0f0f11] z-10">
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${getHeaderDotBg()} ${status === "recording" ? "animate-pulse" : ""}`} />
+          <span className={`size-2 rounded-full ${getHeaderDotBg()} ${status === "recording" ? "animate-pulse" : ""}`} />
           <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">
             Keil HQ · Meeting Studio
           </span>
@@ -392,14 +392,14 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
                 title="Copy Transcript"
                 className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
               >
-                <Copy className="h-4 w-4" />
+                <Copy className="size-4" />
               </button>
               <button
                 onClick={downloadTextFile}
                 title="Download Transcript"
                 className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
               >
-                <Download className="h-4 w-4" />
+                <Download className="size-4" />
               </button>
               <div className="h-4 w-[1px] bg-black/8 dark:bg-white/8 mx-1" />
             </>
@@ -408,7 +408,7 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           >
-            <X className="h-4 w-4" />
+            <X className="size-4" />
           </button>
         </div>
       </header>
@@ -450,37 +450,37 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
               {(status === "idle" || status === "recording") ? (
                 <div className="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center">
                   <VoicePoweredOrb
-                    className="w-full h-full scale-[1.25]"
+                    className="size-full scale-[1.25]"
                     enableVoiceControl={status === "recording"}
                     voiceSensitivity={1.8}
                   />
                   {status === "idle" && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                      <Mic className="h-6 w-6 text-white/80 drop-shadow-md" />
+                      <Mic className="size-6 text-white/80 drop-shadow-md" />
                     </div>
                   )}
                 </div>
               ) : (
                 /* Inner Circle Orb Frame for completed, processing or error */
                 <div
-                  className={`w-full h-full rounded-full border flex items-center justify-center transition-all duration-[400ms] ${
+                  className={`size-full rounded-full border flex items-center justify-center transition-all duration-[400ms] ${
                     status === "completed"
                       ? "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/20"
                       : "border-rose-500/30 bg-rose-500/10 dark:bg-rose-950/30"
                   }`}
                 >
                   {(status === "uploading" || status === "transcribing") && (
-                    <Loader2 className="h-6 w-6 text-violet-500 dark:text-violet-400 animate-spin" />
+                    <Loader2 className="size-6 text-violet-500 dark:text-violet-400 animate-spin" />
                   )}
-                  {status === "completed" && <CheckCircle className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />}
-                  {status === "error" && <AlertCircle className="h-6 w-6 text-rose-500 dark:text-rose-400" />}
+                  {status === "completed" && <CheckCircle className="size-5 text-emerald-500 dark:text-emerald-400" />}
+                  {status === "error" && <AlertCircle className="size-6 text-rose-500 dark:text-rose-400" />}
                 </div>
               )}
 
               {/* Spinner Ring Overlay for Uploading/Transcribing */}
               {(status === "uploading" || status === "transcribing") && (
                 <div className="absolute inset-[-4px] rounded-full p-[2px] animate-[orb-spin_1.5s_linear_infinite] pointer-events-none">
-                  <div className="w-full h-full rounded-full bg-transparent border-2 border-transparent border-t-violet-500 border-r-violet-500" />
+                  <div className="size-full rounded-full bg-transparent border-2 border-transparent border-t-violet-500 border-r-violet-500" />
                 </div>
               )}
             </div>
@@ -501,7 +501,7 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
               {status === "recording" && (
                 <div className="flex flex-col items-center">
                   <div className="flex items-center gap-1.5 justify-center">
-                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
+                    <span className="size-1.5 rounded-full bg-rose-500 animate-ping" />
                     <span className="text-[28px] font-normal leading-tight text-foreground font-mono tracking-tight tabular-nums">
                       {formatTime(duration)}
                     </span>
@@ -535,7 +535,7 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
                         onClick={toggleAudioPlay}
                         className="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-violet-500 cursor-pointer transition-colors"
                       >
-                        {isAudioPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-violet-500/20" />}
+                        {isAudioPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5 fill-violet-500/20" />}
                       </button>
                     )}
                   </div>
@@ -676,7 +676,7 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
                             </span>
                             <span className="text-[11px] font-normal text-muted-foreground font-mono">
                               {formatSegmentTime(entry.start_time_seconds)}
-                              <ChevronRight className="h-2.5 w-2.5 text-muted-foreground/60 inline-block mx-0.5 align-middle" />
+                              <ChevronRight className="size-2.5 text-muted-foreground/60 inline-block mx-0.5 align-middle" />
                               {formatSegmentTime(entry.end_time_seconds)}
                             </span>
                           </div>

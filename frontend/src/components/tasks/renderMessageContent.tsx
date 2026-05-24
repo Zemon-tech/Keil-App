@@ -76,7 +76,7 @@ export function renderMessageContent(
                 : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
             )}
           >
-            {isEvent ? <DollarSign className="h-3 w-3 shrink-0" /> : <Hash className="h-3 w-3 shrink-0" />}
+            {isEvent ? <DollarSign className="size-3 shrink-0" /> : <Hash className="size-3 shrink-0" />}
             {task.title}
           </button>
         );

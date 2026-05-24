@@ -29,7 +29,7 @@ export function InvitePage() {
   if (joinOrg.isPending) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-background text-foreground">
-        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+        <Loader2 className="size-10 animate-spin text-primary mb-4" />
         <h2 className="text-xl font-semibold">Joining Organisation...</h2>
         <p className="text-muted-foreground mt-2">Validating your invitation token.</p>
       </div>
@@ -40,7 +40,7 @@ export function InvitePage() {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-background text-foreground bg-red-50/10 p-6">
         <div className="max-w-md text-center">
-          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <AlertCircle className="size-12 text-destructive mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-destructive mb-2">
             Invalid or Expired Invite
           </h2>

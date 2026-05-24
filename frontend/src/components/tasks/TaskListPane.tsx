@@ -143,7 +143,7 @@ function SubtaskList({
       <div className="pl-6 space-y-px">
         {[1, 2].map((i) => (
           <div key={i} className="flex items-center gap-2 px-2 py-1 animate-pulse">
-            <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/20" />
+            <div className="size-1.5 rounded-full bg-muted-foreground/20" />
             <div className="h-2.5 rounded bg-muted-foreground/12 flex-1" />
           </div>
         ))}
@@ -183,7 +183,7 @@ function SubtaskList({
                   <button
                     onClick={(e) => e.stopPropagation()}
                     className={cn(
-                      "w-1.5 h-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
+                      "size-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
                       STATUS_COLOR[sub.status as AnyStatus] || "bg-zinc-500"
                     )}
                   />
@@ -198,7 +198,7 @@ function SubtaskList({
                         }}
                         className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
                       >
-                        <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
+                        <div className={cn("size-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
                         {s}
                       </button>
                     </PopoverClose>
@@ -223,7 +223,7 @@ function SubtaskList({
                   event
                 </span>
               )}
-              {isHighPriority && <Flag className="w-2.5 h-2.5 text-orange-400 shrink-0" />}
+              {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
               <span className="tabular-nums text-right leading-tight">
                 {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined)}
               </span>
@@ -397,6 +397,11 @@ export function TaskListPane({
   }, [tasks]);
 
   // Keyboard shortcut: press C to open create dialog
+  const onCreateDialogOpenChangeRef = useRef(onCreateDialogOpenChange);
+  onCreateDialogOpenChangeRef.current = onCreateDialogOpenChange;
+  const canCreateTaskRef = useRef(canCreateTask);
+  canCreateTaskRef.current = canCreateTask;
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -407,14 +412,14 @@ export function TaskListPane({
       )
         return;
       if (e.key === "c" || e.key === "C") {
-        if (!canCreateTask) return;
+        if (!canCreateTaskRef.current) return;
         e.preventDefault();
-        onCreateDialogOpenChange(true);
+        onCreateDialogOpenChangeRef.current(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCreateDialogOpenChange, canCreateTask]);
+  }, []);
 
   // Logic handle by useMemo above
   // const taskList = tasks.filter(t => !t.parent_task_id);
@@ -532,7 +537,7 @@ export function TaskListPane({
         <div className="flex items-center justify-between gap-2 min-h-[32px]">
           {isSearchOpen ? (
             <div className="relative flex-1 animate-in fade-in slide-in-from-right-2 duration-200">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
               <Input
                 autoFocus
                 value={query}
@@ -543,10 +548,10 @@ export function TaskListPane({
               />
               <Button
                 variant="ghost" size="sm"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
+                className="absolute right-1 top-1/2 -translate-y-1/2 size-6 p-0 hover:bg-transparent"
                 onClick={() => { onQueryChange(""); setIsSearchOpen(false); }}
               >
-                <X className="h-3.5 w-3.5 text-muted-foreground" />
+                <X className="size-3.5 text-muted-foreground" />
               </Button>
             </div>
           ) : (
@@ -575,21 +580,21 @@ export function TaskListPane({
 
               {/* Icon actions */}
               <div className="flex items-center gap-0.5 shrink-0">
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 rounded-md"
+                <Button size="sm" variant="ghost" className="size-7 p-0 rounded-md"
                   onClick={() => setIsSearchOpen(true)}>
-                  <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Search className="size-3.5 text-muted-foreground" />
                 </Button>
 
                 {/* ── Filter dropdown menu ── */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="sm" variant="ghost"
-                      className={cn("h-7 w-7 p-0 rounded-md relative",
+                      className={cn("size-7 p-0 rounded-md relative",
                         activeFilterChips.length > 0 && "bg-muted"
                       )}>
-                      <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                      <SlidersHorizontal className="size-3.5 text-muted-foreground" />
                       {activeFilterChips.length > 0 && (
-                        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-primary" />
+                        <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary" />
                       )}
                     </Button>
                   </DropdownMenuTrigger>
@@ -598,8 +603,8 @@ export function TaskListPane({
                     {/* Type */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="text-xs gap-2">
-                        <span className="w-3.5 h-3.5 flex items-center justify-center text-muted-foreground">
-                          <ChevronRight className="h-3 w-3" />
+                        <span className="size-3.5 flex items-center justify-center text-muted-foreground">
+                          <ChevronRight className="size-3" />
                         </span>
                         Type
                         {typeFilter !== "all" && (
@@ -610,7 +615,7 @@ export function TaskListPane({
                         {(["all", "tasks", "events", "blocked"] as TypeFilter[]).map(t => (
                           <DropdownMenuItem key={t} className="text-xs capitalize gap-2"
                             onClick={() => setTypeFilter(t)}>
-                            {typeFilter === t && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            {typeFilter === t && <Check className="size-3 text-primary shrink-0" />}
                             <span className={typeFilter === t ? "ml-0" : "ml-5"}>
                               {t === "all" ? "All" : t.charAt(0).toUpperCase() + t.slice(1)}
                             </span>
@@ -622,7 +627,7 @@ export function TaskListPane({
                     {/* Priority */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="text-xs gap-2">
-                        <Flag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <Flag className="size-3.5 text-muted-foreground shrink-0" />
                         Priority
                         {priorityFilter !== "all" && (
                           <span className="ml-auto text-[10px] text-primary font-medium capitalize">{priorityFilter}</span>
@@ -632,7 +637,7 @@ export function TaskListPane({
                         {(["all", "urgent", "high", "medium", "low"] as PriorityFilter[]).map(p => (
                           <DropdownMenuItem key={p} className="text-xs capitalize gap-2"
                             onClick={() => setPriorityFilter(p)}>
-                            {priorityFilter === p && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            {priorityFilter === p && <Check className="size-3 text-primary shrink-0" />}
                             <span className={priorityFilter === p ? "ml-0" : "ml-5"}>
                               {p === "all" ? "Any" : p.charAt(0).toUpperCase() + p.slice(1)}
                             </span>
@@ -644,7 +649,7 @@ export function TaskListPane({
                     {/* Sort */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="text-xs gap-2">
-                        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <Calendar className="size-3.5 text-muted-foreground shrink-0" />
                         Sort
                         <span className="ml-auto text-[10px] text-primary font-medium truncate max-w-[60px]">
                           {SORT_PRESET_LABELS[sortPreset].split(" ").slice(0, 2).join(" ")}
@@ -654,7 +659,7 @@ export function TaskListPane({
                         {(Object.keys(SORT_PRESET_LABELS) as SortPreset[]).map(p => (
                           <DropdownMenuItem key={p} className="text-xs gap-2"
                             onClick={() => setSortPreset(p)}>
-                            {sortPreset === p && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            {sortPreset === p && <Check className="size-3 text-primary shrink-0" />}
                             <span className={sortPreset === p ? "ml-0" : "ml-5"}>
                               {SORT_PRESET_LABELS[p]}
                             </span>
@@ -666,7 +671,7 @@ export function TaskListPane({
                     {/* Quick Filters */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="text-xs gap-2">
-                        <Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <Zap className="size-3.5 text-muted-foreground shrink-0" />
                         Quick Filters
                         {activeQuickPresets.size > 0 && (
                           <span className="ml-auto text-[10px] text-primary font-medium">{activeQuickPresets.size} on</span>
@@ -684,8 +689,8 @@ export function TaskListPane({
                           <DropdownMenuItem key={id} className="text-xs gap-2"
                             onClick={(e) => { e.preventDefault(); toggleQuickPreset(id); }}>
                             {activeQuickPresets.has(id)
-                              ? <Check className="h-3 w-3 text-primary shrink-0" />
-                              : <Icon className="h-3 w-3 text-muted-foreground shrink-0" />
+                              ? <Check className="size-3 text-primary shrink-0" />
+                              : <Icon className="size-3 text-muted-foreground shrink-0" />
                             }
                             {label}
                           </DropdownMenuItem>
@@ -697,7 +702,7 @@ export function TaskListPane({
                     {(activeSpace?.is_private || organisations.length > 1) && (
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger className="text-xs gap-2">
-                          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <User className="size-3.5 text-muted-foreground shrink-0" />
                           Workspace
                           {selectedOrgId !== "all" && (
                             <span className="ml-auto text-[10px] text-primary font-medium truncate max-w-[50px]">
@@ -708,13 +713,13 @@ export function TaskListPane({
                         <DropdownMenuSubContent className="w-48 rounded-xl">
                           <DropdownMenuItem className="text-xs gap-2"
                             onClick={() => { setSelectedOrgId("all"); setSelectedSpaceId("all"); }}>
-                            {selectedOrgId === "all" && <Check className="h-3 w-3 text-primary shrink-0" />}
+                            {selectedOrgId === "all" && <Check className="size-3 text-primary shrink-0" />}
                             <span className={selectedOrgId === "all" ? "ml-0" : "ml-5"}>All workspaces</span>
                           </DropdownMenuItem>
                           {organisations.map(org => (
                             <DropdownMenuItem key={org.id} className="text-xs gap-2"
                               onClick={() => { setSelectedOrgId(org.id); setSelectedSpaceId("all"); }}>
-                              {selectedOrgId === org.id && <Check className="h-3 w-3 text-primary shrink-0" />}
+                              {selectedOrgId === org.id && <Check className="size-3 text-primary shrink-0" />}
                               <span className={selectedOrgId === org.id ? "ml-0" : "ml-5 truncate"}>
                                 {org.name}{org.is_personal ? " (Personal)" : ""}
                               </span>
@@ -725,13 +730,13 @@ export function TaskListPane({
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-xs gap-2"
                                 onClick={() => setSelectedSpaceId("all")}>
-                                {selectedSpaceId === "all" && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                {selectedSpaceId === "all" && <Check className="size-3 text-primary shrink-0" />}
                                 <span className={selectedSpaceId === "all" ? "ml-0" : "ml-5"}>All spaces</span>
                               </DropdownMenuItem>
                               {orgSpaces.map(sp => (
                                 <DropdownMenuItem key={sp.id} className="text-xs gap-2"
                                   onClick={() => setSelectedSpaceId(sp.id)}>
-                                  {selectedSpaceId === sp.id && <Check className="h-3 w-3 text-primary shrink-0" />}
+                                  {selectedSpaceId === sp.id && <Check className="size-3 text-primary shrink-0" />}
                                   <span className={selectedSpaceId === sp.id ? "ml-0" : "ml-5 truncate"}>{sp.name}</span>
                                 </DropdownMenuItem>
                               ))}
@@ -751,7 +756,7 @@ export function TaskListPane({
                             setSelectedOrgId("all"); setSelectedSpaceId("all");
                             setActiveQuickPresets(new Set()); setMineOnly(false);
                           }}>
-                          <X className="h-3 w-3 mr-2" />
+                          <X className="size-3 mr-2" />
                           Clear all filters
                         </DropdownMenuItem>
                       </>
@@ -760,9 +765,9 @@ export function TaskListPane({
                 </DropdownMenu>
 
                 {canCreateTask && (
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 rounded-md"
+                  <Button size="sm" variant="ghost" className="size-7 p-0 rounded-md"
                     onClick={() => onCreateDialogOpenChange(true)}>
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="size-3.5" />
                   </Button>
                 )}
               </div>
@@ -780,7 +785,7 @@ export function TaskListPane({
               >
                 {chip.label}
                 <button onClick={chip.onRemove} className="hover:text-primary/60 transition-colors">
-                  <X className="h-2.5 w-2.5" />
+                  <X className="size-2.5" />
                 </button>
               </span>
             ))}
@@ -810,7 +815,7 @@ export function TaskListPane({
                   key={i}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-md animate-pulse"
                 >
-                  <div className="w-2 h-2 rounded-full bg-muted-foreground/20 shrink-0" />
+                  <div className="size-2 rounded-full bg-muted-foreground/20 shrink-0" />
                   <div
                     className="h-3 rounded bg-muted-foreground/15 flex-1"
                     style={{ width: `${50 + (i % 3) * 20}%` }}
@@ -865,7 +870,7 @@ export function TaskListPane({
                       {/* Drag handle */}
                       {isDraggable ? (
                         <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
-                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                          <GripVertical className="size-3.5 text-muted-foreground" />
                         </div>
                       ) : (
                         <div className="w-[22px] shrink-0" />
@@ -876,19 +881,19 @@ export function TaskListPane({
                         className="shrink-0"
                         onClick={(e) => toggleSelection(e, t.id)}
                       >
-                        <Checkbox checked={isChecked} className="w-3.5 h-3.5" />
+                        <Checkbox checked={isChecked} className="size-3.5" />
                       </div>
                     </div>
 
                     {/* Icon/Dot — click opens popover or expands if parent hovered */}
-                    <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
+                    <div className="size-5 flex items-center justify-center relative shrink-0">
                       {/* Status dot — visible by default, hidden on hover if parent */}
                       <Popover>
                         <PopoverTrigger asChild>
                           <button
                             onClick={(e) => e.stopPropagation()}
                             className={cn(
-                              "w-2 h-2 rounded-full shrink-0 transition-transform hover:scale-125",
+                              "size-2 rounded-full shrink-0 transition-transform hover:scale-125",
                               STATUS_COLOR[t.status as AnyStatus],
                               "group-hover/item:opacity-0 transition-opacity"
                             )}
@@ -909,7 +914,7 @@ export function TaskListPane({
                               >
                                 <div
                                   className={cn(
-                                    "w-2 h-2 rounded-full shrink-0",
+                                    "size-2 rounded-full shrink-0",
                                     STATUS_COLOR[s]
                                   )}
                                 />
@@ -926,9 +931,9 @@ export function TaskListPane({
                         className="absolute inset-0 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-opacity hover:text-foreground"
                       >
                         {expandedTasks.has(t.id) ? (
-                          <ChevronDown className="h-3.5 w-3.5" />
+                          <ChevronDown className="size-3.5" />
                         ) : (
-                          <ChevronRight className="h-3.5 w-3.5" />
+                          <ChevronRight className="size-3.5" />
                         )}
                       </button>
                     </div>
@@ -959,7 +964,7 @@ export function TaskListPane({
                       ) : null}
                       
                       {isBlocked && (
-                        <Zap className="w-3 h-3 text-yellow-400 shrink-0" />
+                        <Zap className="size-3 text-yellow-400 shrink-0" />
                       )}
                     </div>
                     
@@ -978,10 +983,10 @@ export function TaskListPane({
                             <Button 
                               variant="ghost" 
                               size="sm" 
-                              className="h-6 w-6 p-0 hover:bg-muted-foreground/10"
+                              className="size-6 p-0 hover:bg-muted-foreground/10"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <MoreHorizontal className="h-4 w-4" />
+                              <MoreHorizontal className="size-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -990,7 +995,7 @@ export function TaskListPane({
                             </DropdownMenuItem>
                             {itemCanEdit && (
                               <DropdownMenuItem onClick={() => setEditingTask(t)}>
-                                <Pencil className="h-3.5 w-3.5 mr-2" />
+                                <Pencil className="size-3.5 mr-2" />
                                 Edit
                               </DropdownMenuItem>
                             )}
@@ -1001,7 +1006,7 @@ export function TaskListPane({
                                   if (onDeleteTask) onDeleteTask(t.id);
                                 }}
                               >
-                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                <Trash2 className="size-3.5 mr-2" />
                                 Delete
                               </DropdownMenuItem>
                             )}
@@ -1077,7 +1082,7 @@ export function TaskListPane({
               {/* Status submenu */}
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="text-xs">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
+                  <div className="size-2 rounded-full bg-blue-500 mr-2" />
                   Change status
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
@@ -1092,7 +1097,7 @@ export function TaskListPane({
                         >
                           <div
                             className={cn(
-                              "w-1.5 h-1.5 rounded-full mr-2",
+                              "size-1.5 rounded-full mr-2",
                               STATUS_COLOR[s]
                             )}
                           />
@@ -1112,7 +1117,7 @@ export function TaskListPane({
                         >
                           <div
                             className={cn(
-                              "w-1.5 h-1.5 rounded-full mr-2",
+                              "size-1.5 rounded-full mr-2",
                               STATUS_COLOR[s]
                             )}
                           />
@@ -1127,7 +1132,7 @@ export function TaskListPane({
               {/* Priority submenu */}
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="text-xs">
-                  <Flag className="w-3 h-3 mr-2" />
+                  <Flag className="size-3 mr-2" />
                   Change priority
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
@@ -1140,7 +1145,7 @@ export function TaskListPane({
                       >
                         <Flag
                           className={cn(
-                            "w-3 h-3 mr-2",
+                            "size-3 mr-2",
                             p === "high" || p === "urgent"
                               ? "text-orange-400"
                               : "text-muted-foreground"
@@ -1156,7 +1161,7 @@ export function TaskListPane({
               {/* Due date submenu */}
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="text-xs">
-                  <Calendar className="w-3 h-3 mr-2" />
+                  <Calendar className="size-3 mr-2" />
                   Set due date
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
@@ -1207,7 +1212,7 @@ export function TaskListPane({
               {workspaceMembers.length > 0 && (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="text-xs">
-                    <User className="w-3 h-3 mr-2" />
+                    <User className="size-3 mr-2" />
                     Assign to
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="max-h-48 overflow-y-auto">
@@ -1217,7 +1222,7 @@ export function TaskListPane({
                         className="text-xs"
                         onClick={() => handleBulkAssign(member.id)}
                       >
-                        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center mr-2 text-[10px] font-medium">
+                        <div className="size-5 rounded-full bg-muted flex items-center justify-center mr-2 text-[10px] font-medium">
                           {member.name
                             ? member.name.charAt(0).toUpperCase()
                             : member.email.charAt(0).toUpperCase()}
@@ -1243,7 +1248,7 @@ export function TaskListPane({
                 className="text-xs text-destructive focus:text-destructive"
                 onClick={confirmDelete}
               >
-                <Trash2 className="w-3 h-3 mr-2" />
+                <Trash2 className="size-3 mr-2" />
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -1265,7 +1270,7 @@ export function TaskListPane({
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertCircle className="w-5 h-5" />
+              <AlertCircle className="size-5" />
               Delete Tasks
             </DialogTitle>
             <DialogDescription>

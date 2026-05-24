@@ -168,7 +168,7 @@ function SpaceDetailPanel({
                 disabled={renameSpace.isPending}
               />
               {renameSpace.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                <Loader2 className="size-4 animate-spin text-muted-foreground shrink-0" />
               )}
             </div>
           ) : (
@@ -188,13 +188,13 @@ function SpaceDetailPanel({
               <Popover open={addMemberOpen} onOpenChange={setAddMemberOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg gap-1">
-                    <Plus className="h-3 w-3" />
+                    <Plus className="size-3" />
                     Add
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-64 p-2" align="end">
                   <div className="flex items-center gap-2 border-b border-border pb-2 mb-2">
-                    <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Search className="size-4 text-muted-foreground shrink-0" />
                     <Input
                       placeholder="Search org members..."
                       value={memberSearch}
@@ -218,7 +218,7 @@ function SpaceDetailPanel({
                           disabled={addMember.isPending}
                           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent text-left text-sm transition-colors"
                         >
-                          <Avatar className="h-6 w-6 shrink-0">
+                          <Avatar className="size-6 shrink-0">
                             <AvatarFallback className="text-[10px] bg-primary/10">
                               {(om.name || om.email).charAt(0).toUpperCase()}
                             </AvatarFallback>
@@ -249,7 +249,7 @@ function SpaceDetailPanel({
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 group"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <Avatar className="h-7 w-7 shrink-0">
+                    <Avatar className="size-7 shrink-0">
                       <AvatarFallback className="text-[10px] bg-primary/10">
                         {displayName.charAt(0).toUpperCase()}
                       </AvatarFallback>
@@ -291,7 +291,7 @@ function SpaceDetailPanel({
                               )}
                             >
                               {r}
-                              {member.role === r && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                              {member.role === r && <Check className="size-3.5 text-primary shrink-0" />}
                             </button>
                           ))}
                         </PopoverContent>
@@ -308,7 +308,7 @@ function SpaceDetailPanel({
                         className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all rounded-md"
                         title="Remove from space"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="size-3.5" />
                       </button>
                     )}
                   </div>
@@ -346,7 +346,7 @@ function SpaceDetailPanel({
               </div>
               {isLastSpace && (
                 <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
+                  <AlertTriangle className="size-3" />
                   This is the last space in the organisation and cannot be deleted.
                 </p>
               )}
@@ -375,7 +375,7 @@ function SpaceDetailPanel({
               onClick={handleDelete}
               disabled={deleteSpace.isPending}
             >
-              {deleteSpace.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {deleteSpace.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
               Delete Space
             </Button>
           </DialogFooter>
@@ -421,7 +421,7 @@ function DeletedSpaceRow({ space, orgId }: DeletedSpaceRowProps) {
     <>
       <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20 opacity-70">
         <div className="flex items-center gap-2 min-w-0">
-          <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Layers className="size-4 text-muted-foreground shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-medium truncate text-muted-foreground">{space.name}</p>
             <p className="text-xs text-muted-foreground">
@@ -438,9 +438,9 @@ function DeletedSpaceRow({ space, orgId }: DeletedSpaceRowProps) {
             disabled={restoreSpace.isPending}
           >
             {restoreSpace.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="size-3 animate-spin" />
             ) : (
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="size-3" />
             )}
             Restore
           </Button>
@@ -475,7 +475,7 @@ function DeletedSpaceRow({ space, orgId }: DeletedSpaceRowProps) {
               disabled={hardDeleteSpace.isPending}
             >
               {hardDeleteSpace.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 size-4 animate-spin" />
               )}
               Delete Forever
             </Button>
@@ -543,11 +543,11 @@ export function SpacesTab() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6"
+              className="size-6"
               onClick={() => setCreateOpen(true)}
               title="Create space"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
             </Button>
           )}
         </div>
@@ -564,7 +564,7 @@ export function SpacesTab() {
                   : "text-foreground hover:bg-muted"
               )}
             >
-              <Layers className="h-3.5 w-3.5 shrink-0" />
+              <Layers className="size-3.5 shrink-0" />
               <span className="truncate flex-1">{space.name}</span>
               <span
                 className={cn(
@@ -574,7 +574,7 @@ export function SpacesTab() {
                     : "text-muted-foreground"
                 )}
               >
-                <Users className="h-3 w-3" />
+                <Users className="size-3" />
               </span>
             </button>
           ))}
@@ -598,7 +598,7 @@ export function SpacesTab() {
                       : "text-muted-foreground hover:bg-muted hover:opacity-70"
                   )}
                 >
-                  <Layers className="h-3.5 w-3.5 shrink-0" />
+                  <Layers className="size-3.5 shrink-0" />
                   <span className="truncate flex-1 line-through">{ds.name}</span>
                 </button>
               ))}
@@ -639,7 +639,7 @@ export function SpacesTab() {
           }
           return (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center">
-              <Layers className="h-10 w-10 mb-3 opacity-30" />
+              <Layers className="size-10 mb-3 opacity-30" />
               <p className="text-sm">Select a space to manage it</p>
             </div>
           );
@@ -673,7 +673,7 @@ export function SpacesTab() {
               onClick={handleCreateSpace}
               disabled={!createName.trim() || createSpace.isPending}
             >
-              {createSpace.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {createSpace.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
               Create
             </Button>
           </DialogFooter>

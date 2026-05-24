@@ -538,14 +538,14 @@ export function TasksPage() {
   }, [handleUpdateTask]);
 
   const containerClassName = cn(
-    "h-full w-full transition-all duration-500 ease-in-out",
+    "size-full transition-all duration-500 ease-in-out",
     isCollapsed ? "" : ""
   );
 
   return (
     <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
       <main className={containerClassName}>
-        <div className="flex h-full w-full">
+        <div className="flex size-full">
           <div className="w-[300px] shrink-0 bg-card border-r border-border h-full">
             <TaskListPane
               query={query}
@@ -605,7 +605,7 @@ export function TasksPage() {
             {selectedTaskId ? (
               isAnyTaskLoading && !selected ? (
                 <div className="flex flex-col items-center justify-center py-6 h-full text-muted-foreground gap-2">
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="size-5 animate-spin" />
                   <span className="text-sm">Loading task...</span>
                 </div>
               ) : isDefinitelyNotFound ? (

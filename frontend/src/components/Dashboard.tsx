@@ -126,14 +126,14 @@ export function Dashboard() {
         )}
       >
         {!hasChatStarted ? (
-          <div className="w-full h-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar">
+          <div className="size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar">
             <div className="w-full flex flex-col items-center gap-1 sm:gap-2">
               {/* Hero: greeting + input area */}
               <HeroSection onSubmit={handlePromptSubmit} />
 
               {isError && (
                 <div className="w-full max-w-4xl mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
-                  <AlertCircle className="w-4 h-4" />
+                  <AlertCircle className="size-4" />
                   <span>Failed to load dashboard data. Please try again.</span>
                 </div>
               )}
@@ -143,7 +143,7 @@ export function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="flex h-full w-full flex-col items-center">
+          <div className="flex size-full flex-col items-center">
             <section className="w-full max-w-4xl flex-1 overflow-y-auto px-2 pb-40 pt-10 sm:px-4 lg:pt-14">
               <div className="flex flex-col gap-6">
                 {messages.map((message) => (

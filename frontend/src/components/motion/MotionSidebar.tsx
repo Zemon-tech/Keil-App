@@ -128,7 +128,7 @@ function SidebarPageItem({
         >
           {isRenaming ? (
             <div className="flex min-w-0 flex-1 items-center gap-2 pr-14">
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <FileText className="size-4 shrink-0 text-muted-foreground" />
               <input
                 ref={inputRef}
                 value={draftTitle}
@@ -146,10 +146,10 @@ function SidebarPageItem({
             </div>
           ) : (
             <div className="flex min-w-0 flex-1 items-center gap-2 pr-14">
-              <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+              <span className="relative flex size-5 shrink-0 items-center justify-center">
                 <FileText
                   className={cn(
-                    "h-4 w-4 text-muted-foreground transition-opacity group-hover/item:opacity-0",
+                    "size-4 text-muted-foreground transition-opacity group-hover/item:opacity-0",
                     isOpen && "opacity-0",
                   )}
                 />
@@ -167,9 +167,9 @@ function SidebarPageItem({
                   aria-label={isOpen ? "Collapse subpages" : "Expand subpages"}
                 >
                   {isOpen ? (
-                    <ChevronDown className="h-3.5 w-3.5" />
+                    <ChevronDown className="size-3.5" />
                   ) : (
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ChevronRight className="size-3.5" />
                   )}
                 </button>
               </span>
@@ -192,11 +192,11 @@ function SidebarPageItem({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                    className="size-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
                     onClick={(e) => e.stopPropagation()}
                     aria-label={`Open ${item.title} menu`}
                   >
-                    <MoreHorizontal className="h-4 w-4" />
+                    <MoreHorizontal className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -211,7 +211,7 @@ function SidebarPageItem({
                         setIsRenaming(true);
                       }}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="size-3.5" />
                       Rename
                     </DropdownMenuItem>
                   )}
@@ -224,7 +224,7 @@ function SidebarPageItem({
                         setIsOpen(true);
                       }}
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Plus className="size-3.5" />
                       Add subpage
                     </DropdownMenuItem>
                   )}
@@ -237,7 +237,7 @@ function SidebarPageItem({
                         onDelete(item.id, item.title);
                       }}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="size-3.5" />
                       Delete
                     </DropdownMenuItem>
                   )}
@@ -249,7 +249,7 @@ function SidebarPageItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                className="size-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -258,7 +258,7 @@ function SidebarPageItem({
                 }}
                 aria-label={`Add subpage to ${item.title}`}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="size-4" />
               </Button>
             )}
           </div>
@@ -395,7 +395,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   return (
     <Sidebar
       collapsible="none"
-      className="w-full h-full border-r border-border/50 bg-card flex flex-col select-none"
+      className="size-full border-r border-border/50 bg-card flex flex-col select-none"
     >
       {/* ── Header: workspace switcher ── */}
       {/* ── Header: Notion-style Tabs ── */}
@@ -447,11 +447,11 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
               size="icon"
               onClick={() => handleAddPage()}
               disabled={createPage.isPending}
-              className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
               aria-label="New page"
             >
               {createPage.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
               ) : (
                 <SquarePen className="h-[18px] w-[18px]" />
               )}
@@ -463,9 +463,9 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="h-8 w-8 shrink-0 md:hidden text-muted-foreground hover:text-foreground"
+              className="size-8 shrink-0 md:hidden text-muted-foreground hover:text-foreground"
             >
-              <X className="h-4 w-4" />
+              <X className="size-4" />
             </Button>
           )}
         </div>
@@ -492,7 +492,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                       !recentsOpen && "-rotate-90",
                     )}
                   >
-                    <ChevronDown className="h-3 w-3" />
+                    <ChevronDown className="size-3" />
                   </div>
                   Recents
                 </button>
@@ -501,7 +501,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 <SidebarMenu>
                   {isPagesLoading ? (
                     <div className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="size-3 animate-spin" />
                       Loading…
                     </div>
                   ) : recentPages.length > 0 ? (
@@ -539,7 +539,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                       !privateOpen && "-rotate-90",
                     )}
                   >
-                    <ChevronDown className="h-3 w-3" />
+                    <ChevronDown className="size-3" />
                   </div>
                   Pages
                 </button>
@@ -547,11 +547,11 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
+                    className="size-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
                     onClick={() => handleAddPage()}
                     aria-label="Add page"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="size-3.5" />
                   </Button>
                 )}
               </div>
@@ -559,7 +559,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 <SidebarMenu>
                   {isPagesLoading ? (
                     <div className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="size-3 animate-spin" />
                       Loading…
                     </div>
                   ) : rootPages.length > 0 ? (
@@ -595,7 +595,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                     !trashOpen && "-rotate-90",
                   )}
                 >
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronDown className="size-3" />
                 </div>
                 Trash
               </button>
@@ -612,7 +612,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                       return (
                         <SidebarMenuItem key={item.id}>
                           <div className="group/trash flex min-h-8 w-full items-center rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground">
-                            <FileText className="mr-2 h-4 w-4 shrink-0" />
+                            <FileText className="mr-2 size-4 shrink-0" />
                             <span className="flex-1 truncate text-sm font-medium italic line-through">
                               {item.title}
                             </span>
@@ -621,20 +621,20 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-primary transition-all"
+                                  className="size-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-primary transition-all"
                                   onClick={() => handleRestorePage(item.id)}
                                   title="Restore"
                                 >
-                                  <RotateCcw className="h-3.5 w-3.5" />
+                                  <RotateCcw className="size-3.5" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-destructive transition-all"
+                                  className="size-6 text-muted-foreground hover:bg-muted-foreground/10 hover:text-destructive transition-all"
                                   onClick={() => handlePermanentDelete(item.id)}
                                   title="Delete permanently"
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="size-3.5" />
                                 </Button>
                               </div>
                             )}
@@ -664,7 +664,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                       !sharedOpen && "-rotate-90",
                     )}
                   >
-                    <ChevronDown className="h-3 w-3" />
+                    <ChevronDown className="size-3" />
                   </div>
                   Shared with this space
                 </button>
@@ -683,7 +683,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                               if (window.innerWidth < 1024) onClose?.();
                             }}
                           >
-                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <FileText className="size-4 shrink-0 text-muted-foreground" />
                             <span className="truncate">{item.title}</span>
                           </Link>
                         </SidebarMenuButton>

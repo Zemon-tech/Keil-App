@@ -104,7 +104,7 @@ export function KanbanComponent({ pageId }: { pageId: string }) {
   };
 
   return (
-    <div className="flex h-full w-full gap-6 p-6 overflow-x-auto min-w-0 custom-scrollbar-kanban">
+    <div className="flex size-full gap-6 p-6 overflow-x-auto min-w-0 custom-scrollbar-kanban">
       {data.columnOrder.map((columnId) => {
         const column = data.columns[columnId];
         const tasks = column.taskIds.map((taskId) => data.tasks[taskId]);
@@ -121,7 +121,7 @@ export function KanbanComponent({ pageId }: { pageId: string }) {
                   {tasks.length}
                 </span>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:text-foreground">
+              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground/40 hover:text-foreground">
                 <MoreHorizontal className="size-4" />
               </Button>
             </div>

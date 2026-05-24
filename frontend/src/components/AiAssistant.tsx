@@ -157,9 +157,13 @@ export function AiAssistant() {
 
     // Focus input when mode changes
     useEffect(() => {
+        let timerId: ReturnType<typeof setTimeout> | undefined;
         if (mode !== "hidden") {
-            setTimeout(() => inputRef.current?.focus(), 300);
+            timerId = setTimeout(() => inputRef.current?.focus(), 300);
         }
+        return () => {
+            if (timerId) clearTimeout(timerId);
+        };
     }, [mode]);
 
     // Keyboard shortcut: Escape to close, Cmd+J to toggle
@@ -611,7 +615,7 @@ export function AiAssistant() {
                         )}>
                             KeilHQ AI
                             <kbd className="ml-2 bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[9px] border border-border/60">⌘J</kbd>
-                            <div className="absolute top-full right-5 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-popover" />
+                            <div className="absolute top-full right-5 size-0 border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-popover" />
                         </div>
                     </button>
                 </div>

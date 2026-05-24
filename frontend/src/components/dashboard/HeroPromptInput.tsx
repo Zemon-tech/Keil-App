@@ -20,8 +20,8 @@ import {
   AttachmentPreview,
   AttachmentRemove,
   Attachments,
-  getMediaCategory,
 } from "@/components/ai-elements/attachments";
+import { getMediaCategory } from "@/components/ai-elements/attachments-utils";
 import {
   PromptInput,
   PromptInputActionAddAttachments,
@@ -47,8 +47,9 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
-  usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
+import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input-context";
+import type { AttachmentData } from "@/components/ai-elements/attachments-utils";
 import { cn } from "@/lib/utils";
 
 const models = [
@@ -96,7 +97,7 @@ const PromptInputAttachmentsDisplay = () => {
     return null;
   }
 
-  const hasVisualAttachment = attachments.files.some((attachment) => {
+  const hasVisualAttachment = attachments.files.some((attachment: AttachmentData) => {
     const category = getMediaCategory(attachment);
     return category === "image" || category === "video";
   });
@@ -104,7 +105,7 @@ const PromptInputAttachmentsDisplay = () => {
   if (!hasVisualAttachment) {
     return (
       <Attachments variant="inline" className="w-full gap-2 px-1">
-        {attachments.files.map((attachment) => (
+        {attachments.files.map((attachment: AttachmentData) => (
           <Attachment
             key={attachment.id}
             className="h-10 rounded-full border border-border/60 bg-background/65 pr-2 shadow-sm"
@@ -122,7 +123,7 @@ const PromptInputAttachmentsDisplay = () => {
 
   return (
     <Attachments variant="grid" className="w-full gap-3 px-1">
-      {attachments.files.map((attachment, index) => (
+      {attachments.files.map((attachment: AttachmentData, index: number) => (
         <Attachment
           key={attachment.id}
           className={cn(
@@ -211,7 +212,7 @@ function HeroPromptSurface({
                         onSelect={() => onSuggestionClick(suggestion)}
                       >
                         <div className="mt-0.5 rounded-full border border-border/60 bg-background/70 p-2">
-                          <suggestion.icon className="h-4 w-4 text-muted-foreground" />
+                          <suggestion.icon className="size-4 text-muted-foreground" />
                         </div>
                         <div className="flex flex-col">
                           <span className="font-medium text-foreground">{suggestion.label}</span>
@@ -238,7 +239,7 @@ function HeroPromptSurface({
               tooltip={{ content: "Add attachments", shortcut: "⌘U" }}
               variant="ghost"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
             </PromptInputActionMenuTrigger>
             <PromptInputActionMenuContent>
               <PromptInputActionAddAttachments label="Add photos or files" />
@@ -256,7 +257,7 @@ function HeroPromptSurface({
             tooltip={{ content: "Search the web", shortcut: "⌘K" }}
             variant="ghost"
           >
-            <GlobeIcon className="h-4 w-4" />
+            <GlobeIcon className="size-4" />
             <span className="hidden sm:inline">Web</span>
           </PromptInputButton>
 
@@ -283,7 +284,7 @@ function HeroPromptSurface({
             tooltip={{ content: "Voice input", shortcut: "⌘M" }}
             variant="ghost"
           >
-            <Mic className="h-4 w-4" />
+            <Mic className="size-4" />
           </PromptInputButton>
 
           {canSubmit ? (
@@ -291,7 +292,7 @@ function HeroPromptSurface({
               className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
               variant="ghost"
             >
-              <ArrowUp className="h-4 w-4" />
+              <ArrowUp className="size-4" />
             </PromptInputSubmit>
           ) : (
             <PromptInputButton
@@ -299,7 +300,7 @@ function HeroPromptSurface({
               size="icon-sm"
               variant="ghost"
             >
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="size-4" />
             </PromptInputButton>
           )}
         </div>
@@ -360,7 +361,7 @@ export function HeroPromptInput({ isChatStarted = false, onSubmit }: HeroPromptI
     >
       {!isChatStarted && (
         <div className="fixed top-6 right-6 text-muted-foreground/55 transition-colors hover:text-foreground">
-          <Ghost className="h-6 w-6" />
+          <Ghost className="size-6" />
         </div>
       )}
 

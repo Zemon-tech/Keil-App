@@ -29,7 +29,7 @@ export function CurrentFocusCard({
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-3 gap-2 shadow-sm",
-          isWheel ? "h-full w-full" : "md:col-span-2",
+          isWheel ? "size-full" : "md:col-span-2",
         )}
       >
         <div className="flex justify-between items-start mb-1">
@@ -51,7 +51,7 @@ export function CurrentFocusCard({
       <Card
         className={cn(
           "bg-card/90 border border-border/60 rounded-2xl p-4 flex items-center justify-center text-muted-foreground text-xs italic",
-          isWheel ? "h-full w-full" : "md:col-span-2",
+          isWheel ? "size-full" : "md:col-span-2",
         )}
       >
         No active focus
@@ -63,11 +63,11 @@ export function CurrentFocusCard({
     <Card
       className={cn(
         "bg-card/90 border border-border/60 rounded-2xl p-4 gap-2 hover:bg-card transition-all duration-300 cursor-pointer shadow-sm group overflow-hidden relative",
-        isWheel ? "h-full w-full" : "md:col-span-2",
+        isWheel ? "size-full" : "md:col-span-2",
       )}
     >
       <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+        <div className="size-1.5 rounded-full bg-primary animate-pulse" />
       </div>
 
       <div className="flex justify-between items-start mb-1">

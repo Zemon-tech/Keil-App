@@ -129,7 +129,7 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
         )}
         style={{ height: dimensions.containerHeight }}
       >
-        <div className="relative h-full w-full shrink-0 border-b border-border/60 bg-muted/15 sm:w-[31%] sm:border-b-0 sm:border-r">
+        <div className="relative size-full shrink-0 border-b border-border/60 bg-muted/15 sm:w-[31%] sm:border-b-0 sm:border-r">
           <WheelPicker
             items={wheelItems}
             containerHeight={dimensions.containerHeight}

@@ -109,7 +109,7 @@ function BulletList({ items, title }: { items: string[]; title: string }) {
       <ul className="space-y-1.5">
         {items.map((item, i) => (
           <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
-            <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+            <span className="mt-1.5 size-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
             <span>{item}</span>
           </li>
         ))}
@@ -136,7 +136,7 @@ function PublicLoadingScreen() {
 export function PublicNotFoundScreen() {
   return (
     <div className="flex h-dvh w-full flex-col items-center justify-center gap-5 bg-background text-foreground px-6 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+      <div className="flex size-16 items-center justify-center rounded-2xl bg-muted">
         <AlertCircle className="size-8 text-muted-foreground/60" />
       </div>
       <div className="space-y-1.5">
@@ -223,7 +223,7 @@ export function PublicTaskView({ isLoading, isNotFound, task }: PublicTaskViewPr
             variant="outline"
             className={`text-[11px] px-2.5 py-0.5 capitalize font-medium border ${statusCss}`}
           >
-            <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${statusDot}`} />
+            <span className={`inline-block size-1.5 rounded-full mr-1.5 ${statusDot}`} />
             {task.status.replace("-", " ")}
           </Badge>
 
@@ -232,7 +232,7 @@ export function PublicTaskView({ isLoading, isNotFound, task }: PublicTaskViewPr
             variant="outline"
             className={`text-[11px] px-2.5 py-0.5 capitalize font-medium border ${priorityCfg.color}`}
           >
-            <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${priorityCfg.dot}`} />
+            <span className={`inline-block size-1.5 rounded-full mr-1.5 ${priorityCfg.dot}`} />
             {priorityCfg.label} Priority
           </Badge>
 
@@ -354,9 +354,9 @@ export function PublicTaskView({ isLoading, isNotFound, task }: PublicTaskViewPr
                         className="flex items-center gap-2.5 rounded-md px-2.5 py-2"
                       >
                         {isDone ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                          <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
                         ) : (
-                          <Circle className={`h-4 w-4 shrink-0 ${STATUS_TEXT_COLOR[sub.status] ?? "text-zinc-500"}`} />
+                          <Circle className={`size-4 shrink-0 ${STATUS_TEXT_COLOR[sub.status] ?? "text-zinc-500"}`} />
                         )}
                         <span
                           className={`flex-1 text-sm font-medium truncate ${
@@ -391,7 +391,7 @@ export function PublicTaskView({ isLoading, isNotFound, task }: PublicTaskViewPr
                     const displayName = a.name ?? "Unknown";
                     return (
                       <div key={a.id} className="flex items-center gap-2.5">
-                        <Avatar className="h-7 w-7 shrink-0">
+                        <Avatar className="size-7 shrink-0">
                           <AvatarFallback className="text-[11px] font-semibold bg-accent">
                             {displayName.charAt(0).toUpperCase()}
                           </AvatarFallback>

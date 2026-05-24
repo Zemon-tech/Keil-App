@@ -151,7 +151,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 placeholder="Search history"
                 className="h-9 pl-9 text-sm w-[200px] bg-muted/40 border-border/60 hover:bg-muted/60 transition-colors"
@@ -160,8 +160,8 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
               />
             </div>
             {/* Download/Export Button Placeholder */}
-            <div className="h-9 w-9 flex items-center justify-center rounded-md border border-border/60 bg-transparent hover:bg-muted/50 cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-              <Download className="h-4 w-4" />
+            <div className="size-9 flex items-center justify-center rounded-md border border-border/60 bg-transparent hover:bg-muted/50 cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+              <Download className="size-4" />
             </div>
           </div>
         </div>
@@ -171,7 +171,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
           <div className="p-8 max-w-4xl mx-auto w-full">
             {isPending ? (
               <div className="flex justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
               </div>
             ) : Object.keys(groupedEntries).length > 0 ? (
               <div className="space-y-8">
@@ -198,7 +198,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
                           detailUi = (
                             <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-background border border-border/50 rounded-full w-fit text-xs font-mono shadow-sm">
                               <span className="opacity-50 line-through">{entry.old_value?.status || "None"}</span>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              <ChevronRight className="size-3.5 text-muted-foreground" />
                               <span className="text-foreground">{entry.new_value?.status}</span>
                             </div>
                           );
@@ -206,7 +206,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
                           detailUi = (
                             <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-background border border-border/50 rounded-full w-fit text-xs font-mono shadow-sm">
                               <span className="opacity-50 line-through">{entry.old_value?.priority || "None"}</span>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              <ChevronRight className="size-3.5 text-muted-foreground" />
                               <span className="text-foreground">{entry.new_value?.priority}</span>
                             </div>
                           );
@@ -220,7 +220,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
                           detailUi = (
                             <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-background border border-border/50 rounded-full w-fit text-xs font-medium shadow-sm">
                               <span className="text-indigo-400">Assigned</span>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              <ChevronRight className="size-3.5 text-muted-foreground" />
                               <span className="text-foreground shrink-0">{entry.new_value?.assignment || "New User"}</span>
                             </div>
                           );
@@ -238,7 +238,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
                             )}
 
                             {/* Node Avatar Icon */}
-                            <Avatar className="h-9 w-9 shrink-0 border border-border/20 relative z-10 shadow-sm mt-0.5">
+                            <Avatar className="size-9 shrink-0 border border-border/20 relative z-10 shadow-sm mt-0.5">
                               <AvatarFallback className={cn("text-xs font-semibold text-white", colorCode)}>
                                 {initials}
                               </AvatarFallback>
@@ -267,7 +267,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <FileText className="size-10 text-muted-foreground/30 mb-3" />
                 <p className="text-sm font-medium text-foreground">No matching history found.</p>
                 <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or search.</p>
               </div>
@@ -277,7 +277,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
       </div>
 
       {/* RIGHT: Sidebar Summary */}
-      <ScrollArea className="w-full h-full shrink-0 md:w-[280px] lg:w-[320px] bg-background border-l border-border/40">
+      <ScrollArea className="size-full shrink-0 md:w-[280px] lg:w-[320px] bg-background border-l border-border/40">
         <div className="space-y-10 p-8">
 
           {/* Summary Section */}
@@ -311,7 +311,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
                 const colorCode = ["bg-indigo-500", "bg-emerald-500", "bg-blue-500", "bg-rose-500", "bg-amber-500"][name.length % 5];
                 return (
                   <div key={name} className="flex items-center gap-3.5">
-                    <Avatar className="h-8 w-8 shrink-0">
+                    <Avatar className="size-8 shrink-0">
                       <AvatarFallback className={cn("text-[10px] font-semibold text-white shadow-sm", colorCode)}>
                         {data.initials}
                       </AvatarFallback>

@@ -12,12 +12,12 @@ export function QuickCaptureCard({ isWheel }: QuickCaptureCardProps) {
     <Card
       className={cn(
         "bg-card/90 border border-border/60 rounded-2xl px-4 py-3 gap-2 shadow-sm hover:bg-card transition-all duration-300 group relative overflow-hidden",
-        isWheel ? "h-full w-full md:col-span-1" : "md:col-span-3",
+        isWheel ? "size-full md:col-span-1" : "md:col-span-3",
       )}
     >
       <div className="flex flex-col h-full justify-between">
         <div className="flex items-center gap-2 mb-2">
-          <Zap className="h-3.5 w-3.5 text-primary" />
+          <Zap className="size-3.5 text-primary" />
           <h3 className="text-[9px] uppercase tracking-[0.25em] text-muted-foreground font-bold">
             Quick Capture
           </h3>

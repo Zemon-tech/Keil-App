@@ -131,17 +131,17 @@ export function MotionHome() {
                             <img
                               src={item.cover_image}
                               alt=""
-                              className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                              className="size-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
                             />
                           ) : (
-                            <div className="w-full h-full bg-muted" />
+                            <div className="size-full bg-muted" />
                           )}
                         </div>
 
                         {/* Info area with overlapping icon */}
                         <div className="px-2.5 pt-1 pb-2">
                           {/* Icon overlapping cover */}
-                          <div className="text-xl -mt-4 mb-1 w-7 h-7 flex items-center justify-center leading-none">
+                          <div className="text-xl -mt-4 mb-1 size-7 flex items-center justify-center leading-none">
                             <span className="group-hover:scale-110 transition-transform duration-200 drop-shadow-sm">
                               {item.icon || "📄"}
                             </span>

@@ -116,7 +116,7 @@ function CommentNode({
   return (
     <div className="group relative flex items-start gap-2.5 px-4 py-1 hover:bg-black/5 dark:hover:bg-accent/40 transition-colors -mx-4 rounded-md">
       {/* Author Avatar — small, like WhatsApp */}
-      <Avatar className="h-6 w-6 shrink-0 rounded-full mt-0.5">
+      <Avatar className="size-6 shrink-0 rounded-full mt-0.5">
         <AvatarFallback className="text-[10px] font-semibold bg-indigo-500 text-white">
           {authorName.charAt(0).toUpperCase()}
         </AvatarFallback>
@@ -160,9 +160,9 @@ function CommentNode({
                 title="Delete message"
               >
                 {deleteComment.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="size-4" />
                 )}
               </button>
             )}
@@ -186,7 +186,7 @@ function CommentNode({
               onClick={handleReplySubmit}
               disabled={createComment.isPending || !replyInput.trim()}
             >
-              {createComment.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Post"}
+              {createComment.isPending ? <Loader2 className="size-3 animate-spin" /> : "Post"}
             </Button>
           </div>
         )}
@@ -217,7 +217,7 @@ function CommentNode({
                 onClick={() => setRepliesExpanded(true)}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-0.5"
               >
-                <span className="inline-flex items-center justify-center h-4 w-4 rounded-full border border-border text-[10px]">+</span>
+                <span className="inline-flex items-center justify-center size-4 rounded-full border border-border text-[10px]">+</span>
                 {comment.replies.length} {comment.replies.length === 1 ? "reply" : "replies"}
               </button>
             )}
@@ -240,8 +240,10 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   const createComment = useCreateOrgComment(taskOrgId, taskSpaceId);
   const { canComment } = useTaskPermissions(task);
 
-  const [activePicker, setActivePicker] = useState<"user" | "task" | "event" | null>(null);
-  const [pickerSearch, setPickerSearch] = useState("");
+  const [picker, setPicker] = useState<{
+    active: "user" | "task" | "event" | null;
+    search: string;
+  }>({ active: null, search: "" });
   const { data: members = [] } = useSpaceMembers(
     taskOrgId,
     taskSpaceId
@@ -253,14 +255,11 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   useEffect(() => {
     const lastChar = input.slice(-1);
     if (lastChar === "@") {
-      setActivePicker("user");
-      setPickerSearch("");
+      setPicker({ active: "user", search: "" });
     } else if (lastChar === "#") {
-      setActivePicker("task");
-      setPickerSearch("");
+      setPicker({ active: "task", search: "" });
     } else if (lastChar === "$") {
-      setActivePicker("event");
-      setPickerSearch("");
+      setPicker({ active: "event", search: "" });
     }
   }, [input]);
 
@@ -292,8 +291,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
       // the existing manual trigger behavior while supporting the new symbols.
       return (trimmed ? trimmed + " " : "") + symbol + text + " ";
     });
-    setActivePicker(null);
-    setPickerSearch("");
+    setPicker({ active: null, search: "" });
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -305,15 +303,15 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   };
 
   const filteredMembers = (members || []).filter(m =>
-    (m.name || m.email).toLowerCase().includes(pickerSearch.toLowerCase())
+    (m.name || m.email).toLowerCase().includes(picker.search.toLowerCase())
   );
 
   const filteredTasks = allTasks.filter(t =>
-    t.type === "task" && t.id !== task.id && t.title.toLowerCase().includes(pickerSearch.toLowerCase())
+    t.type === "task" && t.id !== task.id && t.title.toLowerCase().includes(picker.search.toLowerCase())
   );
 
   const filteredEvents = allTasks.filter(t =>
-    t.type === "event" && t.id !== task.id && t.title.toLowerCase().includes(pickerSearch.toLowerCase())
+    t.type === "event" && t.id !== task.id && t.title.toLowerCase().includes(picker.search.toLowerCase())
   );
 
   return (
@@ -328,7 +326,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
         <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto">
           {isPending ? (
             <div className="flex justify-center py-8 my-auto">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
             </div>
           ) : (comments ?? []).length > 0 ? (
             <div className="space-y-0.5 mt-auto">
@@ -338,8 +336,8 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center my-auto py-12 text-center">
-              <div className="h-16 w-16 bg-accent rounded-full mb-4 flex items-center justify-center">
-                <MessageSquare className="h-8 w-8 text-muted-foreground" />
+              <div className="size-16 bg-accent rounded-full mb-4 flex items-center justify-center">
+                <MessageSquare className="size-8 text-muted-foreground" />
               </div>
               <h3 className="font-semibold text-lg text-foreground">Welcome to the conversation</h3>
               <p className="mt-1 text-sm text-muted-foreground">This is the start of the activity history for this task.</p>
@@ -349,23 +347,23 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
       </ScrollArea>
 
       {/* Picker overlay above the input */}
-      {activePicker && (
+      {picker.active && (
         <div className="absolute bottom-[80px] left-8 w-72 flex flex-col bg-popover text-popover-foreground rounded-lg border shadow-lg z-50 overflow-hidden">
           <div className="p-2 border-b flex items-center gap-2 bg-muted/50">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Search className="size-4 text-muted-foreground shrink-0" />
             <Input
               autoFocus
-              placeholder={`Search ${activePicker === 'user' ? 'people' : activePicker === 'event' ? 'events' : 'tasks'}...`}
-              value={pickerSearch}
-              onChange={(e) => setPickerSearch(e.target.value)}
+              placeholder={`Search ${picker.active === 'user' ? 'people' : picker.active === 'event' ? 'events' : 'tasks'}...`}
+              value={picker.search}
+              onChange={(e) => setPicker(prev => ({ ...prev, search: e.target.value }))}
               className="h-7 text-sm border-none shadow-none focus-visible:ring-0 p-0 bg-transparent flex-1"
             />
-            <button onClick={() => setActivePicker(null)} className="p-1 hover:bg-muted rounded-md text-muted-foreground shrink-0">
-              <X className="h-3.5 w-3.5" />
+            <button onClick={() => setPicker({ active: null, search: "" })} className="p-1 hover:bg-muted rounded-md text-muted-foreground shrink-0">
+              <X className="size-3.5" />
             </button>
           </div>
           <ScrollArea className="max-h-60 overflow-y-auto">
-            {activePicker === 'user' ? (
+            {picker.active === 'user' ? (
               <div className="p-1.5 space-y-0.5">
                 {filteredMembers.length === 0 ? (
                   <p className="py-4 text-xs text-muted-foreground text-center">No people found</p>
@@ -378,7 +376,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                         onClick={() => handleInsertMention("@", name)}
                         className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
                       >
-                        <Avatar className="h-6 w-6">
+                        <Avatar className="size-6">
                           <AvatarFallback className="text-[10px] bg-indigo-500/10 text-indigo-500 font-semibold">{name.charAt(0).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm truncate font-medium">{name}</span>
@@ -387,7 +385,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                   })
                 )}
               </div>
-            ) : activePicker === 'task' ? (
+            ) : picker.active === 'task' ? (
               <div className="p-1.5 space-y-0.5">
                 {filteredTasks.length === 0 ? (
                   <p className="py-4 text-xs text-muted-foreground text-center">No tasks found</p>
@@ -398,7 +396,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                       onClick={() => handleInsertMention("#", t.title)}
                       className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
                     >
-                      <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <Hash className="size-4 text-muted-foreground shrink-0" />
                       <span className="text-sm truncate font-medium flex-1">{t.title}</span>
                       <span className="text-[10px] text-muted-foreground shrink-0 font-mono hidden sm:inline-block">{t.id.slice(0, 8)}</span>
                     </button>
@@ -416,7 +414,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                       onClick={() => handleInsertMention("$", t.title)}
                       className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
                     >
-                      <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <DollarSign className="size-4 text-muted-foreground shrink-0" />
                       <span className="text-sm truncate font-medium flex-1">{t.title}</span>
                       <span className="text-[10px] text-muted-foreground shrink-0 font-mono hidden sm:inline-block">{t.id.slice(0, 8)}</span>
                     </button>
@@ -443,32 +441,32 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
           {canComment && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 ml-0.5 outline-none">
+                <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full size-8 ml-0.5 outline-none">
                   <Plus className="h-[22px] w-[22px] text-foreground/70" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="w-64 p-2 mb-2 rounded-xl border border-border shadow-md">
-                <DropdownMenuItem onClick={() => setActivePicker('user')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
-                    <AtSign className="h-4 w-4" />
+                <DropdownMenuItem onClick={() => setPicker({ active: 'user', search: "" })} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
+                    <AtSign className="size-4" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">Mention someone</span>
                     <span className="text-xs text-muted-foreground">Notify a team member</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActivePicker('task')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
-                    <Hash className="h-4 w-4" />
+                <DropdownMenuItem onClick={() => setPicker({ active: 'task', search: "" })} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
+                    <Hash className="size-4" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">Mention task</span>
                     <span className="text-xs text-muted-foreground">Reference a task name</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActivePicker('event')} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
-                    <DollarSign className="h-4 w-4" />
+                <DropdownMenuItem onClick={() => setPicker({ active: 'event', search: "" })} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center justify-center size-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
+                    <DollarSign className="size-4" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">Mention event</span>
@@ -477,8 +475,8 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="mx-2 my-1" />
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
-                    <Paperclip className="h-4 w-4" />
+                  <div className="flex items-center justify-center size-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
+                    <Paperclip className="size-4" />
                   </div>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">Add files</span>
@@ -490,8 +488,8 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
           )}
 
           {canComment && (
-            <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 outline-none">
-              <Smile className="h-5 w-5 text-foreground/70" />
+            <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full size-8 outline-none">
+              <Smile className="size-5 text-foreground/70" />
             </button>
           )}
 
@@ -501,7 +499,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
             onChange={(e) => setInput(e.target.value)}
             disabled={!canComment}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !activePicker && canComment) {
+              if (e.key === "Enter" && !e.shiftKey && !picker.active && canComment) {
                 handleSend();
               }
             }}
@@ -513,14 +511,14 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 w-8 p-0 text-primary hover:bg-primary/10 hover:text-primary font-semibold rounded-full flex items-center justify-center"
+                className="size-8 p-0 text-primary hover:bg-primary/10 hover:text-primary font-semibold rounded-full flex items-center justify-center"
                 onClick={handleSend}
                 disabled={createComment.isPending}
               >
-                {createComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
+                {createComment.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
               </Button>
             ) : canComment ? (
-              <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full h-8 w-8 outline-none text-foreground/70">
+              <button className="flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors shrink-0 rounded-full size-8 outline-none text-foreground/70">
                 <Mic className="h-[22px] w-[22px]" />
               </button>
             ) : null}
