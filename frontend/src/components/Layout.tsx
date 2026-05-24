@@ -81,7 +81,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
             <CommandEmpty>No results found.</CommandEmpty>
             <CommandGroup heading="Suggestions">
               <CommandItem>
-                <LayoutDashboard className="mr-2 h-4 w-4 text-slate-400" />
+                <LayoutDashboard className="mr-2 size-4 text-slate-400" />
                 <span>Go to Dashboard</span>
               </CommandItem>
               <CommandItem
@@ -90,21 +90,21 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
                   openChat();
                 }}
               >
-                <MessageSquare className="mr-2 h-4 w-4 text-slate-400" />
+                <MessageSquare className="mr-2 size-4 text-slate-400" />
                 <span>Open Chat</span>
               </CommandItem>
               <CommandItem>
-                <Activity className="mr-2 h-4 w-4 text-slate-400" />
+                <Activity className="mr-2 size-4 text-slate-400" />
                 <span>View Analytics</span>
               </CommandItem>
               <CommandItem>
-                <User className="mr-2 h-4 w-4 text-slate-400" />
+                <User className="mr-2 size-4 text-slate-400" />
                 <span>Profile Settings</span>
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading="Settings">
               <CommandItem>
-                <Settings className="mr-2 h-4 w-4 text-slate-400" />
+                <Settings className="mr-2 size-4 text-slate-400" />
                 <span>Settings</span>
               </CommandItem>
             </CommandGroup>

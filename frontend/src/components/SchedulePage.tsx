@@ -128,7 +128,7 @@ export function SchedulePage() {
   );
 
   const containerClassName = cn(
-    "h-full w-full transition-all duration-500 ease-in-out",
+    "size-full transition-all duration-500 ease-in-out",
     isCollapsed ? "" : ""
   );
 
@@ -136,7 +136,7 @@ export function SchedulePage() {
     <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
       <Toaster />
       <main className={containerClassName}>
-        <div className="flex h-full w-full">
+        <div className="flex size-full">
           <div className="w-[300px] shrink-0 bg-card border-r border-border h-full">
             <TaskListPane
               query={query}

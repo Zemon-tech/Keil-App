@@ -132,8 +132,10 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
         const handleMouseUp = () => {
             if (isResizing.current) {
                 isResizing.current = false;
-                document.body.style.cursor = "default";
-                document.body.style.userSelect = "auto";
+                Object.assign(document.body.style, {
+                    cursor: "default",
+                    userSelect: "auto",
+                });
             }
         };
 
@@ -167,8 +169,10 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                 onMouseDown={(e) => {
                     e.preventDefault();
                     isResizing.current = true;
-                    document.body.style.cursor = "ew-resize";
-                    document.body.style.userSelect = "none";
+                    Object.assign(document.body.style, {
+                        cursor: "ew-resize",
+                        userSelect: "none",
+                    });
                 }}
             />
 

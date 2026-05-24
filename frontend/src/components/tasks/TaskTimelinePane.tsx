@@ -159,7 +159,7 @@ export function TaskTimelinePane({ tasks, selectedTask }: Props) {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="rounded-full h-9 px-5 border-border/60 text-[11px] font-bold uppercase tracking-widest bg-card/20 hover:bg-card/40 shadow-sm transition-all">
                 {viewMode}
-                <ChevronDown className="h-3.5 w-3.5 ml-2 opacity-40" />
+                <ChevronDown className="size-3.5 ml-2 opacity-40" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl border-border/40 bg-card/95 backdrop-blur-xl shadow-2xl min-w-[240px]">

@@ -49,7 +49,7 @@ export function BulletListEditor({
             onClick={() => setIsAdding(true)}
             className="flex items-center gap-1 text-[10px] uppercase font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="size-3.5" />
             Add
           </button>
         )}
@@ -60,14 +60,14 @@ export function BulletListEditor({
           <ul className="space-y-1.5 list-none">
             {points.map((pt, i) => (
               <li key={i} className="group flex items-start gap-2.5 text-sm text-foreground">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
+                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
                 <span className="flex-1 leading-snug">{pt}</span>
                 {!disabled && (
                   <button
                     onClick={() => handleDelete(i)}
                     className="mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="size-3.5" />
                   </button>
                 )}
               </li>
@@ -100,8 +100,8 @@ export function BulletListEditor({
               placeholder="Type a point and press Enter..."
               className="h-8 text-xs"
             />
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0" onClick={() => setIsAdding(false)}>
-              <X className="h-4 w-4" />
+            <Button size="sm" variant="ghost" className="size-8 p-0 shrink-0" onClick={() => setIsAdding(false)}>
+              <X className="size-4" />
             </Button>
           </div>
         </div>

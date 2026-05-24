@@ -514,7 +514,7 @@ export const VoicePoweredOrb: FC<VoicePoweredOrbProps> = ({
     <div
       ref={ctnDom}
       className={cn(
-        "w-full h-full relative",
+        "size-full relative",
         className
       )}
     >

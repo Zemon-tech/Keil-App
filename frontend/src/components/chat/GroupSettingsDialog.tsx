@@ -64,7 +64,7 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
     >
       <DialogTrigger asChild>
         <button className="p-1.5 text-muted-foreground hover:bg-muted rounded-md transition-colors">
-          <Settings className="w-4 h-4" />
+          <Settings className="size-4" />
         </button>
       </DialogTrigger>
 
@@ -77,7 +77,7 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
           <h3 className="text-sm font-medium">Members ({(channel.members || []).length})</h3>
           {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => setShowAdd(!showAdd)}>
-              <UserPlus className="w-4 h-4 mr-1" /> Add
+              <UserPlus className="size-4 mr-1" /> Add
             </Button>
           )}
         </div>
@@ -167,7 +167,7 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
                 className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="size-8">
                     <AvatarFallback className="bg-primary/10 text-xs">
                       {initials}
                     </AvatarFallback>
@@ -185,12 +185,12 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => setConfirmRemoveId(member.id)}
                     disabled={removeMember.isPending}
                     title={isSelf ? "Leave Group" : "Remove Member"}
                   >
-                    <UserX className="w-4 h-4" />
+                    <UserX className="size-4" />
                   </Button>
                 )}
               </div>

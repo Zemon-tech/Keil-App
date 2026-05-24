@@ -168,7 +168,7 @@ export function SignupForm({
               <img 
                 src="https://cdn.brandfetch.io/id6O2oGzv-/theme/dark/symbol.svg?c=1bxid64Mup7aczewSAYMX&t=1755835725776" 
                 alt="Google" 
-                className="h-5 w-5"
+                className="size-5"
               />
               <span className="sr-only">Sign up with Google</span>
             </Button>

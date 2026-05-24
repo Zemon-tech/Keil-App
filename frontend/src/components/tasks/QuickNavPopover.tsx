@@ -116,10 +116,10 @@ export function QuickNavPopover({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 rounded-md hover:bg-accent"
+                  className="size-7 rounded-md hover:bg-accent"
                   onClick={handleCancel}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -142,18 +142,18 @@ export function QuickNavPopover({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 rounded-md"
+                  className="size-7 rounded-md"
                   onClick={() => setNavDate(addMonths(navDate, -1))}
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 rounded-md"
+                  className="size-7 rounded-md"
                   onClick={() => setNavDate(addMonths(navDate, 1))}
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="size-4" />
                 </Button>
               </div>
             </div>
@@ -214,12 +214,12 @@ export function QuickNavPopover({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 rounded-md"
+                className="size-7 rounded-md"
                 onClick={() =>
                   setNavDate(setYear(navDate, navDate.getFullYear() - 12))
                 }
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="size-4" />
               </Button>
               <span className="text-xs font-bold tabular-nums">
                 {years[0]} - {years[years.length - 1]}
@@ -227,12 +227,12 @@ export function QuickNavPopover({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 rounded-md"
+                className="size-7 rounded-md"
                 onClick={() =>
                   setNavDate(setYear(navDate, navDate.getFullYear() + 12))
                 }
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="size-4" />
               </Button>
             </div>
             <div className="grid grid-cols-3 gap-1.5">

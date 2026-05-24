@@ -28,10 +28,7 @@ import { useNotifications, type Notification } from "@/contexts/NotificationCont
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
 
-interface NotificationDialogProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-}
+
 
 const notificationStyles = {
     task_assigned: {
@@ -158,7 +155,6 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                         <div className="border-b border-border/70 px-5 py-5">
                             <div className="flex items-center justify-between gap-3">
                                 <h2 className="text-xl font-semibold tracking-[-0.04em] text-foreground">Notification</h2>
-
                                 <button
                                     onClick={() => onOpenChange(false)}
                                     className="flex size-8 items-center justify-center rounded-full border border-border/70 bg-background/70 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

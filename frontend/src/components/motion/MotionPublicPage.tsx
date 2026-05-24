@@ -152,7 +152,7 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
             "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop"
           }
           alt="cover"
-          className="h-full w-full object-cover opacity-80"
+          className="size-full object-cover opacity-80"
         />
       </div>
 

@@ -37,6 +37,22 @@ export function TaskContextSection({
 
   const addFormRef = useRef<HTMLDivElement>(null);
   const editFormRef = useRef<HTMLDivElement>(null);
+  const addTitleRef = useRef<HTMLInputElement>(null);
+  const editTitleRef = useRef<HTMLInputElement>(null);
+
+  // Focus the add input when opening
+  useEffect(() => {
+    if (isAdding) {
+      addTitleRef.current?.focus();
+    }
+  }, [isAdding]);
+
+  // Focus the edit input when opening
+  useEffect(() => {
+    if (editingId) {
+      editTitleRef.current?.focus();
+    }
+  }, [editingId]);
 
   const contextItems: TaskContextItem[] = (task.context ?? []).map((item: any) => ({
     id: item.id,
@@ -164,7 +180,7 @@ export function TaskContextSection({
                   : "bg-background border border-border hover:bg-accent"
               )}
             >
-              <FileText className="h-3.5 w-3.5" />
+              <FileText className="size-3.5" />
               Note
             </button>
             <button
@@ -176,18 +192,18 @@ export function TaskContextSection({
                   : "bg-background border border-border hover:bg-accent"
               )}
             >
-              <Link2 className="h-3.5 w-3.5" />
+              <Link2 className="size-3.5" />
               Link
             </button>
           </div>
 
           {/* Title Input */}
           <Input
+            ref={addTitleRef}
             placeholder={newItemType === "note" ? "Note title..." : "Link title..."}
             value={newItemTitle}
             onChange={(e) => setNewItemTitle(e.target.value)}
             className="mb-2 h-8 text-sm"
-            autoFocus
           />
 
           {/* Content Input */}
@@ -241,11 +257,11 @@ export function TaskContextSection({
                 // Edit Mode
                 <div ref={editFormRef} className="space-y-2">
                   <Input
+                    ref={editTitleRef}
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                     className="h-7 text-sm"
                     placeholder="Title..."
-                    autoFocus
                   />
                   {item.type === "note" ? (
                     <textarea
@@ -273,9 +289,9 @@ export function TaskContextSection({
                 <div className="flex items-start gap-2">
                   <div className="mt-0.5 shrink-0">
                     {item.type === "note" ? (
-                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <FileText className="size-4 text-muted-foreground" />
                     ) : (
-                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      <Link2 className="size-4 text-muted-foreground" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -301,13 +317,13 @@ export function TaskContextSection({
                       onClick={() => handleStartEdit(item)}
                       className="p-1 text-muted-foreground hover:text-foreground rounded"
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="size-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(item.id)}
                       className="p-1 text-muted-foreground hover:text-destructive rounded"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="size-3.5" />
                     </button>
                   </div>
                 </div>

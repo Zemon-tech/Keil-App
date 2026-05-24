@@ -96,6 +96,7 @@ export function MotionPage() {
     setDrawerTab,
     shareOpen,
     setShareOpen,
+    setLastOpenedPageId,
   } = useMotionStore();
 
   const handleToggleDrawer = (tab: "updates" | "analytics") => {
@@ -115,6 +116,12 @@ export function MotionPage() {
     }
   };
 
+  // Track last opened page so /motion can redirect back to it
+  useEffect(() => {
+    if (pageId && activeOrgId && activeSpaceId) {
+      setLastOpenedPageId(activeOrgId, activeSpaceId, pageId);
+    }
+  }, [pageId, activeOrgId, activeSpaceId, setLastOpenedPageId]);
   // Stable ref so upsertPages is never a useEffect dependency
   const upsertPagesRef = useRef(upsertPages);
   upsertPagesRef.current = upsertPages;
@@ -219,9 +226,13 @@ export function MotionPage() {
   // ── Redirect if page not found after load ───────────────────────────────────
   useEffect(() => {
     if (!isLoading && !serverPage && !page) {
+      // Clear the invalid lastOpenedPageId so we don't end up in an infinite redirect loop
+      if (activeOrgId && activeSpaceId) {
+        setLastOpenedPageId(activeOrgId, activeSpaceId, null);
+      }
       navigate("/motion", { replace: true });
     }
-  }, [isLoading, serverPage, page, navigate]);
+  }, [isLoading, serverPage, page, navigate, activeOrgId, activeSpaceId, setLastOpenedPageId]);
 
   // ── Title draft ─────────────────────────────────────────────────────────────
   const [titleDraft, setTitleDraft] = useState(page?.title ?? "");
@@ -649,7 +660,7 @@ export function MotionPage() {
                   src={displayPage.cover_image}
                   alt="cover"
                   className={cn(
-                    "h-full w-full object-cover select-none transition-none",
+                    "size-full object-cover select-none transition-none",
                     isRepositioning ? "cursor-ns-resize" : ""
                   )}
                   style={{

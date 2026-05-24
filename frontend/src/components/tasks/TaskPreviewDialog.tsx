@@ -110,13 +110,13 @@ const taskStatusColors: Record<string, string> = {
 function getEventIcon(eventType?: string | null) {
   switch (eventType) {
     case "meeting":
-      return <Users className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
+      return <Users className="size-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
     case "call":
-      return <Phone className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
+      return <Phone className="size-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
     case "focus":
-      return <Brain className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
+      return <Brain className="size-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
     default:
-      return <Calendar className="w-4 h-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
+      return <Calendar className="size-4 text-[#4F46E5] dark:text-[#6366F1] shrink-0" />;
   }
 }
 
@@ -184,7 +184,7 @@ export function TaskPreviewDialog({
         <div className="flex-1 flex flex-col gap-2.5">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-6 h-full text-muted-foreground gap-2">
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Loader2 className="size-5 animate-spin" />
               <span className="text-xs">Loading…</span>
             </div>
           ) : task ? (
@@ -204,7 +204,7 @@ export function TaskPreviewDialog({
                   {isEvent ? (
                     <div className="shrink-0">{getEventIcon(task.event_type)}</div>
                   ) : (
-                    <CheckSquare className="w-4 h-4 text-primary shrink-0" />
+                    <CheckSquare className="size-4 text-primary shrink-0" />
                   )}
 
                   <h3
@@ -256,7 +256,7 @@ export function TaskPreviewDialog({
                               onClick={handleNavigate}
                               className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                             >
-                              <Pencil className="w-3.5 h-3.5" />
+                              <Pencil className="size-3.5" />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="top">Edit</TooltipContent>
@@ -267,7 +267,7 @@ export function TaskPreviewDialog({
                               onClick={handleDelete}
                               className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-500 transition-colors"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="size-3.5" />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="top">Delete</TooltipContent>
@@ -280,7 +280,7 @@ export function TaskPreviewDialog({
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors">
-                        <MoreHorizontal className="w-4 h-4" />
+                        <MoreHorizontal className="size-4" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -332,7 +332,7 @@ export function TaskPreviewDialog({
                     onClick={() => onOpenChange(false)}
                     className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="size-4" />
                   </button>
                 </div>
               </div>
@@ -340,7 +340,7 @@ export function TaskPreviewDialog({
               {/* ── TIME (events always show; tasks show if scheduled) ── */}
               {task.start_date && (
                 <div className="flex items-center gap-2 text-[13px] text-foreground/80 font-medium">
-                  <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <Clock className="size-3.5 text-muted-foreground shrink-0" />
                   <span>
                     {formatTimeCompact(task.start_date, task.due_date, task.is_all_day)}
                   </span>
@@ -371,7 +371,7 @@ export function TaskPreviewDialog({
                   )}
                   {task.location && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                      <MapPin className="w-3 h-3 shrink-0 text-muted-foreground/75" />
+                      <MapPin className="size-3 shrink-0 text-muted-foreground/75" />
                       <span className="truncate">{task.location}</span>
                     </div>
                   )}
@@ -394,7 +394,7 @@ export function TaskPreviewDialog({
                         <TooltipProvider key={a.id}>
                           <Tooltip delayDuration={200}>
                             <TooltipTrigger asChild>
-                              <Avatar className="w-5 h-5 border-[1.5px] border-background relative hover:z-10 hover:scale-105 transition-all">
+                              <Avatar className="size-5 border-[1.5px] border-background relative hover:z-10 hover:scale-105 transition-all">
                                 <AvatarFallback className="text-[8px] bg-primary/10 text-primary font-semibold">
                                   {a.name?.charAt(0) || a.email.charAt(0).toUpperCase()}
                                 </AvatarFallback>
@@ -407,7 +407,7 @@ export function TaskPreviewDialog({
                         </TooltipProvider>
                       ))}
                       {task.assignees.length > 3 && (
-                        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-semibold border-[1.5px] border-background relative z-10 text-muted-foreground">
+                        <div className="size-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-semibold border-[1.5px] border-background relative z-10 text-muted-foreground">
                           +{task.assignees.length - 3}
                         </div>
                       )}
@@ -446,7 +446,7 @@ export function TaskPreviewDialog({
                           )}
                         >
                           <span className="truncate">{task.status.replace("-", " ")}</span>
-                          <ChevronDown className="w-3 h-3 shrink-0 ml-0.5 opacity-70" />
+                          <ChevronDown className="size-3 shrink-0 ml-0.5 opacity-70" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>

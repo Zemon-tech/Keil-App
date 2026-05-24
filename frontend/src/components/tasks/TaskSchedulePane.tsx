@@ -190,7 +190,7 @@ function renderEventContent(arg: EventContentArg) {
 
   const BacklogDot = () => (
     <div
-      className="absolute top-0 right-0 w-2.5 h-2.5 bg-destructive rounded-full z-50 pointer-events-none"
+      className="absolute top-0 right-0 size-2.5 bg-destructive rounded-full z-50 pointer-events-none"
       style={{ transform: "translate(50%, -50%)" }}
     />
   );
@@ -201,7 +201,7 @@ function renderEventContent(arg: EventContentArg) {
       arg.event.extendedProps.taskStatus === "done" ||
       arg.event.extendedProps.taskStatus === "completed";
     return (
-      <div className="relative w-full h-full overflow-visible">
+      <div className="relative size-full overflow-visible">
         {isBacklog && <BacklogDot />}
         <div
           className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5"
@@ -210,14 +210,14 @@ function renderEventContent(arg: EventContentArg) {
           {isScheduledTask &&
             (taskType === "event" ? (
               isDone ? (
-                <CalendarCheck className="h-3 w-3 shrink-0 opacity-70" />
+                <CalendarCheck className="size-3 shrink-0 opacity-70" />
               ) : (
-                <Calendar className="h-3 w-3 shrink-0 opacity-70" />
+                <Calendar className="size-3 shrink-0 opacity-70" />
               )
             ) : isDone ? (
-              <CheckSquare className="h-3 w-3 shrink-0 opacity-70" />
+              <CheckSquare className="size-3 shrink-0 opacity-70" />
             ) : (
-              <Square className="h-3 w-3 shrink-0 opacity-70" />
+              <Square className="size-3 shrink-0 opacity-70" />
             ))}
           <span
             className={cn(
@@ -239,22 +239,22 @@ function renderEventContent(arg: EventContentArg) {
       arg.event.extendedProps.taskStatus === "done" ||
       arg.event.extendedProps.taskStatus === "completed";
     return (
-      <div className="relative h-full w-full overflow-visible">
+      <div className="relative size-full overflow-visible">
         {isBacklog && <BacklogDot />}
         <div
-          className="h-full w-full p-2 overflow-hidden flex items-center gap-1.5"
+          className="size-full p-2 overflow-hidden flex items-center gap-1.5"
           style={{ color: arg.textColor || "inherit" }}
         >
           {taskType === "event" ? (
             isDone ? (
-              <CalendarCheck className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              <CalendarCheck className="size-3.5 shrink-0 opacity-70" />
             ) : (
-              <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              <Calendar className="size-3.5 shrink-0 opacity-70" />
             )
           ) : isDone ? (
-            <CheckSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            <CheckSquare className="size-3.5 shrink-0 opacity-70" />
           ) : (
-            <Square className="h-3.5 w-3.5 shrink-0 opacity-70" />
+            <Square className="size-3.5 shrink-0 opacity-70" />
           )}
           <div
             className={cn(
@@ -272,7 +272,7 @@ function renderEventContent(arg: EventContentArg) {
   // Handle calendar blocks with type metadata
   if (!type || !typeMeta[type]) {
     return (
-      <div className="relative h-full w-full overflow-visible">
+      <div className="relative size-full overflow-visible">
         {isBacklog && <BacklogDot />}
         <div className="p-2 text-xs overflow-hidden">{arg.event.title}</div>
       </div>
@@ -285,11 +285,11 @@ function renderEventContent(arg: EventContentArg) {
 
   if (isBg) {
     return (
-      <div className="relative h-full w-full overflow-visible">
+      <div className="relative size-full overflow-visible">
         {isBacklog && <BacklogDot />}
-        <div className="h-full w-full px-2 py-1.5 opacity-40 overflow-hidden">
+        <div className="size-full px-2 py-1.5 opacity-40 overflow-hidden">
           <div className="flex items-center gap-2">
-            <Icon className="h-3 w-3" />
+            <Icon className="size-3" />
             <span className="text-[10px] font-bold uppercase tracking-wider truncate">
               {arg.event.title}
             </span>
@@ -300,11 +300,11 @@ function renderEventContent(arg: EventContentArg) {
   }
 
   return (
-    <div className="relative h-full w-full overflow-visible">
+    <div className="relative size-full overflow-visible">
       {isBacklog && <BacklogDot />}
       <div
         className={cn(
-          "h-full w-full p-2 border-l-4 overflow-hidden",
+          "size-full p-2 border-l-4 overflow-hidden",
           meta.bg,
           meta.border.replace("border-", "border-l-"),
         )}
@@ -320,7 +320,7 @@ function renderEventContent(arg: EventContentArg) {
               </span>
             </div>
           </div>
-          <Icon className="h-3.5 w-3.5 opacity-40" />
+          <Icon className="size-3.5 opacity-40" />
         </div>
       </div>
     </div>
@@ -431,10 +431,10 @@ function QuickNavPopover({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 rounded-md hover:bg-accent"
+                  className="size-7 rounded-md hover:bg-accent"
                   onClick={handleCancel}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -457,18 +457,18 @@ function QuickNavPopover({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 rounded-md"
+                  className="size-7 rounded-md"
                   onClick={() => setNavDate(addMonths(navDate, -1))}
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 rounded-md"
+                  className="size-7 rounded-md"
                   onClick={() => setNavDate(addMonths(navDate, 1))}
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="size-4" />
                 </Button>
               </div>
             </div>
@@ -529,12 +529,12 @@ function QuickNavPopover({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 rounded-md"
+                className="size-7 rounded-md"
                 onClick={() =>
                   setNavDate(setYear(navDate, navDate.getFullYear() - 12))
                 }
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="size-4" />
               </Button>
               <span className="text-xs font-bold tabular-nums">
                 {years[0]} - {years[years.length - 1]}
@@ -542,12 +542,12 @@ function QuickNavPopover({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 rounded-md"
+                className="size-7 rounded-md"
                 onClick={() =>
                   setNavDate(setYear(navDate, navDate.getFullYear() + 12))
                 }
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="size-4" />
               </Button>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
@@ -1126,7 +1126,7 @@ export function TaskSchedulePane({
                     )}
                     aria-label="Change calendar view"
                   >
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="rounded-xl">
                     <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>
@@ -1149,7 +1149,7 @@ export function TaskSchedulePane({
                 className="h-8 px-2"
                 onClick={goPrev}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="size-4" />
               </Button>
               <QuickNavPopover
                 currentViewDate={currentViewDate}
@@ -1169,7 +1169,7 @@ export function TaskSchedulePane({
                 className="h-8 px-2"
                 onClick={goNext}
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="size-4" />
               </Button>
             </div>
 

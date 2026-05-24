@@ -34,6 +34,12 @@ interface MotionStore {
   // ── UI state ─────────────────────────────────────────────────────────────────
   sidebarOpen: boolean;
 
+  /**
+   * Scoped dictionary tracking the last opened page per workspace.
+   * Persisted to localStorage as an orgId:spaceId -> pageId dictionary.
+   */
+  lastOpenedPages: Record<string, string>;
+
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   /**
@@ -85,6 +91,9 @@ interface MotionStore {
   setDrawerTab: (tab: "updates" | "analytics") => void;
   shareOpen: boolean;
   setShareOpen: (open: boolean) => void;
+
+  /** Records the last visited page id for the active org/space and persists it to localStorage. */
+  setLastOpenedPageId: (orgId: string, spaceId: string, pageId: string | null) => void;
 }
 
 export const useMotionStore = create<MotionStore>()((set, get) => ({
@@ -94,6 +103,12 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
   drawerOpen: false,
   drawerTab: "updates",
   shareOpen: false,
+  lastOpenedPages: (() => {
+    try {
+      const saved = localStorage.getItem("motion:lastOpenedPages");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  })(),
 
   // ── Hydration ─────────────────────────────────────────────────────────────────
 
@@ -193,4 +208,21 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
   setDrawerOpen: (open) => set({ drawerOpen: open }),
   setDrawerTab: (tab) => set({ drawerTab: tab }),
   setShareOpen: (open) => set({ shareOpen: open }),
+
+  setLastOpenedPageId: (orgId, spaceId, pageId) => {
+    if (!orgId || !spaceId) return;
+    const key = `${orgId}:${spaceId}`;
+    set((state) => {
+      const updated = { ...state.lastOpenedPages };
+      if (pageId) {
+        updated[key] = pageId;
+      } else {
+        delete updated[key];
+      }
+      try {
+        localStorage.setItem("motion:lastOpenedPages", JSON.stringify(updated));
+      } catch { /* ignore */ }
+      return { lastOpenedPages: updated };
+    });
+  },
 }));

@@ -127,7 +127,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                         {/* Search Bar */}
                         <div className="px-3 py-2 border-b border-border">
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search messages or users..."
                                     value={searchQuery}
@@ -143,7 +143,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                             <div className="p-2">
                                 <div className="px-2 py-1.5 flex items-center justify-between">
                                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                        <Hash className="h-3 w-3" />
+                                        <Hash className="size-3" />
                                         Channels
                                     </span>
                                     <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} defaultTab="group" />
@@ -152,7 +152,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                     <div className="space-y-2">
                                         {[...Array(3)].map((_, i) => (
                                             <div key={i} className="flex items-center gap-3 px-2 py-2">
-                                                <Skeleton className="h-4 w-4 rounded" />
+                                                <Skeleton className="size-4 rounded" />
                                                 <Skeleton className="h-3 w-20" />
                                             </div>
                                         ))}
@@ -174,10 +174,10 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             )}
                                         >
                                             <div className={cn(
-                                                "h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0",
+                                                "size-9 rounded-lg flex items-center justify-center flex-shrink-0",
                                                 activeChannelId === channel.id ? "bg-primary text-primary-foreground" : "bg-muted"
                                             )}>
-                                                <Hash className="h-4 w-4" />
+                                                <Hash className="size-4" />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between">
@@ -205,7 +205,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                             <div className="p-2">
                                 <div className="px-2 py-1.5 flex items-center justify-between">
                                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                        <Users className="h-3 w-3" />
+                                        <Users className="size-3" />
                                         Direct Messages
                                     </span>
                                     <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} defaultTab="direct" />
@@ -214,7 +214,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                     <div className="space-y-2">
                                         {[...Array(3)].map((_, i) => (
                                             <div key={i} className="flex items-center gap-3 px-2 py-2">
-                                                <Skeleton className="h-9 w-9 rounded-full" />
+                                                <Skeleton className="size-9 rounded-full" />
                                                 <Skeleton className="h-3 w-20" />
                                             </div>
                                         ))}
@@ -238,12 +238,12 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                 )}
                                             >
                                                 <div className="relative flex-shrink-0">
-                                                    <Avatar className="h-9 w-9">
+                                                    <Avatar className="size-9">
                                                         <AvatarFallback className="text-sm font-semibold bg-primary/20 text-foreground">
                                                             {displayName.charAt(0).toUpperCase()}
                                                         </AvatarFallback>
                                                     </Avatar>
-                                                    <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-card" />
+                                                    <div className="absolute -bottom-0.5 -right-0.5 size-2.5 bg-green-500 rounded-full border-2 border-card" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between">
@@ -277,7 +277,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                     <div className="flex items-center gap-3">
                                         {currentChannel.type === 'direct' ? (
                                             <>
-                                                <Avatar className="h-9 w-9">
+                                                <Avatar className="size-9">
                                                     <AvatarFallback className="text-sm font-semibold bg-primary/20">
                                                         {currentChannel.members[0]?.name?.charAt(0).toUpperCase() || "?"}
                                                     </AvatarFallback>
@@ -287,15 +287,15 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                         {currentChannel.members[0]?.name || "Unknown"}
                                                     </h3>
                                                     <p className="text-xs text-green-500 flex items-center gap-1">
-                                                        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                                        <span className="size-1.5 rounded-full bg-green-500" />
                                                         Online
                                                     </p>
                                                 </div>
                                             </>
                                         ) : (
                                             <>
-                                                <div className="h-9 w-9 rounded-lg bg-primary/20 flex items-center justify-center">
-                                                    <Hash className="h-4 w-4 text-primary" />
+                                                <div className="size-9 rounded-lg bg-primary/20 flex items-center justify-center">
+                                                    <Hash className="size-4 text-primary" />
                                                 </div>
                                                 <div>
                                                     <h3 className="text-sm font-semibold text-foreground">
@@ -319,10 +319,10 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
                                                     <button
-                                                        className="flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                                        className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                                                         aria-label="Delete chat"
                                                     >
-                                                        <Trash2 className="h-4 w-4" />
+                                                        <Trash2 className="size-4" />
                                                     </button>
                                                 </AlertDialogTrigger>
                                                 <AlertDialogContent>
@@ -366,7 +366,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             </div>
                                         ) : messages.length === 0 ? (
                                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-12">
-                                                <MessageCircle className="h-12 w-12 mb-3 opacity-40" />
+                                                <MessageCircle className="size-12 mb-3 opacity-40" />
                                                 <p className="text-sm">No messages yet. Start the conversation!</p>
                                             </div>
                                         ) : (
@@ -392,7 +392,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                                     minute: '2-digit',
                                                                 })}
                                                             </span>
-                                                            {isMine && <CheckCheck className="w-3 h-3 text-primary" />}
+                                                            {isMine && <CheckCheck className="size-3 text-primary" />}
                                                         </div>
                                                     </div>
                                                 );
@@ -413,8 +413,8 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                 {/* Message Input */}
                                 <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
                                     <div className="flex items-end gap-2">
-                                        <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:text-foreground flex-shrink-0">
-                                            <Paperclip className="h-5 w-5" />
+                                        <Button variant="ghost" size="icon" className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0">
+                                            <Paperclip className="size-5" />
                                         </Button>
                                         <div className="flex-1 relative">
                                             <input
@@ -425,15 +425,15 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                 className="w-full min-h-[44px] max-h-[120px] py-3 px-4 bg-muted rounded-2xl text-sm outline-none placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-primary/20 transition-all"
                                             />
                                         </div>
-                                        <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:text-foreground flex-shrink-0">
-                                            <Smile className="h-5 w-5" />
+                                        <Button variant="ghost" size="icon" className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0">
+                                            <Smile className="size-5" />
                                         </Button>
                                         <Button 
                                             onClick={handleSendMessage}
                                             disabled={!messageText.trim()}
-                                            className="h-10 w-10 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground flex-shrink-0 transition-all disabled:opacity-50"
+                                            className="size-10 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground flex-shrink-0 transition-all disabled:opacity-50"
                                         >
-                                            <Send className="h-4 w-4" />
+                                            <Send className="size-4" />
                                         </Button>
                                     </div>
                                 </div>
@@ -441,8 +441,8 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground bg-card p-12 text-center relative overflow-hidden group">
                                 <div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02]" />
-                                <div className="h-24 w-24 bg-primary/10 rounded-3xl flex items-center justify-center mb-6 ring-4 ring-background shadow-xs relative z-10 transition-transform duration-500 group-hover:scale-105">
-                                    <MessageCircle className="h-10 w-10 text-primary opacity-80" />
+                                <div className="size-24 bg-primary/10 rounded-3xl flex items-center justify-center mb-6 ring-4 ring-background shadow-xs relative z-10 transition-transform duration-500 group-hover:scale-105">
+                                    <MessageCircle className="size-10 text-primary opacity-80" />
                                 </div>
                                 <h3 className="text-xl font-bold text-foreground relative z-10 mb-2">Smart Organisation Comms</h3>
                                 <p className="text-sm max-w-[320px] mb-8 relative z-10">
