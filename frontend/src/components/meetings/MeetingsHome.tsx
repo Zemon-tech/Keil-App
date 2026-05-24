@@ -5,10 +5,12 @@ import { useMeetingHistory } from "@/hooks/api/useMeetings";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { MeetingDialog } from "@/components/MeetingDialog";
+import { MeetingReviewDialog } from "@/components/meetings/MeetingReviewDialog";
 
 export function MeetingsHome() {
   const { activeOrgId, activeSpaceId } = useAppContext();
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+  const [reviewRecordingId, setReviewRecordingId] = useState<string | null>(null);
 
   const { data, isLoading } = useMeetingHistory(1, 6);
   const recentRecordings = data?.recordings ?? [];
@@ -80,6 +82,7 @@ export function MeetingsHome() {
                     {recentRecordings.map((recording) => (
                       <div
                         key={recording.id}
+                        onClick={() => setReviewRecordingId(recording.id)}
                         className="flex items-center gap-4 px-4 py-3 rounded-xl border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
                       >
                         <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
@@ -117,6 +120,15 @@ export function MeetingsHome() {
       <MeetingDialog
         open={meetingDialogOpen}
         onOpenChange={setMeetingDialogOpen}
+      />
+
+      {/* Meeting Review Dialog */}
+      <MeetingReviewDialog
+        open={!!reviewRecordingId}
+        onOpenChange={(open) => {
+          if (!open) setReviewRecordingId(null);
+        }}
+        recordingId={reviewRecordingId}
       />
     </div>
   );

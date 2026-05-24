@@ -22,6 +22,9 @@ router.post("/transcribe", meetingController.transcribeRecording);
 // Endpoint to poll transcription status of a Sarvam job
 router.get("/transcribe/status", meetingController.getTranscriptionStatus);
 
+// Endpoint to retrieve a single recording for review
+router.get("/recording/:recordingId/review", meetingController.getRecordingReview);
+
 // Endpoint to retrieve recordings associated with a specific meeting
 router.get("/:meetingId/recordings", meetingController.getMeetingRecordings);
 

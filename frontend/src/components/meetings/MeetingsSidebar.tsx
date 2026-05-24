@@ -17,12 +17,13 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 import { useMeetingHistory, useMeetingSearch } from "@/hooks/api/useMeetings";
 import { formatDistanceToNow } from "date-fns";
 import { MeetingDialog } from "@/components/MeetingDialog";
+import { MeetingReviewDialog } from "@/components/meetings/MeetingReviewDialog";
 
 const mainTabs = [
   { id: "home", title: "Home", icon: Home, url: "/meetings" },
@@ -36,14 +37,28 @@ export function MeetingsSidebar({ onClose }: { onClose?: () => void }) {
 
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+  const [reviewRecordingId, setReviewRecordingId] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce search input by 300ms
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery]);
 
   // Data fetching
   const { data: historyData, isLoading } = useMeetingHistory(1, 30);
-  const { data: searchResults } = useMeetingSearch(searchQuery);
+  const { data: searchResults } = useMeetingSearch(debouncedQuery);
 
   const recordings = historyData?.recordings ?? [];
-  const displayRecordings = searchMode && searchQuery.trim()
+  const displayRecordings = searchMode && debouncedQuery.trim()
     ? (searchResults ?? [])
     : recordings;
 
@@ -151,7 +166,7 @@ export function MeetingsSidebar({ onClose }: { onClose?: () => void }) {
             </div>
           ) : displayRecordings.length === 0 ? (
             <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-              {searchMode && searchQuery.trim()
+              {searchMode && debouncedQuery.trim()
                 ? "No recordings match your search."
                 : "No recordings yet. Start a meeting to get going."}
             </div>
@@ -163,6 +178,7 @@ export function MeetingsSidebar({ onClose }: { onClose?: () => void }) {
                     <SidebarMenuButton
                       className="h-auto py-2 px-3 rounded-lg"
                       tooltip={`Recording · ${formatDuration(recording.audio_duration_seconds)}`}
+                      onClick={() => setReviewRecordingId(recording.id)}
                     >
                       <div className="flex items-center gap-3 w-full min-w-0">
                         <div className="h-7 w-7 rounded-md bg-violet-500/10 flex items-center justify-center shrink-0">
@@ -196,6 +212,14 @@ export function MeetingsSidebar({ onClose }: { onClose?: () => void }) {
       <MeetingDialog
         open={meetingDialogOpen}
         onOpenChange={setMeetingDialogOpen}
+      />
+
+      <MeetingReviewDialog
+        open={!!reviewRecordingId}
+        onOpenChange={(open) => {
+          if (!open) setReviewRecordingId(null);
+        }}
+        recordingId={reviewRecordingId}
       />
     </>
   );

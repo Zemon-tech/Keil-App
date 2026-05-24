@@ -36,6 +36,8 @@ export const meetingKeys = {
     [...meetingKeys.all, "history", page, limit] as const,
   search: (query: string) =>
     [...meetingKeys.all, "search", query] as const,
+  recording: (id: string) =>
+    [...meetingKeys.all, "recording", id] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -68,5 +70,19 @@ export function useMeetingSearch(query: string) {
       return res.data.data;
     },
     enabled: query.trim().length > 0,
+  });
+}
+
+/**
+ * Fetches a single recording by ID for review.
+ */
+export function useMeetingRecording(recordingId: string | null) {
+  return useQuery({
+    queryKey: meetingKeys.recording(recordingId ?? ""),
+    queryFn: async (): Promise<MeetingRecordingDTO> => {
+      const res = await api.get(`v1/meetings/recording/${recordingId}/review`);
+      return res.data.data;
+    },
+    enabled: !!recordingId,
   });
 }
