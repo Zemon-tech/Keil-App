@@ -108,17 +108,21 @@ jobs:
         id: push-image
         run: |
           echo "📤 Pushing image to Lightsail Container Service..."
-          push_output=$(aws lightsail push-container-image \
+          aws lightsail push-container-image \
             --service-name keil-backend-service \
             --label keil-backend \
-            --image ghcr.io/zemon-tech/keil-backend:latest)
+            --image ghcr.io/zemon-tech/keil-backend:latest
           
-          echo "Parsed Push Output: $push_output"
+          # Query the latest pushed image name using AWS CLI directly from the API (sorted by creation time)
+          echo "🔍 Querying the registered image name from Lightsail..."
+          image_name=$(aws lightsail get-container-images \
+            --service-name keil-backend-service \
+            --query "containerImages[?contains(image, '.keil-backend.')] | sort_by(@, &createdAt)[-1].image" \
+            --output text)
           
-          # Extract the released image name (e.g. :keil-backend-service.keil-backend.1)
-          image_name=$(echo "$push_output" | grep -o ':[a-zA-Z0-9.-]*' | head -n 1)
           echo "IMAGE_NAME=$image_name" >> $GITHUB_ENV
           echo "✅ Pushed image name is: $image_name"
+
 
       # 5. Fetch current deployment config, swap the image, and trigger a rolling update
       - name: Dynamic Deployment (Preserving Environment Variables)
