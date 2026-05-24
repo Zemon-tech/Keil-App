@@ -43,7 +43,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const openChat = useChatStore((state: any) => state.openChat);
   const { isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
 
-  const { drawerOpen, setDrawerOpen, getPageById } = useMotionStore();
+  const { setDrawerOpen, getPageById } = useMotionStore();
   const page = pageId ? getPageById(pageId) : null;
   const pageTitle = page?.title ?? "Untitled";
 
