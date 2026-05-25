@@ -320,6 +320,9 @@ export function MotionPage() {
   const handleDelete = () => {
     if (!pageId || !page) return;
     if (confirm("Are you sure you want to delete this page?")) {
+      if (activeOrgId && activeSpaceId) {
+        setLastOpenedPageId(activeOrgId, activeSpaceId, null);
+      }
       softDelete.mutate({ id: pageId, title: page.title });
       navigate("/motion");
     }

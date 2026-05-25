@@ -36,6 +36,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { GroupSettingsDialog } from "@/components/chat/GroupSettingsDialog";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { EmojiPicker } from "@/components/chat/EmojiPicker";
+
 
 interface ChatDialogProps {
     open: boolean;
@@ -58,6 +61,26 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     const [messageText, setMessageText] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const handleSelectEmoji = (emoji: string) => {
+        const input = inputRef.current;
+        if (input) {
+            const start = input.selectionStart ?? messageText.length;
+            const end = input.selectionEnd ?? messageText.length;
+            const newText = messageText.substring(0, start) + emoji + messageText.substring(end);
+            setMessageText(newText);
+            
+            const newCursorPos = start + emoji.length;
+            setTimeout(() => {
+                input.focus();
+                input.setSelectionRange(newCursorPos, newCursorPos);
+            }, 0);
+        } else {
+            setMessageText(prev => prev + emoji);
+        }
+    };
+
 
     const groupChannels = channels.filter(c => c.type === "group");
     const directChannels = channels.filter(c => c.type === "direct");
@@ -108,24 +131,24 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent
+             <DialogContent
                 showCloseButton={true}
-                className="!max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden [&_[data-slot=dialog-close]]:text-red-500 hover:[&_[data-slot=dialog-close]]:text-red-600 [&_[data-slot=dialog-close]]:opacity-90 transition-colors"
+                className="!flex !flex-col !max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden [&_[data-slot=dialog-close]]:text-red-500 hover:[&_[data-slot=dialog-close]]:text-red-600 [&_[data-slot=dialog-close]]:opacity-90 transition-colors"
             >
                 <VisuallyHidden.Root>
                     <DialogTitle>Chat</DialogTitle>
                 </VisuallyHidden.Root>
 
-                <div className="flex h-full">
+                <div className="flex flex-row h-full w-full overflow-hidden min-h-0">
                     {/* ── Left Sidebar: Channels & Participants ── */}
-                    <div className="w-80 shrink-0 bg-card border-r border-border flex flex-col h-full">
+                    <div className="w-80 shrink-0 grow-0 bg-card border-r border-border flex flex-col h-full overflow-hidden">
                         {/* Sidebar Header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                        <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border">
                             <span className="text-sm font-semibold">Messages</span>
                         </div>
 
                         {/* Search Bar */}
-                        <div className="px-3 py-2 border-b border-border">
+                        <div className="px-3 py-2 shrink-0 border-b border-border">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                                 <Input
@@ -138,7 +161,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                         </div>
 
                         {/* Channels List */}
-                        <ScrollArea className="flex-1">
+                        <ScrollArea className="flex-1 h-0">
                             {/* Group Channels Section */}
                             <div className="p-2">
                                 <div className="px-2 py-1.5 flex items-center justify-between">
@@ -269,11 +292,11 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                     </div>
 
                     {/* ── Right Content Area: Messages ── */}
-                    <div className="flex-1 h-full overflow-hidden bg-background flex flex-col">
+                    <div className="flex-1 h-full overflow-hidden bg-background flex flex-col min-h-0">
                         {activeChannelId && currentChannel ? (
                             <>
                                 {/* Chat Header */}
-                                <div className="h-14 border-b border-border flex items-center justify-between pl-4 pr-14 bg-card/50 backdrop-blur-sm">
+                                <div className="h-14 shrink-0 border-b border-border flex items-center justify-between pl-4 pr-14 bg-card/50 backdrop-blur-sm">
                                     <div className="flex items-center gap-3">
                                         {currentChannel.type === 'direct' ? (
                                             <>
@@ -353,7 +376,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                 </div>
 
                                 {/* Messages Area */}
-                                <ScrollArea className="flex-1 px-4 py-4">
+                                <ScrollArea className="flex-1 h-0 px-4 py-4">
                                     <div className="space-y-4">
                                         {messagesLoading ? (
                                             <div className="space-y-4">
@@ -411,13 +434,14 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                 </ScrollArea>
 
                                 {/* Message Input */}
-                                <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
+                                <div className="p-4 shrink-0 border-t border-border bg-card/50 backdrop-blur-sm">
                                     <div className="flex items-end gap-2">
                                         <Button variant="ghost" size="icon" className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0">
                                             <Paperclip className="size-5" />
                                         </Button>
                                         <div className="flex-1 relative">
                                             <input
+                                                ref={inputRef}
                                                 value={messageText}
                                                 onChange={handleInputChange}
                                                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
@@ -425,9 +449,22 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                 className="w-full min-h-[44px] max-h-[120px] py-3 px-4 bg-muted rounded-2xl text-sm outline-none placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-primary/20 transition-all"
                                             />
                                         </div>
-                                        <Button variant="ghost" size="icon" className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0">
-                                            <Smile className="size-5" />
-                                        </Button>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0">
+                                                    <Smile className="size-5" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent 
+                                                side="top" 
+                                                align="end" 
+                                                sideOffset={12} 
+                                                className="w-auto p-0 bg-transparent border-0 shadow-none"
+                                            >
+                                                <EmojiPicker onSelect={handleSelectEmoji} />
+                                            </PopoverContent>
+                                        </Popover>
+
                                         <Button 
                                             onClick={handleSendMessage}
                                             disabled={!messageText.trim()}

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
 import "./App.css";
 import { Layout } from "./components/Layout";
 import { AuthPage } from "./components/auth/AuthPage";
@@ -24,11 +24,13 @@ import { useAppContext } from "./contexts/AppContext";
 function MotionIndexRoute() {
   const { activeOrgId, activeSpaceId } = useAppContext();
   const lastOpenedPages = useMotionStore((s) => s.lastOpenedPages);
+  const [searchParams] = useSearchParams();
+  const isHomeRequested = searchParams.get("home") === "true";
 
   const key = activeOrgId && activeSpaceId ? `${activeOrgId}:${activeSpaceId}` : "";
   const lastOpenedPageId = lastOpenedPages[key];
 
-  if (lastOpenedPageId) {
+  if (lastOpenedPageId && !isHomeRequested) {
     return <Navigate to={`/motion/${lastOpenedPageId}`} replace />;
   }
   return (

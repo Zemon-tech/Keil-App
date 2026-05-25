@@ -30,10 +30,10 @@ export function ChatPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] bg-background overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem)] bg-background overflow-hidden min-h-0 w-full">
       {/* ── Fixed-width Sidebar ── */}
-      <div className="w-64 shrink-0 bg-card border-r border-border flex flex-col h-full">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="w-64 shrink-0 grow-0 bg-card border-r border-border flex flex-col h-full overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border">
           <span className="text-sm font-semibold">Chat</span>
           <div className="flex items-center gap-1">
             <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} />
@@ -47,7 +47,7 @@ export function ChatPage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 h-0 overflow-y-auto">
           <div className="p-2">
             <div className="px-2 py-1.5">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -154,7 +154,7 @@ export function ChatPage() {
       </div>
 
       {/* ── Main Chat Area ── */}
-      <div className="flex-1 h-full overflow-hidden">
+      <div className="flex-1 h-full overflow-hidden flex flex-col min-h-0">
         {activeChannelId ? (
           <MessageView
             channelId={activeChannelId}

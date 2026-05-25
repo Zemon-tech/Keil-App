@@ -10,6 +10,7 @@
 html,
 body {
     height: 100%;
+    overflow: hidden;
     overscroll-behavior-y: none;
     scroll-behavior: smooth;
 }
