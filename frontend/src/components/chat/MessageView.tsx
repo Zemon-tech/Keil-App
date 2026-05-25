@@ -25,9 +25,10 @@ interface MessageViewProps {
   channelId: string;
   orgId: string | null;
   spaceId: string | null;
+  hideHeader?: boolean;
 }
 
-export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
+export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageViewProps) {
   const { data: channels = [] } = useChatChannels(orgId, spaceId);
   const currentChannel = channels.find((c) => c.id === channelId);
   const { data: messages = [], isLoading } = useChatMessages(channelId, orgId, spaceId);
@@ -80,69 +81,71 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden min-h-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border bg-card">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setActiveChannel(null)}
-            className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <ArrowLeft className="size-4" />
-          </button>
-          
-          <div className="flex items-center gap-2">
-            <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
-              {currentChannel?.type === "group" ? <Users className="size-4" /> : channelName.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-foreground leading-none">{channelName}</span>
-              <span className="text-[10px] text-muted-foreground mt-1">
-                {currentChannel?.type === "group" ? `${currentChannel.members.length} members` : "Direct Message"}
-              </span>
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border bg-card">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setActiveChannel(null)}
+              className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <ArrowLeft className="size-4" />
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
+                {currentChannel?.type === "group" ? <Users className="size-4" /> : channelName.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-foreground leading-none">{channelName}</span>
+                <span className="text-[10px] text-muted-foreground mt-1">
+                  {currentChannel?.type === "group" ? `${currentChannel.members.length} members` : "Direct Message"}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          {currentChannel?.type === "group" ? (
-            <GroupSettingsDialog
-              channel={currentChannel}
-              orgId={orgId}
-              spaceId={spaceId}
-            />
-          ) : (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button
-                  className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  aria-label="Delete chat"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete this direct message? This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction 
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    onClick={() => {
-                      deleteChannel.mutate(channelId);
-                      setActiveChannel(null);
-                    }}
+          <div className="flex items-center gap-2">
+            {currentChannel?.type === "group" ? (
+              <GroupSettingsDialog
+                channel={currentChannel}
+                orgId={orgId}
+                spaceId={spaceId}
+              />
+            ) : (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    aria-label="Delete chat"
                   >
-                    Delete Chat
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+                    <Trash2 className="size-4" />
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete this direct message? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => {
+                        deleteChannel.mutate(channelId);
+                        setActiveChannel(null);
+                      }}
+                    >
+                      Delete Chat
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Message list ── */}
       <div className="flex-1 h-0 overflow-y-auto px-4 py-4 space-y-4 bg-muted/30">

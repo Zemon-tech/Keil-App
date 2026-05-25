@@ -376,10 +376,9 @@ body {
 
 /* AI Sidebar */
 
-body.ai-sidebar-open {
+body.ai-sidebar-open [data-slot="sidebar-inset"] > main {
     transition: padding-right 0.3s ease;
-
-    padding-right: 400px;
+    padding-right: 400px !important;
 }
 
 /* ─────────────────────────────────────────────
