@@ -12,6 +12,9 @@ import {
   registerWatch,
   doIncrementalSync,
 } from '../services/google-calendar.service';
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("gcal-integration");
 
 const PROVIDER = 'google_calendar';
 
@@ -55,10 +58,10 @@ export const handleGoogleCallback = async (req: Request, res: Response): Promise
     // Fire-and-forget: register the push notification watch channel
     // Failure here is safe — the user is already connected and 1-way sync works
     registerWatch(userId).catch(err =>
-      console.error(`[gcal] registerWatch failed after OAuth callback for user ${userId}:`, err.message)
+      log.error({ err, userId }, "registerWatch failed after OAuth callback")
     );
   } catch (err) {
-    console.error('[gcal] OAuth callback error:', (err as Error).message);
+    log.error({ err }, "OAuth callback error");
     res.redirect(`${config.frontendUrl}/tasks?gcal=error`);
   }
 };
@@ -130,7 +133,7 @@ export const handleGoogleWebhook = async (req: Request, res: Response): Promise<
     // Google's initial verification ping — just acknowledge it
     const resourceState = req.headers['x-goog-resource-state'] as string;
     if (resourceState === 'sync') {
-      console.log('[gcal] Webhook verification ping received — acknowledged.');
+      log.info("Webhook verification ping received — acknowledged");
       return;
     }
 
@@ -139,23 +142,24 @@ export const handleGoogleWebhook = async (req: Request, res: Response): Promise<
     const messageNumberStr = req.headers['x-goog-message-number'] as string;
 
     if (!channelId || !resourceId || !messageNumberStr) {
-      console.warn('[gcal] Webhook received with missing headers — discarding.');
+      log.warn("Webhook received with missing headers — discarding");
       return;
     }
 
     // Look up which user owns this channel
     const integration = await integrationRepository.findByChannelId(channelId);
     if (!integration) {
-      console.warn(`[gcal] Webhook received for unknown channelId ${channelId} — discarding.`);
+      log.warn({ channelId }, "Webhook received for unknown channel — discarding");
       return;
     }
 
     // CRITICAL SECURITY CHECK: reject mismatched channel/resource pairs
     if (integration.watch_resource_id !== resourceId) {
-      console.warn(
-        `[gcal] SECURITY: Mismatched resourceId for channel ${channelId}. ` +
-        `Expected: ${integration.watch_resource_id}, received: ${resourceId}. Discarding.`
-      );
+      log.warn({
+        channelId,
+        expectedResourceId: integration.watch_resource_id,
+        receivedResourceId: resourceId,
+      }, "SECURITY: Mismatched resourceId — discarding");
       return;
     }
 
@@ -169,7 +173,7 @@ export const handleGoogleWebhook = async (req: Request, res: Response): Promise<
       );
     } catch (err: any) {
       if (err.code === '23505') {
-        console.log(`[gcal] Duplicate webhook message ${messageNumberStr} for channel ${channelId} — discarding.`);
+        log.debug({ channelId, messageNumber: messageNumberStr }, "Duplicate webhook message — discarding");
         return;
       }
       throw err;
@@ -189,27 +193,27 @@ export const handleGoogleWebhook = async (req: Request, res: Response): Promise<
     );
 
     if (debounceResult.rows.length === 0) {
-      console.log(`[gcal] Webhook debounced for user ${userId} — scheduling delayed sync in 12 seconds.`);
+      log.debug({ userId }, 'Webhook debounced — scheduling delayed sync');
       // Schedule a delayed sync so the change isn't lost
       setTimeout(() => {
         doIncrementalSync(userId).catch(err =>
-          console.error(`[gcal] Delayed incremental sync failed for user ${userId}:`, err.message)
+          log.error({ err, userId }, "Delayed incremental sync failed")
         );
       }, 12000);
       return;
     }
 
-    console.log(`[gcal] Webhook received for user ${userId} — enqueuing incremental sync.`);
+    log.info({ userId }, 'Webhook received — triggering incremental sync');
 
     // Enqueue incremental sync as a background job (never block the request chain)
     process.nextTick(() => {
       doIncrementalSync(userId).catch(err =>
-        console.error(`[gcal] Background incremental sync failed for user ${userId}:`, err.message)
+        log.error({ err, userId }, 'Background incremental sync failed')
       );
     });
 
   } catch (err: any) {
     // Never let webhook processing errors propagate — 200 was already sent
-    console.error('[gcal] Webhook handler error:', err.message);
+    log.error({ err }, "Webhook handler error");
   }
 };

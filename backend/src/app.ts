@@ -3,7 +3,7 @@ import cors from "cors";
 import routes from "./routes/index";
 import { config } from "./config";
 import { errorHandler } from "./middlewares/error";
-import { requestLogger } from "./middlewares/logger";
+import { requestIdMiddleware, requestLogger } from "./middlewares/logger";
 
 const app: Express = express();
 
@@ -18,6 +18,7 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 // Middleware
+app.use(requestIdMiddleware);
 app.use(requestLogger);
 app.use(cors({
     origin: (origin, callback) => {

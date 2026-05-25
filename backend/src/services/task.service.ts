@@ -10,6 +10,9 @@ import { TaskStatus, TaskPriority, LogEntityType, LogActionType } from '../types
 import { TaskQueryOptions } from '../types/repository';
 import { ApiError } from '../utils/ApiError';
 import { syncTaskToCalendar, deleteCalendarEvent } from './google-calendar.service';
+import { createServiceLogger } from '../lib/logger';
+
+const log = createServiceLogger('gcal');
 
 /**
  * Task Service - Business logic layer using repositories
@@ -399,7 +402,7 @@ export const updateTask = async (
       status: result.status,
       google_event_id: result.google_event_id,
       source: 'tasks',
-    }).catch(err => console.error('[gcal] workspace task sync failed:', err.message));
+    }).catch(err => log.error({ err }, 'Workspace task sync failed'));
   }
 
   return taskToDTO(result);
@@ -422,7 +425,7 @@ export const deleteTask = async (
     // Fire-and-forget Google Calendar event deletion
     if (task.google_event_id) {
       deleteCalendarEvent(userId, task.google_event_id)
-        .catch(err => console.error('[gcal] delete event failed:', err.message));
+        .catch(err => log.error({ err }, 'Delete calendar event failed'));
     }
 
     // Soft delete task and its associations (comments)

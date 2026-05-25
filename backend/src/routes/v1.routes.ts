@@ -11,6 +11,8 @@ import motionPublicRoutes from "./motion-public.routes";
 import taskLocatorRoutes from "./task-locator.routes";
 import publicTaskRoutes from "./public-task.routes";
 import meetingRoutes from "./meeting.routes";
+import motionRoutes from "./motion.routes";
+
 import aiRoutes from "./ai.routes";
 import adkRoutes from "./adk.routes"; // ← ADD THIS
 import notificationRoutes from "./notification.routes";
@@ -45,7 +47,7 @@ router.use("/meetings", meetingRoutes);
 // ── AI (OpenRouter via Vercel AI SDK) ─────────────────────────────────────────
 router.use("/ai", aiRoutes);
 
-// ── Google ADK agent ──────────────────────────────────────────────────────────
+router.use("/motions", motionRoutes);
 router.use("/adk", adkRoutes); // ← ADD THIS
 
 // ── Motion public links (no auth) ─────────────────────────────────────────────

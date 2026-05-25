@@ -7,6 +7,9 @@ import { config } from '../config';
 import { integrationRepository } from '../repositories';
 import { personalTaskRepository } from '../repositories';
 import { TaskStatus, TaskPriority } from '../types/enums';
+import { createServiceLogger } from '../lib/logger';
+
+const log = createServiceLogger('gcal');
 
 // Lazy import to avoid circular dependency with socket.ts
 function getIO() {
@@ -212,7 +215,7 @@ export async function getAuthorizedClient(userId: string): Promise<OAuth2Client 
     } catch (err) {
       // Refresh failed — token may have been revoked by the user in Google settings.
       // Log and return null so sync is silently skipped rather than crashing.
-      console.error(`[gcal] Token refresh failed for user ${userId}:`, (err as Error).message);
+      log.error({ err: err as Error, userId }, 'Token refresh failed');
       return null;
     }
   }
@@ -245,7 +248,7 @@ export async function syncTaskToCalendar(
   // When processIncomingGoogleEvent() updates a task, it passes skipGoogleSync: true
   // to prevent the update from being echoed back to Google Calendar.
   if (options?.skipGoogleSync) {
-    console.log(`[gcal] Suppressing outbound sync for task ${task.id} — update originated from Google.`);
+    log.debug({ taskId: task.id }, 'Suppressing outbound sync — update originated from Google');
     return;
   }
 
@@ -466,7 +469,7 @@ async function softDeleteTaskFromGoogle(
     `UPDATE ${table} SET deleted_at = NOW(), google_event_id = NULL WHERE id = $1`,
     [id]
   );
-  console.log(`[gcal] Soft-deleted task ${id} (source: ${source}) — Google event was cancelled.`);
+  log.info({ taskId: id, source }, 'Soft-deleted task — Google event was cancelled');
 }// ─── processIncomingGoogleEvent ───────────────────────────────────────────────
 
 /**
@@ -488,7 +491,7 @@ export async function processIncomingGoogleEvent(
   // --- SYNC LOOP PREVENTION ---
   const source = event.extendedProperties?.private?.['source'];
   if (source === 'keilhq') {
-    console.log(`[gcal] Skipping event ${event.id} — originated from KeilHQ (loop prevention).`);
+    log.debug({ eventId: event.id, reason: 'loop-prevention' }, 'Skipping event — originated from KeilHQ');
     return;
   }
 
@@ -505,7 +508,7 @@ export async function processIncomingGoogleEvent(
     const isAllDay = !!event.start?.date;
     const startRaw = isAllDay ? event.start?.date : event.start?.dateTime;
     if (!startRaw) {
-      console.log(`[gcal] Skipping event ${googleEventId} — no start date.`);
+      log.debug({ eventId: googleEventId, reason: 'no-start-date' }, 'Skipping event — no start date');
       return;
     }
     const startDate = new Date(startRaw);
@@ -517,18 +520,18 @@ export async function processIncomingGoogleEvent(
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (startDate < today) {
-        console.log(`[gcal] Skipping event ${googleEventId} — all-day event is in the past.`);
+        log.debug({ eventId: googleEventId, reason: 'past-all-day' }, 'Skipping event — all-day event is in the past');
         return;
       }
     } else {
       if (startDate < now) {
-        console.log(`[gcal] Skipping event ${googleEventId} — timed event is in the past.`);
+        log.debug({ eventId: googleEventId, reason: 'past-timed' }, 'Skipping event — timed event is in the past');
         return;
       }
     }
 
     if (startDate > thirtyDaysFromNow) {
-      console.log(`[gcal] Skipping event ${googleEventId} — outside 30-day sync window.`);
+      log.debug({ eventId: googleEventId, reason: 'outside-window' }, 'Skipping event — outside 30-day sync window');
       return;
     }
   }
@@ -583,7 +586,7 @@ export async function processIncomingGoogleEvent(
             userId,
           ]
         );
-        console.log(`[gcal] Created org task from Google event ${googleEventId} for user ${userId} in space ${defaultOrgSpace.spaceId}.`);
+        log.info({ eventId: googleEventId, userId, spaceId: defaultOrgSpace.spaceId }, 'Created org task from Google event');
       } else {
         // Fallback to personal task if no org/space found
         await personalTaskRepository.create({
@@ -596,7 +599,7 @@ export async function processIncomingGoogleEvent(
           status: TaskStatus.TODO,
           priority: TaskPriority.MEDIUM,
         });
-        console.log(`[gcal] Created personal task (fallback) from Google event ${googleEventId} for user ${userId}.`);
+        log.info({ eventId: googleEventId, userId }, 'Created personal task (fallback) from Google event');
       }
 
       // Notify frontend to refresh tasks
@@ -606,7 +609,7 @@ export async function processIncomingGoogleEvent(
     } catch (err: any) {
       if (err.code === '23505') {
         // Duplicate key — another concurrent worker already created this task
-        console.warn(`[gcal] Duplicate task for googleEventId ${googleEventId} — treating as idempotent success.`);
+        log.warn({ eventId: googleEventId }, 'Duplicate task — treating as idempotent success');
         return;
       }
       throw err;
@@ -629,7 +632,7 @@ export async function processIncomingGoogleEvent(
     sameDates(matchingTask.start_date, startDate) &&
     sameDates(matchingTask.due_date, dueDate)
   ) {
-    console.log(`[gcal] Task ${matchingTask.id} is already up-to-date — skipping write.`);
+    log.debug({ taskId: matchingTask.id, reason: 'up-to-date' }, 'Task already up-to-date — skipping write');
     return;
   }
 
@@ -639,12 +642,12 @@ export async function processIncomingGoogleEvent(
   const timeDiffMs = Math.abs(googleUpdatedAt.getTime() - ourUpdatedAt.getTime());
 
   if (googleUpdatedAt <= ourUpdatedAt || timeDiffMs < 5000) {
-    console.log(`[gcal] Skipping update for task ${matchingTask.id} — KeilHQ version is newer or within 5s tolerance (diff: ${timeDiffMs}ms).`);
+    log.debug({ taskId: matchingTask.id, timeDiffMs, reason: 'keilhq-newer' }, 'Skipping update — KeilHQ version is newer or within tolerance');
     return;
   }
 
   // Google is newer — update the task with skipGoogleSync to prevent echo loop
-  console.log(`[gcal] Updating task ${matchingTask.id} from Google event ${googleEventId} (Google is ${timeDiffMs}ms newer).`);
+  log.info({ taskId: matchingTask.id, eventId: googleEventId, timeDiffMs }, 'Updating task from Google event');
 
   if (matchingTask.source === 'personal_tasks') {
     // Update directly via repository to avoid circular import with personal-task.service.
@@ -690,7 +693,7 @@ export async function doFullSync(
   let syncToken: string | undefined;
   let totalProcessed = 0;
 
-  console.log(`[gcal] Starting full sync for user ${userId} on calendar ${calendarId}.`);
+  log.info({ userId, calendarId }, 'Starting full sync');
 
   do {
     const response = await calendar.events.list({
@@ -711,7 +714,7 @@ export async function doFullSync(
     syncToken = response.data.nextSyncToken ?? undefined;
   } while (pageToken);
 
-  console.log(`[gcal] Full sync complete for user ${userId} — processed ${totalProcessed} events. syncToken: ${syncToken ? 'obtained' : 'none'}.`);
+  log.info({ userId, totalProcessed, hasSyncToken: !!syncToken }, 'Full sync complete');
   return syncToken;
 }
 
@@ -745,10 +748,10 @@ export async function stopWatch(userId: string): Promise<void> {
         resourceId: integration.watch_resource_id,
       },
     });
-    console.log(`[gcal] Stopped watch channel ${integration.watch_channel_id} for user ${userId}.`);
+    log.info({ userId, channelId: integration.watch_channel_id }, 'Stopped watch channel');
   } catch (err: any) {
     // Channel may already be expired or unknown to Google — log and continue
-    console.warn(`[gcal] Failed to stop watch channel ${integration.watch_channel_id} for user ${userId}:`, err.message);
+    log.warn({ err, userId, channelId: integration.watch_channel_id }, 'Failed to stop watch channel');
   }
 
   await integrationRepository.clearWatchChannel(userId, PROVIDER);
@@ -771,7 +774,7 @@ export async function stopWatch(userId: string): Promise<void> {
 export async function registerWatch(userId: string): Promise<void> {
   const authClient = await getAuthorizedClient(userId);
   if (!authClient) {
-    console.warn(`[gcal] registerWatch: no auth client for user ${userId} — skipping.`);
+    log.warn({ userId }, 'registerWatch: no auth client — skipping');
     return;
   }
 
@@ -788,7 +791,7 @@ export async function registerWatch(userId: string): Promise<void> {
       [watchLockKey]
     );
     if (!lockRes.rows[0].pg_try_advisory_lock) {
-      console.log(`[gcal] Watch registration already in progress for user ${userId} — skipping.`);
+      log.debug({ userId }, 'Watch registration already in progress — skipping');
       lockClient.release();
       return;
     }
@@ -833,10 +836,10 @@ export async function registerWatch(userId: string): Promise<void> {
       syncToken: initialSyncToken,
     });
 
-    console.log(`[gcal] Watch registered for user ${userId} — channelId: ${channelId}, expires: ${expiresAt.toISOString()}.`);
+    log.info({ userId, channelId, expiresAt: expiresAt.toISOString() }, 'Watch registered');
 
   } catch (err: any) {
-    console.error(`[gcal] registerWatch failed for user ${userId}:`, err.message);
+    log.error({ err, userId }, 'registerWatch failed');
 
     // Mark as degraded so the self-healing cron can retry
     try {
@@ -847,7 +850,7 @@ export async function registerWatch(userId: string): Promise<void> {
         [userId]
       );
     } catch (dbErr: any) {
-      console.error(`[gcal] Failed to set degraded status for user ${userId}:`, dbErr.message);
+      log.error({ err: dbErr, userId }, 'Failed to set degraded status');
     }
     // Do NOT rethrow — registerWatch is always called fire-and-forget
   } finally {
@@ -876,20 +879,20 @@ export async function doIncrementalSync(userId: string): Promise<void> {
     );
     const acquired = lockResult.rows[0].pg_try_advisory_lock;
     if (!acquired) {
-      console.log(`[gcal] Incremental sync already in progress for user ${userId} — skipping.`);
+      log.debug({ userId }, 'Incremental sync already in progress — skipping');
       lockClient.release();
       return;
     }
 
     const authClient = await getAuthorizedClient(userId);
     if (!authClient) {
-      console.warn(`[gcal] doIncrementalSync: no auth client for user ${userId} — skipping.`);
+      log.warn({ userId }, 'doIncrementalSync: no auth client — skipping');
       return;
     }
 
     const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
     if (!integration || integration.watch_status !== 'active' || !integration.gcal_sync_token) {
-      console.log(`[gcal] Skipping incremental sync for user ${userId} — watch_status: ${integration?.watch_status}, syncToken: ${integration?.gcal_sync_token ? 'present' : 'missing'}.`);
+      log.debug({ userId, watchStatus: integration?.watch_status, hasSyncToken: !!integration?.gcal_sync_token }, 'Skipping incremental sync');
       return;
     }
 
@@ -903,7 +906,7 @@ export async function doIncrementalSync(userId: string): Promise<void> {
 
     const calendar = google.calendar({ version: 'v3', auth: authClient, timeout: 10000 } as any);
 
-    console.log(`[gcal] Starting incremental sync for user ${userId}.`);
+    log.info({ userId }, 'Starting incremental sync');
 
     try {
       const response = await calendar.events.list({
@@ -912,7 +915,7 @@ export async function doIncrementalSync(userId: string): Promise<void> {
       });
 
       const items = response.data.items ?? [];
-      console.log(`[gcal] Incremental sync: ${items.length} changed event(s) for user ${userId}.`);
+      log.info({ userId, eventCount: items.length }, 'Incremental sync processing events');
 
       for (const event of items) {
         await processIncomingGoogleEvent(userId, event);
@@ -934,7 +937,7 @@ export async function doIncrementalSync(userId: string): Promise<void> {
         [userId]
       );
 
-      console.log(`[gcal] Incremental sync complete for user ${userId}.`);
+      log.info({ userId }, 'Incremental sync complete');
 
     } catch (err: any) {
       // 401/403 — OAuth revoked
@@ -943,7 +946,7 @@ export async function doIncrementalSync(userId: string): Promise<void> {
         err?.code === 403 ||
         err?.response?.data?.error === 'invalid_grant'
       ) {
-        console.warn(`[gcal] OAuth revoked for user ${userId} (code: ${err?.code}) — cleaning up watch channel.`);
+        log.warn({ userId, code: err?.code }, 'OAuth revoked — cleaning up watch channel');
         await pool.query(
           `UPDATE public.user_integrations
            SET watch_status      = 'revoked'::public.gcal_watch_status,
@@ -961,7 +964,7 @@ export async function doIncrementalSync(userId: string): Promise<void> {
 
       // 410 — syncToken expired; fall back to full sync
       if (err?.code === 410) {
-        console.warn(`[gcal] syncToken expired (410) for user ${userId} — running full sync to recover.`);
+        log.warn({ userId }, 'syncToken expired (410) — running full sync to recover');
         await integrationRepository.saveSyncToken(userId, PROVIDER, null);
 
         const freshSyncToken = await doFullSync(
@@ -983,7 +986,7 @@ export async function doIncrementalSync(userId: string): Promise<void> {
       }
 
       // Other errors — log and mark as failed
-      console.error(`[gcal] Incremental sync failed for user ${userId}:`, err.message);
+      log.error({ err, userId }, 'Incremental sync failed');
       await pool.query(
         `UPDATE public.user_integrations
          SET sync_in_progress = FALSE, last_sync_error = $1

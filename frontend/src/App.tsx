@@ -40,16 +40,12 @@ function MotionIndexRoute() {
   );
 }
 
+// New Meetings imports
+import { MeetingsPage } from "./pages/MeetingsPage";
+
 /**
  * Main application component.
  * Configures application routes and protected access.
- *
- * Route split for task/event deep links:
- *  - /tasks/:taskId   → TaskDetailRoute (auth-aware, renders full app for
- *                        authenticated users, public read-only for guests)
- *  - /events/:eventId → TaskDetailRoute (same behaviour)
- *  - /tasks           → ProtectedRoute (task list + calendar, requires login)
- *  - /events          → ProtectedRoute (same as /tasks)
  */
 function App() {
   const { user } = useAuth();
@@ -122,6 +118,15 @@ function App() {
           element={
             <Layout>
               <MotionPage />
+            </Layout>
+          }
+        />
+        {/* New Meetings route */}
+        <Route
+          path="/meetings/*"
+          element={
+            <Layout>
+              <MeetingsPage />
             </Layout>
           }
         />

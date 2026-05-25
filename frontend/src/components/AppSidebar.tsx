@@ -339,29 +339,31 @@ export function AppSidebar() {
   const { setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
 
-  // ── Auto-collapse on /motion/* routes (Option A1) ──────────────────────
-  // When the user navigates into Motion, the AppSidebar collapses so the
-  // MotionSidebar can take the full left panel without two sidebars competing.
-  // When leaving /motion, the previous open state is restored.
+  // ── Auto-collapse on /motion/* and /meetings/* routes ────────────────────
+  // When the user navigates into Motion or Meetings, the AppSidebar collapses
+  // so the feature sidebar can take the full left panel without two sidebars competing.
+  // When leaving, the previous open state is restored.
   const wasOpenBeforeMotion = useRef<boolean | null>(null);
   const isMotionRoute = location.pathname.startsWith("/motion");
+  const isMeetingsRoute = location.pathname.startsWith("/meetings");
+  const isFeatureSidebarRoute = isMotionRoute || isMeetingsRoute;
 
   useEffect(() => {
-    if (isMotionRoute) {
+    if (isFeatureSidebarRoute) {
       // Save current open state before collapsing
       if (wasOpenBeforeMotion.current === null) {
         wasOpenBeforeMotion.current = state === "expanded";
       }
       setOpen(false);
     } else {
-      // Restore previous state when leaving /motion
+      // Restore previous state when leaving
       if (wasOpenBeforeMotion.current !== null) {
         setOpen(wasOpenBeforeMotion.current);
         wasOpenBeforeMotion.current = null;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMotionRoute]);
+  }, [isFeatureSidebarRoute]);
 
   // ── App context ────────────────────────────────────────────────────────
   const {
@@ -489,7 +491,7 @@ export function AppSidebar() {
                         onClick={() => {
                           if ("action" in item) {
                             if (item.action === "meetings") {
-                              setMeetingDialogOpen(true);
+                              navigate('/meetings');
                             } else if (item.action === "notifications") {
                               setNotificationDrawerOpen(true);
                             }
@@ -498,7 +500,7 @@ export function AppSidebar() {
                         isActive={
                           "action" in item
                             ? item.action === "meetings"
-                              ? meetingDialogOpen
+                              ? isRouteActive('/meetings')
                               : item.action === "notifications"
                               ? (notificationDrawerOpen || notificationDialogOpen)
                               : false

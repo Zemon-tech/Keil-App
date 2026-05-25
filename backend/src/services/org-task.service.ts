@@ -10,6 +10,9 @@ import { LogActionType, LogEntityType, TaskPriority, TaskStatus, SpaceRole } fro
 import { TaskQueryOptions } from "../types/repository";
 import { ApiError } from "../utils/ApiError";
 import { syncTaskToCalendar, deleteCalendarEvent } from "./google-calendar.service";
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("gcal");
 
 export interface OrgTaskDTO {
   id: string;
@@ -257,7 +260,7 @@ export const createTask = async (
       status: task.status,
       google_event_id: task.google_event_id,
       source: 'tasks',
-    }).catch(err => console.error('[gcal] org task create sync failed:', err.message));
+    }).catch(err => log.error({ err }, 'Org task create sync failed'));
   }
 
   return toDTO(task);
@@ -354,7 +357,7 @@ export const updateTask = async (
       status: result.status,
       google_event_id: result.google_event_id,
       source: 'tasks',
-    }).catch(err => console.error('[gcal] org task update sync failed:', err.message));
+    }).catch(err => log.error({ err }, 'Org task update sync failed'));
   }
 
   return result ? toDTO(result) : null;
@@ -447,7 +450,7 @@ export const deleteTask = async (
     // Fire-and-forget Google Calendar event deletion
     if (existing.google_event_id) {
       deleteCalendarEvent(userId, existing.google_event_id)
-        .catch(err => console.error('[gcal] org task delete event failed:', err.message));
+        .catch(err => log.error({ err }, 'Org task delete calendar event failed'));
     }
 
     await orgTaskRepository.softDelete(taskId, client);

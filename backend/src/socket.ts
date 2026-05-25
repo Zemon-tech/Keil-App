@@ -4,6 +4,9 @@ import { supabaseAdmin } from "./config/supabase";
 import pool from "./config/pg";
 import * as orgChatService from "./services/org-chat.service";
 import { config } from "./config";
+import { createServiceLogger } from "./lib/logger";
+
+const log = createServiceLogger("socket");
 
 export let io: SocketIOServer;
 
@@ -54,7 +57,7 @@ export const initSocket = (server: HttpServer) => {
 
     io.on("connection", async (socket: Socket) => {
         const user = (socket as any).user;
-        console.log(`🔌 [socket]: User connected: ${user.id}`);
+        log.info({ userId: user.id }, "User connected");
 
         // Join personal room
         socket.join(`user:${user.id}`);
@@ -83,9 +86,9 @@ export const initSocket = (server: HttpServer) => {
                 socket.join(`space:${row.space_id}`);
             });
 
-            console.log(`🔌 [socket]: User ${user.id} joined ${result.rows.length} channels and ${spacesResult.rows.length} spaces`);
+            log.info({ userId: user.id, channels: result.rows.length, spaces: spacesResult.rows.length }, "User joined rooms");
         } catch (err) {
-            console.error(`❌ [socket]: Error joining rooms for user ${user.id}`, err);
+            log.error({ err, userId: user.id }, "Error joining rooms");
         }
 
         socket.on("send_message", async (payload: { channel_id: string; content: string }) => {
@@ -102,7 +105,7 @@ export const initSocket = (server: HttpServer) => {
                 // Broadcast strictly inside the channel_id socket room
                 io.to(`channel:${channel_id}`).emit("receive_message", message);
             } catch (err) {
-                console.error(`❌ [socket]: Error handling send_message`, err);
+                log.error({ err, userId: user.id }, "Error handling send_message");
             }
         });
 
@@ -134,7 +137,7 @@ export const initSocket = (server: HttpServer) => {
         });
 
         socket.on("disconnect", () => {
-            console.log(`🔌 [socket]: User disconnected: ${user.id}`);
+            log.info({ userId: user.id }, "User disconnected");
         });
     });
 

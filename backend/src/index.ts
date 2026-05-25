@@ -7,6 +7,11 @@ import { initSocket } from "./socket";
 import { taskOverdueWorkerService } from "./services/task-overdue-worker.service";
 import { renewExpiringWatchChannels, healDegradedWatchChannels } from "./services/gcal-watch-renewal.service";
 import { NotificationWorkerService } from "./services/notification-worker.service";
+import { createServiceLogger } from "./lib/logger";
+
+const log = createServiceLogger("server");
+const dbLog = createServiceLogger("database");
+const cronLog = createServiceLogger("gcal-renewal");
 
 const port = Number(config.port);
 
@@ -25,13 +30,13 @@ const startServer = async () => {
             await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_all'");
             await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_managers'");
             await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_admins'");
-            console.log('[database]: Successfully added new motion_permission values');
-        } catch (err: any) {
-            console.warn('[database]: Note on altering motion_permission enum:', err.message);
+            dbLog.info("Successfully added new motion_permission values");
+        } catch (err: unknown) {
+            dbLog.warn({ err }, "Note on altering motion_permission enum");
         }
 
         server.listen(port, '0.0.0.0', () => {
-            console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
+            log.info({ port }, `Server is running at http://localhost:${port}`);
         });
 
         // Initialize Socket.io (auth middleware + event handlers live in socket.ts)
@@ -48,23 +53,23 @@ const startServer = async () => {
         const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
         setInterval(async () => {
             await renewExpiringWatchChannels().catch(err =>
-                console.error('[gcal-renewal] renewExpiringWatchChannels error:', err.message)
+                cronLog.error({ err }, "renewExpiringWatchChannels error")
             );
             await healDegradedWatchChannels().catch(err =>
-                console.error('[gcal-renewal] healDegradedWatchChannels error:', err.message)
+                cronLog.error({ err }, "healDegradedWatchChannels error")
             );
         }, TWELVE_HOURS_MS);
 
-        console.log('[gcal-renewal] Watch channel renewal cron scheduled (every 12 hours).');
+        cronLog.info("Watch channel renewal cron scheduled (every 12 hours)");
 
         // Register Graceful Shutdown Hooks
         const gracefulShutdown = (signal: string) => {
-            console.log(`🛑 [server]: Received ${signal}. Shutting down gracefully...`);
+            log.info({ signal }, "Received shutdown signal. Shutting down gracefully...");
             NotificationWorkerService.stop();
             taskOverdueWorkerService.stop();
             server.close(() => {
                 pool.end().then(() => {
-                    console.log("🔌 [server]: Database connection pool ended cleanly.");
+                    log.info("Database connection pool ended cleanly");
                     process.exit(0);
                 });
             });
@@ -74,7 +79,7 @@ const startServer = async () => {
         process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
     } catch (error) {
-        console.error("Failed to start server:", error);
+        log.fatal({ err: error }, "Failed to start server");
         process.exit(1);
     }
 };

@@ -3,6 +3,9 @@ import { catchAsync } from "../utils/catchAsync";
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import * as analyticsService from "../services/motion-analytics.service";
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("motion-analytics");
 
 const asString = (value: any): string => {
   if (typeof value === "string") return value;
@@ -57,7 +60,7 @@ export const getViewers = catchAsync(async (req: Request, res: Response) => {
 
 export const getUpdates = catchAsync(async (req: Request, res: Response) => {
   const { pageId } = getContext(req);
-  console.log("🔍 [analytics-controller]: getUpdates endpoint hit for pageId:", pageId);
+  log.debug({ pageId }, "getUpdates endpoint hit");
   const limit = req.query.limit ? parseInt(asString(req.query.limit), 10) : 20;
   const offset = req.query.offset ? parseInt(asString(req.query.offset), 10) : 0;
 
@@ -66,7 +69,7 @@ export const getUpdates = catchAsync(async (req: Request, res: Response) => {
   }
 
   const updates = await analyticsService.getUpdates(pageId, limit, offset);
-  console.log("🔍 [analytics-controller]: returning updates count:", updates.length, JSON.stringify(updates));
+  log.debug({ count: updates.length }, "Returning updates");
   res.status(200).json(new ApiResponse(200, updates, "Updates retrieved successfully"));
 });
 
