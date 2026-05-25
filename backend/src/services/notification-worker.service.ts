@@ -2,6 +2,9 @@ import { notificationOutboxRepository, notificationRepository, userNotificationP
 import { UserNotificationPreference } from "../types/entities";
 import { io } from "../socket";
 import { PoolClient } from "pg";
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("notification-worker");
 
 const PREFERENCE_KEYS: Record<string, keyof UserNotificationPreference> = {
   'task_assigned': 'notify_task_assigned',
@@ -22,11 +25,11 @@ export class NotificationWorkerService {
    */
   static start() {
     if (this.intervalId) {
-      console.log("⏰ [notification-worker]: Already running.");
+      log.warn("Already running");
       return;
     }
 
-    console.log("🚀 [notification-worker]: Starting background notification worker...");
+    log.info("Starting background notification worker...");
     this.intervalId = setInterval(() => this.processQueue(), this.pollingIntervalMs);
   }
 
@@ -37,7 +40,7 @@ export class NotificationWorkerService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log("🛑 [notification-worker]: Stopped background notification worker.");
+      log.info("Stopped background notification worker");
     }
   }
 
@@ -57,7 +60,7 @@ export class NotificationWorkerService {
           return;
         }
 
-        console.log(`📦 [notification-worker]: Claimed batch of ${batch.length} notification outbox jobs.`);
+        log.info({ batchSize: batch.length }, "Claimed batch of notification outbox jobs");
 
         for (const job of batch) {
           try {
@@ -109,7 +112,7 @@ export class NotificationWorkerService {
             // Delete outbox job on successful processing
             await notificationOutboxRepository.delete(job.id, client);
           } catch (err: any) {
-            console.error(`❌ [notification-worker]: Error processing outbox job ${job.id}:`, err);
+            log.error({ err, jobId: job.id }, "Error processing outbox job");
             
             // If job has failed more than 3 times, mark status as failed
             if (job.attempts >= 3) {
@@ -122,7 +125,7 @@ export class NotificationWorkerService {
         }
       });
     } catch (err: any) {
-      console.error("❌ [notification-worker]: Queue processing transaction failed:", err);
+      log.error({ err }, "Queue processing transaction failed");
     } finally {
       this.isRunning = false;
     }

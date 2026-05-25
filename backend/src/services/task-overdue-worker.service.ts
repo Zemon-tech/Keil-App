@@ -1,5 +1,8 @@
 import pool from '../config/pg';
 import { io } from '../socket';
+import { createServiceLogger } from '../lib/logger';
+
+const log = createServiceLogger('task-overdue-worker');
 
 /**
  * Background worker to automatically move overdue tasks to backlog.
@@ -18,7 +21,7 @@ export class TaskOverdueWorkerService {
     public start() {
         if (this.intervalId) return;
 
-        console.log('⏰ [worker]: Task overdue worker started');
+        log.info("Task overdue worker started");
         this.intervalId = setInterval(() => this.checkOverdueTasks(), this.CHECK_INTERVAL);
         
         // Also run immediately on start (with a slight delay to ensure DB/Socket are ready)
@@ -29,7 +32,7 @@ export class TaskOverdueWorkerService {
         if (this.intervalId) {
             clearInterval(this.intervalId);
             this.intervalId = null;
-            console.log('⏰ [worker]: Task overdue worker stopped');
+            log.info("Task overdue worker stopped");
         }
     }
 
@@ -50,7 +53,7 @@ export class TaskOverdueWorkerService {
             `);
 
             if (workspaceResult.rows.length > 0) {
-                console.log(`⏰ [worker]: Moved ${workspaceResult.rows.length} workspace tasks to backlog`);
+                log.info({ count: workspaceResult.rows.length, type: 'workspace' }, "Moved tasks to backlog");
                 
                 // Broadcast update via Socket.io
                 if (io) {
@@ -77,7 +80,7 @@ export class TaskOverdueWorkerService {
             `);
 
             if (personalResult.rows.length > 0) {
-                console.log(`⏰ [worker]: Moved ${personalResult.rows.length} personal tasks to backlog`);
+                log.info({ count: personalResult.rows.length, type: 'personal' }, "Moved tasks to backlog");
                 
                 if (io) {
                     personalResult.rows.forEach(task => {
@@ -92,7 +95,7 @@ export class TaskOverdueWorkerService {
                 }
             }
         } catch (error) {
-            console.error('❌ [worker]: Error checking overdue tasks:', error);
+            log.error({ err: error }, "Error checking overdue tasks");
         }
     }
 }

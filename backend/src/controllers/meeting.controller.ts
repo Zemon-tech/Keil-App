@@ -8,6 +8,9 @@ import { getS3Client } from "../lib/s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("meeting");
 
 /**
  * Sanitizes MIME types (e.g. 'audio/webm;codecs=opus' -> 'audio/webm') to conform to S3/Sarvam requirements.
@@ -39,7 +42,7 @@ export const getUploadUrl = catchAsync(async (req: Request, res: Response) => {
         // Unique S3 key matching pattern: meetings/${userId}/${meetingId}/${timestamp}-${fileName}
         const s3Key = `meetings/${userId}/${meetingFolder}/${timestamp}-${safeFileName}`;
 
-        console.log(`Generating presigned PUT URL for bucket: ${config.sevallaS3BucketName}, key: ${s3Key}`);
+        log.debug({ bucket: config.sevallaS3BucketName, s3Key }, "Generating presigned PUT URL");
 
         const command = new PutObjectCommand({
             Bucket: config.sevallaS3BucketName,
@@ -60,7 +63,7 @@ export const getUploadUrl = catchAsync(async (req: Request, res: Response) => {
             }, "Presigned S3 upload URL generated successfully")
         );
     } catch (err: any) {
-        console.error("❌ [getUploadUrl] Error occurred:", err);
+        log.error({ err }, "getUploadUrl error");
         return res.status(500).json({ error: "Failed to generate upload URL" });
     }
 });
@@ -82,20 +85,20 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
         }
 
         // 1. Generate presigned S3 GET URL for Sarvam to fetch or for our server fetch
-        console.log(`[transcribe] 1/7: Generating S3 presigned GET URL for key: ${s3Key}...`);
+        log.info({ s3Key, step: "1/7" }, "Generating S3 presigned GET URL");
         const getCommand = new GetObjectCommand({
             Bucket: config.sevallaS3BucketName,
             Key: s3Key,
         });
         const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
-        console.log(`[transcribe] S3 GET URL generated successfully.`);
+        log.debug("S3 GET URL generated successfully");
 
         const sarvamHeaders = {
             "api-subscription-key": config.sarvamApiKey,
             "Content-Type": "application/json"
         };
 
-        console.log(`[transcribe] 2/7: Initiating Sarvam STT job for recording: ${recordingId}...`);
+        log.info({ recordingId, step: "2/7" }, "Initiating Sarvam STT job");
 
         // 2. Create the STT Job on Sarvam
         const createJobResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1", {
@@ -114,15 +117,15 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
 
         if (!createJobResponse.ok) {
             const errText = await createJobResponse.text();
-            console.error("❌ Sarvam Job Creation Error:", errText);
+            log.error({ errText }, "Sarvam job creation error");
             return res.status(createJobResponse.status).json({ error: "Failed to create Sarvam job" });
         }
 
         const { job_id: sarvamJobId } = await createJobResponse.json() as any;
-        console.log(`[transcribe] Sarvam Job Created with ID: ${sarvamJobId}`);
+        log.info({ sarvamJobId }, "Sarvam job created");
 
         // 3. Request presigned upload URLs from Sarvam
-        console.log(`[transcribe] 3/7: Requesting Azure upload URLs from Sarvam...`);
+        log.info({ step: "3/7" }, "Requesting Azure upload URLs from Sarvam");
         const fileName = s3Key.split("/").pop() || "audio.webm";
         const uploadUrlsResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1/upload-files", {
             method: "POST",
@@ -135,7 +138,7 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
 
         if (!uploadUrlsResponse.ok) {
             const errText = await uploadUrlsResponse.text();
-            console.error("❌ Sarvam Upload Urls Error:", errText);
+            log.error({ errText }, "Sarvam upload URLs error");
             return res.status(uploadUrlsResponse.status).json({ error: "Failed to get Sarvam upload URL" });
         }
 
@@ -146,12 +149,12 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             : sarvamUploadUrlObj?.file_url;
 
         if (!sarvamUploadUrl) {
-            console.error("❌ Sarvam did not return upload URL inside:", uploadData);
+            log.error({ uploadData }, "Sarvam did not return upload URL");
             return res.status(500).json({ error: "Sarvam did not return an upload URL for the audio file" });
         }
 
         // 4. Stream S3 audio directly to Sarvam storage
-        console.log(`[transcribe] 4/7: Downloading audio from S3 via presigned GET...`);
+        log.info({ step: "4/7" }, "Downloading audio from S3 via presigned GET");
         const audioResponse = await fetch(presignedAudioUrl);
         if (!audioResponse.ok) {
             return res.status(audioResponse.status).json({ error: "Failed to download audio file from S3" });
@@ -159,7 +162,7 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
         
         const contentLength = audioResponse.headers.get("content-length");
         
-        console.log(`[transcribe] 5/7: Streaming audio to Sarvam Azure storage presigned URL...`);
+        log.info({ step: "5/7" }, "Streaming audio to Sarvam Azure storage");
         const sarvamUploadResponse = await fetch(sarvamUploadUrl, {
             method: "PUT",
             headers: {
@@ -172,13 +175,13 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
 
         if (!sarvamUploadResponse.ok) {
             const errText = await sarvamUploadResponse.text();
-            console.error("❌ Sarvam Storage Upload Error:", errText);
+            log.error({ errText }, "Sarvam storage upload error");
             return res.status(sarvamUploadResponse.status).json({ error: "Failed to upload audio to Sarvam storage" });
         }
-        console.log(`[transcribe] Audio streamed successfully.`);
+        log.debug("Audio streamed successfully");
 
         // 5. Start the processing on Sarvam
-        console.log(`[transcribe] 6/7: Starting processing for Sarvam Job: ${sarvamJobId}...`);
+        log.info({ sarvamJobId, step: "6/7" }, "Starting Sarvam job processing");
         const startResponse = await fetch(`https://api.sarvam.ai/speech-to-text/job/v1/${sarvamJobId}/start`, {
             method: "POST",
             headers: sarvamHeaders,
@@ -187,15 +190,15 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
 
         if (!startResponse.ok) {
             const errText = await startResponse.text();
-            console.error("❌ Sarvam Start Job Error:", errText);
+            log.error({ errText }, "Sarvam start job error");
             return res.status(startResponse.status).json({ error: "Failed to start Sarvam job" });
         }
-        console.log(`[transcribe] Sarvam job started successfully.`);
+        log.info("Sarvam job started successfully");
 
         // 6. Update database record with the job ID and processing state
-        console.log(`[transcribe] 7/7: Updating database record for recording: ${recordingId}...`);
+        log.info({ recordingId, step: "7/7" }, "Updating database record");
         await meetingService.updateRecordingJob(recordingId, sarvamJobId, durationSeconds);
-        console.log(`[transcribe] Database record updated successfully.`);
+        log.info("Database record updated successfully");
 
         return res.status(200).json(
             new ApiResponse(200, {
@@ -204,9 +207,9 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             }, "Transcription job triggered successfully")
         );
     } catch (err: any) {
-        console.error(`❌ [transcribeRecording] Pipeline failed for recordingId: ${recordingId}`, err);
+        log.error({ err, recordingId }, "Transcription pipeline failed");
         if (recordingId) {
-            await meetingService.updateRecordingStatus(recordingId, "failed").catch(console.error);
+            await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => log.error({ err: e }, "Failed to update recording status"));
         }
         return res.status(500).json({ error: "Transcription pipeline failed" });
     }
@@ -228,7 +231,7 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
             "Content-Type": "application/json"
         };
 
-        console.log(`Checking status for job: ${jobId}, recording: ${recordingId}`);
+        log.debug({ jobId, recordingId }, "Checking transcription job status");
 
         const statusResponse = await fetch(`https://api.sarvam.ai/speech-to-text/job/v1/${jobId}/status`, {
             method: "GET",
@@ -237,7 +240,7 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
 
         if (!statusResponse.ok) {
             const errText = await statusResponse.text();
-            console.error("Sarvam Get Status Error:", errText);
+            log.error({ errText }, "Sarvam get status error");
             return res.status(statusResponse.status).json({ error: "Failed to fetch Sarvam job status" });
         }
 
@@ -245,7 +248,7 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
         const jobState = statusData.job_state; // Accepted | Pending | Running | Completed | Failed
 
         if (jobState === "Completed") {
-            console.log(`Sarvam job completed! Fetching transcripts...`);
+            log.info({ jobId }, "Sarvam job completed — fetching transcripts");
             const jobDetails = statusData.job_details || [];
             let transcriptText = "";
             let transcriptDiarized = null;
@@ -268,7 +271,7 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
 
                 if (!downloadUrlsResponse.ok) {
                     const errText = await downloadUrlsResponse.text();
-                    console.error("❌ Sarvam Download Urls Error:", errText);
+                    log.error({ errText }, "Sarvam download URLs error");
                     return res.status(downloadUrlsResponse.status).json({ error: "Failed to request result download URL" });
                 }
 
@@ -309,7 +312,7 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
                 }, "Transcription completed successfully")
             );
         } else if (jobState === "Failed") {
-            console.warn(`Sarvam job ${jobId} failed.`);
+            log.warn({ jobId }, "Sarvam job failed");
             const updated = await meetingService.updateRecordingStatus(recordingId as string, "failed");
 
             return res.status(200).json(
@@ -327,9 +330,9 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
             );
         }
     } catch (err: any) {
-        console.error(`❌ [getTranscriptionStatus] Error for recordingId: ${recordingId}`, err);
+        log.error({ err, recordingId }, "getTranscriptionStatus error");
         if (recordingId) {
-            await meetingService.updateRecordingStatus(recordingId as string, "failed").catch(console.error);
+            await meetingService.updateRecordingStatus(recordingId as string, "failed").catch(e => log.error({ err: e }, "Failed to update recording status"));
         }
         return res.status(500).json({ error: "Failed to fetch transcription status" });
     }
@@ -352,7 +355,7 @@ export const getMeetingRecordings = catchAsync(async (req: Request, res: Respons
             new ApiResponse(200, recordings, "Meeting recordings retrieved successfully")
         );
     } catch (err: any) {
-        console.error(`❌ [getMeetingRecordings] Error:`, err);
+        log.error({ err }, "getMeetingRecordings error");
         return res.status(500).json({ error: "Failed to retrieve meeting recordings" });
     }
 });

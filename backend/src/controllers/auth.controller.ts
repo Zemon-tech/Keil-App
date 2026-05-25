@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import { google } from "googleapis";
 import { config } from "../config";
-import pino from "pino";
+import { createServiceLogger } from "../lib/logger";
 
-const logger = pino();
+const logger = createServiceLogger("auth");
 
 const oauth2Client = new google.auth.OAuth2(
     config.googleClientId,

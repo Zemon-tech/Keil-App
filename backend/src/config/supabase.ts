@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { config } from "./index";
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("supabase");
 
 if (!config.supabaseUrl || !config.supabasePublishableKey || !config.supabaseSecretKey) {
     throw new Error("❌ [supabase]: Missing Supabase configuration in .env file");
@@ -16,4 +19,4 @@ export const supabaseAdmin = createClient(config.supabaseUrl, config.supabaseSec
     }
 });
 
-console.log("✅ [supabase]: Supabase clients initialized");
+log.info("Supabase clients initialized");

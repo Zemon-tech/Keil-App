@@ -1,6 +1,9 @@
 import { motionAnalyticsRepository } from "../repositories";
 import { User } from "../types/entities";
 
+import { createServiceLogger } from '../lib/logger';
+
+const log = createServiceLogger('motion-analytics');
 // ─── Tiptap JSON Content Recursive Text Extractor ──────────────────────────────
 
 function extractTextFromTiptap(node: any): string {
@@ -144,7 +147,7 @@ export const logPageEdit = async (
       }
     }
   } catch (err) {
-    console.error("Error logging page edit:", err);
+    log.error({ err }, "Error logging page edit");
   }
 };
 
@@ -157,7 +160,7 @@ export const logPageCreation = async (pageId: string, userId: string) => {
       description: "Created page"
     });
   } catch (err) {
-    console.error("Error logging page creation:", err);
+    log.error({ err }, "Error logging page creation");
   }
 };
 

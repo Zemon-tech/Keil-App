@@ -1,5 +1,8 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import { config } from "../config";
+import { createServiceLogger } from "./logger";
+
+const log = createServiceLogger("s3");
 
 const s3Configured =
     !!config.sevallaS3Endpoint &&
@@ -18,9 +21,9 @@ if (s3Configured) {
             secretAccessKey: config.sevallaS3SecretAccessKey,
         },
     });
-    console.log("✅ [s3]: Sevalla S3 client initialized");
+    log.info("Sevalla S3 client initialized");
 } else {
-    console.warn("⚠️  [s3]: Missing Sevalla S3 configuration in .env — S3 features will be unavailable");
+    log.warn("Missing Sevalla S3 configuration in .env — S3 features will be unavailable");
 }
 
 /**

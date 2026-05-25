@@ -36,4 +36,9 @@ export const config = {
     // Which Gemini model the ADK agent runs on.
     // Recommended: gemini-2.0-flash (fast) or gemini-2.5-pro (more capable)
     googleAdkModel: process.env.GOOGLE_ADK_MODEL || "gemini-2.0-flash",
+    // ── Logging ──────────────────────────────────────────────────────────────
+    logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug"),
+    grafanaLokiHost: process.env.GRAFANA_LOKI_HOST || "",
+    grafanaLokiUser: process.env.GRAFANA_LOKI_USER || "",
+    grafanaLokiPassword: process.env.GRAFANA_LOKI_PASSWORD || "",
 };

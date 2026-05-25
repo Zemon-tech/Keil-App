@@ -6,6 +6,9 @@ import { ApiError } from '../utils/ApiError';
 import { broadcastMotionChange } from '../socket';
 import { logPageEdit, logPageCreation } from './motion-analytics.service';
 
+import { createServiceLogger } from '../lib/logger';
+
+const log = createServiceLogger('motion-page');
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
 export interface MotionPageDTO {
@@ -260,7 +263,7 @@ export const createPage = async (
   broadcastMotionChange(spaceId, { type: 'create', page: dto, userId });
 
   // Log the page creation asynchronously
-  logPageCreation(page.id, userId).catch(err => console.error("Error in logPageCreation:", err));
+  logPageCreation(page.id, userId).catch(err => log.error({ err }, "Error in logPageCreation"));
 
   return dto;
 };
@@ -312,7 +315,7 @@ export const updatePage = async (
   updates.updated_by = userId;
 
   // Log the edit activity diffs asynchronously before database update
-  logPageEdit(pageId, userId, page, input).catch(err => console.error("Error in logPageEdit:", err));
+  logPageEdit(pageId, userId, page, input).catch(err => log.error({ err }, "Error in logPageEdit"));
 
   const updated = await motionPageRepository.update(pageId, updates);
   if (updated) {
@@ -451,7 +454,7 @@ export const createShare = async (
         description: 'shared page via public link',
       });
     } catch (err) {
-      console.error('Error logging public share creation:', err);
+      log.error({ err }, 'Error logging public share creation');
     }
 
     return toShareDTO(share);
@@ -532,7 +535,7 @@ export const createShare = async (
         description: `shared page with "${spaceName}" workspace of "${orgName}" organisation`,
       });
     } catch (err) {
-      console.error('Error logging space share creation:', err);
+      log.error({ err }, 'Error logging space share creation');
     }
     return toShareDTO(share);
   }
@@ -585,7 +588,7 @@ export const revokeShare = async (
       });
     }
   } catch (err) {
-    console.error('Error logging share revocation:', err);
+    log.error({ err }, 'Error logging share revocation');
   }
 
   await motionPageShareRepository.delete(shareId);
@@ -648,7 +651,7 @@ export const updateShare = async (
       });
     }
   } catch (err) {
-    console.error('Error logging share update:', err);
+    log.error({ err }, 'Error logging share update');
   }
 
   return toShareDTO(updated!);

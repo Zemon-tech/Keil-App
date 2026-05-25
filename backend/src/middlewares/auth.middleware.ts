@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin } from "../config/supabase";
 import pool from "../config/pg";
+import logger from "../lib/logger";
 /**
  * Verifies the JWT token from the Authorization header and attaches the user row to req.user.
  * Relies on Supabase webhook/trigger to have already created the user profile.
@@ -14,7 +15,7 @@ export const protect = async (
     res: Response,
     next: NextFunction
 ): Promise<void> => {
-    console.log(`🔍 [auth]: Protect middleware hit for ${req.method} ${req.originalUrl}`);
+    logger.debug({ method: req.method, url: req.originalUrl }, "Auth protect middleware hit");
     try {
         let token: string | undefined;
 
@@ -64,7 +65,7 @@ export const protect = async (
 
         next();
     } catch (err) {
-        console.error(`❌ [auth]: Middleware Error: ${(err as Error).message}`);
+        logger.error({ err: err as Error }, "Auth middleware error");
         res.status(500).json({
             success: false,
             message: "Internal Server Error during authentication",
