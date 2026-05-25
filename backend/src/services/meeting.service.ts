@@ -130,3 +130,51 @@ export const getRecordingsByMeetingId = async (meetingId: string): Promise<Meeti
     const result = await pool.query(queryText, [meetingId]);
     return result.rows;
 };
+
+/**
+ * Fetches paginated meeting history for a user
+ */
+export const getMeetingHistory = async (
+    userId: string,
+    page: number = 1,
+    limit: number = 20
+): Promise<{ recordings: MeetingRecording[]; total: number }> => {
+    const offset = (page - 1) * limit;
+
+    const countQuery = `
+        SELECT COUNT(*) as total FROM public.meeting_recordings
+        WHERE user_id = $1
+    `;
+    const countResult = await pool.query(countQuery, [userId]);
+    const total = parseInt(countResult.rows[0].total, 10);
+
+    const queryText = `
+        SELECT * FROM public.meeting_recordings
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+    `;
+    const result = await pool.query(queryText, [userId, limit, offset]);
+    return { recordings: result.rows, total };
+};
+
+/**
+ * Searches meetings by transcript text or title-like content
+ */
+export const searchMeetings = async (
+    userId: string,
+    query: string
+): Promise<MeetingRecording[]> => {
+    const queryText = `
+        SELECT * FROM public.meeting_recordings
+        WHERE user_id = $1
+          AND (
+            transcript_text ILIKE $2
+            OR audio_s3_key ILIKE $2
+          )
+        ORDER BY created_at DESC
+        LIMIT 20
+    `;
+    const result = await pool.query(queryText, [userId, `%${query}%`]);
+    return result.rows;
+};

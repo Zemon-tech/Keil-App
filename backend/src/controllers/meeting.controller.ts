@@ -359,3 +359,93 @@ export const getMeetingRecordings = catchAsync(async (req: Request, res: Respons
         return res.status(500).json({ error: "Failed to retrieve meeting recordings" });
     }
 });
+
+/**
+ * Retrieves paginated meeting history for the authenticated user
+ */
+export const getMeetingHistory = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 20), 50);
+
+    try {
+        const { recordings, total } = await meetingService.getMeetingHistory(user.id, page, limit);
+
+        return res.status(200).json(
+            new ApiResponse(200, {
+                recordings,
+                pagination: { page, limit, total, hasMore: page * limit < total }
+            }, "Meeting history retrieved successfully")
+        );
+    } catch (err: any) {
+        console.error(`❌ [getMeetingHistory] Error:`, err);
+        return res.status(500).json({ error: "Failed to retrieve meeting history" });
+    }
+});
+
+/**
+ * Searches meetings by transcript content
+ */
+export const searchMeetings = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const q = req.query.q as string;
+    if (!q || q.trim().length === 0) {
+        return res.status(400).json({ error: "Search query required" });
+    }
+
+    try {
+        const recordings = await meetingService.searchMeetings(user.id, q.trim());
+
+        return res.status(200).json(
+            new ApiResponse(200, recordings, "Search results retrieved successfully")
+        );
+    } catch (err: any) {
+        console.error(`❌ [searchMeetings] Error:`, err);
+        return res.status(500).json({ error: "Search failed" });
+    }
+});
+
+/**
+ * Retrieves a single recording by ID for review (with ownership check)
+ */
+export const getRecordingReview = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const { recordingId } = req.params;
+    if (!recordingId) {
+        return res.status(400).json({ error: "Recording ID is required" });
+    }
+
+    try {
+        const recording = await meetingService.getRecordingById(recordingId as string);
+
+        if (!recording) {
+            return res.status(404).json({ error: "Recording not found" });
+        }
+
+        if (recording.user_id !== user.id) {
+            return res.status(403).json({ error: "Unauthorized" });
+        }
+
+        return res.status(200).json(
+            new ApiResponse(200, recording, "Recording retrieved successfully")
+        );
+    } catch (err: any) {
+        console.error(`❌ [getRecordingReview] Error:`, err);
+        return res.status(500).json({ error: "Failed to retrieve recording" });
+    }
+});

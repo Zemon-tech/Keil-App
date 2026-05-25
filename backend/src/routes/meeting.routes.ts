@@ -7,6 +7,12 @@ const router = Router();
 // Apply auth middleware to protect all routes
 router.use(protect);
 
+// Endpoint to retrieve paginated meeting history for the user
+router.get("/history", meetingController.getMeetingHistory);
+
+// Endpoint to search meetings by transcript content
+router.get("/search/query", meetingController.searchMeetings);
+
 // Endpoint to generate presigned S3 upload URL
 router.post("/upload-url", meetingController.getUploadUrl);
 
@@ -15,6 +21,9 @@ router.post("/transcribe", meetingController.transcribeRecording);
 
 // Endpoint to poll transcription status of a Sarvam job
 router.get("/transcribe/status", meetingController.getTranscriptionStatus);
+
+// Endpoint to retrieve a single recording for review
+router.get("/recording/:recordingId/review", meetingController.getRecordingReview);
 
 // Endpoint to retrieve recordings associated with a specific meeting
 router.get("/:meetingId/recordings", meetingController.getMeetingRecordings);
