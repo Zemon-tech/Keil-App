@@ -634,7 +634,7 @@ export function AiAssistant() {
 
             {/* ─── SIDEBAR PANEL ─────────────────────────────────────── */}
             {mode === "sidebar" && (
-                <div className="fixed top-0 right-0 bottom-0 z-30 w-[400px] bg-card border-l border-border flex flex-col ai-sidebar-appear shadow-2xl shadow-black/40">
+                <div className="absolute top-0 right-0 bottom-0 z-30 w-[400px] bg-card border-l border-border flex flex-col ai-sidebar-appear shadow-2xl shadow-black/40">
                     {renderHeader()}
                     {renderMessages()}
                     {renderInput()}

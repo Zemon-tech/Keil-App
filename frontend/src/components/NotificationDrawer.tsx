@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
     Bell,
     X,
@@ -65,50 +65,49 @@ const getNotificationMeta = (eventType: string) =>
     };
 
 function getNotificationTitle(n: Notification): string {
-  const actor = n.payload.sender_name || "Someone";
-  switch (n.event_type) {
-    case "task_assigned":
-      return `Task Assigned`;
-    case "someone_messaged":
-      return `New message from ${actor}`;
-    case "motion_shared":
-      return `Motion Shared`;
-    case "task_status_changed":
-      return `Task Status Updated`;
-    case "membership_updates":
-      return `Membership Update`;
-    case "mention_in_comment":
-      return `Mentioned in Comment`;
-    default:
-      return `New Notification`;
-  }
+    const actor = n.payload.sender_name || "Someone";
+    switch (n.event_type) {
+        case "task_assigned":
+            return `Task Assigned`;
+        case "someone_messaged":
+            return `New message from ${actor}`;
+        case "motion_shared":
+            return `Motion Shared`;
+        case "task_status_changed":
+            return `Task Status Updated`;
+        case "membership_updates":
+            return `Membership Update`;
+        case "mention_in_comment":
+            return `Mentioned in Comment`;
+        default:
+            return `New Notification`;
+    }
 }
 
 function getNotificationSnippet(n: Notification): string {
-  const actor = n.payload.sender_name || "Someone";
-  switch (n.event_type) {
-    case "task_assigned":
-      return `${actor} assigned you to "${n.payload.task_title}"`;
-    case "someone_messaged":
-      return n.payload.message_snippet || `New message in channel`;
-    case "motion_shared":
-      return `${actor} shared "${n.payload.page_title}" with space`;
-    case "task_status_changed":
-      return `"${n.payload.task_title}" moved to ${n.payload.status}`;
-    case "membership_updates":
-      const action = n.payload.action === 'added_space' || n.payload.action === 'added_workspace' ? 'added you to' : 'updated your role in';
-      const place = n.payload.space_name || n.payload.workspace_name || 'workspace';
-      return `${actor} ${action} ${place} as ${n.payload.role}`;
-    case "mention_in_comment":
-      return `${actor} mentioned you: "${n.payload.comment_snippet}"`;
-    default:
-      return `You have a new alert`;
-  }
+    const actor = n.payload.sender_name || "Someone";
+    switch (n.event_type) {
+        case "task_assigned":
+            return `${actor} assigned you to "${n.payload.task_title}"`;
+        case "someone_messaged":
+            return n.payload.message_snippet || `New message in channel`;
+        case "motion_shared":
+            return `${actor} shared "${n.payload.page_title}" with space`;
+        case "task_status_changed":
+            return `"${n.payload.task_title}" moved to ${n.payload.status}`;
+        case "membership_updates":
+            const action = n.payload.action === 'added_space' || n.payload.action === 'added_workspace' ? 'added you to' : 'updated your role in';
+            const place = n.payload.space_name || n.payload.workspace_name || 'workspace';
+            return `${actor} ${action} ${place} as ${n.payload.role}`;
+        case "mention_in_comment":
+            return `${actor} mentioned you: "${n.payload.comment_snippet}"`;
+        default:
+            return `You have a new alert`;
+    }
 }
 
 export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: NotificationDrawerProps) {
-    const [width, setWidth] = useState(392);
-    const isResizing = useRef(false);
+    const width = 400;
     const [filter, setFilter] = useState<"All" | "Unread" | "Tasks" | "Mentions">("All");
 
     const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
@@ -118,36 +117,6 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
         if (open) {
             markAllAsRead();
         }
-    }, [open]);
-
-    useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!isResizing.current) return;
-            const newWidth = window.innerWidth - e.clientX;
-            if (newWidth > 340 && newWidth < 800) {
-                setWidth(newWidth);
-            }
-        };
-
-        const handleMouseUp = () => {
-            if (isResizing.current) {
-                isResizing.current = false;
-                Object.assign(document.body.style, {
-                    cursor: "default",
-                    userSelect: "auto",
-                });
-            }
-        };
-
-        if (open) {
-            window.addEventListener("mousemove", handleMouseMove);
-            window.addEventListener("mouseup", handleMouseUp);
-        }
-
-        return () => {
-            window.removeEventListener("mousemove", handleMouseMove);
-            window.removeEventListener("mouseup", handleMouseUp);
-        };
     }, [open]);
 
     const filteredNotifications = notifications.filter((n) => {
@@ -162,19 +131,8 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
     return (
         <div
             style={{ width: `${width}px` }}
-            className="fixed inset-y-0 right-0 z-[60] flex border-l border-border/80 bg-background/95 shadow-[var(--shadow-lg)] backdrop-blur-xl transition-colors duration-200"
+            className="absolute inset-y-0 right-0 z-[60] flex border-l border-border bg-background shadow-2xl transition-[width] duration-300"
         >
-            <div
-                className="absolute left-0 top-0 bottom-0 z-[70] w-1.5 cursor-ew-resize transition-colors hover:bg-primary/30 active:bg-primary/50"
-                onMouseDown={(e) => {
-                    e.preventDefault();
-                    isResizing.current = true;
-                    Object.assign(document.body.style, {
-                        cursor: "ew-resize",
-                        userSelect: "none",
-                    });
-                }}
-            />
 
             <div className="relative flex h-full w-full flex-col overflow-hidden">
                 <header className="border-b border-border/70 px-5 py-4">
@@ -189,19 +147,19 @@ export function NotificationDrawer({ open, onOpenChange, onOpenFullView }: Notif
                         </div>
 
                         <div className="flex items-center gap-1 rounded-full border border-border/70 bg-card/80 p-1 shadow-sm">
-                            <Button 
-                                variant="ghost" 
-                                size="icon-xs" 
-                                className="rounded-full text-muted-foreground hover:text-foreground" 
+                            <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="rounded-full text-muted-foreground hover:text-foreground"
                                 aria-label="Mark all as read"
                                 onClick={markAllAsRead}
                             >
                                 <Check className="size-3.5" />
                             </Button>
-                            <Button 
-                                variant="ghost" 
-                                size="icon-xs" 
-                                className="rounded-full text-muted-foreground hover:text-destructive" 
+                            <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="rounded-full text-muted-foreground hover:text-destructive"
                                 aria-label="Clear all notifications"
                                 onClick={clearAll}
                             >

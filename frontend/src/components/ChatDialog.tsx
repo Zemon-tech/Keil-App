@@ -58,6 +58,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     const { data: me } = useMe();
 
     const [searchQuery, setSearchQuery] = useState("");
+    const [searchOpen, setSearchOpen] = useState(false);
     const [messageText, setMessageText] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -143,22 +144,46 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                     {/* ── Left Sidebar: Channels & Participants ── */}
                     <div className="w-80 shrink-0 grow-0 bg-card border-r border-border flex flex-col h-full overflow-hidden">
                         {/* Sidebar Header */}
-                        <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border">
-                            <span className="text-sm font-semibold">Messages</span>
-                        </div>
-
-                        {/* Search Bar */}
-                        <div className="px-3 py-2 shrink-0 border-b border-border">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search messages or users..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-9 h-9 text-sm bg-muted/50 border-0 focus-visible:ring-1"
-                                />
+                        {searchOpen ? (
+                            <div className="flex items-center gap-2 px-3 py-2 shrink-0 border-b border-border h-12">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                                    <Input
+                                        autoFocus
+                                        placeholder="Search messages or users..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="pl-8 h-8 text-xs bg-muted/50 border-0 focus-visible:ring-1 w-full"
+                                    />
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground shrink-0"
+                                    onClick={() => {
+                                        setSearchOpen(false);
+                                        setSearchQuery("");
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border h-12">
+                                <span className="text-sm font-semibold">Messages</span>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-7 text-muted-foreground hover:text-foreground"
+                                        onClick={() => setSearchOpen(true)}
+                                    >
+                                        <Search className="size-4" />
+                                    </Button>
+                                    <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} />
+                                </div>
+                            </div>
+                        )}
 
                         {/* Channels List */}
                         <ScrollArea className="flex-1 h-0">
@@ -169,7 +194,6 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                         <Hash className="size-3" />
                                         Channels
                                     </span>
-                                    <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} defaultTab="group" />
                                 </div>
                                 {isLoading ? (
                                     <div className="space-y-2">
@@ -231,7 +255,6 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                         <Users className="size-3" />
                                         Direct Messages
                                     </span>
-                                    <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} defaultTab="direct" />
                                 </div>
                                 {isLoading ? (
                                     <div className="space-y-2">

@@ -5,47 +5,43 @@ import { useAppContext } from "@/contexts/AppContext";
 import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
-import { X, Maximize2 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { X, Maximize2, ArrowLeft, Users, Trash2 } from "lucide-react";
+
+import { useChatChannels, useDeleteChannel } from "@/hooks/api/useChat";
+import { useMe } from "@/hooks/api/useMe";
+import { GroupSettingsDialog } from "./GroupSettingsDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function ChatDrawer() {
-  const { isChatOpen, activeChannelId, closeChat, openChatDialog } =
+  const { isChatOpen, activeChannelId, closeChat, openChatDialog, setActiveChannel } =
     useChatStore();
-  const [width, setWidth] = useState(360);
-  const isResizing = useRef(false);
+  const width = 400;
 
   const { activeOrgId, activeSpaceId } = useAppContext();
+
+  const { data: channels = [] } = useChatChannels(activeOrgId, activeSpaceId);
+  const currentChannel = channels.find((c) => c.id === activeChannelId);
+  const { data: me } = useMe();
+  const deleteChannel = useDeleteChannel(activeOrgId, activeSpaceId);
+
+  const channelName = currentChannel?.type === "direct"
+    ? currentChannel.members.find((m) => m.id !== me?.id)?.name ?? "Unknown"
+    : currentChannel?.name ?? "Group Chat";
 
   const handleExpandClick = () => {
     openChatDialog();
     closeChat();
   };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current) return;
-      const newWidth = window.innerWidth - e.clientX;
-      if (newWidth > 320 && newWidth < 800) setWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      if (isResizing.current) {
-        isResizing.current = false;
-        document.body.style.cursor = "default";
-        document.body.style.userSelect = "auto";
-      }
-    };
-
-    if (isChatOpen) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isChatOpen]);
 
   if (!isChatOpen) {
     return null;
@@ -54,57 +50,103 @@ export function ChatDrawer() {
   return (
     <div
       style={{ width: `${width}px` }}
-      className="fixed inset-y-0 right-0 z-50 flex shadow-2xl border-l border-border bg-background transition-[width] duration-300"
+      className="absolute inset-y-0 right-0 z-50 flex shadow-2xl border-l border-border bg-background transition-[width] duration-300"
     >
-      {/* Resize Handle */}
-      <div
-        role="separator"
-        aria-label="Resize chat drawer"
-        aria-valuenow={width}
-        aria-valuemin={320}
-        aria-valuemax={800}
-        tabIndex={0}
-        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-[70] outline-none focus-visible:bg-primary/40"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          isResizing.current = true;
-          document.body.style.cursor = "ew-resize";
-          document.body.style.userSelect = "none";
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") {
-            e.preventDefault();
-            setWidth((w) => Math.max(320, w - 10));
-          } else if (e.key === "ArrowRight") {
-            e.preventDefault();
-            setWidth((w) => Math.min(800, w + 10));
-          }
-        }}
-      />
 
       <div className="flex flex-col size-full relative">
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-sm">Chat</h2>
-            <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} />
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleExpandClick}
-              className="text-muted-foreground hover:text-foreground"
-              aria-label="Open full chat page"
-            >
-              <Maximize2 className="size-4" />
-            </button>
-            <button
-              onClick={closeChat}
-              className="text-muted-foreground hover:text-foreground"
-              aria-label="Close chat"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border h-14 shrink-0 bg-card">
+          {activeChannelId && currentChannel ? (
+            <>
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  onClick={() => setActiveChannel(null)}
+                  className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                  aria-label="Go back to chat list"
+                >
+                  <ArrowLeft className="size-4" />
+                </button>
+                
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs shrink-0">
+                    {currentChannel?.type === "group" ? <Users className="size-4" /> : channelName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-foreground leading-none truncate">{channelName}</span>
+                    <span className="text-[10px] text-muted-foreground mt-1 truncate">
+                      {currentChannel?.type === "group" ? `${currentChannel.members.length} members` : "Direct Message"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {currentChannel?.type === "group" ? (
+                  <GroupSettingsDialog
+                    channel={currentChannel}
+                    orgId={activeOrgId}
+                    spaceId={activeSpaceId}
+                  />
+                ) : (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button
+                        className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        aria-label="Delete chat"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete this direct message? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => {
+                            if (activeChannelId) {
+                              deleteChannel.mutate(activeChannelId);
+                              setActiveChannel(null);
+                            }
+                          }}
+                        >
+                          Delete Chat
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-sm">Chat</h2>
+                <NewChatDialog orgId={activeOrgId} spaceId={activeSpaceId} />
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleExpandClick}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Open full chat page"
+                >
+                  <Maximize2 className="size-4" />
+                </button>
+                <button
+                  onClick={closeChat}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Close chat"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── Body ── */}
@@ -114,6 +156,7 @@ export function ChatDrawer() {
               channelId={activeChannelId}
               orgId={activeOrgId}
               spaceId={activeSpaceId}
+              hideHeader={true}
             />
           ) : (
             <ChannelList orgId={activeOrgId} spaceId={activeSpaceId} />
