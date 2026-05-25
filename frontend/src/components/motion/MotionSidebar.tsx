@@ -51,7 +51,7 @@ import {
 } from "@/hooks/api/useMotionPages";
 
 const mainTabs = [
-  { id: "home", title: "Home", icon: Home, url: "/motion" },
+  { id: "home", title: "Home", icon: Home, url: "/motion?home=true" },
   { id: "search", title: "Search", icon: Search, url: "#" },
 ];
 
@@ -372,7 +372,12 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
 
   const handleDeletePage = (id: string, title: string) => {
     softDelete.mutate({ id, title });
-    if (pageId === id) navigate("/motion");
+    if (pageId === id) {
+      if (activeOrgId && activeSpaceId) {
+        useMotionStore.getState().setLastOpenedPageId(activeOrgId, activeSpaceId, null);
+      }
+      navigate("/motion");
+    }
   };
 
   const handleRenamePage = (id: string, title: string) => {
@@ -414,8 +419,13 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 onClick={() => {
                   if (tab.id === "search") {
                     setSearchOpen(true);
-                  } else if (window.innerWidth < 1024) {
-                    onClose?.();
+                  } else {
+                    if (tab.id === "home" && activeOrgId && activeSpaceId) {
+                      useMotionStore.getState().setLastOpenedPageId(activeOrgId, activeSpaceId, null);
+                    }
+                    if (window.innerWidth < 1024) {
+                      onClose?.();
+                    }
                   }
                 }}
                 className={cn(

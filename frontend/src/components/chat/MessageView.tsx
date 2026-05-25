@@ -78,9 +78,9 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
     : currentChannel?.name ?? "Group Chat";
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
+    <div className="flex flex-col flex-1 overflow-hidden min-h-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border bg-card">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setActiveChannel(null)}
@@ -145,7 +145,7 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
       </div>
 
       {/* ── Message list ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-muted/30">
+      <div className="flex-1 h-0 overflow-y-auto px-4 py-4 space-y-4 bg-muted/30">
         {isLoading && (
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
@@ -217,7 +217,7 @@ export function MessageView({ channelId, orgId, spaceId }: MessageViewProps) {
       </div>
 
       {/* ── Send input ── */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-card border-t border-border">
+      <div className="flex items-center gap-3 px-4 py-3 shrink-0 bg-card border-t border-border">
         <input
           value={text}
           onChange={handleInputChange}
