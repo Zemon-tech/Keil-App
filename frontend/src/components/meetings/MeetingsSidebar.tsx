@@ -15,7 +15,7 @@ import {
   X,
   Mic,
 } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
@@ -32,7 +32,6 @@ const mainTabs = [
 
 export function MeetingsSidebar({ onClose }: { onClose?: () => void }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const { activeOrgId, activeSpaceId } = useAppContext();
 
   const [searchMode, setSearchMode] = useState(false);
