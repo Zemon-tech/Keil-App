@@ -650,16 +650,34 @@ body.ai-sidebar-open {
 
     white-space: nowrap;
 
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    width: 100%;
+}
+
+:where(.group, .group\/item):hover .task-name-container {
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 20px,
+        black calc(100% - 20px),
+        transparent 100%
+    );
+}
+
+:where(.group, .group\/item):hover .task-name-scroll {
+    overflow: visible;
+
+    text-overflow: unset;
+
     width: max-content;
 
     min-width: 100%;
 
     flex-shrink: 0;
 
-    will-change: transform;
-}
-
-:where(.group, .group\/item):hover .task-name-scroll {
     animation: task-marquee 8s linear infinite alternate;
 }
 

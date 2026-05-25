@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -599,6 +600,11 @@ export function TaskSchedulePane({
     useState<CalendarView>("dayGridMonth");
   const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<EventInput[]>([]);
+  const [morePopover, setMorePopover] = useState<{
+    date: Date;
+    events: { id: string; title: string; status: string; priority: string; type: string; taskId: string }[];
+    position: { x: number; y: number };
+  } | null>(null);
   const unscheduledTaskIds = useRef<Set<string>>(new Set());
   const calendarRef = useRef<FullCalendar>(null);
   const calendarContainerRef = useRef<HTMLDivElement>(null);
@@ -1230,6 +1236,41 @@ export function TaskSchedulePane({
               headerToolbar={false}
               dayMaxEvents={2}
               moreLinkContent={(args) => `${args.num} more`}
+              moreLinkClick={(info) => {
+                // Prevent FullCalendar's built-in popover — use our own portalled one
+                const rect = (info.jsEvent.target as HTMLElement).getBoundingClientRect();
+                const dayEvents = info.allSegs.map((seg) => ({
+                  id: seg.event.id,
+                  title: seg.event.title,
+                  status: seg.event.extendedProps.taskStatus as string || "",
+                  priority: seg.event.extendedProps.taskPriority as string || "",
+                  type: seg.event.extendedProps.taskType as string || "",
+                  taskId: seg.event.extendedProps.taskId as string || seg.event.id,
+                }));
+
+                // Position: align to the "more" link, ensure it stays within viewport
+                const popoverWidth = 280;
+                const popoverMaxHeight = 300;
+                let x = rect.left;
+                let y = rect.bottom + 6;
+
+                // Keep within horizontal bounds
+                if (x + popoverWidth > window.innerWidth - 16) {
+                  x = window.innerWidth - popoverWidth - 16;
+                }
+                // If it would clip at the bottom, open upward
+                if (y + popoverMaxHeight > window.innerHeight - 16) {
+                  y = rect.top - popoverMaxHeight - 6;
+                  if (y < 16) y = 16;
+                }
+
+                setMorePopover({
+                  date: info.date,
+                  events: dayEvents,
+                  position: { x, y },
+                });
+                return "none"; // suppress FullCalendar's built-in popover
+              }}
               events={events}
               eventOrder={(a: any, b: any) => {
                 const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -1408,6 +1449,83 @@ export function TaskSchedulePane({
           setCreateInitialValues(undefined);
         }}
       />
+
+      {/* Custom "more tasks" popover — portalled to body to avoid overflow clipping */}
+      {morePopover &&
+        createPortal(
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-9999"
+              onClick={() => setMorePopover(null)}
+            />
+            {/* Popover */}
+            <div
+              className="fixed z-10000 w-[280px] bg-popover border border-border rounded-2xl shadow-lg backdrop-blur-xl flex flex-col"
+              style={{
+                left: morePopover.position.x,
+                top: morePopover.position.y,
+                maxHeight: "min(300px, calc(100vh - 32px))",
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border shrink-0">
+                <span className="text-sm font-semibold text-foreground">
+                  {format(morePopover.date, "MMMM d, yyyy")}
+                </span>
+                <button
+                  onClick={() => setMorePopover(null)}
+                  className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+              {/* Body */}
+              <div
+                className="flex-1 overflow-y-auto overscroll-contain p-2.5 flex flex-col gap-1.5"
+                style={{ maxHeight: "240px" }}
+              >
+                {morePopover.events.map((evt) => {
+                  const isDone = evt.status === "done" || evt.status === "completed";
+                  const theme = getThemeForTask(evt.type, evt.priority, evt.status);
+                  return (
+                    <button
+                      key={evt.id}
+                      onClick={() => {
+                        setMorePopover(null);
+                        setSelectedTaskId(evt.taskId);
+                        setDialogPosition(morePopover.position);
+                      }}
+                      className={cn(
+                        "w-full text-left rounded-[10px] transition-colors border",
+                        isDone && "line-through opacity-[0.68]"
+                      )}
+                      style={{
+                        minHeight: 28,
+                        padding: "4px 8px",
+                        fontSize: "0.75rem",
+                        fontWeight: 500,
+                        background: theme.background,
+                        borderColor: theme.border,
+                        color: theme.text,
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {isDone ? (
+                          <CheckSquare className="size-3 shrink-0 opacity-70" />
+                        ) : (
+                          <Square className="size-3 shrink-0 opacity-70" />
+                        )}
+                        <span className="truncate">{evt.title || "Untitled"}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
     </>
   );
 }

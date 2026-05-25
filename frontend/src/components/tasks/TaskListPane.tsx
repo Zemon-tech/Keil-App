@@ -210,7 +210,7 @@ function SubtaskList({
                 <span className={cn(
                   "task-name-scroll text-[13px] font-medium leading-snug",
                   isDone && "line-through opacity-60"
-                )}>
+                )} title={sub.title}>
                   {sub.title}
                 </span>
               </div>
@@ -942,7 +942,7 @@ export function TaskListPane({
                       <span className={cn(
                         "task-name-scroll text-sm font-medium leading-snug",
                         isDone && "line-through opacity-60"
-                      )}>
+                      )} title={t.title}>
                         {t.title}
                       </span>
                       {t.org_id !== activeOrgId && t.org_name && (
