@@ -40,8 +40,7 @@ function MotionIndexRoute() {
   );
 }
 
-// New Meetings imports
-import { MeetingsPage } from "./pages/MeetingsPage";
+
 
 /**
  * Main application component.
@@ -121,14 +120,10 @@ function App() {
             </Layout>
           }
         />
-        {/* New Meetings route */}
+        {/* New Meetings route - redirect to motion */}
         <Route
           path="/meetings/*"
-          element={
-            <Layout>
-              <MeetingsPage />
-            </Layout>
-          }
+          element={<Navigate to="/motion" replace />}
         />
         <Route
           path="/schedule"
