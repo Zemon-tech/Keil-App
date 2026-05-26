@@ -38,10 +38,10 @@ const delegateToTaskAgent = createTool({
   inputSchema: z.object({
     query: z.string().describe("The full task-related request from the user"),
   }),
-  execute: async ({ context: input }, options) => {
+  execute: async (inputData, context) => {
     const result = await taskAgent.generate(
-      [{ role: "user", content: input.query }],
-      { requestContext: options?.requestContext }
+      [{ role: "user", content: inputData.query }],
+      { requestContext: context?.requestContext }
     );
     return { response: await result.text };
   },
@@ -54,10 +54,10 @@ const delegateToChatAgent = createTool({
   inputSchema: z.object({
     query: z.string().describe("The full messaging-related request from the user"),
   }),
-  execute: async ({ context: input }, options) => {
+  execute: async (inputData, context) => {
     const result = await chatAgent.generate(
-      [{ role: "user", content: input.query }],
-      { requestContext: options?.requestContext }
+      [{ role: "user", content: inputData.query }],
+      { requestContext: context?.requestContext }
     );
     return { response: await result.text };
   },
@@ -70,10 +70,10 @@ const delegateToMotionAgent = createTool({
   inputSchema: z.object({
     query: z.string().describe("The full notes-related request from the user"),
   }),
-  execute: async ({ context: input }, options) => {
+  execute: async (inputData, context) => {
     const result = await motionAgent.generate(
-      [{ role: "user", content: input.query }],
-      { requestContext: options?.requestContext }
+      [{ role: "user", content: inputData.query }],
+      { requestContext: context?.requestContext }
     );
     return { response: await result.text };
   },

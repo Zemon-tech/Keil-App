@@ -32,10 +32,10 @@ export const searchMotionPagesTool = createTool({
       .min(1)
       .describe("Keyword to search for in page titles"),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
-    const orgId = options?.requestContext?.get("orgId") as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    const orgId = context?.requestContext?.get("orgId") as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
@@ -53,7 +53,7 @@ export const searchMotionPagesTool = createTool({
          AND deleted_at IS NULL
        ORDER BY updated_at DESC
        LIMIT 10`,
-      [orgId, spaceId, input.query]
+      [orgId, spaceId, inputData.query]
     );
 
     const pages = result.rows.map((row) => ({
@@ -65,7 +65,7 @@ export const searchMotionPagesTool = createTool({
     return {
       pages,
       count: pages.length,
-      query: input.query,
+      query: inputData.query,
     };
   },
 });
@@ -77,10 +77,10 @@ export const getMotionPageTool = createTool({
   inputSchema: z.object({
     pageId: z.string().uuid().describe("The page's UUID"),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
-    const orgId = options?.requestContext?.get("orgId") as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    const orgId = context?.requestContext?.get("orgId") as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
@@ -92,7 +92,7 @@ export const getMotionPageTool = createTool({
     const page = await motionPageService.getPageById(
       orgId,
       spaceId,
-      input.pageId
+      inputData.pageId
     );
 
     if (!page)

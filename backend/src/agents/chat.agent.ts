@@ -26,10 +26,10 @@ export const getUserChannelsTool = createTool({
   description:
     "List all channels the current user is a member of in this space, including unread message counts.",
   inputSchema: z.object({}),
-  execute: async ({ }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
-    const orgId = options?.requestContext?.get("orgId") as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (_inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    const orgId = context?.requestContext?.get("orgId") as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
@@ -58,19 +58,19 @@ export const getChannelMessagesTool = createTool({
       .default(20)
       .describe("Number of recent messages to fetch"),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const member = await isChannelMember(input.channelId, userId);
+    const member = await isChannelMember(inputData.channelId, userId);
     if (!member)
       return {
         error: "You are not a member of this channel.",
       };
 
     const messages = await orgChatService.getChannelMessages(
-      input.channelId,
-      input.limit
+      inputData.channelId,
+      inputData.limit
     );
     return { messages, count: messages.length };
   },
@@ -81,10 +81,10 @@ export const checkUnreadMessagesTool = createTool({
   description:
     "Check whether the current user has any unread messages across all their channels in this space.",
   inputSchema: z.object({}),
-  execute: async ({ }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
-    const orgId = options?.requestContext?.get("orgId") as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (_inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    const orgId = context?.requestContext?.get("orgId") as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };

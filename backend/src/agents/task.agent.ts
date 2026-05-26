@@ -36,33 +36,33 @@ const statusEnum = z
   .enum([TaskStatus.BACKLOG, TaskStatus.TODO, TaskStatus.IN_PROGRESS,
          TaskStatus.DONE, TaskStatus.CANCELLED, TaskStatus.COMPLETED])
   .optional()
-  .describe("Task status");
+  .describe("Optional filter: only include tasks with this status. Omit to return tasks of ALL statuses.");
 
 const priorityEnum = z
   .enum([TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH, TaskPriority.URGENT])
   .optional()
-  .describe("Task priority");
+  .describe("Optional filter: only include tasks with this priority. Omit to return tasks of ALL priorities.");
 
 // ─── Tool 1: get_personal_tasks ───────────────────────────────────────────────
 
 export const getPersonalTasksTool = createTool({
   id: "get_personal_tasks",
-  description: "List the current user's personal tasks. Optionally filter by status, priority, or limit.",
+  description: "List the current user's personal tasks. Returns ALL tasks by default. Only pass status or priority if the user explicitly asks to filter.",
   inputSchema: z.object({
     status: statusEnum,
     priority: priorityEnum,
     limit: z.number().int().min(1).max(50).optional().default(10),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
     const tasks = await personalTaskService.getPersonalTasks(userId, {
       filters: {
-        status: input.status as TaskStatus | undefined,
-        priority: input.priority as TaskPriority | undefined,
+        status: inputData.status as TaskStatus | undefined,
+        priority: inputData.priority as TaskPriority | undefined,
       },
-      pagination: { limit: input.limit ?? 10, offset: 0 },
+      pagination: { limit: inputData.limit ?? 10, offset: 0 },
     });
 
     return { tasks, count: tasks.length };
@@ -77,11 +77,11 @@ export const getPersonalTaskTool = createTool({
   inputSchema: z.object({
     taskId: z.string().uuid().describe("The task's UUID"),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const task = await personalTaskService.getPersonalTaskById(input.taskId, userId);
+    const task = await personalTaskService.getPersonalTaskById(inputData.taskId, userId);
     if (!task) return { error: "Task not found or you do not own it." };
 
     return { task };
@@ -101,18 +101,18 @@ export const createPersonalTaskTool = createTool({
     start_date: z.string().optional().describe("ISO 8601 date, e.g. 2025-06-01"),
     due_date: z.string().optional().describe("ISO 8601 date, e.g. 2025-06-15"),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
     const task = await personalTaskService.createPersonalTask({
       owner_user_id: userId,
-      title: input.title,
-      description: input.description ?? null,
-      priority: input.priority as TaskPriority | undefined,
-      status: input.status as TaskStatus | undefined,
-      start_date: input.start_date ? new Date(input.start_date) : null,
-      due_date: input.due_date ? new Date(input.due_date) : null,
+      title: inputData.title,
+      description: inputData.description ?? null,
+      priority: inputData.priority as TaskPriority | undefined,
+      status: inputData.status as TaskStatus | undefined,
+      start_date: inputData.start_date ? new Date(inputData.start_date) : null,
+      due_date: inputData.due_date ? new Date(inputData.due_date) : null,
     });
 
     return { task, message: `Personal task "${task.title}" created.` };
@@ -133,11 +133,11 @@ export const updatePersonalTaskTool = createTool({
     start_date: z.string().nullable().optional(),
     due_date: z.string().nullable().optional(),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const { taskId, ...rest } = input;
+    const { taskId, ...rest } = inputData;
     const updated = await personalTaskService.updatePersonalTask(taskId, userId, {
       title: rest.title,
       description: rest.description,
@@ -164,11 +164,11 @@ export const deletePersonalTaskTool = createTool({
   inputSchema: z.object({
     taskId: z.string().uuid(),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId = options?.requestContext?.get("userId") as string;
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const deleted = await personalTaskService.deletePersonalTask(input.taskId, userId);
+    const deleted = await personalTaskService.deletePersonalTask(inputData.taskId, userId);
     if (!deleted) return { error: "Task not found or you do not own it." };
 
     return { message: "Personal task deleted successfully." };
@@ -186,10 +186,10 @@ export const getOrgTasksTool = createTool({
     assigneeId: z.string().uuid().optional().describe("Filter by assignee user ID"),
     limit: z.number().int().min(1).max(50).optional().default(20),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId  = options?.requestContext?.get("userId")  as string;
-    const orgId   = options?.requestContext?.get("orgId")   as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (inputData, context) => {
+    const userId  = context?.requestContext?.get("userId")  as string;
+    const orgId   = context?.requestContext?.get("orgId")   as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
 
@@ -198,11 +198,11 @@ export const getOrgTasksTool = createTool({
 
     const tasks = await orgTaskService.getTasksBySpace(orgId, spaceId, {
       filters: {
-        status: input.status as TaskStatus | undefined,
-        priority: input.priority as TaskPriority | undefined,
-        assigneeId: input.assigneeId,
+        status: inputData.status as TaskStatus | undefined,
+        priority: inputData.priority as TaskPriority | undefined,
+        assigneeId: inputData.assigneeId,
       },
-      pagination: { limit: input.limit ?? 20, offset: 0 },
+      pagination: { limit: inputData.limit ?? 20, offset: 0 },
     });
 
     return { tasks, count: tasks.length };
@@ -217,17 +217,17 @@ export const getOrgTaskTool = createTool({
   inputSchema: z.object({
     taskId: z.string().uuid(),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId  = options?.requestContext?.get("userId")  as string;
-    const orgId   = options?.requestContext?.get("orgId")   as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (inputData, context) => {
+    const userId  = context?.requestContext?.get("userId")  as string;
+    const orgId   = context?.requestContext?.get("orgId")   as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
 
     const role = await getSpaceRole(userId, orgId, spaceId);
     if (!role) return { error: "You are not a member of this space." };
 
-    const task = await orgTaskService.getTaskById(input.taskId);
+    const task = await orgTaskService.getTaskById(inputData.taskId);
     if (!task) return { error: "Task not found." };
 
     return { task };
@@ -249,18 +249,18 @@ export const createOrgTaskTool = createTool({
     due_date: z.string().optional(),
     assignee_ids: z.array(z.string().uuid()).optional(),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId  = options?.requestContext?.get("userId")  as string;
-    const orgId   = options?.requestContext?.get("orgId")   as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (inputData, context) => {
+    const userId  = context?.requestContext?.get("userId")  as string;
+    const orgId   = context?.requestContext?.get("orgId")   as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
 
     const role = await getSpaceRole(userId, orgId, spaceId);
     if (!role) return { error: "You are not a member of this space." };
 
-    if (role === "member" && input.assignee_ids?.length) {
-      const onlySelf = input.assignee_ids.length === 1 && input.assignee_ids[0] === userId;
+    if (role === "member" && inputData.assignee_ids?.length) {
+      const onlySelf = inputData.assignee_ids.length === 1 && inputData.assignee_ids[0] === userId;
       if (!onlySelf) return { error: "Members can only assign tasks to themselves." };
     }
 
@@ -269,14 +269,14 @@ export const createOrgTaskTool = createTool({
       {
         org_id: orgId,
         space_id: spaceId,
-        title: input.title,
-        description: input.description ?? null,
-        priority: input.priority as TaskPriority | undefined,
-        status: input.status as TaskStatus | undefined,
-        type: input.type as "task" | "event" | undefined,
-        start_date: input.start_date ? new Date(input.start_date) : null,
-        due_date: input.due_date ? new Date(input.due_date) : null,
-        assignee_ids: input.assignee_ids,
+        title: inputData.title,
+        description: inputData.description ?? null,
+        priority: inputData.priority as TaskPriority | undefined,
+        status: inputData.status as TaskStatus | undefined,
+        type: inputData.type as "task" | "event" | undefined,
+        start_date: inputData.start_date ? new Date(inputData.start_date) : null,
+        due_date: inputData.due_date ? new Date(inputData.due_date) : null,
+        assignee_ids: inputData.assignee_ids,
         created_by: userId,
       }
     );
@@ -299,10 +299,10 @@ export const updateOrgTaskTool = createTool({
     start_date: z.string().nullable().optional(),
     due_date: z.string().nullable().optional(),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId  = options?.requestContext?.get("userId")  as string;
-    const orgId   = options?.requestContext?.get("orgId")   as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (inputData, context) => {
+    const userId  = context?.requestContext?.get("userId")  as string;
+    const orgId   = context?.requestContext?.get("orgId")   as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
 
@@ -310,11 +310,11 @@ export const updateOrgTaskTool = createTool({
     if (!role) return { error: "You are not a member of this space." };
 
     if (role === "member") {
-      const assigned = await isAssignedToTask(input.taskId, userId);
+      const assigned = await isAssignedToTask(inputData.taskId, userId);
       if (!assigned) return { error: "You can only update tasks assigned to you." };
     }
 
-    const { taskId, ...rest } = input;
+    const { taskId, ...rest } = inputData;
     const updated = await orgTaskService.updateTask(
       { orgId, spaceId },
       taskId,
@@ -346,10 +346,10 @@ export const deleteOrgTaskTool = createTool({
   inputSchema: z.object({
     taskId: z.string().uuid(),
   }),
-  execute: async ({ context: input }, options) => {
-    const userId  = options?.requestContext?.get("userId")  as string;
-    const orgId   = options?.requestContext?.get("orgId")   as string;
-    const spaceId = options?.requestContext?.get("spaceId") as string;
+  execute: async (inputData, context) => {
+    const userId  = context?.requestContext?.get("userId")  as string;
+    const orgId   = context?.requestContext?.get("orgId")   as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
 
     if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
 
@@ -357,11 +357,11 @@ export const deleteOrgTaskTool = createTool({
     if (!role) return { error: "You are not a member of this space." };
 
     if (role === "member") {
-      const assigned = await isAssignedToTask(input.taskId, userId);
+      const assigned = await isAssignedToTask(inputData.taskId, userId);
       if (!assigned) return { error: "You can only delete tasks assigned to you." };
     }
 
-    await orgTaskService.deleteTask({ orgId, spaceId }, input.taskId, userId);
+    await orgTaskService.deleteTask({ orgId, spaceId }, inputData.taskId, userId);
     return { message: "Org task deleted successfully." };
   },
 });
@@ -373,8 +373,11 @@ export const taskAgent = new Agent({
   name: "keilhq-task-agent",
   instructions: `You are the KeilHQ Task Agent. You manage personal and organisation tasks.
 
-Always call tools for real data — never fabricate task details.
-Confirm every create/update/delete action back to the user.
+IMPORTANT RULES:
+- Always call tools for real data — never fabricate task details.
+- When listing tasks, do NOT pass status or priority filters unless the user explicitly asks to filter by them. Call get_personal_tasks or get_org_tasks with NO filters to get ALL tasks.
+- Confirm every create/update/delete action back to the user.
+
 For org tasks, space role rules apply (enforced automatically by each tool):
   - admin / manager: full CRUD on all tasks
   - member: view all tasks, but edit/delete only their assigned tasks
