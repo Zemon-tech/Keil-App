@@ -86,6 +86,8 @@ export function Dashboard() {
             role: msg.role,
             content: msg.content,
           })),
+          orgId: activeOrgId ?? undefined,
+          spaceId: activeSpaceId ?? undefined,
         },
       );
 
