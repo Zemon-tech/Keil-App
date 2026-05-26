@@ -11,6 +11,15 @@
   - Merged auto-select and membership validation into a single effect guarded by `isOrgsSuccess` (TanStack Query), preventing premature fallback on empty/pending data.
 - **Plan**: `docs/plans/fix-org-selector-persistence.md`
 
+### ~~14. Calendar View/Date Not Persistent Across Refresh~~ ✅ FIXED
+- **Location**: `frontend/src/components/tasks/TaskSchedulePane.tsx`
+- **Problem**: Calendar always reset to month view at today's date on page refresh. View mode and navigated date were stored only in local React state with no persistence.
+- **Fix Applied**:
+  - Persist `currentViewType` and `currentViewDate` to localStorage (`keil_calendar_view`, `keil_calendar_date`).
+  - Restore from localStorage on component mount.
+  - Pass restored values as `initialView` and `initialDate` to FullCalendar.
+  - Fixed `setView()` to not reset date when switching views.
+
 ---
 
 ## Open Issues — ADK Agent (Backend)

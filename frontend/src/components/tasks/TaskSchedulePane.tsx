@@ -87,6 +87,10 @@ type CalendarView =
   | "dayGridMonth"
   | "listWeek";
 
+// ─── Calendar State Persistence Keys ──────────────────────────────────────────
+const STORAGE_CALENDAR_VIEW = "keil_calendar_view";
+const STORAGE_CALENDAR_DATE = "keil_calendar_date";
+
 const typeMeta: Record<
   CalendarBlockType,
   { label: string; icon: any; pill: string; bg: string; border: string }
@@ -597,8 +601,21 @@ export function TaskSchedulePane({
     Partial<TaskDTO> | undefined
   >(undefined);
   const [currentViewType, setCurrentViewType] =
-    useState<CalendarView>("dayGridMonth");
-  const [currentViewDate, setCurrentViewDate] = useState<Date>(new Date());
+    useState<CalendarView>(() => {
+      const stored = localStorage.getItem(STORAGE_CALENDAR_VIEW);
+      if (stored === "timeGridDay" || stored === "timeGridWeek" || stored === "dayGridMonth" || stored === "listWeek") {
+        return stored;
+      }
+      return "dayGridMonth";
+    });
+  const [currentViewDate, setCurrentViewDate] = useState<Date>(() => {
+    const stored = localStorage.getItem(STORAGE_CALENDAR_DATE);
+    if (stored) {
+      const parsed = new Date(stored);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  });
   const [events, setEvents] = useState<EventInput[]>([]);
   const [morePopover, setMorePopover] = useState<{
     date: Date;
@@ -1079,7 +1096,9 @@ export function TaskSchedulePane({
   const initialDate = useMemo(() => {
     if (selectedTask?.plannedStartISO)
       return parseISO(selectedTask.plannedStartISO);
-    return new Date();
+    // Use the persisted date from state (restored from localStorage)
+    return currentViewDate;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTask?.plannedStartISO]);
 
   const goPrev = () => {
@@ -1101,7 +1120,7 @@ export function TaskSchedulePane({
   const setView = (view: CalendarView) => {
     const calendarApi = calendarRef.current?.getApi();
     if (!calendarApi) return;
-    calendarApi.changeView(view, new Date());
+    calendarApi.changeView(view);
   };
 
   return (
@@ -1196,7 +1215,7 @@ export function TaskSchedulePane({
                 listPlugin,
                 interactionPlugin,
               ]}
-              initialView="dayGridMonth"
+              initialView={currentViewType}
               initialDate={initialDate}
               height="100%"
               nowIndicator
@@ -1412,6 +1431,8 @@ export function TaskSchedulePane({
                 const view = dateInfo.view.type as CalendarView;
                 setCurrentViewType(view);
                 setCurrentViewDate(dateInfo.view.currentStart);
+                localStorage.setItem(STORAGE_CALENDAR_VIEW, view);
+                localStorage.setItem(STORAGE_CALENDAR_DATE, dateInfo.view.currentStart.toISOString());
                 if (onViewChange) onViewChange(view);
                 if (onDateChange) onDateChange(dateInfo.view.currentStart);
               }}
