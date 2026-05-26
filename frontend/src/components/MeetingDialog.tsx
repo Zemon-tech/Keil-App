@@ -3,7 +3,7 @@ import { useMeetingStore } from "@/store/useMeetingStore";
 import { MeetingRecorder } from "./MeetingRecorder";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { Mic, Pause, Play, Square, Maximize2, X, Minimize2 } from "lucide-react";
+import { Mic, Pause, Square, Maximize2 } from "lucide-react";
 
 export const MeetingDialog: React.FC = () => {
   const {

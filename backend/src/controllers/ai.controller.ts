@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
-import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import { supervisor, buildRequestContext } from "../agents";
 import { config } from "../config";
@@ -9,16 +8,16 @@ import { config } from "../config";
  * POST /api/v1/ai/chat
  *
  * Body:
- *   messages   {Array<{role, content}>}  — conversation history (required)
- *   orgId      {string}                  — active org UUID (optional)
- *   spaceId    {string}                  — active space UUID (optional)
- *   stream     {boolean}                 — stream tokens via SSE (default: false)
+ *   messages   {Array<{role, content?, parts?}>}  — conversation history (required)
+ *   orgId      {string}                           — active org UUID (optional)
+ *   spaceId    {string}                           — active space UUID (optional)
+ *   stream     {boolean}                          — stream tokens via SSE (default: false)
  */
 export const chat = catchAsync(async (req: Request, res: Response) => {
   const userId = (req as any).user?.id as string;
 
   const { messages, orgId, spaceId, stream = false } = req.body as {
-    messages?: Array<{ role: string; content: string }>;
+    messages?: Array<{ role: string; content?: string; parts?: Array<{ type: string; text?: string }> }>;
     orgId?: string;
     spaceId?: string;
     stream?: boolean;
@@ -29,10 +28,24 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
     throw new ApiError(400, "messages must be a non-empty array");
   }
 
-  const normalizedMessages = messages.map((m) => ({
-    role: m?.role as "user" | "assistant" | "system",
-    content: typeof m?.content === "string" ? m.content.trim() : "",
-  }));
+  // Normalize messages: handle both plain `content` string and `parts` array
+  // (useChat from @ai-sdk/react sends messages with `parts` format)
+  const normalizedMessages = messages.map((message) => {
+    let content = "";
+    if (typeof message?.content === "string") {
+      content = message.content.trim();
+    } else if (Array.isArray(message?.parts)) {
+      content = message.parts
+        .filter((part: any) => part?.type === "text" && typeof part?.text === "string")
+        .map((part: any) => part.text.trim())
+        .join("\n")
+        .trim();
+    }
+    return {
+      role: message?.role as "user" | "assistant" | "system",
+      content,
+    };
+  });
 
   const invalid = normalizedMessages.find(
     (m) => !["user", "assistant", "system"].includes(m.role) || !m.content
@@ -53,8 +66,8 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
       requestContext,
     });
 
-    // MastraModelOutput.textStream is a Web ReadableStream<string>.
-    // We pipe it manually to the Express response as SSE so useChat() can consume it.
+    // Pipe Mastra's textStream as Vercel AI SDK data stream protocol
+    // so the frontend's useChat() hook can consume it.
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -68,13 +81,19 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
         // Vercel AI SDK useChat() expects the data stream protocol format
         res.write(`0:${JSON.stringify(value)}\n`);
       }
+    } catch (err) {
+      if (!res.writableEnded) {
+        res.write(`3:${JSON.stringify("Stream error")}\n`);
+      }
     } finally {
       reader.releaseLock();
     }
 
     // Signal stream end
-    res.write("d:{\"finishReason\":\"stop\"}\n");
-    res.end();
+    if (!res.writableEnded) {
+      res.write("d:{\"finishReason\":\"stop\"}\n");
+      res.end();
+    }
     return;
   }
 
@@ -85,11 +104,10 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
 
   const text = await result.text;
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      { content: text, model: config.openRouterModel },
-      "AI response generated successfully"
-    )
-  );
+  return res.status(200).json({
+    statusCode: 200,
+    data: { content: text, model: config.openRouterModel },
+    message: "AI response generated successfully",
+    success: true,
+  });
 });

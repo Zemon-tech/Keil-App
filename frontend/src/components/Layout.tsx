@@ -4,6 +4,8 @@ import { AppSidebar } from "./AppSidebar";
 import { AiAssistant } from "./AiAssistant";
 import { ChatDrawer } from "./chat/ChatDrawer";
 import { ChatDialog } from "./ChatDialog";
+import { NotificationDialog } from "@/components/NotificationDialog";
+import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { MeetingDialog } from "./MeetingDialog";
 import { ChatSocketManager } from "./chat/ChatSocketManager";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
@@ -39,6 +41,8 @@ type LayoutProps = {
 
 export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
+  const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
+  const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const location = useLocation();
   const { pageId } = useParams<{ pageId: string }>();
   const openChat = useChatStore((state: any) => state.openChat);
@@ -73,7 +77,13 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <div className="flex-1 h-full min-w-0 flex flex-col relative transition-all duration-300 ease-in-out">
         <SidebarProvider>
-      {sidebar || <AppSidebar />}
+      {sidebar || (
+        <AppSidebar
+          notificationDrawerOpen={notificationDrawerOpen}
+          notificationDialogOpen={notificationDialogOpen}
+          onNotificationDrawerOpenChange={setNotificationDrawerOpen}
+        />
+      )}
       <SidebarInset className="bg-background">
         {/* Command Palette */}
         <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
@@ -88,6 +98,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
               <CommandItem
                 onSelect={() => {
                   setIsCommandOpen(false);
+                  setNotificationDrawerOpen(false);
                   openChat();
                 }}
               >
@@ -114,7 +125,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         <main
           className={cn(
             "flex-1 transition-all duration-300",
-            isChatOpen && "pr-[400px]",
+            (isChatOpen || notificationDrawerOpen) && "pr-[400px]",
             className
           )}
         >
@@ -132,10 +143,25 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
       {/* Global Chat Drawer */}
       <ChatDrawer />
 
+      {/* Global Notification Drawer */}
+      <NotificationDrawer
+        open={notificationDrawerOpen}
+        onOpenChange={setNotificationDrawerOpen}
+        onOpenFullView={() => {
+          setNotificationDrawerOpen(false);
+          setNotificationDialogOpen(true);
+        }}
+      />
+
       {/* Global Chat Dialog */}
       <ChatDialog
         open={isChatDialogOpen}
         onOpenChange={(open) => !open && closeChatDialog()}
+      />
+
+      <NotificationDialog
+        open={notificationDialogOpen}
+        onOpenChange={setNotificationDialogOpen}
       />
 
       {/* Global Meeting Studio */}

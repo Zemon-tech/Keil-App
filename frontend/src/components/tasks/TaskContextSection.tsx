@@ -1,24 +1,92 @@
 import { useState, useRef, useEffect } from "react";
-import { FileText, Link2, Pencil, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Link2, Pencil, Trash2, Loader2 } from "lucide-react";
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import api from "@/lib/api";
 
 import type { TaskDTO } from "@/hooks/api/useTasks";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type ContextItemType = "note" | "link";
+import { ContextIcon } from "./task-detail-shared";
 
 interface TaskContextItem {
   id: string;
-  type: ContextItemType;
   title: string;
-  content: string; // For notes: the note text, For links: the URL
+  url: string;
+  description: string;
+  type: "doc" | "link" | "figma" | "github" | "notion";
+  favicon?: string;
 }
 
-// ─── TaskContextSection ───────────────────────────────────────────────────────
+function parseUrlMetadata(urlStr: string): { title: string; description: string; type: "github" | "notion" | "figma" | "doc" | "link" } {
+  let cleanUrl = urlStr.trim();
+  if (!cleanUrl) {
+    return { title: "", description: "", type: "link" };
+  }
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    cleanUrl = "https://" + cleanUrl;
+  }
+
+  try {
+    const url = new URL(cleanUrl);
+    const hostname = url.hostname.toLowerCase();
+    const pathname = url.pathname;
+
+    if (hostname.includes("github.com")) {
+      const parts = pathname.split("/").filter(Boolean);
+      const repoName = parts.slice(0, 2).join("/");
+      return {
+        title: repoName ? `GitHub: ${repoName}` : "GitHub Repository",
+        description: "Source code repository and version control on GitHub.",
+        type: "github"
+      };
+    }
+
+    if (hostname.includes("figma.com")) {
+      const parts = pathname.split("/").filter(Boolean);
+      const fileIndex = parts.indexOf("file");
+      const fileName = fileIndex !== -1 && parts[fileIndex + 2] 
+        ? decodeURIComponent(parts[fileIndex + 2].replace(/-/g, " ")) 
+        : "Design File";
+      return {
+        title: `Figma: ${fileName}`,
+        description: "Collaborative interface design file in Figma.",
+        type: "figma"
+      };
+    }
+
+    if (hostname.includes("notion.so") || hostname.includes("notion.site")) {
+      const parts = pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1] || "";
+      const docName = lastPart.split("-").slice(0, -1).join(" ") || "Document";
+      const cleanDocName = docName ? decodeURIComponent(docName) : "Notion Workspace";
+      return {
+        title: `Notion: ${cleanDocName}`,
+        description: "Connected workspace document in Notion.",
+        type: "notion"
+      };
+    }
+
+    // Default parser for generic website
+    const domainName = hostname.replace("www.", "");
+    const parts = pathname.split("/").filter(Boolean);
+    const pageTitle = parts[parts.length - 1] 
+      ? decodeURIComponent(parts[parts.length - 1].replace(/[-_]/g, " ")) 
+      : "";
+    
+    return {
+      title: pageTitle ? `${domainName}: ${pageTitle}` : domainName,
+      description: `Linked web resource from ${domainName}.`,
+      type: "link"
+    };
+  } catch (e) {
+    return {
+      title: cleanUrl,
+      description: "External web link.",
+      type: "link"
+    };
+  }
+}
 
 export function TaskContextSection({
   task,
@@ -28,37 +96,42 @@ export function TaskContextSection({
   onUpdateTask?: (id: string, updates: any) => void;
 }) {
   const [isAdding, setIsAdding] = useState(false);
-  const [newItemType, setNewItemType] = useState<ContextItemType>("note");
-  const [newItemTitle, setNewItemTitle] = useState("");
-  const [newItemContent, setNewItemContent] = useState("");
+  const [newUrl, setNewUrl] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [isFetchingMeta, setIsFetchingMeta] = useState(false);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [editContent, setEditContent] = useState("");
+  const [editUrl, setEditUrl] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
   const addFormRef = useRef<HTMLDivElement>(null);
   const editFormRef = useRef<HTMLDivElement>(null);
-  const addTitleRef = useRef<HTMLInputElement>(null);
-  const editTitleRef = useRef<HTMLInputElement>(null);
+  const addUrlRef = useRef<HTMLInputElement>(null);
+  const editUrlRef = useRef<HTMLInputElement>(null);
 
   // Focus the add input when opening
   useEffect(() => {
     if (isAdding) {
-      addTitleRef.current?.focus();
+      addUrlRef.current?.focus();
     }
   }, [isAdding]);
 
   // Focus the edit input when opening
   useEffect(() => {
     if (editingId) {
-      editTitleRef.current?.focus();
+      editUrlRef.current?.focus();
     }
   }, [editingId]);
 
   const contextItems: TaskContextItem[] = (task.context ?? []).map((item: any) => ({
     id: item.id,
-    type: item.type === "link" || item.url ? "link" : "note",
-    title: item.title,
-    content: item.content || item.url || item.title,
+    title: item.title ?? "",
+    url: item.url || item.content || "",
+    description: item.description || "",
+    type: item.type || "link",
+    favicon: item.favicon || undefined,
   }));
 
   // Close add form on outside click
@@ -67,9 +140,9 @@ export function TaskContextSection({
     const handleClickOutside = (e: MouseEvent) => {
       if (addFormRef.current && !addFormRef.current.contains(e.target as Node)) {
         setIsAdding(false);
-        setNewItemTitle("");
-        setNewItemContent("");
-        setNewItemType("note");
+        setNewUrl("");
+        setNewTitle("");
+        setNewDescription("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -83,245 +156,309 @@ export function TaskContextSection({
       if (editFormRef.current && !editFormRef.current.contains(e.target as Node)) {
         setEditingId(null);
         setEditTitle("");
-        setEditContent("");
+        setEditUrl("");
+        setEditDescription("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [editingId]);
 
-  const handleAdd = () => {
-    if (!newItemTitle.trim() || !newItemContent.trim()) return;
+  const fetchMetadata = async (urlVal: string) => {
+    const url = urlVal.trim();
+    if (!url) return null;
 
-    const newItem: any = {
+    setIsFetchingMeta(true);
+    try {
+      const res = await api.get<{ data: { title: string; description: string; favicon: string } }>(
+        `v1/tasks/link-meta`,
+        { params: { url } }
+      );
+      setIsFetchingMeta(false);
+      return res.data.data;
+    } catch (err) {
+      console.error("Failed to fetch metadata:", err);
+      setIsFetchingMeta(false);
+      return null;
+    }
+  };
+
+  const handleAdd = async () => {
+    if (!newUrl.trim()) return;
+
+    let title = newTitle.trim();
+    let description = newDescription.trim();
+    let favicon = "";
+
+    const meta = await fetchMetadata(newUrl);
+    if (meta) {
+      if (!title) title = meta.title;
+      if (!description) description = meta.description;
+      favicon = meta.favicon;
+    }
+
+    if (!title) {
+      const parsed = parseUrlMetadata(newUrl);
+      title = parsed.title;
+      if (!description) description = parsed.description;
+    }
+
+    const parsed = parseUrlMetadata(newUrl);
+    const newItem = {
       id: crypto.randomUUID(),
-      title: newItemTitle.trim(),
-      url: newItemType === "link" ? newItemContent.trim() : "",
-      content: newItemType === "note" ? newItemContent.trim() : "",
-      type: newItemType === "link" ? "link" : "doc",
+      title: title || newUrl,
+      url: newUrl.trim(),
+      description,
+      type: parsed.type,
+      favicon,
     };
 
     const updatedContext = [
-      ...contextItems.map((i) => ({
-        id: i.id,
-        title: i.title,
-        url: i.type === "link" ? i.content : "",
-        content: i.type === "note" ? i.content : "",
-        type: i.type === "link" ? "link" : "doc",
-      })),
+      ...(task.context ?? []),
       newItem,
     ];
 
     onUpdateTask?.(task.id, { context: updatedContext });
 
-    setNewItemTitle("");
-    setNewItemContent("");
+    setNewUrl("");
+    setNewTitle("");
+    setNewDescription("");
     setIsAdding(false);
   };
 
   const handleDelete = (id: string) => {
-    const updatedContext = contextItems.filter((item) => item.id !== id);
+    const updatedContext = (task.context ?? []).filter((item: any) => item.id !== id);
     onUpdateTask?.(task.id, { context: updatedContext as any });
   };
 
   const handleStartEdit = (item: TaskContextItem) => {
     setEditingId(item.id);
     setEditTitle(item.title);
-    setEditContent(item.content);
+    setEditUrl(item.url);
+    setEditDescription(item.description);
   };
 
-  const handleSaveEdit = () => {
-    if (!editTitle.trim() || !editContent.trim() || !editingId) return;
+  const handleSaveEdit = async () => {
+    if (!editUrl.trim() || !editingId) return;
 
-    const updatedContext = contextItems
-      .map((item) =>
-        item.id === editingId
-          ? { ...item, title: editTitle.trim(), content: editContent.trim() }
-          : item
-      )
-      .map((i) => ({
-        id: i.id,
-        title: i.title,
-        url: i.type === "link" ? i.content : "",
-        content: i.type === "note" ? i.content : "",
-        type: i.type === "link" ? "link" : "doc",
-      }));
+    let title = editTitle.trim();
+    let description = editDescription.trim();
+    let favicon = "";
+
+    const meta = await fetchMetadata(editUrl);
+    if (meta) {
+      if (!title) title = meta.title;
+      if (!description) description = meta.description;
+      favicon = meta.favicon;
+    }
+
+    if (!title) {
+      const parsed = parseUrlMetadata(editUrl);
+      title = parsed.title;
+      if (!description) description = parsed.description;
+    }
+
+    const parsed = parseUrlMetadata(editUrl);
+    const updatedContext = (task.context ?? []).map((item: any) =>
+      item.id === editingId
+        ? {
+            ...item,
+            title: title || editUrl,
+            url: editUrl.trim(),
+            description,
+            type: parsed.type,
+            favicon: favicon || item.favicon,
+          }
+        : item
+    );
 
     onUpdateTask?.(task.id, { context: updatedContext });
 
     setEditingId(null);
     setEditTitle("");
-    setEditContent("");
+    setEditUrl("");
+    setEditDescription("");
   };
 
   return (
     <div>
-      {/* Header — no Add button */}
+      {/* Header */}
       <div className="mb-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Context
+          Context Links
         </span>
       </div>
 
-      {/* Inline Add Form — opens on click, closes on outside click */}
+      {/* Inline Add Form */}
       {isAdding ? (
         <div
           ref={addFormRef}
-          className="mb-3 rounded-md border border-border p-3 bg-muted/30"
+          className="mb-3 rounded-md border border-border p-3 bg-muted/30 space-y-2.5"
         >
-          {/* Type Selector */}
-          <div className="mb-3 flex gap-2">
-            <button
-              onClick={() => setNewItemType("note")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-                newItemType === "note"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background border border-border hover:bg-accent"
+          {/* Link URL (Required) */}
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Link URL</label>
+            <div className="relative">
+              <Input
+                ref={addUrlRef}
+                placeholder="https://..."
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                onBlur={async () => {
+                  if (newUrl.trim() && !newTitle.trim()) {
+                    const meta = await fetchMetadata(newUrl);
+                    if (meta) {
+                      setNewTitle(meta.title);
+                      if (meta.description) {
+                        setNewDescription(meta.description);
+                      }
+                    }
+                  }
+                }}
+                className="h-8 text-sm bg-background pr-8"
+              />
+              {isFetchingMeta && (
+                <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground animate-spin" />
               )}
-            >
-              <FileText className="size-3.5" />
-              Note
-            </button>
-            <button
-              onClick={() => setNewItemType("link")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-                newItemType === "link"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background border border-border hover:bg-accent"
-              )}
-            >
-              <Link2 className="size-3.5" />
-              Link
-            </button>
+            </div>
           </div>
 
-          {/* Title Input */}
-          <Input
-            ref={addTitleRef}
-            placeholder={newItemType === "note" ? "Note title..." : "Link title..."}
-            value={newItemTitle}
-            onChange={(e) => setNewItemTitle(e.target.value)}
-            className="mb-2 h-8 text-sm"
-          />
-
-          {/* Content Input */}
-          {newItemType === "note" ? (
-            <textarea
-              placeholder="Write your note here..."
-              value={newItemContent}
-              onChange={(e) => setNewItemContent(e.target.value)}
-              className="w-full min-h-[80px] rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          ) : (
+          {/* Title (Optional) */}
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Title (Optional - Auto-fetched if empty)</label>
             <Input
-              placeholder="https://..."
-              value={newItemContent}
-              onChange={(e) => setNewItemContent(e.target.value)}
-              className="h-8 text-sm"
+              placeholder="Custom title..."
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              className="h-8 text-sm bg-background"
             />
-          )}
+          </div>
 
-          {/* Save action only — no Cancel button */}
+          {/* Description (Optional) */}
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Description (Optional - Auto-fetched if empty)</label>
+            <textarea
+              placeholder="Custom description..."
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              className="w-full min-h-[60px] rounded-md border border-border bg-background px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+
+          {/* Save action */}
           <div className="mt-2 flex justify-end">
             <Button
               size="sm"
-              className="h-7 text-xs"
+              className="h-7 text-xs px-4"
               onClick={handleAdd}
-              disabled={!newItemTitle.trim() || !newItemContent.trim()}
+              disabled={!newUrl.trim() || isFetchingMeta}
             >
-              Add
+              {isFetchingMeta ? "Fetching..." : "Add Link"}
             </Button>
           </div>
         </div>
       ) : (
-        /* Placeholder — click to open form, styled like description */
+        /* Add Link Trigger button */
         <button
           onClick={() => setIsAdding(true)}
-          className="mb-3 w-full text-left text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors py-0.5"
+          className="mb-3 w-full text-left text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1 flex items-center gap-1.5"
         >
-          Add context...
+          <Link2 className="size-3.5" />
+          Add context link...
         </button>
       )}
 
-      {/* Context Items List */}
+      {/* Context Links List */}
       <div className="space-y-2">
         {contextItems.length > 0 ? (
           contextItems.map((item) => (
             <div
               key={item.id}
-              className="group rounded-md border border-border p-2.5 transition-colors hover:bg-accent/30"
+              className="group rounded-md border border-border p-3 transition-colors hover:bg-accent/30"
             >
               {editingId === item.id ? (
                 // Edit Mode
-                <div ref={editFormRef} className="space-y-2">
-                  <Input
-                    ref={editTitleRef}
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="h-7 text-sm"
-                    placeholder="Title..."
-                  />
-                  {item.type === "note" ? (
-                    <textarea
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      className="w-full min-h-[60px] rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                      placeholder="Content..."
-                    />
-                  ) : (
+                <div ref={editFormRef} className="space-y-2.5">
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Link URL</label>
                     <Input
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      className="h-7 text-sm"
-                      placeholder="URL..."
+                      ref={editUrlRef}
+                      value={editUrl}
+                      onChange={(e) => setEditUrl(e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="https://..."
                     />
-                  )}
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Title (Optional)</label>
+                    <Input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="Title..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Description (Optional)</label>
+                    <textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      className="w-full min-h-[60px] rounded-md border border-border bg-background px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                      placeholder="Description..."
+                    />
+                  </div>
                   <div className="flex justify-end">
-                    <Button size="sm" className="h-6 text-xs" onClick={handleSaveEdit}>
-                      Save
+                    <Button size="sm" className="h-7 text-xs px-4" onClick={handleSaveEdit} disabled={!editUrl.trim() || isFetchingMeta}>
+                      Save Changes
                     </Button>
                   </div>
                 </div>
               ) : (
                 // View Mode
-                <div className="flex items-start gap-2">
-                  <div className="mt-0.5 shrink-0">
-                    {item.type === "note" ? (
-                      <FileText className="size-4 text-muted-foreground" />
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 flex items-center justify-center size-7 bg-muted/40 rounded-md border border-border/40 shadow-sm p-1">
+                    {item.favicon ? (
+                      <img 
+                        src={item.favicon} 
+                        alt="" 
+                        className="size-5 shrink-0 rounded-sm object-contain"
+                        onError={(e) => {
+                          // Hide broken favicons and fall back to the standard icons
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
                     ) : (
-                      <Link2 className="size-4 text-muted-foreground" />
+                      <ContextIcon type={item.type} className="size-5 text-muted-foreground" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{item.title}</p>
-                    {item.type === "note" ? (
-                      <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">
-                        {item.content}
+                    <a
+                      href={item.url.startsWith("http") ? item.url : `https://${item.url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-semibold text-foreground hover:text-blue-500 hover:underline transition-colors block truncate"
+                    >
+                      {item.title}
+                    </a>
+                    {item.description && (
+                      <p className="mt-0.5 text-xs text-muted-foreground/90 leading-relaxed">
+                        {item.description}
                       </p>
-                    ) : (
-                      <a
-                        href={item.content}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-0.5 text-xs text-blue-500 hover:underline truncate block"
-                      >
-                        {item.content}
-                      </a>
                     )}
                   </div>
                   {/* Actions */}
-                  <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                  <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity shrink-0">
                     <button
                       onClick={() => handleStartEdit(item)}
-                      className="p-1 text-muted-foreground hover:text-foreground rounded"
+                      className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+                      title="Edit Link"
                     >
                       <Pencil className="size-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(item.id)}
-                      className="p-1 text-muted-foreground hover:text-destructive rounded"
+                      className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors"
+                      title="Delete Link"
                     >
                       <Trash2 className="size-3.5" />
                     </button>
@@ -332,7 +469,7 @@ export function TaskContextSection({
           ))
         ) : (
           !isAdding && (
-            <p className="text-xs italic text-muted-foreground">No context items</p>
+            <p className="text-xs italic text-muted-foreground pl-1">No context links added</p>
           )
         )}
       </div>

@@ -5,6 +5,10 @@ import {
   Plus,
   Search,
   X,
+  User,
+  Clock,
+  MapPin,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +36,8 @@ import { formatDate } from "./task-detail-shared";
 import { BulletListEditor } from "./BulletListEditor";
 import { TaskContextSection } from "./TaskContextSection";
 
+
+
 // ─── OverviewTab ──────────────────────────────────────────────────────────────
 
 export const OverviewTab = ({
@@ -57,6 +63,14 @@ export const OverviewTab = ({
   );
   const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
   const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
+
+
+
+
+  const creatorMember = members.find((m) => m.user_id === task.created_by);
+  const creatorName = creatorMember
+    ? (creatorMember.name || creatorMember.email)
+    : (task.created_by?.includes("-") ? "Space Member" : task.created_by);
 
   // Fetch real subtasks from API
   const isTopLevelTask = !task.parent_task_id;
@@ -194,9 +208,9 @@ export const OverviewTab = ({
                       <span className="text-[11px] tabular-nums text-muted-foreground shrink-0">
                         {displayDate
                           ? new Date(displayDate).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                            })
+                            month: "short",
+                            day: "numeric",
+                          })
                           : ""}
                       </span>
 
@@ -244,90 +258,160 @@ export const OverviewTab = ({
       <ScrollArea className="w-full shrink-0 md:w-[280px] lg:w-[300px]">
         <div className="space-y-5 p-5 pl-6">
 
+          {/* Properties section */}
+          <div>
+            <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Properties
+            </span>
+            <div className="space-y-3.5 text-xs">
+              {/* Type */}
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Type</span>
+                <Badge variant="outline" className="h-5 px-1.5 text-[11px] capitalize">
+                  {task.type}
+                  {task.event_type && ` (${task.event_type})`}
+                </Badge>
+              </div>
+
+              {/* Workspace / Context */}
+              {task.org_name && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Workspace</span>
+                  <span className="font-medium text-right text-muted-foreground/80 flex items-center gap-1">
+                    <Building2 className="size-3 text-muted-foreground/60 shrink-0" />
+                    <span className="truncate max-w-[130px]">{task.org_name} › {task.space_name ?? "General"}</span>
+                  </span>
+                </div>
+              )}
+
+              {/* Creator */}
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Creator</span>
+                <span className="font-medium text-right flex items-center gap-1">
+                  <User className="size-3 text-muted-foreground/60 shrink-0" />
+                  <span className="truncate max-w-[130px]" title={creatorName}>{creatorName}</span>
+                </span>
+              </div>
+
+              {/* Created At */}
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Created</span>
+                <span className="font-medium text-right flex items-center gap-1">
+                  <Clock className="size-3 text-muted-foreground/60 shrink-0" />
+                  <span>{formatDate(task.created_at)}</span>
+                </span>
+              </div>
+
+              {/* Updated At */}
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Updated</span>
+                <span className="font-medium text-right flex items-center gap-1">
+                  <Clock className="size-3 text-muted-foreground/60 shrink-0" />
+                  <span>{formatDate(task.updated_at)}</span>
+                </span>
+              </div>
+
+              {/* Location (if Event) */}
+              {task.type === "event" && task.location && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Location</span>
+                  <span className="font-medium text-right flex items-center gap-1">
+                    <MapPin className="size-3 text-muted-foreground/60 shrink-0" />
+                    <span className="truncate max-w-[130px]" title={task.location}>{task.location}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Assignees */}
           <div>
             <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Assignees
             </span>
             <div className="space-y-1.5">
-              {(task.assignees ?? []).map((a) => {
-                const name = a.name || a.email;
-                return (
-                  <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 -mx-1">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="size-6">
-                        <AvatarFallback className="text-[10px] font-semibold bg-accent">
-                          {name.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">{name}</span>
+              <div className="max-h-[130px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                {(task.assignees ?? []).map((a) => {
+                  const name = a.name || a.email;
+                  return (
+                    <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 py-0.5">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="size-6">
+                          <AvatarFallback className="text-[10px] font-semibold bg-accent">
+                            {name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm truncate max-w-[170px]">{name}</span>
+                      </div>
+                      {canAssignTask && (
+                        <button
+                          onClick={() => handleRemoveAssignee(a.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      )}
                     </div>
-                    {canAssignTask && (
-                      <button
-                        onClick={() => handleRemoveAssignee(a.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
 
-              {/* Assignees section */}
+              {/* Assignees picker */}
               {canAssignTask && (
-              <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
-                <PopoverTrigger asChild>
-                  <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                    <Plus className="size-3" />
-                    Add assignee
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-56 p-2" align="start">
-                  <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
-                    <Search className="size-4 text-muted-foreground shrink-0" />
-                    <Input
-                      placeholder="Search members..."
-                      value={assigneeSearch}
-                      onChange={(e) => setAssigneeSearch(e.target.value)}
-                      className="h-7 border-none shadow-none focus-visible:ring-0 px-0 outline-none"
-                    />
-                  </div>
-                  <div className="max-h-40 overflow-y-auto space-y-1">
-                    {(() => {
-                      const elements = [];
-                      const assignees = task.assignees ?? [];
-                      const searchLower = assigneeSearch.toLowerCase();
-                      for (const m of members) {
-                        const isAlreadyAssigned = assignees.some(a => a.id === m.user_id);
-                        if (isAlreadyAssigned) continue;
-                        
-                        const mName = m.name || m.email;
-                        if (!mName.toLowerCase().includes(searchLower)) continue;
-                        
-                        elements.push(
-                          <button
-                            key={m.user_id}
-                            onClick={() => {
-                              handleAssignUser(m.user_id);
-                              setIsAssigneePickerOpen(false);
-                            }}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
-                          >
-                            <Avatar className="size-5 shrink-0">
-                              <AvatarFallback className="text-[9px] bg-accent">
-                                {mName.charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="truncate">{mName}</span>
-                          </button>
-                        );
-                      }
-                      return elements;
-                    })()}
-                  </div>
-                </PopoverContent>
-              </Popover>
+                <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+                      <Plus className="size-3" />
+                      Add assignee
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2" align="start">
+                    <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
+                      <Search className="size-4 text-muted-foreground shrink-0" />
+                      <Input
+                        placeholder="Search members..."
+                        value={assigneeSearch}
+                        onChange={(e) => setAssigneeSearch(e.target.value)}
+                        className="h-7 border-none shadow-none focus-visible:ring-0 px-0 outline-none"
+                      />
+                    </div>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {(() => {
+                        const elements = [];
+                        const assignees = task.assignees ?? [];
+                        const searchLower = assigneeSearch.toLowerCase();
+                        for (const m of members) {
+                          const isAlreadyAssigned = assignees.some(a => a.id === m.user_id);
+                          if (isAlreadyAssigned) continue;
+
+                          const mName = m.name || m.email;
+                          if (!mName.toLowerCase().includes(searchLower)) continue;
+
+                          elements.push(
+                            <button
+                              key={m.user_id}
+                              onClick={() => {
+                                handleAssignUser(m.user_id);
+                                setIsAssigneePickerOpen(false);
+                              }}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
+                            >
+                              <Avatar className="size-5 shrink-0">
+                                <AvatarFallback className="text-[9px] bg-accent">
+                                  {mName.charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="truncate">{mName}</span>
+                            </button>
+                          );
+                        }
+                        return elements;
+                      })()}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
           </div>
@@ -339,24 +423,24 @@ export const OverviewTab = ({
             <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Dates
             </span>
-            {(task.due_date || task.dueDateISO || task.plannedStartISO || task.plannedEndISO) ? (
+            {(task.start_date || task.plannedStartISO || task.plannedEndISO || task.due_date || task.dueDateISO) ? (
               <div className="space-y-1.5 text-xs">
-                {(task.due_date || task.dueDateISO) && (
+                {(task.start_date || task.plannedStartISO) && (
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Due</span>
-                    <span className="font-medium">{formatDate(task.due_date || task.dueDateISO!)}</span>
-                  </div>
-                )}
-                {task.plannedStartISO && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Start</span>
-                    <span className="font-medium">{formatDate(task.plannedStartISO)}</span>
+                    <span className="text-muted-foreground">Start Date</span>
+                    <span className="font-medium">{formatDate((task.start_date || task.plannedStartISO)!)}</span>
                   </div>
                 )}
                 {task.plannedEndISO && (
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">End</span>
+                    <span className="text-muted-foreground">End Date</span>
                     <span className="font-medium">{formatDate(task.plannedEndISO)}</span>
+                  </div>
+                )}
+                {(task.due_date || task.dueDateISO) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Deadline</span>
+                    <span className="font-medium">{formatDate((task.due_date || task.dueDateISO)!)}</span>
                   </div>
                 )}
               </div>

@@ -12,7 +12,6 @@ import {
   Loader2,
   Copy,
   Download,
-  ChevronRight,
   X,
   Minimize2,
   Bookmark,
@@ -46,7 +45,6 @@ export const MeetingRecorder: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-  const [isPipMode, setIsPipMode] = useState(false);
 
   // Mute & Pause recording state
   const [isMuted, setIsMuted] = useState(false);

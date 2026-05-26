@@ -270,7 +270,7 @@ export function MotionPage() {
 
   const handleContentChange = useCallback(
     (json: JSONContent) => {
-      if (!pageId) return;
+      if (!pageId || isPageReadOnly) return;
       pendingContent.current = json;
       setDirty(pageId);
       setSaveStatus("saving");
@@ -279,7 +279,7 @@ export function MotionPage() {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(flushSave, DEBOUNCE_MS);
     },
-    [pageId, setDirty, flushSave]
+    [pageId, isPageReadOnly, setDirty, flushSave]
   );
 
   // Flush on unmount (navigation away)
@@ -287,7 +287,7 @@ export function MotionPage() {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       // Fire-and-forget flush — we can't await in cleanup
-      if (pendingContent.current && pageId) {
+      if (pendingContent.current && pageId && !isPageReadOnly) {
         updatePage.mutate({
           id: pageId,
           updates: { content: pendingContent.current },
@@ -296,11 +296,11 @@ export function MotionPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageId]);
+  }, [pageId, isPageReadOnly]);
 
   // ── Title save (on blur) ────────────────────────────────────────────────────
   const handleTitleBlur = () => {
-    if (!pageId) return;
+    if (!pageId || isPageReadOnly) return;
     const trimmed = titleDraft.trim() || "Untitled";
     if (trimmed !== page?.title) {
       // Optimistic update in store

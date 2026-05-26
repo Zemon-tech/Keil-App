@@ -5,7 +5,7 @@ import {
   Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User,
   AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil,
   SlidersHorizontal, CalendarClock, UserCheck,
-  CalendarRange, ShieldAlert, Check,
+  CalendarRange, ShieldAlert, Check, CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ import type { Task, AnyStatus, TaskPriority } from "@/types/task";
 import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
-import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, STATUS_COLOR } from "./task-detail-shared";
+import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useSpaces } from "@/hooks/api/useSpaces";
 
@@ -95,6 +95,27 @@ function formatTaskDateRange(start?: string, end?: string) {
   }
 
   return `${format(startDate, "MMM d")} – ${format(endDate, "MMM d")}`;
+}
+
+function getStatusTextColor(status: AnyStatus): string {
+  switch (status) {
+    case "done":
+    case "completed":
+      return "text-green-500 dark:text-[#86EFAC]";
+    case "in-progress":
+    case "confirmed":
+      return "text-blue-500";
+    case "in-review":
+    case "todo":
+      return "text-violet-500";
+    case "backlog":
+    case "cancelled":
+      return "text-red-500";
+    case "tentative":
+      return "text-yellow-500";
+    default:
+      return "text-zinc-500";
+  }
 }
 
 // Using STATUS_COLOR from task-detail-shared
@@ -177,16 +198,19 @@ function SubtaskList({
             )}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* Status dot */}
+              {/* Status icon */}
               <Popover>
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className={cn(
-                      "size-1.5 rounded-full shrink-0 transition-transform hover:scale-125",
-                      STATUS_COLOR[sub.status as AnyStatus] || "bg-zinc-500"
+                    className="shrink-0 transition-transform hover:scale-110 flex items-center justify-center"
+                  >
+                    {(sub as any).type === "event" ? (
+                      <Calendar className={cn("size-3.5 shrink-0", getStatusTextColor(sub.status as AnyStatus))} />
+                    ) : (
+                      <CheckSquare className={cn("size-3.5 shrink-0", getStatusTextColor(sub.status as AnyStatus))} />
                     )}
-                  />
+                  </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
                   {((sub as any).type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
@@ -198,7 +222,11 @@ function SubtaskList({
                         }}
                         className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
                       >
-                        <div className={cn("size-1.5 rounded-full shrink-0", STATUS_COLOR[s])} />
+                        {(sub as any).type === "event" ? (
+                          <Calendar className={cn("size-3 shrink-0", getStatusTextColor(s))} />
+                        ) : (
+                          <CheckSquare className={cn("size-3 shrink-0", getStatusTextColor(s))} />
+                        )}
                         {s}
                       </button>
                     </PopoverClose>
@@ -887,17 +915,19 @@ export function TaskListPane({
 
                     {/* Icon/Dot — click opens popover or expands if parent hovered */}
                     <div className="size-5 flex items-center justify-center relative shrink-0">
-                      {/* Status dot — visible by default, hidden on hover if parent */}
+                      {/* Status icon — visible by default, hidden on hover if parent */}
                       <Popover>
                         <PopoverTrigger asChild>
                           <button
                             onClick={(e) => e.stopPropagation()}
-                            className={cn(
-                              "size-2 rounded-full shrink-0 transition-transform hover:scale-125",
-                              STATUS_COLOR[t.status as AnyStatus],
-                              "group-hover/item:opacity-0 transition-opacity"
+                            className="shrink-0 transition-transform hover:scale-110 group-hover/item:opacity-0 transition-opacity flex items-center justify-center"
+                          >
+                            {t.type === "event" ? (
+                              <Calendar className={cn("size-4 shrink-0", getStatusTextColor(t.status))} />
+                            ) : (
+                              <CheckSquare className={cn("size-4 shrink-0", getStatusTextColor(t.status))} />
                             )}
-                          />
+                          </button>
                         </PopoverTrigger>
                         <PopoverContent
                           align="start"
@@ -912,12 +942,11 @@ export function TaskListPane({
                                 }}
                                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
                               >
-                                <div
-                                  className={cn(
-                                    "size-2 rounded-full shrink-0",
-                                    STATUS_COLOR[s]
-                                  )}
-                                />
+                                {t.type === "event" ? (
+                                  <Calendar className={cn("size-3.5 shrink-0", getStatusTextColor(s))} />
+                                ) : (
+                                  <CheckSquare className={cn("size-3.5 shrink-0", getStatusTextColor(s))} />
+                                )}
                                 {s}
                               </button>
                             </PopoverClose>
@@ -945,11 +974,6 @@ export function TaskListPane({
                       )} title={t.title}>
                         {t.title}
                       </span>
-                      {t.org_id !== activeOrgId && t.org_name && (
-                        <div className="text-[10px] font-medium text-muted-foreground/80 bg-muted/40 px-1.5 py-0.5 rounded backdrop-blur-sm border border-border/20 shadow-sm mt-0.5 transition-colors">
-                          {t.org_name} › {t.space_name ?? "General"}
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -1092,13 +1116,13 @@ export function TaskListPane({
                       {TASK_STATUS_OPTIONS.map((s) => (
                         <DropdownMenuItem
                           key={s}
-                          className="text-xs capitalize"
+                          className="text-xs capitalize gap-2"
                           onClick={() => handleBulkStatusChange(s)}
                         >
-                          <div
+                          <CheckSquare
                             className={cn(
-                              "size-1.5 rounded-full mr-2",
-                              STATUS_COLOR[s]
+                              "size-3 shrink-0",
+                              getStatusTextColor(s)
                             )}
                           />
                           {s}
@@ -1112,13 +1136,13 @@ export function TaskListPane({
                       {EVENT_STATUS_OPTIONS.map((s) => (
                         <DropdownMenuItem
                           key={s}
-                          className="text-xs capitalize"
+                          className="text-xs capitalize gap-2"
                           onClick={() => handleBulkStatusChange(s)}
                         >
-                          <div
+                          <Calendar
                             className={cn(
-                              "size-1.5 rounded-full mr-2",
-                              STATUS_COLOR[s]
+                              "size-3 shrink-0",
+                              getStatusTextColor(s)
                             )}
                           />
                           {s}
