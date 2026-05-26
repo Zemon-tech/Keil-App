@@ -12,23 +12,25 @@ import {
   Copy,
   Download,
   ChevronRight,
-  X
+  X,
+  Minimize2
 } from "lucide-react";
 import { toast } from "sonner";
+import { useMeetingStore } from "@/store/useMeetingStore";
 
-type RecorderState = "idle" | "recording" | "uploading" | "transcribing" | "completed" | "error";
 
-interface MeetingRecorderProps {
-  onClose: () => void;
-  meetingId?: string;
-}
 
-export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
-  onClose,
-  meetingId
-}) => {
-  const [status, setStatus] = useState<RecorderState>("idle");
-  const [duration, setDuration] = useState(0);
+export const MeetingRecorder: React.FC = () => {
+  const {
+    status,
+    setStatus,
+    duration,
+    setDuration,
+    meetingId,
+    closeDialog,
+    minimizeDialog,
+  } = useMeetingStore();
+
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
@@ -38,6 +40,57 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [isPipMode, setIsPipMode] = useState(false);
+
+  // Fetch recording details if meetingId is provided
+  useEffect(() => {
+    if (!meetingId) {
+      if (status !== "recording" && status !== "uploading" && status !== "transcribing") {
+        resetRecorder();
+      }
+      return;
+    }
+
+
+    let active = true;
+    const fetchRecording = async () => {
+      setStatus("transcribing");
+      try {
+        const response = await api.get(`v1/meetings/recording/${meetingId}/review`);
+        if (!active) return;
+        
+        const recording = response.data.data;
+        if (recording) {
+          setRecordingId(recording.id);
+          setDuration(recording.audio_duration_seconds || 0);
+          setTranscript(recording.transcript_text);
+          setDiarizedTranscript(recording.transcript_diarized);
+          setLanguageDetected(recording.language_detected);
+          setAudioUrl(recording.audio_url || null);
+          
+          if (recording.transcription_status === "completed") {
+            setStatus("completed");
+          } else if (recording.transcription_status === "failed") {
+            setStatus("error");
+            setErrorMessage("Transcription failed for this recording.");
+          } else {
+            setStatus("transcribing");
+            setJobId(recording.sarvam_job_id);
+          }
+        }
+      } catch (err: any) {
+        if (!active) return;
+        console.error("Failed to fetch recording:", err);
+        setErrorMessage(err.message || "Failed to load recording.");
+        setStatus("error");
+      }
+    };
+
+    fetchRecording();
+
+    return () => {
+      active = false;
+    };
+  }, [meetingId]);
 
   // Audio recording references
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -302,6 +355,19 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
     setJobId(null);
   };
 
+  const handleClose = () => {
+    if (status === "recording") {
+      if (confirm("Stop and discard current recording?")) {
+        cleanup();
+        resetRecorder();
+        closeDialog();
+      }
+    } else {
+      closeDialog();
+    }
+  };
+
+
   // Dynamic values for ElevenLabs compact metadata
   const speakerIds = diarizedTranscript?.entries
     ? Array.from(new Set(diarizedTranscript.entries.map((e: any) => e.speaker_id))) as (string | number)[]
@@ -411,9 +477,18 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
             <button
               onClick={() => setIsPipMode(true)}
               title="Picture-in-Picture mode"
-              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors text-[10px] font-semibold tracking-wide uppercase border border-black/8 dark:border-white/8"
+              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors text-[10px] font-semibold tracking-wide uppercase border border-black/8 dark:border-white/8 mr-1"
             >
               PiP
+            </button>
+          )}
+          {status !== "idle" && (
+            <button
+              onClick={minimizeDialog}
+              title="Minimize to Sidebar"
+              className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors mr-1"
+            >
+              <Minimize2 className="size-4" />
             </button>
           )}
           {status === "completed" && (
@@ -436,7 +511,7 @@ export const MeetingRecorder: React.FC<MeetingRecorderProps> = ({
             </>
           )}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           >
             <X className="size-4" />

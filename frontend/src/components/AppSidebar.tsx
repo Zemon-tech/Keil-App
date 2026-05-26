@@ -54,7 +54,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { useChatStore } from "@/store/useChatStore";
-import { MeetingDialog } from "@/components/MeetingDialog";
+import { useMeetingStore } from "@/store/useMeetingStore";
 import type { Organisation } from "@/hooks/api/useOrganisations";
 import {
   Dialog,
@@ -315,9 +315,21 @@ export function AppSidebar() {
   const openChat = useChatStore((state) => state.openChat);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
-  const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { unreadCount } = useNotifications();
+
+  const { isMinimized, restoreDialog, duration, status, isDialogOpen, openDialog } = useMeetingStore();
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return [
+      h > 0 ? h : null,
+      m.toString().padStart(2, "0"),
+      s.toString().padStart(2, "0")
+    ].filter(x => x !== null).join(":");
+  };
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -491,7 +503,7 @@ export function AppSidebar() {
                         onClick={() => {
                           if ("action" in item) {
                             if (item.action === "meetings") {
-                              navigate('/meetings');
+                              openDialog();
                             } else if (item.action === "notifications") {
                               setNotificationDrawerOpen(true);
                             }
@@ -500,7 +512,7 @@ export function AppSidebar() {
                         isActive={
                           "action" in item
                             ? item.action === "meetings"
-                              ? isRouteActive('/meetings')
+                              ? (isDialogOpen && !isMinimized)
                               : item.action === "notifications"
                               ? (notificationDrawerOpen || notificationDialogOpen)
                               : false
@@ -550,7 +562,48 @@ export function AppSidebar() {
         </SidebarContent>
 
         {/* ── Footer: profile dropdown ── */}
-        <SidebarFooter className="shrink-0 border-t border-border/50 p-1.5 px-2">
+        <SidebarFooter className="shrink-0 border-t border-border/50 p-1.5 px-2 gap-2">
+          {/* Minimized meeting recording widget */}
+          {isMinimized && (
+            isCollapsed ? (
+              <div 
+                onClick={restoreDialog}
+                className="flex items-center justify-center size-9 mx-auto rounded-xl bg-violet-600/10 dark:bg-violet-500/10 border border-violet-500/20 hover:bg-violet-600 dark:hover:bg-violet-500 hover:text-white cursor-pointer transition-all duration-300 relative group/mini"
+                title="Recording meeting - Click to open"
+              >
+                <Mic className="size-4 text-violet-500 dark:text-violet-400 group-hover/mini:text-white animate-pulse" />
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                </span>
+              </div>
+            ) : (
+              <div 
+                onClick={restoreDialog}
+                className="group/mini relative flex items-center gap-3 rounded-xl bg-violet-600/10 dark:bg-violet-500/10 border border-violet-500/20 hover:border-violet-500/40 p-2.5 cursor-pointer transition-all duration-300 hover:shadow-md animate-in fade-in slide-in-from-bottom-2"
+              >
+                <div className="relative flex items-center justify-center size-8 rounded-lg bg-violet-600 text-white shrink-0 shadow-sm shadow-violet-500/20">
+                  <Mic className="size-4 animate-pulse" />
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col text-left">
+                  <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider leading-none">
+                    {status === "recording" ? "Recording" : status === "uploading" ? "Uploading" : "Processing"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground truncate font-medium mt-1 leading-none">
+                    Click to open Studio
+                  </span>
+                </div>
+                <span className="text-xs font-mono font-bold text-foreground tabular-nums bg-background/50 dark:bg-black/20 px-2 py-0.5 rounded border border-border/40 shrink-0">
+                  {formatTime(duration)}
+                </span>
+              </div>
+            )
+          )}
+
           <SidebarMenu>
             <SidebarMenuItem>
               <DropdownMenu>
@@ -701,10 +754,6 @@ export function AppSidebar() {
       <NotificationDialog
         open={notificationDialogOpen}
         onOpenChange={setNotificationDialogOpen}
-      />
-      <MeetingDialog
-        open={meetingDialogOpen}
-        onOpenChange={setMeetingDialogOpen}
       />
     </>
   );

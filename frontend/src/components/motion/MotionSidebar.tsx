@@ -21,8 +21,9 @@ import {
   Pencil,
   Loader2,
   SquarePen,
+  Mic,
 } from "lucide-react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
@@ -49,9 +50,12 @@ import {
   useUpdateMotionPage,
   useMotionSocketListeners,
 } from "@/hooks/api/useMotionPages";
+import { useMeetingHistory } from "@/hooks/api/useMeetings";
+import { useMeetingStore } from "@/store/useMeetingStore";
 
 const mainTabs = [
   { id: "home", title: "Home", icon: Home, url: "/motion?home=true" },
+  { id: "meetings", title: "Meetings", icon: Mic, url: "#" },
   { id: "search", title: "Search", icon: Search, url: "#" },
 ];
 
@@ -301,7 +305,6 @@ type MotionSidebarProps = {
 };
 
 export function MotionSidebar({ onClose }: MotionSidebarProps) {
-  const location = useLocation();
   const navigate = useNavigate();
   const { pageId } = useParams();
 
@@ -361,6 +364,45 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const [trashOpen, setTrashOpen] = useState(false);
   const [sharedOpen, setSharedOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<"pages" | "meetings">("pages");
+
+  const openDialog = useMeetingStore((s) => s.openDialog);
+
+  // ── Meetings data ──
+  const { data: historyData, isLoading: isMeetingsLoading } = useMeetingHistory(1, 50);
+  const recordings = historyData?.recordings ?? [];
+
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const formatRecordingTime = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      const formattedDate = date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
+      const formattedTime = date.toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      });
+      return `${formattedDate} • ${formattedTime}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  useEffect(() => {
+    if (pageId) {
+      setSidebarMode("pages");
+    }
+  }, [pageId]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleAddPage = async (parentId?: string) => {
@@ -408,19 +450,26 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {mainTabs.map((tab) => {
             const isActive =
-              location.pathname === tab.url ||
-              (tab.id === "home" && location.pathname === "/motion");
+              (tab.id === "home" && sidebarMode === "pages") ||
+              (tab.id === "meetings" && sidebarMode === "meetings") ||
+              (tab.id === "search" && searchOpen);
+
+            const isAsChild = tab.id === "home";
+
             return (
               <Button
                 key={tab.id}
                 variant="ghost"
                 size="sm"
-                asChild={tab.id !== "search"}
+                asChild={isAsChild}
                 onClick={() => {
                   if (tab.id === "search") {
                     setSearchOpen(true);
-                  } else {
-                    if (tab.id === "home" && activeOrgId && activeSpaceId) {
+                  } else if (tab.id === "meetings") {
+                    setSidebarMode("meetings");
+                  } else if (tab.id === "home") {
+                    setSidebarMode("pages");
+                    if (activeOrgId && activeSpaceId) {
                       useMotionStore.getState().setLastOpenedPageId(activeOrgId, activeSpaceId, null);
                     }
                     if (window.innerWidth < 1024) {
@@ -435,16 +484,18 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                     : "text-muted-foreground",
                 )}
               >
-                {tab.id === "search" ? (
-                  <div className="flex items-center gap-2 cursor-pointer w-full">
-                    <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
-                    <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>
-                  </div>
-                ) : (
+                {isAsChild ? (
                   <Link to={tab.url}>
                     <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
                     {isActive && <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>}
                   </Link>
+                ) : (
+                  <div className="flex items-center gap-2 cursor-pointer w-full">
+                    <tab.icon className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-muted-foreground/80")} />
+                    {isActive && (
+                      <span className="text-[13px] font-semibold tracking-tight">{tab.title}</span>
+                    )}
+                  </div>
                 )}
               </Button>
             );
@@ -452,20 +503,33 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           <div className="flex-1" />
 
           {canCreatePage && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleAddPage()}
-              disabled={createPage.isPending}
-              className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              aria-label="New page"
-            >
-              {createPage.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <SquarePen className="h-[18px] w-[18px]" />
-              )}
-            </Button>
+            sidebarMode === "meetings" ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => openDialog()}
+                className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                aria-label="Record meeting"
+                title="Record new meeting"
+              >
+                <Mic className="h-[18px] w-[18px] text-violet-500" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleAddPage()}
+                disabled={createPage.isPending}
+                className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                aria-label="New page"
+              >
+                {createPage.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <SquarePen className="h-[18px] w-[18px]" />
+                )}
+              </Button>
+            )
           )}
 
           {onClose && (
@@ -486,6 +550,60 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           <div className="px-4 py-8 text-center text-xs text-muted-foreground">
             Select an organisation and space to use Motion.
           </div>
+        ) : sidebarMode === "meetings" ? (
+          isMeetingsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : recordings.length === 0 ? (
+            <div className="px-4 py-8 text-center text-xs text-muted-foreground flex flex-col items-center gap-3">
+              <span>No recordings yet.</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openDialog()}
+                className="gap-1.5 rounded-lg border-violet-500/20 hover:border-violet-500/40 text-violet-500 hover:bg-violet-500/5 cursor-pointer text-xs"
+              >
+                <Mic className="size-3.5" />
+                Record Meeting
+              </Button>
+            </div>
+          ) : (
+            <SidebarGroup>
+              <SidebarMenu>
+                {recordings.map((recording) => (
+                  <SidebarMenuItem key={recording.id}>
+                    <div
+                      className="group/item relative flex min-h-8 w-full items-center rounded-md py-1.5 px-2 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground cursor-pointer"
+                      onClick={() => {
+                        openDialog(recording.id);
+                      }}
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="relative flex size-5 shrink-0 items-center justify-center">
+                          <Mic className="size-4 text-muted-foreground transition-colors" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground">
+                          {formatDuration(recording.audio_duration_seconds)} recording
+                          <span className="text-[11px] text-muted-foreground/50 ml-2 font-normal">
+                            ({formatRecordingTime(recording.created_at)})
+                          </span>
+                        </span>
+                      </div>
+                      <span className={cn(
+                        "h-1.5 w-1.5 rounded-full shrink-0 ml-2 mr-1 shadow-sm",
+                        recording.transcription_status === "completed"
+                          ? "bg-emerald-500"
+                          : recording.transcription_status === "failed"
+                          ? "bg-rose-500"
+                          : "bg-amber-500 animate-pulse"
+                      )} />
+                    </div>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          )
         ) : (
           <>
             {/* ── Recents ── */}

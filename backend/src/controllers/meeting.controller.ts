@@ -441,8 +441,18 @@ export const getRecordingReview = catchAsync(async (req: Request, res: Response)
             return res.status(403).json({ error: "Unauthorized" });
         }
 
+        // Generate pre-signed URL for the audio file in the bucket
+        const getCommand = new GetObjectCommand({
+            Bucket: config.sevallaS3BucketName,
+            Key: recording.audio_s3_key,
+        });
+        const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
+
         return res.status(200).json(
-            new ApiResponse(200, recording, "Recording retrieved successfully")
+            new ApiResponse(200, {
+                ...recording,
+                audio_url: presignedAudioUrl
+            }, "Recording retrieved successfully")
         );
     } catch (err: any) {
         console.error(`❌ [getRecordingReview] Error:`, err);

@@ -4,6 +4,7 @@ import { AppSidebar } from "./AppSidebar";
 import { AiAssistant } from "./AiAssistant";
 import { ChatDrawer } from "./chat/ChatDrawer";
 import { ChatDialog } from "./ChatDialog";
+import { MeetingDialog } from "./MeetingDialog";
 import { ChatSocketManager } from "./chat/ChatSocketManager";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import {
@@ -136,6 +137,9 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         open={isChatDialogOpen}
         onOpenChange={(open) => !open && closeChatDialog()}
       />
+
+      {/* Global Meeting Studio */}
+      <MeetingDialog />
 
       {/* Global Socket Manager for Chat */}
       <ChatSocketManager />
