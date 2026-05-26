@@ -65,17 +65,21 @@ export function Dashboard() {
           headers,
         });
       },
+      body: {
+        orgId: activeOrgId ?? undefined,
+        spaceId: activeSpaceId ?? undefined,
+      },
     }),
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("AI request failed:", error);
-      setMessages((current) => [
+      setMessages((current: any[]) => [
         ...current,
         {
           id: crypto.randomUUID(),
-          role: "assistant",
+          role: "assistant" as const,
           parts: [
             {
-              type: "text",
+              type: "text" as const,
               text: "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
             },
           ],
@@ -154,7 +158,7 @@ export function Dashboard() {
           <div className="flex size-full flex-col items-center">
             <section className="w-full flex-1 overflow-y-auto pb-48 pt-10 lg:pt-14">
               <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 px-4 sm:px-6">
-                {messages.map((message) => (
+                {messages.map((message: any) => (
                   <Message from={message.role} key={message.id} className="max-w-full w-full">
                     <MessageContent
                       className={cn(

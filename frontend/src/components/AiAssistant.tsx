@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import api from "@/lib/api";
+import { useAppContext } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -149,6 +150,7 @@ export function AiAssistant() {
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const { activeOrgId, activeSpaceId } = useAppContext();
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {
@@ -187,10 +189,12 @@ export function AiAssistant() {
                 role: message.role,
                 content: message.content,
             })),
+            orgId: activeOrgId ?? undefined,
+            spaceId: activeSpaceId ?? undefined,
         });
 
         return response.data.data.content;
-    }, []);
+    }, [activeOrgId, activeSpaceId]);
 
     const appendAssistantMessage = useCallback((content: string) => {
         const aiMsg: AiMessage = {

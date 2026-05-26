@@ -4,7 +4,11 @@ import * as meetingController from "../controllers/meeting.controller";
 
 const router = Router();
 
-// Apply auth middleware to protect all routes
+// ── Unprotected routes (called by external services) ──────────────────────────
+// Sarvam AI webhook — called by Sarvam servers on job completion
+router.post("/webhook/sarvam", meetingController.handleSarvamWebhook);
+
+// Apply auth middleware to protect all remaining routes
 router.use(protect);
 
 // Endpoint to retrieve paginated meeting history for the user

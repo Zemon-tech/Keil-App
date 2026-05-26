@@ -184,6 +184,37 @@ export const searchMeetings = async (
 };
 
 /**
+ * Fetches a recording by its Sarvam job ID
+ */
+export const getRecordingByJobId = async (sarvamJobId: string): Promise<MeetingRecording | null> => {
+    const queryText = `
+        SELECT * FROM public.meeting_recordings
+        WHERE sarvam_job_id = $1
+    `;
+    const result = await pool.query(queryText, [sarvamJobId]);
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+};
+
+/**
+ * Updates the audio duration of a recording
+ */
+export const updateRecordingDuration = async (
+    recordingId: string,
+    durationSeconds: number
+): Promise<MeetingRecording> => {
+    const queryText = `
+        UPDATE public.meeting_recordings
+        SET audio_duration_seconds = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING *
+    `;
+    const result = await pool.query(queryText, [durationSeconds, recordingId]);
+    return result.rows[0];
+};
+
+/**
  * Permanently deletes a recording from the database
  */
 export const deleteRecording = async (recordingId: string, userId: string): Promise<boolean> => {

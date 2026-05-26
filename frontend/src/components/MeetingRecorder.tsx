@@ -334,7 +334,7 @@ export const MeetingRecorder: React.FC = () => {
     }
   };
 
-  // Handle uploading blob to cloud S3
+  // Handle uploading blob to cloud S3 and Sarvam Azure in parallel
   const handleAudioUpload = async (audioBlob: Blob) => {
     if (duration > 3600) {
       toast.warning("Meeting duration exceeds 60 minutes.");
@@ -346,45 +346,108 @@ export const MeetingRecorder: React.FC = () => {
     });
 
     try {
+      // Step 1: Get all upload URLs (S3 + Sarvam) in one call
       const response = await api.post("v1/meetings/upload-url", {
         meetingId: meetingId || null,
         fileName: `recording-${Date.now()}.webm`,
         contentType: audioBlob.type,
       });
 
-      const { uploadUrl, s3Key, recordingId: recId } = response.data.data;
+      const { uploadUrl, sarvamUploadUrl, sarvamJobId, s3Key, recordingId: recId } = response.data.data;
       setRecordingId(recId);
 
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        body: audioBlob,
-        headers: {
-          "Content-Type": audioBlob.type,
-        },
-      });
+      // Step 2: Upload to S3 and Sarvam Azure in parallel (if sarvamUploadUrl available)
+      if (sarvamUploadUrl && sarvamJobId) {
+        // New optimized flow: dual upload
+        const [s3Result, sarvamResult] = await Promise.allSettled([
+          fetch(uploadUrl, {
+            method: "PUT",
+            body: audioBlob,
+            headers: { "Content-Type": audioBlob.type },
+          }),
+          fetch(sarvamUploadUrl, {
+            method: "PUT",
+            body: audioBlob,
+            headers: { "x-ms-blob-type": "BlockBlob", "Content-Type": audioBlob.type },
+          }),
+        ]);
 
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to upload audio to S3 cloud storage.");
+        // Handle S3 upload failure
+        if (s3Result.status === "rejected" || (s3Result.status === "fulfilled" && !s3Result.value.ok)) {
+          throw new Error("Failed to upload audio to S3 cloud storage.");
+        }
+
+        // Handle Sarvam upload failure — fall back to legacy flow
+        if (sarvamResult.status === "rejected" || (sarvamResult.status === "fulfilled" && !sarvamResult.value.ok)) {
+          console.warn("[MeetingRecorder] Sarvam direct upload failed, falling back to legacy flow");
+          // Fall back: let backend handle Sarvam upload via s3Key
+          setStatus("transcribing");
+          toast.info("Decoding conversation map...", {
+            description: "Initiating Sarvam AI speech-to-text transcription.",
+          });
+
+          const transcribeResponse = await api.post("v1/meetings/transcribe", {
+            recordingId: recId,
+            s3Key,
+            durationSeconds: duration,
+            contentType: audioBlob.type,
+          });
+
+          setJobId(transcribeResponse.data.data.jobId);
+          toast.success("Meeting Sync Saved", {
+            description: "Transcription and analysis are running in the background.",
+          });
+          resetRecorder();
+          return;
+        }
+
+        // Both uploads succeeded — start the job (no download/upload needed on backend)
+        setStatus("transcribing");
+        toast.info("Decoding conversation map...", {
+          description: "Initiating Sarvam AI speech-to-text transcription.",
+        });
+
+        const transcribeResponse = await api.post("v1/meetings/transcribe", {
+          recordingId: recId,
+          sarvamJobId,
+          durationSeconds: duration,
+        });
+
+        setJobId(transcribeResponse.data.data.jobId);
+        toast.success("Meeting Sync Saved", {
+          description: "Transcription and analysis are running in the background.",
+        });
+        resetRecorder();
+      } else {
+        // Legacy flow: only S3 URL returned (Sarvam job creation failed in upload-url)
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: audioBlob,
+          headers: { "Content-Type": audioBlob.type },
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload audio to S3 cloud storage.");
+        }
+
+        setStatus("transcribing");
+        toast.info("Decoding conversation map...", {
+          description: "Initiating Sarvam AI speech-to-text transcription.",
+        });
+
+        const transcribeResponse = await api.post("v1/meetings/transcribe", {
+          recordingId: recId,
+          s3Key,
+          durationSeconds: duration,
+          contentType: audioBlob.type,
+        });
+
+        setJobId(transcribeResponse.data.data.jobId);
+        toast.success("Meeting Sync Saved", {
+          description: "Transcription and analysis are running in the background.",
+        });
+        resetRecorder();
       }
-
-      setStatus("transcribing");
-      toast.info("Decoding conversation map...", {
-        description: "Initiating Sarvam AI speech-to-text transcription.",
-      });
-
-      await api.post("v1/meetings/transcribe", {
-        recordingId: recId,
-        s3Key,
-        durationSeconds: duration,
-        contentType: audioBlob.type,
-      });
-
-      toast.success("Meeting Sync Saved", {
-        description: "Transcription and analysis are running in the background.",
-      });
-
-      // Instantly reset the companion state back to idle so a new meeting can be started immediately
-      resetRecorder();
     } catch (err: any) {
       console.error("[MeetingRecorder] Processing Pipeline Error:", err);
       setErrorMessage(err.message || "An error occurred during audio upload/transcription.");
@@ -395,18 +458,20 @@ export const MeetingRecorder: React.FC = () => {
     }
   };
 
-  // Polling server for transcription status updates
+  // Polling server for transcription status updates (fallback — webhook handles primary)
   useEffect(() => {
     if (status !== "transcribing" || !jobId || !recordingId) return;
 
+    let active = true;
     let pollCount = 0;
-    const maxPolls = 120; // 10 minutes max at 5s intervals
+    const maxPolls = 60; // ~10 minutes with backoff
+    let currentDelay = 3000; // Start at 3s
 
-    const interval = window.setInterval(async () => {
+    const poll = async () => {
+      if (!active) return;
       pollCount++;
 
       if (pollCount > maxPolls) {
-        clearInterval(interval);
         setStatus("error");
         setErrorMessage("Transcription timed out after 10 minutes.");
         toast.error("Transcription timed out");
@@ -420,24 +485,38 @@ export const MeetingRecorder: React.FC = () => {
         const { status: jobStatus, recording } = response.data.data;
 
         if (jobStatus === "completed") {
-          clearInterval(interval);
+          if (!active) return;
           setStatus("completed");
           setTranscript(recording.transcript_text);
           setDiarizedTranscript(recording.transcript_diarized);
           setLanguageDetected(recording.language_detected);
           toast.success("AI Transcription completed!");
+          return;
         } else if (jobStatus === "failed") {
-          clearInterval(interval);
+          if (!active) return;
           setStatus("error");
           setErrorMessage("Sarvam AI STT job processing failed.");
           toast.error("AI Transcription failed");
+          return;
         }
       } catch (err) {
         console.warn("Polling error (will retry):", err);
       }
-    }, 5000);
 
-    return () => clearInterval(interval);
+      // Exponential backoff: 3s → 4.5s → 6.75s → ... max 15s
+      currentDelay = Math.min(currentDelay * 1.5, 15000);
+      if (active) {
+        setTimeout(poll, currentDelay);
+      }
+    };
+
+    // Start first poll after initial delay
+    const initialTimeout = setTimeout(poll, currentDelay);
+
+    return () => {
+      active = false;
+      clearTimeout(initialTimeout);
+    };
   }, [status, jobId, recordingId]);
 
   // WebSockets real-time status listener to instantly update UI upon STT completion

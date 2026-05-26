@@ -20,6 +20,7 @@ export const config = {
     backendUrl: process.env.BACKEND_URL || "",
     // Sarvam AI
     sarvamApiKey: process.env.SARVAM_API_KEY || "",
+    sarvamWebhookSecret: process.env.SARVAM_WEBHOOK_SECRET || "",
     // OpenRouter / Vercel AI SDK
     openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",

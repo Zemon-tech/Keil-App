@@ -8,6 +8,7 @@ import { getS3Client } from "../lib/s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
+import { processCompletedTranscription, processFailedTranscription } from "../services/transcription-processor";
 import { createServiceLogger } from "../lib/logger";
 
 const log = createServiceLogger("meeting");
@@ -55,52 +56,14 @@ export const getUploadUrl = catchAsync(async (req: Request, res: Response) => {
         // Create database row in pending state
         const recording = await meetingService.createRecording(userId, dbMeetingId, s3Key);
 
-        res.status(200).json(
-            new ApiResponse(200, {
-                uploadUrl,
-                s3Key,
-                recordingId: recording.id
-            }, "Presigned S3 upload URL generated successfully")
-        );
-    } catch (err: any) {
-        log.error({ err }, "getUploadUrl error");
-        return res.status(500).json({ error: "Failed to generate upload URL" });
-    }
-});
-
-/**
- * Creates, uploads, and starts a Sarvam Batch STT job
- */
-export const transcribeRecording = catchAsync(async (req: Request, res: Response) => {
-    const { recordingId, s3Key, durationSeconds, contentType } = req.body;
-    const user = (req as any).user;
-
-    try {
-        if (!user || !user.id) {
-            return res.status(401).json({ error: "User authentication required" });
-        }
-
-        if (!recordingId || !s3Key) {
-            return res.status(400).json({ error: "Recording ID and S3 key are required" });
-        }
-
-        // 1. Generate presigned S3 GET URL for Sarvam to fetch or for our server fetch
-        log.info({ s3Key, step: "1/7" }, "Generating S3 presigned GET URL");
-        const getCommand = new GetObjectCommand({
-            Bucket: config.sevallaS3BucketName,
-            Key: s3Key,
-        });
-        const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
-        log.debug("S3 GET URL generated successfully");
-
+        // Create Sarvam batch job early so frontend can upload directly to Sarvam Azure
         const sarvamHeaders = {
             "api-subscription-key": config.sarvamApiKey,
             "Content-Type": "application/json"
         };
 
-        log.info({ recordingId, step: "2/7" }, "Initiating Sarvam STT job");
+        log.info({ recordingId: recording.id }, "Creating Sarvam job early for direct frontend upload");
 
-        // 2. Create the STT Job on Sarvam
         const createJobResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1", {
             method: "POST",
             headers: sarvamHeaders,
@@ -111,9 +74,197 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                     language_code: "en-IN",
                     with_diarization: true,
                     num_speakers: 2
-                }
+                },
+                ...(config.sarvamWebhookSecret && config.backendUrl ? {
+                    callback: {
+                        url: `${config.backendUrl}/api/v1/meetings/webhook/sarvam`,
+                        auth_token: config.sarvamWebhookSecret
+                    }
+                } : {})
             })
         });
+
+        if (!createJobResponse.ok) {
+            const errText = await createJobResponse.text();
+            log.error({ errText }, "Sarvam job creation error during upload-url");
+            // Fall back to returning just the S3 URL — transcribe endpoint will handle Sarvam job creation
+            return res.status(200).json(
+                new ApiResponse(200, {
+                    uploadUrl,
+                    s3Key,
+                    recordingId: recording.id
+                }, "Presigned S3 upload URL generated (Sarvam job creation deferred)")
+            );
+        }
+
+        const { job_id: sarvamJobId } = await createJobResponse.json() as any;
+        log.info({ sarvamJobId }, "Sarvam job created early");
+
+        // Get Sarvam Azure upload URL
+        const sarvamFileName = s3Key.split("/").pop() || "audio.webm";
+        const uploadUrlsResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1/upload-files", {
+            method: "POST",
+            headers: sarvamHeaders,
+            body: JSON.stringify({
+                job_id: sarvamJobId,
+                files: [sarvamFileName]
+            })
+        });
+
+        let sarvamUploadUrl: string | null = null;
+        if (uploadUrlsResponse.ok) {
+            const uploadData = await uploadUrlsResponse.json() as any;
+            const sarvamUploadUrlObj = uploadData.upload_urls?.[sarvamFileName];
+            sarvamUploadUrl = typeof sarvamUploadUrlObj === "string" 
+                ? sarvamUploadUrlObj 
+                : sarvamUploadUrlObj?.file_url || null;
+        } else {
+            log.warn("Failed to get Sarvam upload URL during upload-url — frontend will use legacy flow");
+        }
+
+        // Update DB with job ID immediately
+        await meetingService.updateRecordingJob(recording.id, sarvamJobId, undefined);
+
+        res.status(200).json(
+            new ApiResponse(200, {
+                uploadUrl,
+                sarvamUploadUrl,
+                sarvamJobId,
+                s3Key,
+                recordingId: recording.id
+            }, "Upload URLs generated successfully")
+        );
+    } catch (err: any) {
+        log.error({ err }, "getUploadUrl error");
+        return res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+});
+
+/**
+ * Creates, uploads, and starts a Sarvam Batch STT job.
+ * 
+ * Supports two flows:
+ * - NEW (Phase 3): Frontend passes sarvamJobId — audio already uploaded to Sarvam by frontend.
+ *   Backend only starts the job.
+ * - LEGACY: Frontend passes s3Key — backend downloads from S3, uploads to Sarvam, starts job.
+ */
+export const transcribeRecording = catchAsync(async (req: Request, res: Response) => {
+    const { recordingId, s3Key, sarvamJobId: frontendJobId, durationSeconds, contentType } = req.body;
+    const user = (req as any).user;
+
+    try {
+        if (!user || !user.id) {
+            return res.status(401).json({ error: "User authentication required" });
+        }
+
+        if (!recordingId) {
+            return res.status(400).json({ error: "Recording ID is required" });
+        }
+
+        // ─── NEW FLOW: Frontend already uploaded to Sarvam Azure ───────────────
+        if (frontendJobId) {
+            log.info({ recordingId, sarvamJobId: frontendJobId }, "New flow: starting pre-created Sarvam job");
+
+            // Update duration if provided
+            if (durationSeconds) {
+                await meetingService.updateRecordingDuration(recordingId, durationSeconds);
+            }
+
+            // Broadcast processing started
+            try {
+                const { broadcastMeetingUpdate } = require("../socket");
+                const updatedRec = await meetingService.getRecordingById(recordingId);
+                broadcastMeetingUpdate(user.id, {
+                    type: "transcription_started",
+                    recordingId,
+                    status: "processing",
+                    recording: updatedRec
+                });
+            } catch (sockErr) {
+                log.warn({ sockErr, recordingId }, "Failed to broadcast WebSocket transcription start");
+            }
+
+            // Start the Sarvam job (audio already uploaded by frontend)
+            const startResponse = await fetch(
+                `https://api.sarvam.ai/speech-to-text/job/v1/${frontendJobId}/start`,
+                {
+                    method: "POST",
+                    headers: { "api-subscription-key": config.sarvamApiKey, "Content-Type": "application/json" },
+                    body: JSON.stringify({})
+                }
+            );
+
+            if (!startResponse.ok) {
+                const errText = await startResponse.text();
+                log.error({ errText, sarvamJobId: frontendJobId }, "Failed to start Sarvam job");
+                const updated = await meetingService.updateRecordingStatus(recordingId, "failed");
+                try {
+                    const { broadcastMeetingUpdate } = require("../socket");
+                    broadcastMeetingUpdate(user.id, {
+                        type: "transcription_complete",
+                        recordingId,
+                        status: "failed",
+                        recording: updated
+                    });
+                } catch (sockErr) {
+                    log.warn({ sockErr }, "Failed to broadcast failure");
+                }
+                return res.status(500).json({ error: "Failed to start Sarvam job" });
+            }
+
+            log.info({ sarvamJobId: frontendJobId }, "Sarvam job started successfully (new flow)");
+
+            return res.status(200).json(
+                new ApiResponse(200, {
+                    jobId: frontendJobId,
+                    recordingId
+                }, "Transcription job started")
+            );
+        }
+
+        // ─── LEGACY FLOW: Backend handles S3 download + Sarvam upload ──────────
+        if (!s3Key) {
+            return res.status(400).json({ error: "Either sarvamJobId or s3Key is required" });
+        }
+
+        // 1. Generate presigned S3 GET URL
+        log.info({ s3Key, step: "1/6" }, "Legacy flow: Generating S3 presigned GET URL");
+        const getCommand = new GetObjectCommand({
+            Bucket: config.sevallaS3BucketName,
+            Key: s3Key,
+        });
+        const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
+
+        const sarvamHeaders = {
+            "api-subscription-key": config.sarvamApiKey,
+            "Content-Type": "application/json"
+        };
+
+        // 2. PARALLEL: Create Sarvam job + Download audio from S3 simultaneously
+        log.info({ recordingId, step: "2/6" }, "Parallel: Creating Sarvam job + downloading S3 audio");
+
+        const [createJobResponse, audioResponse] = await Promise.all([
+            fetch("https://api.sarvam.ai/speech-to-text/job/v1", {
+                method: "POST",
+                headers: sarvamHeaders,
+                body: JSON.stringify({
+                    job_parameters: {
+                        model: "saaras:v3",
+                        mode: "transcribe",
+                        language_code: "en-IN",
+                        with_diarization: true,
+                        num_speakers: 2
+                    },
+                    ...(config.sarvamWebhookSecret && config.backendUrl ? {
+                        callback: {
+                            url: `${config.backendUrl}/api/v1/meetings/webhook/sarvam`,
+                            auth_token: config.sarvamWebhookSecret
+                        }
+                    } : {})
+                })
+            }),
+            fetch(presignedAudioUrl)
+        ]);
 
         if (!createJobResponse.ok) {
             const errText = await createJobResponse.text();
@@ -124,8 +275,15 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
         const { job_id: sarvamJobId } = await createJobResponse.json() as any;
         log.info({ sarvamJobId }, "Sarvam job created");
 
-        // 3. Request presigned upload URLs from Sarvam
-        log.info({ step: "3/7" }, "Requesting Azure upload URLs from Sarvam");
+        if (!audioResponse.ok) {
+            log.error({ status: audioResponse.status }, "Failed to download audio from S3");
+            return res.status(500).json({ error: "Failed to download audio from S3" });
+        }
+
+        const contentLength = audioResponse.headers.get("content-length");
+
+        // 3. Request presigned upload URLs from Sarvam (depends on job_id)
+        log.info({ step: "3/6" }, "Requesting Azure upload URLs from Sarvam");
         const fileName = s3Key.split("/").pop() || "audio.webm";
         const uploadUrlsResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1/upload-files", {
             method: "POST",
@@ -153,8 +311,8 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             return res.status(500).json({ error: "Sarvam did not return an upload URL for the audio file" });
         }
 
-        // 4. Update database record with the job ID and processing state synchronously
-        log.info({ recordingId, step: "4/7" }, "Updating database record to processing state");
+        // 4. Update database record with the job ID and processing state
+        log.info({ recordingId, step: "4/6" }, "Updating database record to processing state");
         await meetingService.updateRecordingJob(recordingId, sarvamJobId, durationSeconds);
 
         // Broadcast real-time processing initiation notification via WebSockets
@@ -171,20 +329,12 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             log.warn({ sockErr, recordingId }, "Failed to broadcast WebSocket transcription processing start update");
         }
 
-        // 5. Fire off the heavy background streaming and starting asynchronously (fire-and-forget)
-        log.info({ recordingId, sarvamJobId }, "Triggering async S3 streaming and start job pipeline in the background");
+        // 5. Background: Upload audio to Sarvam Azure + Start job (fire-and-forget)
+        log.info({ recordingId, sarvamJobId, step: "5/6" }, "Background: uploading to Sarvam Azure + starting job");
         
         (async () => {
             try {
-                log.info({ sarvamJobId, step: "Background 1/3" }, "Downloading audio from S3 via presigned GET in background");
-                const audioResponse = await fetch(presignedAudioUrl);
-                if (!audioResponse.ok) {
-                    throw new Error(`Failed to download audio file from S3: status ${audioResponse.status}`);
-                }
-                
-                const contentLength = audioResponse.headers.get("content-length");
-                
-                log.info({ sarvamJobId, step: "Background 2/3" }, "Streaming audio to Sarvam Azure storage in background");
+                log.info({ sarvamJobId, step: "Background 1/2" }, "Streaming audio to Sarvam Azure storage");
                 const sarvamUploadResponse = await fetch(sarvamUploadUrl, {
                     method: "PUT",
                     headers: {
@@ -199,9 +349,9 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                     const errText = await sarvamUploadResponse.text();
                     throw new Error(`Failed to upload audio to Sarvam storage: status ${sarvamUploadResponse.status}, details: ${errText}`);
                 }
-                log.info({ sarvamJobId }, "Audio streamed successfully to Sarvam in background");
+                log.info({ sarvamJobId }, "Audio streamed successfully to Sarvam");
 
-                log.info({ sarvamJobId, step: "Background 3/3" }, "Triggering Sarvam job start in background");
+                log.info({ sarvamJobId, step: "Background 2/2" }, "Starting Sarvam job");
                 const startResponse = await fetch(`https://api.sarvam.ai/speech-to-text/job/v1/${sarvamJobId}/start`, {
                     method: "POST",
                     headers: sarvamHeaders,
@@ -212,9 +362,9 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                     const errText = await startResponse.text();
                     throw new Error(`Failed to start Sarvam job: status ${startResponse.status}, details: ${errText}`);
                 }
-                log.info({ sarvamJobId }, "Sarvam job successfully started in background");
+                log.info({ sarvamJobId }, "Sarvam job successfully started");
             } catch (bgError: any) {
-                log.error({ err: bgError, sarvamJobId, recordingId }, "Asynchronous background streaming/starting pipeline failed");
+                log.error({ err: bgError, sarvamJobId, recordingId }, "Background upload/start pipeline failed");
                 const updated = await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => {
                     log.error({ err: e }, "Failed to update recording status on background failure");
                     return null;
@@ -229,7 +379,7 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                             recording: updated
                         });
                     } catch (sockErr) {
-                        log.warn({ sockErr }, "Failed to broadcast WebSocket transcription failure update on background error");
+                        log.warn({ sockErr }, "Failed to broadcast WebSocket failure on background error");
                     }
                 }
             }
@@ -260,7 +410,7 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                         recording: updated
                     });
                 } catch (sockErr) {
-                    log.warn({ sockErr }, "Failed to broadcast WebSocket transcription failure update on trigger failure");
+                    log.warn({ sockErr }, "Failed to broadcast WebSocket failure on trigger failure");
                 }
             }
         }
@@ -315,75 +465,9 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
         const jobState = statusData.job_state; // Accepted | Pending | Running | Completed | Failed
 
         if (jobState === "Completed") {
-            log.info({ jobId }, "Sarvam job completed — fetching transcripts");
-            const jobDetails = statusData.job_details || [];
-            let transcriptText = "";
-            let transcriptDiarized = null;
-            let languageDetected = null;
-
-            const successDetail = jobDetails.find((d: any) => d.state === "Success" && d.outputs && d.outputs.length > 0);
-            if (successDetail) {
-                const outputFile = successDetail.outputs[0];
-                const outputFileName = outputFile.file_name;
-
-                // Generate presigned GET url to download the JSON results from Sarvam
-                const downloadUrlsResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1/download-files", {
-                    method: "POST",
-                    headers: sarvamHeaders,
-                    body: JSON.stringify({
-                        job_id: jobId,
-                        files: [outputFileName]
-                    })
-                });
-
-                if (!downloadUrlsResponse.ok) {
-                    const errText = await downloadUrlsResponse.text();
-                    log.error({ errText }, "Sarvam download URLs error");
-                    return res.status(downloadUrlsResponse.status).json({ error: "Failed to request result download URL" });
-                }
-
-                const downloadData = await downloadUrlsResponse.json() as any;
-                const downloadUrlObj = downloadData.download_urls?.[outputFileName];
-                const downloadUrl = typeof downloadUrlObj === "string" ? downloadUrlObj : downloadUrlObj?.file_url;
-
-                if (!downloadUrl) {
-                    return res.status(500).json({ error: "Sarvam did not return a download URL for the result file" });
-                }
-
-                // Download and parse transcription output JSON
-                const resultFileResponse = await fetch(downloadUrl);
-                if (!resultFileResponse.ok) {
-                    return res.status(resultFileResponse.status).json({ error: "Failed to download transcription results" });
-                }
-
-                const resultJson = await resultFileResponse.json() as any;
-
-                transcriptText = resultJson.transcript || resultJson.text || "";
-                transcriptDiarized = resultJson.diarized_transcript || null;
-                languageDetected = resultJson.language_code || resultJson.language || null;
-            }
-
-            // Update database with final transcript text, JSON diarization and completed status
-            const updated = await meetingService.updateRecordingResult(
-                recordingId as string,
-                "completed",
-                transcriptText,
-                transcriptDiarized,
-                languageDetected
-            );
-
-            // Broadcast real-time completion notification via WebSockets
-            try {
-                const { broadcastMeetingUpdate } = require("../socket");
-                broadcastMeetingUpdate(updated.user_id, {
-                    type: "transcription_complete",
-                    recordingId: recordingId as string,
-                    status: "completed",
-                    recording: updated
-                });
-            } catch (sockErr) {
-                log.warn({ sockErr }, "Failed to broadcast WebSocket transcription completion update");
-            }
+            log.info({ jobId }, "Sarvam job completed — fetching transcripts via shared processor");
+            const userId = localRecording?.user_id || (req as any).user?.id;
+            const updated = await processCompletedTranscription(jobId as string, recordingId as string, userId);
 
             return res.status(200).json(
                 new ApiResponse(200, {
@@ -393,20 +477,8 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
             );
         } else if (jobState === "Failed") {
             log.warn({ jobId }, "Sarvam job failed");
-            const updated = await meetingService.updateRecordingStatus(recordingId as string, "failed");
-
-            // Broadcast failure notification via WebSockets
-            try {
-                const { broadcastMeetingUpdate } = require("../socket");
-                broadcastMeetingUpdate(updated.user_id, {
-                    type: "transcription_complete",
-                    recordingId: recordingId as string,
-                    status: "failed",
-                    recording: updated
-                });
-            } catch (sockErr) {
-                log.warn({ sockErr }, "Failed to broadcast WebSocket transcription failure update");
-            }
+            const userId = localRecording?.user_id || (req as any).user?.id;
+            const updated = await processFailedTranscription(jobId as string, recordingId as string, userId);
 
             return res.status(200).json(
                 new ApiResponse(200, {
@@ -674,4 +746,60 @@ export const deleteRecording = catchAsync(async (req: Request, res: Response) =>
         console.error(`❌ [deleteRecording] Error:`, err);
         return res.status(500).json({ error: "Failed to delete recording" });
     }
+});
+
+/**
+ * Webhook handler for Sarvam AI batch job completion callbacks.
+ * This endpoint is NOT protected by auth middleware — Sarvam's servers call it directly.
+ * Authentication is done via the auth_token in the request body.
+ */
+export const handleSarvamWebhook = catchAsync(async (req: Request, res: Response) => {
+    const { auth_token, job_id, status: jobStatus } = req.body;
+
+    log.info({ job_id, jobStatus }, "Sarvam webhook received");
+
+    // 1. Verify auth_token
+    if (!auth_token || auth_token !== config.sarvamWebhookSecret) {
+        log.warn({ job_id }, "Sarvam webhook rejected: invalid auth_token");
+        return res.status(401).json({ error: "Invalid auth token" });
+    }
+
+    if (!job_id) {
+        return res.status(400).json({ error: "job_id is required" });
+    }
+
+    // 2. Look up recording by sarvam_job_id
+    const recording = await meetingService.getRecordingByJobId(job_id);
+    if (!recording) {
+        log.warn({ job_id }, "Sarvam webhook: recording not found for job_id");
+        return res.status(404).json({ error: "Recording not found for this job" });
+    }
+
+    // 3. Idempotency check — if already processed, return 200 immediately
+    if (recording.transcription_status === "completed" || recording.transcription_status === "failed") {
+        log.debug({ job_id, recordingId: recording.id }, "Sarvam webhook: already processed, skipping");
+        return res.status(200).json({ received: true, already_processed: true });
+    }
+
+    // 4. Process based on status
+    const normalizedStatus = (jobStatus || "").toLowerCase();
+
+    if (normalizedStatus === "completed") {
+        try {
+            await processCompletedTranscription(job_id, recording.id, recording.user_id);
+        } catch (err: any) {
+            log.error({ err, job_id, recordingId: recording.id }, "Webhook: failed to process completed transcription");
+            // Still return 200 to Sarvam so they don't retry — polling fallback will handle it
+        }
+    } else if (normalizedStatus === "failed") {
+        try {
+            await processFailedTranscription(job_id, recording.id, recording.user_id);
+        } catch (err: any) {
+            log.error({ err, job_id, recordingId: recording.id }, "Webhook: failed to process failed transcription");
+        }
+    } else {
+        log.debug({ job_id, jobStatus }, "Sarvam webhook: intermediate status, ignoring");
+    }
+
+    return res.status(200).json({ received: true });
 });
