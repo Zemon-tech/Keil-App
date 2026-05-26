@@ -43,7 +43,7 @@ const delegateToTaskAgent = createTool({
       [{ role: "user", content: inputData.query }],
       { requestContext: context?.requestContext }
     );
-    return { response: await result.text };
+    return { response: result.text };
   },
 });
 
@@ -59,7 +59,7 @@ const delegateToChatAgent = createTool({
       [{ role: "user", content: inputData.query }],
       { requestContext: context?.requestContext }
     );
-    return { response: await result.text };
+    return { response: result.text };
   },
 });
 
@@ -75,7 +75,7 @@ const delegateToMotionAgent = createTool({
       [{ role: "user", content: inputData.query }],
       { requestContext: context?.requestContext }
     );
-    return { response: await result.text };
+    return { response: result.text };
   },
 });
 

@@ -51,6 +51,7 @@ export function Dashboard() {
         if (init?.body && typeof init.body === "string") {
           try {
             const parsedBody = JSON.parse(init.body);
+            parsedBody.stream = true;
             parsedBody.modelSelection = localStorage.getItem("ai_model_selection") || "openrouter";
             parsedBody.localAiBaseUrl = localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
             parsedBody.localAiModel = localStorage.getItem("local_ai_model") || "gemma-4";
@@ -66,6 +67,7 @@ export function Dashboard() {
         });
       },
       body: {
+        stream: true,
         orgId: activeOrgId ?? undefined,
         spaceId: activeSpaceId ?? undefined,
       },

@@ -101,40 +101,62 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
 
   // ── Streaming (SSE) ────────────────────────────────────────────────────────
   if (stream) {
-    console.log("Streaming chat started for messages:", JSON.stringify(normalizedMessages));
     try {
       const result = await supervisor.stream(normalizedMessages, {
         requestContext,
         model: customModel,
       });
 
-      console.log("Supervisor stream successfully initialized");
-      const aiSDKStream = toAISdkV5Stream(result, { from: "agent" });
+      // toAISdkV5Stream returns a ReadableStream of UI message chunk objects.
+      // The frontend's useChat (via DefaultChatTransport) expects the AI SDK
+      // UI Message Stream Protocol: SSE lines of `data: <JSON>\n\n` with a
+      // final `data: [DONE]\n\n`, plus the `x-vercel-ai-ui-message-stream: v1`
+      // header so the client knows how to parse the stream.
+      const aiSDKStream = toAISdkV5Stream(result, {
+        from: "agent",
+        sendStart: true,
+        sendFinish: true,
+      });
 
-      // Stream tokens to Express response compatible with Vercel AI SDK protocol
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
+      res.setHeader("x-vercel-ai-ui-message-stream", "v1");
+      res.setHeader("X-Accel-Buffering", "no");
       res.flushHeaders();
 
       const reader = aiSDKStream.getReader();
       try {
         while (true) {
           const { done, value } = await reader.read();
-          if (done) {
-            console.log("Mastra stream reading complete");
-            break;
-          }
-          console.log("Writing stream chunk:", JSON.stringify(value));
-          res.write(value);
+          if (done) break;
+          // Serialize each chunk as an SSE data line (AI SDK protocol)
+          res.write(`data: ${JSON.stringify(value)}\n\n`);
         }
       } catch (err) {
-        console.error("Mastra stream write failed in loop:", err);
+        console.error("Mastra stream error:", err);
+        // Send error as an SSE event so the client can surface it
+        res.write(`data: ${JSON.stringify({ type: "error", errorText: String(err) })}\n\n`);
       } finally {
         reader.releaseLock();
       }
+
+      // Signal end of stream
+      res.write("data: [DONE]\n\n");
     } catch (err) {
       console.error("Mastra stream initialization failed:", err);
+      // If headers haven't been sent yet, return a proper error response
+      if (!res.headersSent) {
+        return res.status(500).json({
+          statusCode: 500,
+          data: null,
+          message: "Failed to initialize AI stream",
+          success: false,
+        });
+      }
+      // Headers already sent — write error as SSE and close
+      res.write(`data: ${JSON.stringify({ type: "error", errorText: "Stream initialization failed" })}\n\n`);
+      res.write("data: [DONE]\n\n");
     }
 
     if (!res.writableEnded) {
@@ -149,7 +171,7 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
     model: customModel,
   });
 
-  const text = await result.text;
+  const text = result.text;
 
   return res.status(200).json({
     statusCode: 200,
