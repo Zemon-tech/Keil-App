@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware";
-import { locateTask } from "../controllers/task-locator.controller";
+import { locateTask, getLinkMetadata } from "../controllers/task-locator.controller";
 
 const router = Router();
+
+// GET /api/v1/tasks/link-meta
+// Protected — fetches title, description, and favicon metadata for any external link.
+router.get("/link-meta", protect, getLinkMetadata);
 
 // GET /api/v1/tasks/:taskId/locate
 // Protected — requires a valid session. No org/space scoping needed;
