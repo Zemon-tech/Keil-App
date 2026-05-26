@@ -14,6 +14,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
@@ -77,7 +84,7 @@ export function MotionPage() {
   const [draftPosition, setDraftPosition] = useState<number>(50);
   const coverContainerRef = useRef<HTMLDivElement>(null);
 
-  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { activeOrgId, activeSpaceId, activeOrg, activeSpace } = useAppContext();
   const { user } = useAuth();
   const { spaceRole } = useSpaceRole();
 
@@ -384,6 +391,24 @@ export function MotionPage() {
             >
               <Menu className="size-4" />
             </Button>
+            {/* Org > Space breadcrumb */}
+            {activeOrg && activeSpace && (
+              <Breadcrumb>
+                <BreadcrumbList className="flex-nowrap text-xs gap-1 sm:gap-1.5">
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-muted-foreground/60 font-medium max-w-[120px] truncate">
+                      {activeOrg.is_personal ? "Personal" : activeOrg.name}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="[&>svg]:size-3" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage className="text-muted-foreground/80 font-medium max-w-[120px] truncate">
+                      {activeSpace.name}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            )}
             {parentPage && (
               <div className="flex items-center text-xs text-muted-foreground/50">
                 <Link
