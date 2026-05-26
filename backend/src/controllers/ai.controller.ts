@@ -4,7 +4,7 @@ import { ApiError } from "../utils/ApiError";
 import * as aiService from "../services/ai.service";
 
 export const chat = catchAsync(async (req: Request, res: Response) => {
-    const { messages } = req.body;
+    const { messages, modelSelection, localAiBaseUrl, localAiModel } = req.body;
 
     if (!Array.isArray(messages)) {
         throw new ApiError(400, "messages must be an array");
@@ -37,7 +37,11 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
         throw new ApiError(400, "Each message must include role and content");
     }
 
-    const stream = await aiService.generateAiStream(normalizedMessages);
+    const stream = await aiService.generateAiStream(normalizedMessages, {
+        modelSelection,
+        localAiBaseUrl,
+        localAiModel,
+    });
 
     stream.pipeUIMessageStreamToResponse(res);
 });

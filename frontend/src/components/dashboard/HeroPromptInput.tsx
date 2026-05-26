@@ -52,11 +52,7 @@ import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input
 import type { AttachmentData } from "@/components/ai-elements/attachments-utils";
 import { cn } from "@/lib/utils";
 
-const models = [
-  { id: "sonnet-4.6", name: "Sonnet 4.6 Extended" },
-  { id: "opus-3", name: "Claude 3 Opus" },
-  { id: "gpt-4o", name: "GPT-4o" },
-];
+// Models are defined dynamically based on user settings
 
 const suggestions: {
   id: string;
@@ -266,7 +262,13 @@ function HeroPromptSurface({
               <PromptInputSelectValue />
             </PromptInputSelectTrigger>
             <PromptInputSelectContent>
-              {models.map((item) => (
+              {[
+                { id: "openrouter", name: "OpenRouter AI (Default)" },
+                {
+                  id: "local",
+                  name: `Local LLM (${(typeof window !== "undefined" ? localStorage.getItem("local_ai_model") : null) || "gemma-4"})`
+                }
+              ].map((item) => (
                 <PromptInputSelectItem key={item.id} value={item.id}>
                   {item.name}
                 </PromptInputSelectItem>
@@ -312,12 +314,33 @@ function HeroPromptSurface({
 interface HeroPromptInputProps {
   isChatStarted?: boolean;
   onSubmit?: (message: PromptInputMessage) => void;
+  modelSelection?: string;
+  onModelSelectionChange?: (value: string) => void;
 }
 
-export function HeroPromptInput({ isChatStarted = false, onSubmit }: HeroPromptInputProps) {
+export function HeroPromptInput({
+  isChatStarted = false,
+  onSubmit,
+  modelSelection,
+  onModelSelectionChange,
+}: HeroPromptInputProps) {
   const { user } = useAuth();
   const [text, setText] = useState("");
-  const [model, setModel] = useState(models[0].id);
+  
+  const [internalModel, setInternalModel] = useState(() => {
+    return localStorage.getItem("ai_model_selection") || "openrouter";
+  });
+  
+  const model = modelSelection !== undefined ? modelSelection : internalModel;
+  
+  const setModel = (value: string) => {
+    if (onModelSelectionChange) {
+      onModelSelectionChange(value);
+    } else {
+      setInternalModel(value);
+    }
+    localStorage.setItem("ai_model_selection", value);
+  };
   const [useWebSearch, setUseWebSearch] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
 

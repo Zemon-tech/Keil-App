@@ -18,11 +18,27 @@ const toModelMessages = (messages: AiChatMessage[]): ModelMessage[] => {
     }));
 };
 
-export const generateAiStream = async (messages: AiChatMessage[]) => {
-    // If a custom/local endpoint is used, we bypass the strict OpenRouter API key requirement
-    // by defaulting to a dummy key since local servers typically do not require authentication.
-    const isLocalOrCustom = config.openRouterBaseUrl && !config.openRouterBaseUrl.includes("openrouter.ai");
-    const apiKey = config.openRouterApiKey || (isLocalOrCustom ? "local-key" : "");
+export const generateAiStream = async (
+    messages: AiChatMessage[],
+    options?: {
+        modelSelection?: "openrouter" | "local";
+        localAiBaseUrl?: string;
+        localAiModel?: string;
+    }
+) => {
+    const useLocal = options?.modelSelection === "local";
+
+    // Determine the baseURL and model to query dynamically
+    const baseURL = useLocal
+        ? (options?.localAiBaseUrl || "http://localhost:8080/v1")
+        : config.openRouterBaseUrl;
+
+    const modelName = useLocal
+        ? (options?.localAiModel || "local-model")
+        : config.openRouterModel;
+
+    const isLocalOrCustom = baseURL && !baseURL.includes("openrouter.ai");
+    const apiKey = useLocal ? "local-key" : (config.openRouterApiKey || (isLocalOrCustom ? "local-key" : ""));
 
     if (!apiKey) {
         throw new ApiError(500, "OPENROUTER_API_KEY is not configured");
@@ -35,7 +51,7 @@ export const generateAiStream = async (messages: AiChatMessage[]) => {
     const provider = createOpenAICompatible({
         name: isLocalOrCustom ? "local-llm" : "openrouter",
         apiKey: apiKey,
-        baseURL: config.openRouterBaseUrl,
+        baseURL: baseURL,
         includeUsage: true,
         headers: {
             "HTTP-Referer": config.frontendUrl || "http://localhost:5173",
@@ -44,7 +60,7 @@ export const generateAiStream = async (messages: AiChatMessage[]) => {
     });
 
     return streamText({
-        model: provider(config.openRouterModel),
+        model: provider(modelName),
         system: SYSTEM_PROMPT,
         messages: toModelMessages(messages).slice(-20),
     });

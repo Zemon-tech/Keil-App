@@ -32,6 +32,10 @@ export function Dashboard() {
     activeSpaceId,
   );
 
+  const [modelSelection, setModelSelection] = useState<string>(() => {
+    return localStorage.getItem("ai_model_selection") || "openrouter";
+  });
+
   const { messages, sendMessage, setMessages, status } = useChat({
     transport: new DefaultChatTransport({
       api: `${import.meta.env.VITE_API_URL || "http://localhost:5001/api"}/v1/ai/chat`,
@@ -41,8 +45,23 @@ export function Dashboard() {
         if (session?.access_token) {
           headers.set("Authorization", `Bearer ${session.access_token}`);
         }
+
+        // Intercept and inject custom model selection options into the request body
+        let newInit = { ...init };
+        if (init?.body && typeof init.body === "string") {
+          try {
+            const parsedBody = JSON.parse(init.body);
+            parsedBody.modelSelection = localStorage.getItem("ai_model_selection") || "openrouter";
+            parsedBody.localAiBaseUrl = localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
+            parsedBody.localAiModel = localStorage.getItem("local_ai_model") || "gemma-4";
+            newInit.body = JSON.stringify(parsedBody);
+          } catch (e) {
+            console.error("Failed to parse request body in fetch:", e);
+          }
+        }
+
         return fetch(input, {
-          ...init,
+          ...newInit,
           headers,
         });
       },
@@ -114,7 +133,11 @@ export function Dashboard() {
           <div className={cn(containerClassName, "size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar")}>
             <div className="w-full flex flex-col items-center gap-1 sm:gap-2">
               {/* Hero: greeting + input area */}
-              <HeroSection onSubmit={handlePromptSubmit} />
+              <HeroSection
+                onSubmit={handlePromptSubmit}
+                modelSelection={modelSelection}
+                onModelSelectionChange={setModelSelection}
+              />
 
               {isError && (
                 <div className="w-full max-w-4xl mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
@@ -170,7 +193,12 @@ export function Dashboard() {
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-background via-background/95 to-transparent px-4 pb-3 pt-16 sm:px-6">
               <div className="pointer-events-auto w-full max-w-4xl">
-                <HeroSection isChatStarted onSubmit={handlePromptSubmit} />
+                <HeroSection
+                  isChatStarted
+                  onSubmit={handlePromptSubmit}
+                  modelSelection={modelSelection}
+                  onModelSelectionChange={setModelSelection}
+                />
                 <p className="px-4 pb-1 text-center text-[11px] text-muted-foreground/70">
                   Keil AI can make mistakes. Check important details.
                 </p>

@@ -1509,6 +1509,30 @@ function PreferencesTab() {
 }
 
 function PersonalizationTab() {
+  const [localUrl, setLocalUrl] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
+    }
+    return "http://localhost:8080/v1";
+  });
+
+  const [localModel, setLocalModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_model") || "gemma-4";
+    }
+    return "gemma-4";
+  });
+
+  const handleUrlChange = (val: string) => {
+    setLocalUrl(val);
+    localStorage.setItem("local_ai_base_url", val);
+  };
+
+  const handleModelChange = (val: string) => {
+    setLocalModel(val);
+    localStorage.setItem("local_ai_model", val);
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -1545,6 +1569,50 @@ function PersonalizationTab() {
           placeholder="e.g., Engineering, Design"
           className="mt-2 rounded-lg"
         />
+      </div>
+
+      <Separator />
+
+      {/* Local AI Configuration Section */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <SlidersHorizontal className="size-4 text-muted-foreground" />
+          Local AI Model Integration
+        </h3>
+        
+        <div className="space-y-3 pt-1">
+          <div>
+            <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Local AI Connection URL
+            </Label>
+            <Input
+              id="local_ai_url"
+              value={localUrl}
+              onChange={(e) => handleUrlChange(e.target.value)}
+              placeholder="e.g., http://localhost:8080/v1"
+              className="mt-2 rounded-lg font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              The OpenAI-compatible endpoint URL of your locally running LLM (e.g. llama.cpp or Ollama).
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="local_ai_model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Local Model Identifier
+            </Label>
+            <Input
+              id="local_ai_model"
+              value={localModel}
+              onChange={(e) => handleModelChange(e.target.value)}
+              placeholder="e.g., gemma-4, llama3"
+              className="mt-2 rounded-lg font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              The exact name or identifier of the local model currently loaded in your server.
+            </p>
+          </div>
+        </div>
       </div>
 
       <Separator />
