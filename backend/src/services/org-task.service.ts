@@ -29,6 +29,8 @@ export interface OrgTaskDTO {
   start_date: string | null;
   due_date: string | null;
   created_by: string;
+  creator_name: string | null;
+  creator_email: string | null;
   created_at: string;
   updated_at: string;
   assignees?: Array<{ id: string; email: string; name: string | null; created_at: string }>;
@@ -92,7 +94,7 @@ const toISO = (value: Date | string | null | undefined): string | null => {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 };
 
-const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string }): OrgTaskDTO => ({
+const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string; creator_name?: string | null; creator_email?: string | null }): OrgTaskDTO => ({
   id: task.id,
   workspace_id: task.workspace_id,
   org_id: task.org_id ?? null,
@@ -107,6 +109,8 @@ const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string }): O
   start_date: toISO(task.start_date),
   due_date: toISO(task.due_date),
   created_by: task.created_by,
+  creator_name: task.creator_name ?? null,
+  creator_email: task.creator_email ?? null,
   created_at: toISO(task.created_at)!,
   updated_at: toISO(task.updated_at)!,
   assignees: task.assignees as any,

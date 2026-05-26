@@ -26,6 +26,8 @@ export interface TaskDTO {
   org_id?: string;
   space_id?: string;
   created_by: string;
+  creator_name?: string | null;
+  creator_email?: string | null;
   created_at: string;
   updated_at: string;
   assignees?: Array<{ id: string; name: string | null; email: string }>;
