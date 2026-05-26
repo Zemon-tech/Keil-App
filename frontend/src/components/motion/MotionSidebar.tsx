@@ -22,6 +22,8 @@ import {
   Loader2,
   SquarePen,
   Mic,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -50,8 +52,11 @@ import {
   useUpdateMotionPage,
   useMotionSocketListeners,
 } from "@/hooks/api/useMotionPages";
-import { useMeetingHistory } from "@/hooks/api/useMeetings";
+import { useMeetingHistory, useDeleteRecording, useCancelTranscription } from "@/hooks/api/useMeetings";
 import { useMeetingStore } from "@/store/useMeetingStore";
+import { useQueryClient } from "@tanstack/react-query";
+import { getSocket } from "@/lib/socket";
+import { toast } from "sonner";
 
 const mainTabs = [
   { id: "home", title: "Home", icon: Home, url: "/motion?home=true" },
@@ -309,6 +314,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const { pageId } = useParams();
 
   const { activeOrgId, activeSpaceId } = useAppContext();
+  const queryClient = useQueryClient();
 
   // ── API data ────────────────────────────────────────────────────────────────
   const { data: apiPages = [], isLoading: isPagesLoading } = useMotionPages(
@@ -337,6 +343,28 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
     pageId ?? null,
     user?.id ?? null,
   );
+
+  // ── WebSockets real-time status listener for meetings ──
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleMeetingUpdate = (payload: {
+      type: string;
+      recordingId: string;
+      status: string;
+      recording?: any;
+    }) => {
+      console.log("[MotionSidebar] WebSocket meeting update event received:", payload);
+      // Invalidate meeting history query to pull latest state immediately without any delays
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+    };
+
+    socket.on("meeting_update", handleMeetingUpdate);
+    return () => {
+      socket.off("meeting_update", handleMeetingUpdate);
+    };
+  }, [queryClient]);
 
   // ── Zustand store sync ──────────────────────────────────────────────────────
   const hydratePages = useMotionStore((s) => s.hydratePages);
@@ -371,6 +399,35 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   // ── Meetings data ──
   const { data: historyData, isLoading: isMeetingsLoading } = useMeetingHistory(1, 50);
   const recordings = historyData?.recordings ?? [];
+
+  const deleteRecordingMutation = useDeleteRecording();
+  const cancelTranscriptionMutation = useCancelTranscription();
+
+  const handleDeleteRecording = async (recordingId: string) => {
+    if (confirm("Permanently delete this meeting recording and its audio file? This action is irreversible.")) {
+      try {
+        await deleteRecordingMutation.mutateAsync(recordingId);
+        toast.success("Recording deleted successfully");
+      } catch (err: any) {
+        console.error("Failed to delete recording:", err);
+        toast.error("Failed to delete recording", {
+          description: err.message || "An unexpected error occurred."
+        });
+      }
+    }
+  };
+
+  const handleCancelTranscription = async (recordingId: string) => {
+    try {
+      await cancelTranscriptionMutation.mutateAsync(recordingId);
+      toast.success("Transcription sync cancelled");
+    } catch (err: any) {
+      console.error("Failed to cancel transcription:", err);
+      toast.error("Failed to cancel transcription", {
+        description: err.message || "An unexpected error occurred."
+      });
+    }
+  };
 
   const formatDuration = (seconds: number | null) => {
     if (!seconds) return "0:00";
@@ -574,30 +631,92 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 {recordings.map((recording) => (
                   <SidebarMenuItem key={recording.id}>
                     <div
-                      className="group/item relative flex min-h-8 w-full items-center rounded-md py-1.5 px-2 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground cursor-pointer"
+                      className="group/item relative flex min-h-12 w-full items-center rounded-lg py-2 px-3 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground cursor-pointer border border-transparent hover:border-border/40"
                       onClick={() => {
                         openDialog(recording.id);
                       }}
                     >
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="relative flex size-5 shrink-0 items-center justify-center">
-                          <Mic className="size-4 text-muted-foreground transition-colors" />
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <span className={cn(
+                          "relative flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                          recording.transcription_status === "completed"
+                            ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-500"
+                            : recording.transcription_status === "failed"
+                            ? "bg-rose-500/5 border-rose-500/20 text-rose-500"
+                            : "bg-amber-500/5 border-amber-500/20 text-amber-500 animate-pulse"
+                        )}>
+                          <Mic className="size-4" />
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground">
-                          {formatDuration(recording.audio_duration_seconds)} recording
-                          <span className="text-[11px] text-muted-foreground/50 ml-2 font-normal">
-                            ({formatRecordingTime(recording.created_at)})
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex flex-col gap-0.5">
+                          <span className="flex items-center gap-2">
+                            <span className="truncate text-foreground font-semibold">
+                              {recording.audio_duration_seconds 
+                                ? `${formatDuration(recording.audio_duration_seconds)} Recording` 
+                                : "Meeting Capture"}
+                            </span>
+                            {recording.transcription_status === "processing" && (
+                              <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded font-normal animate-pulse flex items-center gap-1">
+                                <Loader2 className="size-2.5 animate-spin" />
+                                Syncing
+                              </span>
+                            )}
+                            {recording.transcription_status === "failed" && (
+                              <span className="text-[10px] bg-rose-500/10 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded font-normal flex items-center gap-1">
+                                <AlertCircle className="size-2.5" />
+                                Failed
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground/60 font-normal">
+                            {formatRecordingTime(recording.created_at)}
                           </span>
                         </span>
                       </div>
-                      <span className={cn(
-                        "h-1.5 w-1.5 rounded-full shrink-0 ml-2 mr-1 shadow-sm",
-                        recording.transcription_status === "completed"
-                          ? "bg-emerald-500"
-                          : recording.transcription_status === "failed"
-                          ? "bg-rose-500"
-                          : "bg-amber-500 animate-pulse"
-                      )} />
+
+                      {/* Dropdown Menu actions for Stop Transcription / Delete Recording */}
+                      <div className="absolute right-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100 z-20">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 rounded-lg text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground shrink-0"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }}
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44 rounded-xl p-1 z-30">
+                            {recording.transcription_status === "processing" && (
+                              <DropdownMenuItem
+                                className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-amber-600 dark:text-amber-400"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleCancelTranscription(recording.id);
+                                }}
+                              >
+                                <X className="size-3.5" />
+                                Cancel Sync
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-destructive focus:text-destructive"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteRecording(recording.id);
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                              Delete Recording
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </SidebarMenuItem>
                 ))}

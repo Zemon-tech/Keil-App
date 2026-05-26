@@ -15,9 +15,10 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useMeetingRecording } from "@/hooks/api/useMeetings";
+import { useMeetingRecording, useDeleteRecording, useCancelTranscription } from "@/hooks/api/useMeetings";
 
 interface MeetingReviewDialogProps {
   open: boolean;
@@ -33,6 +34,38 @@ export const MeetingReviewDialog: React.FC<MeetingReviewDialogProps> = ({
   const { data: recording, isLoading, isError } = useMeetingRecording(
     open ? recordingId : null
   );
+
+  const deleteMutation = useDeleteRecording();
+  const cancelMutation = useCancelTranscription();
+
+  const handleDelete = async () => {
+    if (!recordingId) return;
+    if (confirm("Permanently delete this meeting recording and its audio file? This action is irreversible.")) {
+      try {
+        await deleteMutation.mutateAsync(recordingId);
+        toast.success("Recording deleted successfully");
+        onOpenChange(false);
+      } catch (err: any) {
+        console.error("Failed to delete recording:", err);
+        toast.error("Failed to delete recording", {
+          description: err.message || "An unexpected error occurred."
+        });
+      }
+    }
+  };
+
+  const handleCancelTranscription = async () => {
+    if (!recordingId) return;
+    try {
+      await cancelMutation.mutateAsync(recordingId);
+      toast.success("Transcription sync cancelled");
+    } catch (err: any) {
+      console.error("Failed to cancel transcription:", err);
+      toast.error("Failed to cancel transcription", {
+        description: err.message || "An unexpected error occurred."
+      });
+    }
+  };
 
   const transcript = recording?.transcript_text ?? null;
   const diarizedTranscript = recording?.transcript_diarized ?? null;
@@ -165,6 +198,43 @@ export const MeetingReviewDialog: React.FC<MeetingReviewDialogProps> = ({
                   <div className="h-4 w-px bg-black/8 dark:bg-white/8 mx-1" />
                 </>
               )}
+
+              {(status === "pending" || status === "processing") && (
+                <>
+                  <button
+                    onClick={handleCancelTranscription}
+                    disabled={cancelMutation.isPending}
+                    title="Cancel Transcription"
+                    className="p-1.5 rounded-md hover:bg-amber-500/10 dark:hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 cursor-pointer transition-colors flex items-center justify-center shrink-0"
+                  >
+                    {cancelMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <X className="h-4 w-4 text-amber-500" />
+                    )}
+                  </button>
+                  <div className="h-4 w-px bg-black/8 dark:bg-white/8 mx-1" />
+                </>
+              )}
+
+              {recordingId && (
+                <>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    title="Delete Recording"
+                    className="p-1.5 rounded-md hover:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 cursor-pointer transition-colors flex items-center justify-center shrink-0"
+                  >
+                    {deleteMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                  <div className="h-4 w-px bg-black/8 dark:bg-white/8 mx-1" />
+                </>
+              )}
+
               <button
                 onClick={() => onOpenChange(false)}
                 className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"

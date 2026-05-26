@@ -123,7 +123,9 @@ export const getRecordingById = async (recordingId: string): Promise<MeetingReco
  */
 export const getRecordingsByMeetingId = async (meetingId: string): Promise<MeetingRecording[]> => {
     const queryText = `
-        SELECT * FROM public.meeting_recordings
+        SELECT id, user_id, meeting_id, audio_s3_key, audio_duration_seconds, 
+               sarvam_job_id, transcription_status, language_detected, created_at, updated_at
+        FROM public.meeting_recordings
         WHERE meeting_id = $1
         ORDER BY created_at DESC
     `;
@@ -149,7 +151,9 @@ export const getMeetingHistory = async (
     const total = parseInt(countResult.rows[0].total, 10);
 
     const queryText = `
-        SELECT * FROM public.meeting_recordings
+        SELECT id, user_id, meeting_id, audio_s3_key, audio_duration_seconds, 
+               sarvam_job_id, transcription_status, language_detected, created_at, updated_at
+        FROM public.meeting_recordings
         WHERE user_id = $1
         ORDER BY created_at DESC
         LIMIT $2 OFFSET $3
@@ -177,4 +181,17 @@ export const searchMeetings = async (
     `;
     const result = await pool.query(queryText, [userId, `%${query}%`]);
     return result.rows;
+};
+
+/**
+ * Permanently deletes a recording from the database
+ */
+export const deleteRecording = async (recordingId: string, userId: string): Promise<boolean> => {
+    const queryText = `
+        DELETE FROM public.meeting_recordings
+        WHERE id = $1 AND user_id = $2
+        RETURNING id
+    `;
+    const result = await pool.query(queryText, [recordingId, userId]);
+    return result.rows.length > 0;
 };

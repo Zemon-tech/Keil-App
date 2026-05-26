@@ -28,4 +28,10 @@ router.get("/recording/:recordingId/review", meetingController.getRecordingRevie
 // Endpoint to retrieve recordings associated with a specific meeting
 router.get("/:meetingId/recordings", meetingController.getMeetingRecordings);
 
+// Endpoint to stop/cancel an active transcription job
+router.post("/recording/:recordingId/cancel-transcription", meetingController.cancelTranscription);
+
+// Endpoint to permanently delete a recording and its audio file
+router.delete("/recording/:recordingId", meetingController.deleteRecording);
+
 export default router;

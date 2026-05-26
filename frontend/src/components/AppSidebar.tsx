@@ -55,6 +55,8 @@ import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { useChatStore } from "@/store/useChatStore";
 import { useMeetingStore } from "@/store/useMeetingStore";
+import { getSocket } from "@/lib/socket";
+import { toast } from "sonner";
 import type { Organisation } from "@/hooks/api/useOrganisations";
 import {
   Dialog,
@@ -319,6 +321,50 @@ export function AppSidebar() {
   const { unreadCount } = useNotifications();
 
   const { isMinimized, restoreDialog, duration, status, isDialogOpen, openDialog } = useMeetingStore();
+
+  // Global WebSocket listener for background meeting transcription updates
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleMeetingUpdate = (payload: {
+      type: string;
+      recordingId: string;
+      status: string;
+      recording?: any;
+    }) => {
+      console.log("[AppSidebar] WebSocket meeting update event received:", payload);
+      
+      if (payload.status === "processing") {
+        toast.info("Meeting Sync Started", {
+          description: "Your background capture is now being transcribed using AI.",
+          duration: 5000
+        });
+      } else if (payload.status === "completed" && payload.recording) {
+        toast.success("Meeting Captured Successfully", {
+          description: "Your session transcript and diarization are ready.",
+          action: {
+            label: "Open Review",
+            onClick: () => {
+              openDialog(payload.recordingId);
+            }
+          },
+          duration: 10000
+        });
+      } else if (payload.status === "failed") {
+        console.error("[AppSidebar] Meeting transcription job failed for recording ID:", payload.recordingId, payload.recording);
+        toast.error("Meeting Sync Failed", {
+          description: "Sarvam AI failed to transcribe the background capture. Check developer console logs.",
+          duration: 8000
+        });
+      }
+    };
+
+    socket.on("meeting_update", handleMeetingUpdate);
+    return () => {
+      socket.off("meeting_update", handleMeetingUpdate);
+    };
+  }, [openDialog]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);

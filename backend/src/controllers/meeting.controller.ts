@@ -6,7 +6,7 @@ import { ApiError } from "../utils/ApiError";
 import { config } from "../config";
 import { getS3Client } from "../lib/s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
 import { createServiceLogger } from "../lib/logger";
 
@@ -153,65 +153,118 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             return res.status(500).json({ error: "Sarvam did not return an upload URL for the audio file" });
         }
 
-        // 4. Stream S3 audio directly to Sarvam storage
-        log.info({ step: "4/7" }, "Downloading audio from S3 via presigned GET");
-        const audioResponse = await fetch(presignedAudioUrl);
-        if (!audioResponse.ok) {
-            return res.status(audioResponse.status).json({ error: "Failed to download audio file from S3" });
-        }
-        
-        const contentLength = audioResponse.headers.get("content-length");
-        
-        log.info({ step: "5/7" }, "Streaming audio to Sarvam Azure storage");
-        const sarvamUploadResponse = await fetch(sarvamUploadUrl, {
-            method: "PUT",
-            headers: {
-                "x-ms-blob-type": "BlockBlob",
-                "Content-Type": sanitizeMimeType(contentType),
-                ...(contentLength ? { "Content-Length": contentLength } : {})
-            },
-            body: audioResponse.body
-        });
-
-        if (!sarvamUploadResponse.ok) {
-            const errText = await sarvamUploadResponse.text();
-            log.error({ errText }, "Sarvam storage upload error");
-            return res.status(sarvamUploadResponse.status).json({ error: "Failed to upload audio to Sarvam storage" });
-        }
-        log.debug("Audio streamed successfully");
-
-        // 5. Start the processing on Sarvam
-        log.info({ sarvamJobId, step: "6/7" }, "Starting Sarvam job processing");
-        const startResponse = await fetch(`https://api.sarvam.ai/speech-to-text/job/v1/${sarvamJobId}/start`, {
-            method: "POST",
-            headers: sarvamHeaders,
-            body: JSON.stringify({})
-        });
-
-        if (!startResponse.ok) {
-            const errText = await startResponse.text();
-            log.error({ errText }, "Sarvam start job error");
-            return res.status(startResponse.status).json({ error: "Failed to start Sarvam job" });
-        }
-        log.info("Sarvam job started successfully");
-
-        // 6. Update database record with the job ID and processing state
-        log.info({ recordingId, step: "7/7" }, "Updating database record");
+        // 4. Update database record with the job ID and processing state synchronously
+        log.info({ recordingId, step: "4/7" }, "Updating database record to processing state");
         await meetingService.updateRecordingJob(recordingId, sarvamJobId, durationSeconds);
-        log.info("Database record updated successfully");
 
+        // Broadcast real-time processing initiation notification via WebSockets
+        try {
+            const { broadcastMeetingUpdate } = require("../socket");
+            const updatedRec = await meetingService.getRecordingById(recordingId);
+            broadcastMeetingUpdate(user.id, {
+                type: "transcription_started",
+                recordingId: recordingId,
+                status: "processing",
+                recording: updatedRec
+            });
+        } catch (sockErr) {
+            log.warn({ sockErr, recordingId }, "Failed to broadcast WebSocket transcription processing start update");
+        }
+
+        // 5. Fire off the heavy background streaming and starting asynchronously (fire-and-forget)
+        log.info({ recordingId, sarvamJobId }, "Triggering async S3 streaming and start job pipeline in the background");
+        
+        (async () => {
+            try {
+                log.info({ sarvamJobId, step: "Background 1/3" }, "Downloading audio from S3 via presigned GET in background");
+                const audioResponse = await fetch(presignedAudioUrl);
+                if (!audioResponse.ok) {
+                    throw new Error(`Failed to download audio file from S3: status ${audioResponse.status}`);
+                }
+                
+                const contentLength = audioResponse.headers.get("content-length");
+                
+                log.info({ sarvamJobId, step: "Background 2/3" }, "Streaming audio to Sarvam Azure storage in background");
+                const sarvamUploadResponse = await fetch(sarvamUploadUrl, {
+                    method: "PUT",
+                    headers: {
+                        "x-ms-blob-type": "BlockBlob",
+                        "Content-Type": sanitizeMimeType(contentType),
+                        ...(contentLength ? { "Content-Length": contentLength } : {})
+                    },
+                    body: audioResponse.body
+                });
+
+                if (!sarvamUploadResponse.ok) {
+                    const errText = await sarvamUploadResponse.text();
+                    throw new Error(`Failed to upload audio to Sarvam storage: status ${sarvamUploadResponse.status}, details: ${errText}`);
+                }
+                log.info({ sarvamJobId }, "Audio streamed successfully to Sarvam in background");
+
+                log.info({ sarvamJobId, step: "Background 3/3" }, "Triggering Sarvam job start in background");
+                const startResponse = await fetch(`https://api.sarvam.ai/speech-to-text/job/v1/${sarvamJobId}/start`, {
+                    method: "POST",
+                    headers: sarvamHeaders,
+                    body: JSON.stringify({})
+                });
+
+                if (!startResponse.ok) {
+                    const errText = await startResponse.text();
+                    throw new Error(`Failed to start Sarvam job: status ${startResponse.status}, details: ${errText}`);
+                }
+                log.info({ sarvamJobId }, "Sarvam job successfully started in background");
+            } catch (bgError: any) {
+                log.error({ err: bgError, sarvamJobId, recordingId }, "Asynchronous background streaming/starting pipeline failed");
+                const updated = await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => {
+                    log.error({ err: e }, "Failed to update recording status on background failure");
+                    return null;
+                });
+                if (updated) {
+                    try {
+                        const { broadcastMeetingUpdate } = require("../socket");
+                        broadcastMeetingUpdate(updated.user_id, {
+                            type: "transcription_complete",
+                            recordingId: recordingId,
+                            status: "failed",
+                            recording: updated
+                        });
+                    } catch (sockErr) {
+                        log.warn({ sockErr }, "Failed to broadcast WebSocket transcription failure update on background error");
+                    }
+                }
+            }
+        })().catch(e => log.error({ err: e }, "Unhandled background Promise rejection"));
+
+        // 6. Return response to the frontend instantly
         return res.status(200).json(
             new ApiResponse(200, {
                 jobId: sarvamJobId,
                 recordingId
-            }, "Transcription job triggered successfully")
+            }, "Transcription job triggered and processing in the background")
         );
+
     } catch (err: any) {
-        log.error({ err, recordingId }, "Transcription pipeline failed");
+        log.error({ err, recordingId }, "Transcription pipeline trigger failed");
         if (recordingId) {
-            await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => log.error({ err: e }, "Failed to update recording status"));
+            const updated = await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => {
+                log.error({ err: e }, "Failed to update recording status on trigger failure");
+                return null;
+            });
+            if (updated) {
+                try {
+                    const { broadcastMeetingUpdate } = require("../socket");
+                    broadcastMeetingUpdate(updated.user_id, {
+                        type: "transcription_complete",
+                        recordingId: recordingId,
+                        status: "failed",
+                        recording: updated
+                    });
+                } catch (sockErr) {
+                    log.warn({ sockErr }, "Failed to broadcast WebSocket transcription failure update on trigger failure");
+                }
+            }
         }
-        return res.status(500).json({ error: "Transcription pipeline failed" });
+        return res.status(500).json({ error: "Failed to trigger transcription pipeline" });
     }
 });
 
@@ -226,6 +279,20 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
     }
 
     try {
+        // Optimistically check database state first to avoid redundant Sarvam API network calls
+        const localRecording = await meetingService.getRecordingById(recordingId as string);
+        if (localRecording) {
+            if (localRecording.transcription_status === "completed" || localRecording.transcription_status === "failed") {
+                log.debug({ recordingId }, "Recording status resolved from database cache");
+                return res.status(200).json(
+                    new ApiResponse(200, {
+                        status: localRecording.transcription_status,
+                        recording: localRecording
+                    }, `Transcription status resolved from database: ${localRecording.transcription_status}`)
+                );
+            }
+        }
+
         const sarvamHeaders = {
             "api-subscription-key": config.sarvamApiKey,
             "Content-Type": "application/json"
@@ -305,6 +372,19 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
                 languageDetected
             );
 
+            // Broadcast real-time completion notification via WebSockets
+            try {
+                const { broadcastMeetingUpdate } = require("../socket");
+                broadcastMeetingUpdate(updated.user_id, {
+                    type: "transcription_complete",
+                    recordingId: recordingId as string,
+                    status: "completed",
+                    recording: updated
+                });
+            } catch (sockErr) {
+                log.warn({ sockErr }, "Failed to broadcast WebSocket transcription completion update");
+            }
+
             return res.status(200).json(
                 new ApiResponse(200, {
                     status: "completed",
@@ -314,6 +394,19 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
         } else if (jobState === "Failed") {
             log.warn({ jobId }, "Sarvam job failed");
             const updated = await meetingService.updateRecordingStatus(recordingId as string, "failed");
+
+            // Broadcast failure notification via WebSockets
+            try {
+                const { broadcastMeetingUpdate } = require("../socket");
+                broadcastMeetingUpdate(updated.user_id, {
+                    type: "transcription_complete",
+                    recordingId: recordingId as string,
+                    status: "failed",
+                    recording: updated
+                });
+            } catch (sockErr) {
+                log.warn({ sockErr }, "Failed to broadcast WebSocket transcription failure update");
+            }
 
             return res.status(200).json(
                 new ApiResponse(200, {
@@ -457,5 +550,128 @@ export const getRecordingReview = catchAsync(async (req: Request, res: Response)
     } catch (err: any) {
         console.error(`❌ [getRecordingReview] Error:`, err);
         return res.status(500).json({ error: "Failed to retrieve recording" });
+    }
+});
+
+/**
+ * Stop/cancel transcription of an active processing or pending recording
+ */
+export const cancelTranscription = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const recordingId = req.params.recordingId as string;
+    if (!recordingId) {
+        return res.status(400).json({ error: "Recording ID is required" });
+    }
+
+    try {
+        const recording = await meetingService.getRecordingById(recordingId);
+
+        if (!recording) {
+            return res.status(404).json({ error: "Recording not found" });
+        }
+
+        if (recording.user_id !== user.id) {
+            return res.status(403).json({ error: "Unauthorized to cancel this transcription" });
+        }
+
+        // Only allow canceling if state is pending or processing
+        if (recording.transcription_status !== "pending" && recording.transcription_status !== "processing") {
+            return res.status(400).json({ error: "Can only cancel active transcription jobs" });
+        }
+
+        // Set status to failed/cancelled in database
+        const updated = await meetingService.updateRecordingStatus(recordingId, "failed");
+
+        // Broadcast failure update via WebSockets to instantly update lists and stop spinners
+        try {
+            const { broadcastMeetingUpdate } = require("../socket");
+            broadcastMeetingUpdate(user.id, {
+                type: "transcription_complete",
+                recordingId: recordingId,
+                status: "failed",
+                recording: updated
+            });
+        } catch (sockErr) {
+            log.warn({ sockErr }, "Failed to broadcast WebSocket transcription cancellation update");
+        }
+
+        return res.status(200).json(
+            new ApiResponse(200, updated, "Transcription processing cancelled successfully")
+        );
+    } catch (err: any) {
+        console.error(`❌ [cancelTranscription] Error:`, err);
+        return res.status(500).json({ error: "Failed to cancel transcription" });
+    }
+});
+
+/**
+ * Permanently delete a meeting recording (audio file in S3 bucket and database row)
+ */
+export const deleteRecording = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const recordingId = req.params.recordingId as string;
+    if (!recordingId) {
+        return res.status(400).json({ error: "Recording ID is required" });
+    }
+
+    try {
+        const recording = await meetingService.getRecordingById(recordingId);
+
+        if (!recording) {
+            return res.status(404).json({ error: "Recording not found" });
+        }
+
+        if (recording.user_id !== user.id) {
+            return res.status(403).json({ error: "Unauthorized to delete this recording" });
+        }
+
+        // 1. Delete the raw audio file from the S3 bucket to save cloud storage costs
+        if (recording.audio_s3_key) {
+            log.info({ recordingId, s3Key: recording.audio_s3_key }, "Deleting audio file from S3 bucket");
+            const deleteCommand = new DeleteObjectCommand({
+                Bucket: config.sevallaS3BucketName,
+                Key: recording.audio_s3_key,
+            });
+            await getS3Client().send(deleteCommand).catch(s3Err => {
+                log.error({ s3Err }, "Failed to delete audio file from S3 bucket during recording deletion");
+            });
+        }
+
+        // 2. Delete the record from the database
+        log.info({ recordingId }, "Deleting recording database row");
+        const deleted = await meetingService.deleteRecording(recordingId, user.id);
+
+        if (!deleted) {
+            return res.status(500).json({ error: "Failed to delete database record" });
+        }
+
+        // 3. Broadcast real-time deletion via WebSockets to clear it from any active frontend views
+        try {
+            const { broadcastMeetingUpdate } = require("../socket");
+            broadcastMeetingUpdate(user.id, {
+                type: "recording_deleted",
+                recordingId: recordingId,
+                status: "deleted"
+            });
+        } catch (sockErr) {
+            log.warn({ sockErr }, "Failed to broadcast WebSocket deletion update");
+        }
+
+        return res.status(200).json(
+            new ApiResponse(200, { recordingId }, "Recording and audio data deleted successfully")
+        );
+    } catch (err: any) {
+        console.error(`❌ [deleteRecording] Error:`, err);
+        return res.status(500).json({ error: "Failed to delete recording" });
     }
 });

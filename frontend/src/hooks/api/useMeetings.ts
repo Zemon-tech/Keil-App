@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,5 +84,37 @@ export function useMeetingRecording(recordingId: string | null) {
       return res.data.data;
     },
     enabled: !!recordingId,
+  });
+}
+
+/**
+ * Deletes a recording permanently (both S3 file and database entry).
+ */
+export function useDeleteRecording() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (recordingId: string) => {
+      const res = await api.delete(`v1/meetings/recording/${recordingId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.all });
+    },
+  });
+}
+
+/**
+ * Cancels/stops active transcription of a recording.
+ */
+export function useCancelTranscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (recordingId: string) => {
+      const res = await api.post(`v1/meetings/recording/${recordingId}/cancel-transcription`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.all });
+    },
   });
 }

@@ -35,6 +35,16 @@ const startServer = async () => {
             dbLog.warn({ err }, "Note on altering motion_permission enum");
         }
 
+        // Ensure optimized meeting_recordings indexes exist
+        try {
+            await pool.query("CREATE INDEX IF NOT EXISTS idx_meeting_recordings_user_id ON public.meeting_recordings(user_id)");
+            await pool.query("CREATE INDEX IF NOT EXISTS idx_meeting_recordings_meeting_id ON public.meeting_recordings(meeting_id)");
+            await pool.query("CREATE INDEX IF NOT EXISTS idx_meeting_recordings_created_at_desc ON public.meeting_recordings(created_at DESC)");
+            dbLog.info("Successfully verified and applied meeting recordings database indexes");
+        } catch (err: unknown) {
+            dbLog.warn({ err }, "Note on creating meeting recordings indexes");
+        }
+
         server.listen(port, '0.0.0.0', () => {
             log.info({ port }, `Server is running at http://localhost:${port}`);
         });

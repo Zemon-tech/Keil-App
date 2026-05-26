@@ -156,3 +156,8 @@ export const broadcastMotionChange = (spaceId: string, payload: { type: string, 
     if (!io) return;
     io.to(`space:${spaceId}`).emit("motion_change", payload);
 };
+
+export const broadcastMeetingUpdate = (userId: string, payload: { type: string; recordingId: string; status: string; recording?: any }) => {
+    if (!io) return;
+    io.to(`user:${userId}`).emit("meeting_update", payload);
+};
