@@ -36,14 +36,17 @@ export const orgKeys = {
  * Fetches all organisations the current user belongs to.
  * Calls: GET /api/v1/orgs
  * Returns an empty array (not an error) when the user has no organisations.
+ *
+ * @param enabled - When false, the query will not fire. Use to gate on auth readiness.
  */
-export function useOrganisations() {
+export function useOrganisations(enabled: boolean = true) {
   return useQuery<Organisation[]>({
     queryKey: orgKeys.list(),
     queryFn: async () => {
       const res = await api.get<{ data: { organisations: Organisation[] } }>("v1/orgs");
       return res.data.data.organisations ?? [];
     },
+    enabled,
     retry: (failureCount, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;

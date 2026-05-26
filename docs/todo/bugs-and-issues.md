@@ -1,5 +1,18 @@
 # Bugs & Issues Tracker
 
+## Resolved Issues
+
+### ~~13. Organisation Selector Not Persistent Across Refresh~~ ✅ FIXED
+- **Location**: `frontend/src/contexts/AppContext.tsx`, `frontend/src/hooks/api/useOrganisations.ts`, `frontend/src/contexts/AuthContext.tsx`
+- **Problem**: On page refresh, the app always reset to the personal org/space regardless of the user's last selection. Caused by a race condition where `useOrganisations()` fired before the Supabase session was ready (401 → empty array → membership validation falsely concluded user was removed from org).
+- **Fix Applied**:
+  - Added `isAuthenticated` flag to `AuthContext` to signal auth readiness.
+  - Gated `useOrganisations()` with an `enabled` param tied to auth readiness.
+  - Merged auto-select and membership validation into a single effect guarded by `isOrgsSuccess` (TanStack Query), preventing premature fallback on empty/pending data.
+- **Plan**: `docs/plans/fix-org-selector-persistence.md`
+
+---
+
 ## Open Issues — ADK Agent (Backend)
 
 ### 4. InMemorySessionService — No Persistence
