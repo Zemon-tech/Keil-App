@@ -23,7 +23,6 @@ import {
   SquarePen,
   Mic,
   AlertCircle,
-  CheckCircle,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -627,60 +626,77 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
             </div>
           ) : (
             <SidebarGroup>
+              <div className="group/section flex h-8 items-center justify-between">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground"
+                >
+                  <ChevronDown className="size-3" />
+                  Meetings
+                </button>
+                {canCreatePage && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
+                    onClick={() => openDialog()}
+                    aria-label="Record meeting"
+                  >
+                    <Plus className="size-3.5" />
+                  </Button>
+                )}
+              </div>
               <SidebarMenu>
                 {recordings.map((recording) => (
                   <SidebarMenuItem key={recording.id}>
                     <div
-                      className="group/item relative flex min-h-12 w-full items-center rounded-lg py-2 px-3 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground cursor-pointer border border-transparent hover:border-border/40"
+                      className="group/item relative flex min-h-9 w-full cursor-pointer items-center rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
                       onClick={() => {
                         openDialog(recording.id);
                       }}
                     >
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-2 pr-8">
                         <span className={cn(
-                          "relative flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                          "relative flex size-5 shrink-0 items-center justify-center transition-colors",
                           recording.transcription_status === "completed"
-                            ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-500"
+                            ? "text-emerald-500"
                             : recording.transcription_status === "failed"
-                            ? "bg-rose-500/5 border-rose-500/20 text-rose-500"
-                            : "bg-amber-500/5 border-amber-500/20 text-amber-500 animate-pulse"
+                            ? "text-rose-500"
+                            : "text-amber-500"
                         )}>
                           <Mic className="size-4" />
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex flex-col gap-0.5">
-                          <span className="flex items-center gap-2">
-                            <span className="truncate text-foreground font-semibold">
-                              {recording.audio_duration_seconds 
-                                ? `${formatDuration(recording.audio_duration_seconds)} Recording` 
-                                : "Meeting Capture"}
-                            </span>
-                            {recording.transcription_status === "processing" && (
-                              <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded font-normal animate-pulse flex items-center gap-1">
-                                <Loader2 className="size-2.5 animate-spin" />
-                                Syncing
-                              </span>
-                            )}
-                            {recording.transcription_status === "failed" && (
-                              <span className="text-[10px] bg-rose-500/10 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded font-normal flex items-center gap-1">
-                                <AlertCircle className="size-2.5" />
-                                Failed
-                              </span>
-                            )}
+                        <span className="flex min-w-0 flex-1 items-center gap-2 text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground">
+                          <span className="min-w-0 flex-1 truncate">
+                            {recording.audio_duration_seconds
+                              ? `${formatDuration(recording.audio_duration_seconds)} Recording`
+                              : "Meeting Capture"}
                           </span>
-                          <span className="text-[11px] text-muted-foreground/60 font-normal">
+                          <span className="hidden shrink-0 text-[11px] font-normal text-muted-foreground/60 xl:inline">
                             {formatRecordingTime(recording.created_at)}
                           </span>
+                          {recording.transcription_status === "processing" && (
+                            <span className="flex shrink-0 items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-normal text-amber-600 dark:text-amber-400">
+                              <Loader2 className="size-2.5 animate-spin" />
+                              Syncing
+                            </span>
+                          )}
+                          {recording.transcription_status === "failed" && (
+                            <span className="flex shrink-0 items-center gap-1 rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-normal text-rose-600 dark:text-rose-400">
+                              <AlertCircle className="size-2.5" />
+                              Failed
+                            </span>
+                          )}
                         </span>
                       </div>
 
-                      {/* Dropdown Menu actions for Stop Transcription / Delete Recording */}
-                      <div className="absolute right-2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100 z-20">
+                      <div className="absolute right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="size-7 rounded-lg text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground shrink-0"
+                              className="size-6 shrink-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -689,7 +705,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                               <MoreHorizontal className="size-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44 rounded-xl p-1 z-30">
+                          <DropdownMenuContent align="end" className="w-44 rounded-xl p-1">
                             {recording.transcription_status === "processing" && (
                               <DropdownMenuItem
                                 className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-amber-600 dark:text-amber-400"

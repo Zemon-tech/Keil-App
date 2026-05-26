@@ -51,8 +51,6 @@ import {
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { SettingsDialog } from "@/components/SettingsDialog";
-import { NotificationDialog } from "@/components/NotificationDialog";
-import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { useChatStore } from "@/store/useChatStore";
 import { useMeetingStore } from "@/store/useMeetingStore";
 import { getSocket } from "@/lib/socket";
@@ -305,7 +303,17 @@ function OrgSpaceSubmenu({
 
 // ─── AppSidebar ───────────────────────────────────────────────────────────────
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  notificationDrawerOpen?: boolean;
+  notificationDialogOpen?: boolean;
+  onNotificationDrawerOpenChange?: (open: boolean) => void;
+};
+
+export function AppSidebar({
+  notificationDrawerOpen = false,
+  notificationDialogOpen = false,
+  onNotificationDrawerOpenChange,
+}: AppSidebarProps) {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -315,8 +323,7 @@ export function AppSidebar() {
   const [orgManageOpen, setOrgManageOpen] = useState(false);
   const [orgManageTab, setOrgManageTab] = useState<"create" | "join">("create");
   const openChat = useChatStore((state) => state.openChat);
-  const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
-  const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const closeChat = useChatStore((state) => state.closeChat);
   const [searchQuery, setSearchQuery] = useState("");
   const { unreadCount } = useNotifications();
 
@@ -551,7 +558,8 @@ export function AppSidebar() {
                             if (item.action === "meetings") {
                               openDialog();
                             } else if (item.action === "notifications") {
-                              setNotificationDrawerOpen(true);
+                              closeChat();
+                              onNotificationDrawerOpenChange?.(true);
                             }
                           }
                         }}
@@ -589,7 +597,7 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       onClick={() => {
                         openChat();
-                        setNotificationDrawerOpen(false);
+                        onNotificationDrawerOpenChange?.(false);
                       }}
                       tooltip="Chat"
                       className="h-9 rounded-xl px-3 text-[13px] font-medium"
@@ -788,18 +796,6 @@ export function AppSidebar() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         initialTab={settingsInitialTab}
-      />
-      <NotificationDrawer
-        open={notificationDrawerOpen}
-        onOpenChange={setNotificationDrawerOpen}
-        onOpenFullView={() => {
-          setNotificationDrawerOpen(false);
-          setNotificationDialogOpen(true);
-        }}
-      />
-      <NotificationDialog
-        open={notificationDialogOpen}
-        onOpenChange={setNotificationDialogOpen}
       />
     </>
   );
