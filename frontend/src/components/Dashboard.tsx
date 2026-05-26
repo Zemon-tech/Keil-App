@@ -170,7 +170,7 @@ export function Dashboard() {
                         {message.parts
                           ?.filter((p: any) => p.type === "text")
                           ?.map((p: any) => p.text)
-                          ?.join("\n") || ""}
+                          ?.join("\n") || message.content || ""}
                       </MessageResponse>
                     </MessageContent>
                   </Message>

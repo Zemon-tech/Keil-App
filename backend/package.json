@@ -18,6 +18,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1053.0",
     "@google/adk": "^1.1.0",
     "@google/genai": "^0.7.0",
+    "@mastra/ai-sdk": "^1.4.3",
     "@mastra/core": "^1.36.0",
     "@supabase/supabase-js": "^2.97.0",
     "@types/jsonwebtoken": "^9.0.10",

@@ -63,7 +63,11 @@ const getMyPersonalTasksTool = new FunctionTool({
   execute: async (input: unknown, toolContext?: { userId: string }) => {
     const params = input as { status?: string; priority?: string; limit?: number };
     const userId = toolContext?.userId;
-    if (!userId) return { error: "No user context available." };
+    console.log("[ADK Tool] get_my_personal_tasks called with params:", JSON.stringify(params), "for userId:", userId);
+    if (!userId) {
+      console.error("[ADK Tool] get_my_personal_tasks failed: No user context available.");
+      return { error: "No user context available." };
+    }
 
     const tasks = await personalTaskRepository.findByOwner(userId, {
       filters: {
@@ -74,6 +78,7 @@ const getMyPersonalTasksTool = new FunctionTool({
       pagination: { limit: params.limit ?? 10, offset: 0 },
     });
 
+    console.log("[ADK Tool] get_my_personal_tasks found tasks count:", tasks.length);
     if (tasks.length === 0) {
       return { result: "No tasks found matching those filters." };
     }
@@ -124,7 +129,11 @@ const getMyOrgTasksTool = new FunctionTool({
   execute: async (input: unknown, toolContext?: { userId: string }) => {
     const params = input as { status?: string; priority?: string; limit?: number };
     const userId = toolContext?.userId;
-    if (!userId) return { error: "No user context available." };
+    console.log("[ADK Tool] get_my_org_tasks called with params:", JSON.stringify(params), "for userId:", userId);
+    if (!userId) {
+      console.error("[ADK Tool] get_my_org_tasks failed: No user context available.");
+      return { error: "No user context available." };
+    }
 
     const limit = params.limit ?? 10;
     let query = `
@@ -156,7 +165,9 @@ const getMyOrgTasksTool = new FunctionTool({
     query += ` ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC LIMIT $${idx}`;
     queryParams.push(limit);
 
+    console.log("[ADK Tool] get_my_org_tasks running query:", query, "with params:", JSON.stringify(queryParams));
     const result = await pool.query(query, queryParams);
+    console.log("[ADK Tool] get_my_org_tasks returned rows count:", result.rows.length);
 
     if (result.rows.length === 0) {
       return { result: "No assigned org tasks found matching those filters." };
@@ -186,7 +197,11 @@ const summariseWorkloadTool = new FunctionTool({
     "Return a count breakdown of tasks by status for the current user (personal + org). Use this when the user asks for a summary, overview, or dashboard of their work.",
   execute: async (_input: string, toolContext?: { userId: string }) => {
     const userId = toolContext?.userId;
-    if (!userId) return { error: "No user context available." };
+    console.log("[ADK Tool] summarise_my_workload called for userId:", userId);
+    if (!userId) {
+      console.error("[ADK Tool] summarise_my_workload failed: No user context available.");
+      return { error: "No user context available." };
+    }
 
     const [personal, org] = await Promise.all([
       pool.query(
@@ -212,11 +227,14 @@ const summariseWorkloadTool = new FunctionTool({
         {} as Record<string, number>
       );
 
+    const breakdown = {
+      personal_tasks: toMap(personal.rows),
+      org_tasks: toMap(org.rows),
+    };
+    console.log("[ADK Tool] summarise_my_workload calculated breakdown:", JSON.stringify(breakdown));
+
     return {
-      result: {
-        personal_tasks: toMap(personal.rows),
-        org_tasks: toMap(org.rows),
-      },
+      result: breakdown,
     };
   },
 });
@@ -397,19 +415,25 @@ async function collectFinalText(
 ): Promise<string> {
   let finalText = "";
 
+  console.log("[ADK Service] Draining async runner generator stream...");
   for await (const event of stream) {
+    console.log("[ADK Event Received] Event content:", JSON.stringify(event));
     if (event.content?.parts) {
       const textParts = event.content.parts
         .filter((p: { text?: string }) => typeof p.text === "string")
         .map((p: { text?: string }) => p.text as string);
 
       if (textParts.length > 0) {
-        finalText = textParts.join("");
+        const combined = textParts.join("");
+        console.log("[ADK Event Text Delta] Chunk joined text:", combined);
+        finalText = combined;
       }
     }
   }
 
+  console.log("[ADK Service] Stream draining complete. Final accumulated text:", finalText);
   if (!finalText) {
+    console.error("[ADK Service] Error: ADK agent returned empty text response");
     throw new ApiError(500, "ADK agent returned no text response");
   }
 
@@ -432,11 +456,14 @@ export const runAdkAgent = async (
   message: string,
   sessionId?: string
 ): Promise<AdkChatReply> => {
+  console.log("[ADK Service] runAdkAgent invoked. userId:", userId, "message:", message, "sessionId:", sessionId);
   if (!config.googleAdkApiKey) {
+    console.error("[ADK Service] Error: GOOGLE_ADK_API_KEY is not configured in environment.");
     throw new ApiError(500, "GOOGLE_ADK_API_KEY is not configured");
   }
 
   if (!message.trim()) {
+    console.error("[ADK Service] Error: Message parameter is empty.");
     throw new ApiError(400, "Message cannot be empty");
   }
 
@@ -450,6 +477,7 @@ export const runAdkAgent = async (
     (
       await sessionService.createSession({ appName: "keilhq", userId })
     ).id;
+  console.log("[ADK Service] Resolved session ID:", resolvedSessionId);
 
   const stream = runner.runAsync({
     userId,
@@ -459,5 +487,6 @@ export const runAdkAgent = async (
 
   const content = await collectFinalText(stream);
 
+  console.log("[ADK Service] runAdkAgent execution successful. returning payload.");
   return { content, sessionId: resolvedSessionId };
 };
