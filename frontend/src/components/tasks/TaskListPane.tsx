@@ -40,7 +40,7 @@ import type { Task, AnyStatus, TaskPriority } from "@/types/task";
 import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
-import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, STATUS_COLOR } from "./task-detail-shared";
+import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useSpaces } from "@/hooks/api/useSpaces";
 

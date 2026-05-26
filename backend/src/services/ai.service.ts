@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText, type ModelMessage } from "ai";
+import { streamText, type ModelMessage } from "ai";
 import { config } from "../config";
 import { ApiError } from "../utils/ApiError";
 
@@ -18,8 +18,13 @@ const toModelMessages = (messages: AiChatMessage[]): ModelMessage[] => {
     }));
 };
 
-export const generateAiReply = async (messages: AiChatMessage[]) => {
-    if (!config.openRouterApiKey) {
+export const generateAiStream = async (messages: AiChatMessage[]) => {
+    // If a custom/local endpoint is used, we bypass the strict OpenRouter API key requirement
+    // by defaulting to a dummy key since local servers typically do not require authentication.
+    const isLocalOrCustom = config.openRouterBaseUrl && !config.openRouterBaseUrl.includes("openrouter.ai");
+    const apiKey = config.openRouterApiKey || (isLocalOrCustom ? "local-key" : "");
+
+    if (!apiKey) {
         throw new ApiError(500, "OPENROUTER_API_KEY is not configured");
     }
 
@@ -28,8 +33,8 @@ export const generateAiReply = async (messages: AiChatMessage[]) => {
     }
 
     const provider = createOpenAICompatible({
-        name: "openrouter",
-        apiKey: config.openRouterApiKey,
+        name: isLocalOrCustom ? "local-llm" : "openrouter",
+        apiKey: apiKey,
         baseURL: config.openRouterBaseUrl,
         includeUsage: true,
         headers: {
@@ -38,16 +43,9 @@ export const generateAiReply = async (messages: AiChatMessage[]) => {
         },
     });
 
-    const result = await generateText({
+    return streamText({
         model: provider(config.openRouterModel),
         system: SYSTEM_PROMPT,
         messages: toModelMessages(messages).slice(-20),
     });
-
-    return {
-        content: result.text,
-        model: config.openRouterModel,
-        usage: result.usage,
-        finishReason: result.finishReason,
-    };
 };

@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -27,124 +27,16 @@ import {
   useOrgSubtasks,
   useAssignOrgUser,
   useRemoveOrgAssignee,
-  useChangeOrgTaskStatus,
 } from "@/hooks/api/useTasks";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 
-import {
-  STATUS_OPTIONS,
-  STATUS_COLOR,
-  PRIORITY_OPTIONS,
-  PRIORITY_CONFIG,
-  formatDate,
-} from "./task-detail-shared";
+import { formatDate } from "./task-detail-shared";
 import { BulletListEditor } from "./BulletListEditor";
 import { TaskContextSection } from "./TaskContextSection";
-import type { TaskPriority, TaskStatus, AnyStatus } from "@/types/task";
 
-// ─── StatusBadge ──────────────────────────────────────────────────────────────
-function StatusBadge({
-  status,
-  onStatusChange,
-  disabled,
-}: {
-  status: AnyStatus;
-  onStatusChange: (s: TaskStatus) => void;
-  disabled?: boolean;
-}) {
-  if (disabled) {
-    return (
-      <Badge
-        variant="outline"
-        className="h-5 gap-1 px-1.5 text-[11px] opacity-60 cursor-default"
-      >
-        <span className={cn("size-1.5 rounded-full", STATUS_COLOR[status])} />
-        {status}
-      </Badge>
-    );
-  }
 
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Badge
-          variant="outline"
-          className="h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors capitalize"
-        >
-          <span className={cn("size-1.5 rounded-full", STATUS_COLOR[status])} />
-          {status}
-        </Badge>
-      </PopoverTrigger>
-      <PopoverContent className="w-40 p-1" align="start">
-        {STATUS_OPTIONS.map((s) => (
-          <PopoverClose asChild key={s}>
-            <button
-              onClick={() => onStatusChange(s)}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs
-                         hover:bg-accent transition-colors text-left capitalize"
-            >
-              <span className={cn("size-1.5 rounded-full", STATUS_COLOR[s])} />
-              {s}
-            </button>
-          </PopoverClose>
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ─── PriorityBadge ────────────────────────────────────────────────────────────
-function PriorityBadge({
-  priority,
-  onPriorityChange,
-}: {
-  priority: TaskPriority;
-  onPriorityChange?: (p: TaskPriority) => void;
-}) {
-  const cfg = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.low;
-
-  if (!onPriorityChange) {
-    return (
-      <Badge variant="outline" className={cn("h-5 gap-1 px-1.5 text-[11px] capitalize", cfg.color)}>
-        <Flag className="size-3" />
-        {priority}
-      </Badge>
-    );
-  }
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Badge
-          variant="outline"
-          className={cn("h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors capitalize", cfg.color)}
-        >
-          <Flag className="size-3" />
-          {priority}
-        </Badge>
-      </PopoverTrigger>
-      <PopoverContent className="w-40 p-1" align="start">
-        {PRIORITY_OPTIONS.map((p) => {
-          const pcfg = PRIORITY_CONFIG[p];
-          return (
-            <PopoverClose asChild key={p}>
-              <button
-                onClick={() => onPriorityChange(p)}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs
-                           hover:bg-accent transition-colors text-left capitalize"
-              >
-                <span className={cn("size-1.5 rounded-full", pcfg.dot)} />
-                {p}
-              </button>
-            </PopoverClose>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 // ─── OverviewTab ──────────────────────────────────────────────────────────────
 
@@ -172,19 +64,8 @@ export const OverviewTab = ({
   const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
   const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
-  const taskOrgId = task.org_id ?? activeOrgId;
-  const taskSpaceId = task.space_id ?? activeSpaceId;
-  const changeStatus = useChangeOrgTaskStatus(taskOrgId, taskSpaceId);
 
-  const handleStatusChange = (newStatus: TaskStatus) => {
-    changeStatus.mutate({ id: task.id, status: newStatus });
-  };
 
-  const handlePriorityChange = (newPriority: TaskPriority) => {
-    onUpdateField?.({ priority: newPriority });
-  };
-
-  const canUpdateStatus = canEditTask;
 
   const creatorMember = members.find((m) => m.user_id === task.created_by);
   const creatorName = creatorMember

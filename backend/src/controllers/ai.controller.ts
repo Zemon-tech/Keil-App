@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
-import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import * as aiService from "../services/ai.service";
 
@@ -11,10 +10,22 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
         throw new ApiError(400, "messages must be an array");
     }
 
-    const normalizedMessages = messages.map((message) => ({
-        role: message?.role,
-        content: typeof message?.content === "string" ? message.content.trim() : "",
-    }));
+    const normalizedMessages = messages.map((message) => {
+        let content = "";
+        if (typeof message?.content === "string") {
+            content = message.content.trim();
+        } else if (Array.isArray(message?.parts)) {
+            content = message.parts
+                .filter((part: any) => part?.type === "text" && typeof part?.text === "string")
+                .map((part: any) => part.text.trim())
+                .join("\n")
+                .trim();
+        }
+        return {
+            role: message?.role,
+            content,
+        };
+    });
 
     const invalidMessage = normalizedMessages.find(
         (message) =>
@@ -26,9 +37,7 @@ export const chat = catchAsync(async (req: Request, res: Response) => {
         throw new ApiError(400, "Each message must include role and content");
     }
 
-    const reply = await aiService.generateAiReply(normalizedMessages);
+    const stream = await aiService.generateAiStream(normalizedMessages);
 
-    return res.status(200).json(
-        new ApiResponse(200, reply, "AI response generated successfully")
-    );
+    stream.pipeUIMessageStreamToResponse(res);
 });

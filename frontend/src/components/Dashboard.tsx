@@ -4,7 +4,6 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { HeroSection } from "./dashboard/HeroSection";
 import { DashboardPanel } from "./dashboard/DashboardPanel";
 import { useOrgDashboard } from "@/hooks/api/useDashboard";
-import api from "@/lib/api";
 import { useAppContext } from "@/contexts/AppContext";
 import { AlertCircle } from "lucide-react";
 import {
@@ -15,32 +14,64 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { MessageCircle } from "lucide-react";
-
-type DashboardChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
+import { useChat } from "@ai-sdk/react";
+import { supabase } from "@/lib/supabase";
+import { DefaultChatTransport } from "ai";
 
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
-  const [messages, setMessages] = useState<DashboardChatMessage[]>([]);
-  const [isAssistantThinking, setIsAssistantThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Dashboard Data ─────────────────────────────────────────
   const { activeOrgId, activeSpaceId } = useAppContext();
 
   // ── Org/space-scoped dashboard ──────────
-  const { data, isLoading, isError } = useOrgDashboard(
+  const { data, isLoading: isDashboardLoading, isError } = useOrgDashboard(
     activeOrgId,
     activeSpaceId,
   );
 
+  const { messages, sendMessage, setMessages, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: `${import.meta.env.VITE_API_URL || "http://localhost:5001/api"}/v1/ai/chat`,
+      fetch: async (input, init) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers = new Headers(init?.headers);
+        if (session?.access_token) {
+          headers.set("Authorization", `Bearer ${session.access_token}`);
+        }
+        return fetch(input, {
+          ...init,
+          headers,
+        });
+      },
+    }),
+    onError: (error) => {
+      console.error("AI request failed:", error);
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              text: "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
+            },
+          ],
+        },
+      ]);
+    }
+  });
+
+  const isLoading = status === "submitted" || status === "streaming";
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const isAssistantThinking = isLoading && messages[messages.length - 1]?.role === "user";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
@@ -67,52 +98,9 @@ export function Dashboard() {
     const content =
       text || `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
 
-    const userMessage: DashboardChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content,
-    };
-
-    const conversation = [...messages, userMessage];
-
-    setMessages(conversation);
-    setIsAssistantThinking(true);
-
-    try {
-      const response = await api.post<{ data: { content: string } }>(
-        "v1/ai/chat",
-        {
-          messages: conversation.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-        },
-      );
-
-      const replyContent = response.data.data.content;
-
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: replyContent,
-        },
-      ]);
-    } catch (error) {
-      console.error("AI request failed:", error);
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content:
-            "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
-        },
-      ]);
-    } finally {
-      setIsAssistantThinking(false);
-    }
+    await sendMessage({
+      text: content,
+    });
   };
 
   if (!mounted) return null;
@@ -120,13 +108,10 @@ export function Dashboard() {
   return (
     <div className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none">
       <main
-        className={cn(
-          containerClassName,
-          "h-full flex flex-col items-center relative overflow-hidden overscroll-none",
-        )}
+        className="w-full h-full flex flex-col items-center relative overflow-hidden overscroll-none"
       >
         {!hasChatStarted ? (
-          <div className="size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar">
+          <div className={cn(containerClassName, "size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar")}>
             <div className="w-full flex flex-col items-center gap-1 sm:gap-2">
               {/* Hero: greeting + input area */}
               <HeroSection onSubmit={handlePromptSubmit} />
@@ -139,28 +124,33 @@ export function Dashboard() {
               )}
 
               {/* Dashboard Panel with 3D Wheels */}
-              <DashboardPanel data={data} isLoading={isLoading} />
+              <DashboardPanel data={data} isLoading={isDashboardLoading} />
             </div>
           </div>
         ) : (
           <div className="flex size-full flex-col items-center">
-            <section className="w-full max-w-4xl flex-1 overflow-y-auto px-2 pb-40 pt-10 sm:px-4 lg:pt-14">
-              <div className="flex flex-col gap-6">
+            <section className="w-full flex-1 overflow-y-auto pb-48 pt-10 lg:pt-14">
+              <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 px-4 sm:px-6">
                 {messages.map((message) => (
-                  <Message from={message.role} key={message.id}>
+                  <Message from={message.role} key={message.id} className="max-w-full w-full">
                     <MessageContent
                       className={cn(
                         message.role === "assistant" &&
                           "w-full max-w-[46rem] text-[0.95rem] leading-7",
                       )}
                     >
-                      <MessageResponse>{message.content}</MessageResponse>
+                      <MessageResponse>
+                        {message.parts
+                          ?.filter((p: any) => p.type === "text")
+                          ?.map((p: any) => p.text)
+                          ?.join("\n") || ""}
+                      </MessageResponse>
                     </MessageContent>
                   </Message>
                 ))}
 
                 {isAssistantThinking && (
-                  <Message from="assistant">
+                  <Message from="assistant" className="max-w-full w-full">
                     <MessageContent className="px-0 py-0">
                       <div className="flex items-center gap-2 py-2 text-sm">
                         <span className="flex size-7 items-center justify-center rounded-full border border-border/70 bg-card/80 text-muted-foreground">
