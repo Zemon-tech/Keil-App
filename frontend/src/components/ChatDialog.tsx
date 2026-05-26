@@ -332,10 +332,6 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                     <h3 className="text-sm font-semibold text-foreground">
                                                         {currentChannel.members[0]?.name || "Unknown"}
                                                     </h3>
-                                                    <p className="text-xs text-green-500 flex items-center gap-1">
-                                                        <span className="size-1.5 rounded-full bg-green-500" />
-                                                        Online
-                                                    </p>
                                                 </div>
                                             </>
                                         ) : (
