@@ -1,7 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import pool from "../../config/pg";
-import * as personalTaskService from "../../services/personal-task.service";
 import * as orgTaskService from "../../services/org-task.service";
 import { TaskStatus, TaskPriority } from "../../types/enums";
 
@@ -41,11 +40,75 @@ const priorityEnum = z
   .optional()
   .describe("Optional filter: only include tasks with this priority. Omit to return tasks of ALL priorities.");
 
+// ─── Personal org/space resolver ──────────────────────────────────────────────
+
+async function getPersonalOrgSpace(userId: string): Promise<{ orgId: string; spaceId: string } | null> {
+  const result = await pool.query(
+    `SELECT o.id as org_id, s.id as space_id
+     FROM public.organisations o
+     INNER JOIN public.spaces s ON s.org_id = o.id AND s.is_private = TRUE AND s.deleted_at IS NULL
+     WHERE o.owner_user_id = $1 AND o.is_personal = TRUE AND o.deleted_at IS NULL
+     LIMIT 1`,
+    [userId]
+  );
+  if (result.rows.length === 0) return null;
+  return { orgId: result.rows[0].org_id, spaceId: result.rows[0].space_id };
+}
+
+// ─── Tool: search_tasks_by_title ──────────────────────────────────────────────
+
+export const searchTasksByTitleTool = createTool({
+  id: "search_tasks_by_title",
+  description: "Search for tasks by title using fuzzy matching. Searches across ALL the user's tasks (personal + org tasks assigned to them). Use this when the user refers to a task by name instead of ID.",
+  inputSchema: z.object({
+    title: z.string().min(1).describe("The task title or partial title to search for (case-insensitive, fuzzy match)"),
+    limit: z.number().int().min(1).max(20).optional().default(5),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    // Search across all tasks the user has access to:
+    // 1. Tasks in their personal org's private space (created_by = userId)
+    // 2. Tasks assigned to them in any org space they belong to
+    const searchPattern = `%${inputData.title.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+
+    const result = await pool.query(
+      `SELECT DISTINCT t.id, t.title, t.status, t.priority, t.due_date,
+              t.org_id, t.space_id, o.name as org_name, s.name as space_name,
+              CASE
+                WHEN t.title ILIKE $2 THEN 1
+                WHEN t.title ILIKE $3 THEN 2
+                ELSE 3
+              END as relevance
+       FROM public.tasks t
+       LEFT JOIN public.organisations o ON o.id = t.org_id
+       LEFT JOIN public.spaces s ON s.id = t.space_id
+       WHERE t.deleted_at IS NULL
+         AND t.title ILIKE $3
+         AND (
+           t.created_by = $1
+           OR t.id IN (SELECT task_id FROM public.task_assignees WHERE user_id = $1)
+           OR t.space_id IN (SELECT space_id FROM public.space_members WHERE user_id = $1)
+         )
+       ORDER BY relevance ASC, t.updated_at DESC
+       LIMIT $4`,
+      [userId, inputData.title, searchPattern, inputData.limit ?? 5]
+    );
+
+    if (result.rows.length === 0) {
+      return { tasks: [], count: 0, message: `No tasks found matching "${inputData.title}".` };
+    }
+
+    return { tasks: result.rows, count: result.rows.length };
+  },
+});
+
 // ─── Tool: get_personal_tasks ─────────────────────────────────────────────────
 
 export const getPersonalTasksTool = createTool({
   id: "get_personal_tasks",
-  description: "List the current user's personal tasks. Returns ALL tasks by default. Only pass status or priority if the user explicitly asks to filter.",
+  description: "List the current user's personal tasks (tasks in their personal org's private space). Returns ALL tasks by default. Only pass status or priority if the user explicitly asks to filter.",
   inputSchema: z.object({
     status: statusEnum,
     priority: priorityEnum,
@@ -55,7 +118,10 @@ export const getPersonalTasksTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const tasks = await personalTaskService.getPersonalTasks(userId, {
+    const personal = await getPersonalOrgSpace(userId);
+    if (!personal) return { error: "Personal organisation not found." };
+
+    const tasks = await orgTaskService.getTasksBySpace(personal.orgId, personal.spaceId, {
       filters: {
         status: inputData.status as TaskStatus | undefined,
         priority: inputData.priority as TaskPriority | undefined,
@@ -79,8 +145,15 @@ export const getPersonalTaskTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const task = await personalTaskService.getPersonalTaskById(inputData.taskId, userId);
-    if (!task) return { error: "Task not found or you do not own it." };
+    const personal = await getPersonalOrgSpace(userId);
+    if (!personal) return { error: "Personal organisation not found." };
+
+    const task = await orgTaskService.getTaskById(inputData.taskId);
+    if (!task) return { error: "Task not found." };
+    // Verify it belongs to the user's personal space
+    if (task.org_id !== personal.orgId || task.space_id !== personal.spaceId) {
+      return { error: "Task not found or you do not own it." };
+    }
 
     return { task };
   },
@@ -90,7 +163,7 @@ export const getPersonalTaskTool = createTool({
 
 export const createPersonalTaskTool = createTool({
   id: "create_personal_task",
-  description: "Create a new personal task for the current user.",
+  description: "Create a new personal task for the current user (in their personal org's private space).",
   inputSchema: z.object({
     title: z.string().min(1).describe("Task title"),
     description: z.string().optional(),
@@ -103,15 +176,24 @@ export const createPersonalTaskTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const task = await personalTaskService.createPersonalTask({
-      owner_user_id: userId,
-      title: inputData.title,
-      description: inputData.description ?? null,
-      priority: inputData.priority as TaskPriority | undefined,
-      status: inputData.status as TaskStatus | undefined,
-      start_date: inputData.start_date ? new Date(inputData.start_date) : null,
-      due_date: inputData.due_date ? new Date(inputData.due_date) : null,
-    });
+    const personal = await getPersonalOrgSpace(userId);
+    if (!personal) return { error: "Personal organisation not found." };
+
+    const task = await orgTaskService.createTask(
+      { orgId: personal.orgId, spaceId: personal.spaceId },
+      {
+        org_id: personal.orgId,
+        space_id: personal.spaceId,
+        title: inputData.title,
+        description: inputData.description ?? null,
+        priority: inputData.priority as TaskPriority | undefined,
+        status: inputData.status as TaskStatus | undefined,
+        start_date: inputData.start_date ? new Date(inputData.start_date) : null,
+        due_date: inputData.due_date ? new Date(inputData.due_date) : null,
+        assignee_ids: [userId],
+        created_by: userId,
+      }
+    );
 
     return { task, message: `Personal task "${task.title}" created.` };
   },
@@ -135,21 +217,35 @@ export const updatePersonalTaskTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const { taskId, ...rest } = inputData;
-    const updated = await personalTaskService.updatePersonalTask(taskId, userId, {
-      title: rest.title,
-      description: rest.description,
-      priority: rest.priority as TaskPriority | undefined,
-      status: rest.status as TaskStatus | undefined,
-      start_date: rest.start_date !== undefined
-        ? rest.start_date ? new Date(rest.start_date) : null
-        : undefined,
-      due_date: rest.due_date !== undefined
-        ? rest.due_date ? new Date(rest.due_date) : null
-        : undefined,
-    });
+    const personal = await getPersonalOrgSpace(userId);
+    if (!personal) return { error: "Personal organisation not found." };
 
-    if (!updated) return { error: "Task not found or you do not own it." };
+    // Verify the task belongs to the personal space
+    const existing = await orgTaskService.getTaskById(inputData.taskId);
+    if (!existing || existing.org_id !== personal.orgId || existing.space_id !== personal.spaceId) {
+      return { error: "Task not found or you do not own it." };
+    }
+
+    const { taskId, ...rest } = inputData;
+    const updated = await orgTaskService.updateTask(
+      { orgId: personal.orgId, spaceId: personal.spaceId },
+      taskId,
+      userId,
+      {
+        title: rest.title,
+        description: rest.description,
+        priority: rest.priority as TaskPriority | undefined,
+        status: rest.status as TaskStatus | undefined,
+        start_date: rest.start_date !== undefined
+          ? rest.start_date ? new Date(rest.start_date) : null
+          : undefined,
+        due_date: rest.due_date !== undefined
+          ? rest.due_date ? new Date(rest.due_date) : null
+          : undefined,
+      }
+    );
+
+    if (!updated) return { error: "Task not found." };
     return { task: updated, message: `Task "${updated.title}" updated.` };
   },
 });
@@ -158,7 +254,7 @@ export const updatePersonalTaskTool = createTool({
 
 export const deletePersonalTaskTool = createTool({
   id: "delete_personal_task",
-  description: "Permanently delete a personal task.",
+  description: "Delete a personal task.",
   inputSchema: z.object({
     taskId: z.string().uuid(),
   }),
@@ -166,10 +262,110 @@ export const deletePersonalTaskTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const deleted = await personalTaskService.deletePersonalTask(inputData.taskId, userId);
-    if (!deleted) return { error: "Task not found or you do not own it." };
+    const personal = await getPersonalOrgSpace(userId);
+    if (!personal) return { error: "Personal organisation not found." };
 
+    // Verify the task belongs to the personal space
+    const existing = await orgTaskService.getTaskById(inputData.taskId);
+    if (!existing || existing.org_id !== personal.orgId || existing.space_id !== personal.spaceId) {
+      return { error: "Task not found or you do not own it." };
+    }
+
+    await orgTaskService.deleteTask({ orgId: personal.orgId, spaceId: personal.spaceId }, inputData.taskId, userId);
     return { message: "Personal task deleted successfully." };
+  },
+});
+
+// ─── Tool: get_my_organisations ───────────────────────────────────────────────
+
+export const getMyOrganisationsTool = createTool({
+  id: "get_my_organisations",
+  description: "List all organisations the current user is a member of, including their role in each.",
+  inputSchema: z.object({}),
+  execute: async (_inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    const result = await pool.query(
+      `SELECT o.id, o.name, o.slug, om.role
+       FROM public.organisations o
+       INNER JOIN public.organisation_members om ON om.org_id = o.id
+       WHERE om.user_id = $1 AND o.deleted_at IS NULL
+       ORDER BY o.name`,
+      [userId]
+    );
+
+    return { organisations: result.rows, count: result.rows.length };
+  },
+});
+
+// ─── Tool: get_my_spaces ──────────────────────────────────────────────────────
+
+export const getMySpacesTool = createTool({
+  id: "get_my_spaces",
+  description: "List all spaces the current user belongs to within a given organisation.",
+  inputSchema: z.object({
+    orgId: z.string().uuid().describe("The organisation ID to list spaces for"),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    const result = await pool.query(
+      `SELECT s.id, s.name, s.slug, sm.role
+       FROM public.spaces s
+       INNER JOIN public.space_members sm ON sm.space_id = s.id
+       WHERE sm.user_id = $1 AND s.org_id = $2 AND s.deleted_at IS NULL
+       ORDER BY s.name`,
+      [userId, inputData.orgId]
+    );
+
+    return { spaces: result.rows, count: result.rows.length };
+  },
+});
+
+// ─── Tool: get_my_assigned_tasks ──────────────────────────────────────────────
+
+export const getMyAssignedTasksTool = createTool({
+  id: "get_my_assigned_tasks",
+  description: "List all org tasks assigned to the current user across ALL organisations and spaces they belong to. Useful for a global view of the user's workload.",
+  inputSchema: z.object({
+    status: statusEnum,
+    priority: priorityEnum,
+    limit: z.number().int().min(1).max(100).optional().default(30),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    const params: any[] = [userId];
+    let query = `
+      SELECT t.id, t.title, t.description, t.status, t.priority,
+             t.start_date, t.due_date, t.created_at,
+             o.name as org_name, s.name as space_name,
+             t.org_id, t.space_id
+      FROM public.tasks t
+      INNER JOIN public.task_assignees ta ON ta.task_id = t.id AND ta.user_id = $1
+      LEFT JOIN public.organisations o ON o.id = t.org_id
+      LEFT JOIN public.spaces s ON s.id = t.space_id
+      WHERE t.deleted_at IS NULL
+    `;
+
+    if (inputData.status) {
+      params.push(inputData.status);
+      query += ` AND t.status = $${params.length}`;
+    }
+    if (inputData.priority) {
+      params.push(inputData.priority);
+      query += ` AND t.priority = $${params.length}`;
+    }
+
+    query += ` ORDER BY t.due_date ASC NULLS LAST, t.priority DESC`;
+    params.push(inputData.limit ?? 30);
+    query += ` LIMIT $${params.length}`;
+
+    const result = await pool.query(query, params);
+    return { tasks: result.rows, count: result.rows.length };
   },
 });
 
