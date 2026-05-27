@@ -17,7 +17,7 @@ import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, CopyIcon, ThumbsDownIcon, ThumbsUpIcon, CheckIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import {
   createContext,
@@ -358,3 +358,93 @@ export const MessageToolbar = ({
     {children}
   </div>
 );
+
+interface LikeActionProps {
+  messageKey: string;
+  isLiked: boolean;
+  onToggle: (key: string) => void;
+}
+
+export const LikeAction = memo(
+  ({ messageKey, isLiked, onToggle }: LikeActionProps) => {
+    const handleClick = useCallback(
+      () => onToggle(messageKey),
+      [messageKey, onToggle]
+    );
+    return (
+      <MessageAction
+        label="Like"
+        onClick={handleClick}
+        tooltip="Like this response"
+      >
+        <ThumbsUpIcon
+          className="size-4"
+          fill={isLiked ? "currentColor" : "none"}
+        />
+      </MessageAction>
+    );
+  }
+);
+
+LikeAction.displayName = "LikeAction";
+
+interface DislikeActionProps {
+  messageKey: string;
+  isDisliked: boolean;
+  onToggle: (key: string) => void;
+}
+
+export const DislikeAction = memo(
+  ({ messageKey, isDisliked, onToggle }: DislikeActionProps) => {
+    const handleClick = useCallback(
+      () => onToggle(messageKey),
+      [messageKey, onToggle]
+    );
+    return (
+      <MessageAction
+        label="Dislike"
+        onClick={handleClick}
+        tooltip="Dislike this response"
+      >
+        <ThumbsDownIcon
+          className="size-4"
+          fill={isDisliked ? "currentColor" : "none"}
+        />
+      </MessageAction>
+    );
+  }
+);
+
+DislikeAction.displayName = "DislikeAction";
+
+interface CopyActionProps {
+  content: string;
+}
+
+export const CopyAction = memo(({ content }: CopyActionProps) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleClick = useCallback(() => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [content]);
+
+  return (
+    <MessageAction
+      label="Copy"
+      onClick={handleClick}
+      tooltip={copied ? "Copied!" : "Copy to clipboard"}
+    >
+      {copied ? (
+        <CheckIcon className="size-4 text-emerald-500 animate-in fade-in zoom-in-75 duration-200" />
+      ) : (
+        <CopyIcon className="size-4" />
+      )}
+    </MessageAction>
+  );
+});
+
+CopyAction.displayName = "CopyAction";
+

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { HeroSection } from "./dashboard/HeroSection";
@@ -10,6 +10,10 @@ import {
   Message,
   MessageContent,
   MessageResponse,
+  MessageActions,
+  LikeAction,
+  DislikeAction,
+  CopyAction,
 } from "@/components/ai-elements/message";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -76,6 +80,29 @@ export function Dashboard() {
   });
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [disliked, setDisliked] = useState<Record<string, boolean>>({});
+
+  const handleToggleLike = useCallback((key: string) => {
+    setLiked((prev) => {
+      const isCurrentlyLiked = prev[key] ?? false;
+      if (!isCurrentlyLiked) {
+        setDisliked((dPrev) => ({ ...dPrev, [key]: false }));
+      }
+      return { ...prev, [key]: !isCurrentlyLiked };
+    });
+  }, []);
+
+  const handleToggleDislike = useCallback((key: string) => {
+    setDisliked((prev) => {
+      const isCurrentlyDisliked = prev[key] ?? false;
+      if (!isCurrentlyDisliked) {
+        setLiked((lPrev) => ({ ...lPrev, [key]: false }));
+      }
+      return { ...prev, [key]: !isCurrentlyDisliked };
+    });
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -145,23 +172,59 @@ export function Dashboard() {
           <div className="flex size-full flex-col items-center">
             <section className="w-full flex-1 overflow-y-auto pb-48 pt-10 lg:pt-14">
               <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 px-4 sm:px-6">
-                {messages.map((message: any) => (
-                  <Message from={message.role} key={message.id} className="max-w-full w-full">
-                    <MessageContent
-                      className={cn(
-                        message.role === "assistant" &&
-                          "w-full max-w-[46rem] text-[0.95rem] leading-7",
-                      )}
-                    >
-                      <MessageResponse>
-                        {message.parts
-                          ?.filter((p: any) => p.type === "text")
-                          ?.map((p: any) => p.text)
-                          ?.join("\n") || message.content || ""}
-                      </MessageResponse>
-                    </MessageContent>
-                  </Message>
-                ))}
+                {messages.map((message: any) => {
+                  const isAssistant = message.role === "assistant";
+                  const text = message.parts
+                    ?.filter((p: any) => p.type === "text")
+                    ?.map((p: any) => p.text)
+                    ?.join("\n") || message.content || "";
+
+                  const showShimmer = isAssistant && isLoading && text.trim() === "";
+
+                  return (
+                    <Message from={message.role} key={message.id} className="max-w-full w-full">
+                      <MessageContent
+                        className={cn(
+                          isAssistant &&
+                            "w-full max-w-[46rem] text-[0.95rem] leading-7",
+                          showShimmer && "px-0 py-0",
+                        )}
+                      >
+                        {showShimmer ? (
+                          <div className="flex items-center gap-2 py-2 text-sm">
+                            <span className="flex size-7 items-center justify-center rounded-full border border-border/70 bg-card/80 text-muted-foreground">
+                              <MessageCircle className="size-3.5" />
+                            </span>
+                            <Shimmer className="font-medium" duration={1.6}>
+                              {assistantLoadingText}
+                            </Shimmer>
+                          </div>
+                        ) : (
+                          <>
+                            <MessageResponse>
+                              {text}
+                            </MessageResponse>
+                            {isAssistant && (
+                              <MessageActions className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <LikeAction
+                                  isLiked={liked[message.id] ?? false}
+                                  messageKey={message.id}
+                                  onToggle={handleToggleLike}
+                                />
+                                <DislikeAction
+                                  isDisliked={disliked[message.id] ?? false}
+                                  messageKey={message.id}
+                                  onToggle={handleToggleDislike}
+                                />
+                                <CopyAction content={text} />
+                              </MessageActions>
+                            )}
+                          </>
+                        )}
+                      </MessageContent>
+                    </Message>
+                  );
+                })}
 
                 {isAssistantThinking && (
                   <Message from="assistant" className="max-w-full w-full">
