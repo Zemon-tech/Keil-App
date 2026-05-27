@@ -7,6 +7,7 @@ import {
   PanelRightClose,
   Pencil,
   Trash2,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -190,6 +191,40 @@ function AssigneesChip({ assignees }: { assignees: { id: string, name: string | 
           </Avatar>
         )}
       </div>
+    </TooltipProvider>
+  );
+}
+
+// ─── CreatedByChip ────────────────────────────────────────────────────────────
+
+/** Shows who created the task and when */
+function CreatedByChip({ name, email, createdAt }: { name?: string | null; email?: string | null; createdAt: string }) {
+  const displayName = name || email || "Unknown";
+  const initial = displayName.charAt(0).toUpperCase();
+  const dateStr = formatDate(createdAt);
+
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1.5 h-5 px-1.5 rounded-md border border-border/60 bg-muted/30 cursor-default">
+            <Avatar className="size-4 ring-1 ring-background">
+              <AvatarFallback className="text-[8px] font-semibold bg-accent">
+                {initial}
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">
+              {displayName}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60">
+              · {dateStr}
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Created by {displayName} on {dateStr}
+        </TooltipContent>
+      </Tooltip>
     </TooltipProvider>
   );
 }
@@ -388,6 +423,12 @@ export function TaskDetailHeader({
             {label}
           </Badge>
         ))}
+
+        <CreatedByChip
+          name={task.creator_name}
+          email={task.creator_email}
+          createdAt={task.created_at}
+        />
       </div>
 
       {/* Delete confirmation dialog */}

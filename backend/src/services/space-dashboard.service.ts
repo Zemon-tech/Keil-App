@@ -16,6 +16,8 @@ const toDTO = (task: any): OrgTaskDTO => ({
   start_date: task.start_date ? new Date(task.start_date).toISOString() : null,
   due_date: task.due_date ? new Date(task.due_date).toISOString() : null,
   created_by: task.created_by,
+  creator_name: task.creator_name ?? null,
+  creator_email: task.creator_email ?? null,
   created_at: new Date(task.created_at).toISOString(),
   updated_at: new Date(task.updated_at).toISOString(),
   type: task.type,

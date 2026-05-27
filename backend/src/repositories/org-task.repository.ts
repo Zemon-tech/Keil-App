@@ -128,10 +128,12 @@ export class OrgTaskRepository extends BaseRepository<Task> {
     return result.rows as Task[];
   }
 
-  async findWithAssignees(taskId: string, client?: PoolClient): Promise<(Task & { assignees: User[] }) | null> {
+  async findWithAssignees(taskId: string, client?: PoolClient): Promise<(Task & { assignees: User[]; creator_name?: string | null; creator_email?: string | null }) | null> {
     const query = `
       SELECT
         t.*,
+        creator.name as creator_name,
+        creator.email as creator_email,
         COALESCE(
           json_agg(
             json_build_object(
@@ -144,18 +146,20 @@ export class OrgTaskRepository extends BaseRepository<Task> {
           '[]'
         ) as assignees
       FROM public.tasks t
+      LEFT JOIN public.users creator
+        ON creator.id = t.created_by
       LEFT JOIN public.task_assignees ta
         ON ta.task_id = t.id
       LEFT JOIN public.users u
         ON u.id = ta.user_id
       WHERE t.id = $1
         AND t.deleted_at IS NULL
-      GROUP BY t.id
+      GROUP BY t.id, creator.name, creator.email
     `;
 
     const executor = client || this.pool;
     const result = await executor.query(query, [taskId]);
-    return result.rows[0] as (Task & { assignees: User[] }) | undefined ?? null;
+    return result.rows[0] as (Task & { assignees: User[]; creator_name?: string | null; creator_email?: string | null }) | undefined ?? null;
   }
 
   async findWithDependencies(taskId: string, client?: PoolClient): Promise<(Task & { dependencies: Task[] }) | null> {

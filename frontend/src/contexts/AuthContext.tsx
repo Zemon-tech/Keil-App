@@ -14,6 +14,8 @@ interface AuthContextType {
     session: Session | null;
     user: User | null;
     loading: boolean;
+    /** True when the initial session check is complete AND a user is present. */
+    isAuthenticated: boolean;
     signOut: () => Promise<void>;
     /** Call with `true` before signUp to suppress auto-login, then `false` after. */
     setSuppressAutoLogin: (value: boolean) => void;
@@ -112,10 +114,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         await supabase.auth.signOut(); // then clear the Supabase session
     };
 
+    const isAuthenticated = !loading && user !== null;
+
     const value = {
         session,
         user,
         loading,
+        isAuthenticated,
         signOut,
         setSuppressAutoLogin,
     };

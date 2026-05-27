@@ -22,6 +22,7 @@ import React, {
 } from "react";
 import { useOrganisations, type Organisation } from "@/hooks/api/useOrganisations";
 import { useSpaces, type Space } from "@/hooks/api/useSpaces";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Storage Keys ─────────────────────────────────────────────────────────────
 
@@ -104,6 +105,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.removeItem(STORAGE_MODE);
   }, []);
 
+  // ── Auth readiness ────────────────────────────────────────────────────────
+  const { isAuthenticated } = useAuth();
+
   // ── Restore persisted state ──────────────────────────────────────────────
   const [activeOrgId, setActiveOrgId] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_ORG_ID);
@@ -114,43 +118,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   });
 
   // ── Remote data ───────────────────────────────────────────────────────────
-  const { data: organisations = [], isLoading: isLoadingOrgs } = useOrganisations();
+  // Guard: only fetch orgs once the user is authenticated.
+  const {
+    data: organisations = [],
+    isLoading: isLoadingOrgs,
+    isSuccess: isOrgsSuccess,
+  } = useOrganisations(isAuthenticated);
   const { data: spaces = [], isLoading: isLoadingSpaces } = useSpaces(activeOrgId);
 
-  // ── Auto-select personal organisation on load if none active ──────────────
+  // ── Combined auto-select + membership validation ──────────────────────────
+  // This single effect handles both "no org stored → pick personal" and
+  // "stored org is stale → fall back to personal". It only runs after a
+  // confirmed successful fetch (isOrgsSuccess), preventing the race condition
+  // where an empty default array would incorrectly trigger a fallback.
   useEffect(() => {
-    if (isLoadingOrgs || organisations.length === 0) return;
+    // Don't act until we have a real, successful response from the server.
+    if (!isOrgsSuccess || isLoadingOrgs) return;
+
+    // Case 1: No org stored — auto-select personal.
     if (!activeOrgId) {
+      if (organisations.length === 0) return;
       const personal = organisations.find((o) => o.is_personal);
       if (personal) {
         setActiveOrgId(personal.id);
         localStorage.setItem(STORAGE_ORG_ID, personal.id);
       }
+      return;
     }
-  }, [organisations, isLoadingOrgs, activeOrgId]);
 
-  // ── Membership validation: clear stale org from storage / fallback to personal ──────────────────
-  useEffect(() => {
-    if (isLoadingOrgs) return;
+    // Case 2: Org stored — validate membership.
+    if (organisations.length === 0) {
+      // User genuinely has no orgs (edge case). Clear stored state.
+      setActiveOrgId(null);
+      setActiveSpaceId(null);
+      localStorage.removeItem(STORAGE_ORG_ID);
+      localStorage.removeItem(STORAGE_SPACE_ID);
+      return;
+    }
 
-    if (activeOrgId) {
-      const stillMember = organisations.some((o) => o.id === activeOrgId);
-      if (!stillMember) {
-        const personal = organisations.find((o) => o.is_personal);
-        if (personal) {
-          setActiveOrgId(personal.id);
-          setActiveSpaceId(null);
-          localStorage.setItem(STORAGE_ORG_ID, personal.id);
-          localStorage.removeItem(STORAGE_SPACE_ID);
-        } else {
-          setActiveOrgId(null);
-          setActiveSpaceId(null);
-          localStorage.removeItem(STORAGE_ORG_ID);
-          localStorage.removeItem(STORAGE_SPACE_ID);
-        }
+    const stillMember = organisations.some((o) => o.id === activeOrgId);
+    if (!stillMember) {
+      // User was removed from the stored org — fall back to personal.
+      const personal = organisations.find((o) => o.is_personal);
+      if (personal) {
+        setActiveOrgId(personal.id);
+        setActiveSpaceId(null);
+        localStorage.setItem(STORAGE_ORG_ID, personal.id);
+        localStorage.removeItem(STORAGE_SPACE_ID);
+      } else {
+        setActiveOrgId(null);
+        setActiveSpaceId(null);
+        localStorage.removeItem(STORAGE_ORG_ID);
+        localStorage.removeItem(STORAGE_SPACE_ID);
       }
     }
-  }, [organisations, isLoadingOrgs, activeOrgId]);
+  }, [organisations, isLoadingOrgs, isOrgsSuccess, activeOrgId]);
 
   // ── Auto-select space when org becomes active ─────────────────────────────
   useEffect(() => {
