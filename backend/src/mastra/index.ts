@@ -2,10 +2,7 @@ import { Mastra } from "@mastra/core";
 import { PostgresStore } from "@mastra/pg";
 import { registerApiRoute } from "@mastra/core/server";
 import { toAISdkStream } from "@mastra/ai-sdk";
-import {
-  createUIMessageStream,
-  createUIMessageStreamResponse,
-} from "ai";
+import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import type { UIMessage } from "ai";
 import jwt from "jsonwebtoken";
 import pool from "../config/pg";
@@ -71,7 +68,7 @@ export const mastra = new Mastra({
           if (!authResult) {
             return c.json(
               { success: false, message: "Invalid or expired token" },
-              401
+              401,
             );
           }
           console.log(`[Chat] Auth verified in ${Date.now() - startTime}ms`);
@@ -89,7 +86,7 @@ export const mastra = new Mastra({
             requestContext.set("localAiModel", body.localAiModel);
 
           console.log(
-            `[Chat] model=${body?.modelSelection || "gemini"} | user=${authResult.userId} | bodyParsed in ${Date.now() - startTime}ms`
+            `[Chat] model=${body?.modelSelection || "gemini"} | user=${authResult.userId} | bodyParsed in ${Date.now() - startTime}ms`,
           );
 
           // ── Get agent and stream directly ─────────────────────────
@@ -98,12 +95,15 @@ export const mastra = new Mastra({
 
           const agentStream = await agent.stream(messages, {
             requestContext,
-            ...(body.memory && { memory: body.memory }),
+            memory: {
+              ...body.memory,
+              resource: authResult.userId,
+            },
             abortSignal: c.req.raw.signal,
           });
 
           console.log(
-            `[Chat] agent.stream() started in ${Date.now() - startTime}ms`
+            `[Chat] agent.stream() started in ${Date.now() - startTime}ms`,
           );
 
           // ── Convert to AI SDK v6 format and return ────────────────

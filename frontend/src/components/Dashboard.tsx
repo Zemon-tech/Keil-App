@@ -31,10 +31,11 @@ export function Dashboard() {
   const { activeOrgId, activeSpaceId } = useAppContext();
 
   // ── Org/space-scoped dashboard ──────────
-  const { data, isLoading: isDashboardLoading, isError } = useOrgDashboard(
-    activeOrgId,
-    activeSpaceId,
-  );
+  const {
+    data,
+    isLoading: isDashboardLoading,
+    isError,
+  } = useOrgDashboard(activeOrgId, activeSpaceId);
 
   const [modelSelection, setModelSelection] = useState<string>(() => {
     return localStorage.getItem("ai_model_selection") || "gemini";
@@ -44,22 +45,42 @@ export function Dashboard() {
     transport: new DefaultChatTransport({
       api: `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}/chat`,
       headers: async (): Promise<Record<string, string>> => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) return { Authorization: `Bearer ${session.access_token}` };
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.access_token)
+          return { Authorization: `Bearer ${session.access_token}` };
         return {};
       },
-      prepareSendMessagesRequest: ({ messages: msgs }) => ({
-        body: {
-          messages: [msgs[msgs.length - 1]],
-          modelSelection: localStorage.getItem("ai_model_selection") || "gemini",
-          ...(localStorage.getItem("ai_model_selection") === "local" && {
-            localAiBaseUrl: localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1",
-            localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
-          }),
-          ...(activeOrgId && { orgId: activeOrgId }),
-          ...(activeSpaceId && { spaceId: activeSpaceId }),
-        },
-      }),
+      prepareSendMessagesRequest: ({ messages: msgs }) => {
+        const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
+        let tid = localStorage.getItem(key);
+        if (!tid) {
+          tid = crypto.randomUUID();
+          localStorage.setItem(key, tid);
+        }
+
+        return {
+          body: {
+            messages: [msgs[msgs.length - 1]],
+            modelSelection:
+              localStorage.getItem("ai_model_selection") || "gemini",
+            ...(localStorage.getItem("ai_model_selection") === "local" && {
+              localAiBaseUrl:
+                localStorage.getItem("local_ai_base_url") ||
+                "http://localhost:8080/v1",
+              localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
+            }),
+            ...(activeOrgId && { orgId: activeOrgId }),
+            ...(activeSpaceId && { spaceId: activeSpaceId }),
+            memory: {
+              thread: {
+                id: tid,
+              },
+            },
+          },
+        };
+      },
     }),
     onError: (error: Error) => {
       console.error("AI request failed:", error);
@@ -76,7 +97,7 @@ export function Dashboard() {
           ],
         },
       ]);
-    }
+    },
   });
 
   const isLoading = status === "submitted" || status === "streaming";
@@ -108,7 +129,8 @@ export function Dashboard() {
     setMounted(true);
   }, []);
 
-  const isAssistantThinking = isLoading && messages[messages.length - 1]?.role === "user";
+  const isAssistantThinking =
+    isLoading && messages[messages.length - 1]?.role === "user";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
@@ -144,11 +166,14 @@ export function Dashboard() {
 
   return (
     <div className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none">
-      <main
-        className="w-full h-full flex flex-col items-center relative overflow-hidden overscroll-none"
-      >
+      <main className="w-full h-full flex flex-col items-center relative overflow-hidden overscroll-none">
         {!hasChatStarted ? (
-          <div className={cn(containerClassName, "size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar")}>
+          <div
+            className={cn(
+              containerClassName,
+              "size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar",
+            )}
+          >
             <div className="w-full flex flex-col items-center gap-1 sm:gap-2">
               {/* Hero: greeting + input area */}
               <HeroSection
@@ -158,7 +183,7 @@ export function Dashboard() {
               />
 
               {isError && (
-                <div className="w-full max-w-4xl mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
+                <div className="w-full max-w-[54rem] mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
                   <AlertCircle className="size-4" />
                   <span>Failed to load dashboard data. Please try again.</span>
                 </div>
@@ -171,22 +196,29 @@ export function Dashboard() {
         ) : (
           <div className="flex size-full flex-col items-center">
             <section className="w-full flex-1 overflow-y-auto pb-48 pt-10 lg:pt-14">
-              <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 px-4 sm:px-6">
+              <div className="w-full max-w-[54rem] mx-auto flex flex-col gap-6 px-4 sm:px-6">
                 {messages.map((message: any) => {
                   const isAssistant = message.role === "assistant";
-                  const text = message.parts
-                    ?.filter((p: any) => p.type === "text")
-                    ?.map((p: any) => p.text)
-                    ?.join("\n") || message.content || "";
+                  const text =
+                    message.parts
+                      ?.filter((p: any) => p.type === "text")
+                      ?.map((p: any) => p.text)
+                      ?.join("\n") ||
+                    message.content ||
+                    "";
 
-                  const showShimmer = isAssistant && isLoading && text.trim() === "";
+                  const showShimmer =
+                    isAssistant && isLoading && text.trim() === "";
 
                   return (
-                    <Message from={message.role} key={message.id} className="max-w-full w-full">
+                    <Message
+                      from={message.role}
+                      key={message.id}
+                      className="max-w-full w-full"
+                    >
                       <MessageContent
                         className={cn(
-                          isAssistant &&
-                            "w-full max-w-[46rem] text-[0.95rem] leading-7",
+                          isAssistant && "w-full text-[0.95rem] leading-7",
                           showShimmer && "px-0 py-0",
                         )}
                       >
@@ -201,9 +233,7 @@ export function Dashboard() {
                           </div>
                         ) : (
                           <>
-                            <MessageResponse>
-                              {text}
-                            </MessageResponse>
+                            <MessageResponse>{text}</MessageResponse>
                             {isAssistant && (
                               <MessageActions className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                 <LikeAction
@@ -246,7 +276,7 @@ export function Dashboard() {
             </section>
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-background via-background/95 to-transparent px-4 pb-3 pt-16 sm:px-6">
-              <div className="pointer-events-auto w-full max-w-4xl">
+              <div className="pointer-events-auto w-full max-w-[54rem]">
                 <HeroSection
                   isChatStarted
                   onSubmit={handlePromptSubmit}

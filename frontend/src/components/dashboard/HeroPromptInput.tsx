@@ -10,7 +10,7 @@ import {
   Image,
   Plus,
   SearchIcon,
-  Mic
+  Mic,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -93,10 +93,12 @@ const PromptInputAttachmentsDisplay = () => {
     return null;
   }
 
-  const hasVisualAttachment = attachments.files.some((attachment: AttachmentData) => {
-    const category = getMediaCategory(attachment);
-    return category === "image" || category === "video";
-  });
+  const hasVisualAttachment = attachments.files.some(
+    (attachment: AttachmentData) => {
+      const category = getMediaCategory(attachment);
+      return category === "image" || category === "video";
+    },
+  );
 
   if (!hasVisualAttachment) {
     return (
@@ -126,7 +128,7 @@ const PromptInputAttachmentsDisplay = () => {
             "overflow-hidden border border-border/60 bg-background/65 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.3)]",
             index === 0
               ? "size-28 rounded-[1.5rem] sm:size-36"
-              : "size-20 rounded-[1.15rem] sm:size-24"
+              : "size-20 rounded-[1.15rem] sm:size-24",
           )}
           data={attachment}
           onRemove={() => attachments.remove(attachment.id)}
@@ -183,10 +185,12 @@ function HeroPromptSurface({
                 ? "min-h-[3.25rem] pt-3 pb-1 text-[0.95rem] max-h-36 overflow-y-auto"
                 : hasAttachments
                   ? "min-h-[5rem] pt-3 pb-2 text-base sm:text-lg max-h-48 overflow-y-auto"
-                  : "min-h-[5rem] pt-3 pb-2 text-[1rem] sm:text-[1.05rem] max-h-48 overflow-y-auto"
+                  : "min-h-[5rem] pt-3 pb-2 text-[1rem] sm:text-[1.05rem] max-h-48 overflow-y-auto",
             )}
             onChange={valueChanged}
-            placeholder={isChatStarted ? "Write a message..." : "How can I help you today?"}
+            placeholder={
+              isChatStarted ? "Write a message..." : "How can I help you today?"
+            }
             value={text}
           />
 
@@ -197,9 +201,14 @@ function HeroPromptSurface({
           {showCommandMenu && (
             <div className="absolute inset-x-0 top-full z-50 mt-3 px-0">
               <PromptInputCommand className="overflow-hidden rounded-[1.35rem] border border-border/70 bg-popover/95 p-2 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] backdrop-blur-xl">
-                <PromptInputCommandInput className="hidden" placeholder="Search commands..." />
+                <PromptInputCommandInput
+                  className="hidden"
+                  placeholder="Search commands..."
+                />
                 <PromptInputCommandList>
-                  <PromptInputCommandEmpty>No commands found.</PromptInputCommandEmpty>
+                  <PromptInputCommandEmpty>
+                    No commands found.
+                  </PromptInputCommandEmpty>
                   <PromptInputCommandGroup heading="Suggestions">
                     {suggestions.map((suggestion) => (
                       <PromptInputCommandItem
@@ -211,7 +220,9 @@ function HeroPromptSurface({
                           <suggestion.icon className="size-4 text-muted-foreground" />
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{suggestion.label}</span>
+                          <span className="font-medium text-foreground">
+                            {suggestion.label}
+                          </span>
                           <span className="text-xs text-muted-foreground">
                             {suggestion.description}
                           </span>
@@ -247,7 +258,7 @@ function HeroPromptSurface({
               "rounded-full border px-3 text-[13px] shadow-none transition-all",
               useWebSearch
                 ? "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15"
-                : "border-border/60 bg-background/60 text-muted-foreground hover:bg-background hover:text-foreground"
+                : "border-border/60 bg-background/60 text-muted-foreground hover:bg-background hover:text-foreground",
             )}
             onClick={() => setUseWebSearch((value) => !value)}
             tooltip={{ content: "Search the web", shortcut: "⌘K" }}
@@ -267,8 +278,8 @@ function HeroPromptSurface({
                 { id: "openrouter", name: "OpenRouter AI" },
                 {
                   id: "local",
-                  name: `Local LLM (${(typeof window !== "undefined" ? localStorage.getItem("local_ai_model") : null) || "gemma-4"})`
-                }
+                  name: `Local LLM (${(typeof window !== "undefined" ? localStorage.getItem("local_ai_model") : null) || "gemma-4"})`,
+                },
               ].map((item) => (
                 <PromptInputSelectItem key={item.id} value={item.id}>
                   {item.name}
@@ -327,13 +338,13 @@ export function HeroPromptInput({
 }: HeroPromptInputProps) {
   const { user } = useAuth();
   const [text, setText] = useState("");
-  
+
   const [internalModel, setInternalModel] = useState(() => {
     return localStorage.getItem("ai_model_selection") || "gemini";
   });
-  
+
   const model = modelSelection !== undefined ? modelSelection : internalModel;
-  
+
   const setModel = (value: string) => {
     if (onModelSelectionChange) {
       onModelSelectionChange(value);
@@ -346,9 +357,7 @@ export function HeroPromptInput({
   const [showCommandMenu, setShowCommandMenu] = useState(false);
 
   const userName =
-    user?.user_metadata?.full_name ||
-    user?.email?.split("@")[0] ||
-    "there";
+    user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
 
   const handleSubmit = (message: PromptInputMessage) => {
     const hasText = Boolean(message.text?.trim());
@@ -377,10 +386,8 @@ export function HeroPromptInput({
   return (
     <section
       className={cn(
-        "relative flex w-full max-w-4xl flex-col items-center px-4",
-        isChatStarted
-          ? "gap-0 py-4"
-          : "gap-6 pt-12 sm:gap-7 sm:pt-14"
+        "relative flex w-full max-w-[54rem] flex-col items-center px-4",
+        isChatStarted ? "gap-0 py-4" : "gap-6 pt-12 sm:gap-7 sm:pt-14",
       )}
     >
       {!isChatStarted && (
@@ -412,7 +419,7 @@ export function HeroPromptInput({
               : "[&_[data-slot=input-group]]:shadow-[0_26px_70px_-42px_rgba(15,23,42,0.28)]",
             "[&_[data-slot=input-group]]:backdrop-blur-xl",
             "transition-all duration-300 dark:shadow-[0_30px_80px_-42px_rgba(0,0,0,0.65)]",
-            "[&_[data-slot=input-group]]:before:pointer-events-none [&_[data-slot=input-group]]:before:absolute [&_[data-slot=input-group]]:before:inset-x-6 [&_[data-slot=input-group]]:before:top-0 [&_[data-slot=input-group]]:before:h-px [&_[data-slot=input-group]]:before:bg-white/10 [&_[data-slot=input-group]]:before:content-['']"
+            "[&_[data-slot=input-group]]:before:pointer-events-none [&_[data-slot=input-group]]:before:absolute [&_[data-slot=input-group]]:before:inset-x-6 [&_[data-slot=input-group]]:before:top-0 [&_[data-slot=input-group]]:before:h-px [&_[data-slot=input-group]]:before:bg-white/10 [&_[data-slot=input-group]]:before:content-['']",
           )}
           globalDrop
           multiple

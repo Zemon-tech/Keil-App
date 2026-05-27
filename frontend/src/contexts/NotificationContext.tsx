@@ -45,16 +45,20 @@ interface NotificationContextType {
   clearAll: () => Promise<void>;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+const NotificationContext = createContext<NotificationContextType | undefined>(
+  undefined,
+);
 
-export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  
+
   const { user } = useAuth();
-  const { activeOrg, activeSpace } = useAppContext();
-  
+  const { activeOrg } = useAppContext();
+
   // Notifications are now scoped by org/space — no workspace_id needed
   const orgId = activeOrg?.id || null;
 
@@ -119,7 +123,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // Show elegant custom toast utilizing sonner
         const title = getNotificationTitle(notification);
         const snippet = getNotificationSnippet(notification);
-        
+
         toast(title, {
           description: snippet,
         });
@@ -136,7 +140,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       await api.patch(`/v1/notifications/${id}/read`);
       setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
+        prev.map((n) =>
+          n.id === id ? { ...n, read_at: new Date().toISOString() } : n,
+        ),
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (err) {
@@ -147,7 +153,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const markAllAsRead = async () => {
     try {
       await api.post("/v1/notifications/read-all", { orgId });
-      setNotifications((prev) => prev.map((n) => ({ ...n, read_at: new Date().toISOString() })));
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, read_at: new Date().toISOString() })),
+      );
       setUnreadCount(0);
     } catch (err) {
       console.error("Failed to mark all as read:", err);
@@ -184,7 +192,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (context === undefined) {
-    throw new Error("useNotifications must be used within a NotificationProvider");
+    throw new Error(
+      "useNotifications must be used within a NotificationProvider",
+    );
   }
   return context;
 };
@@ -223,8 +233,13 @@ function getNotificationSnippet(n: Notification): string {
     case "task_status_changed":
       return `"${n.payload.task_title}" moved to ${n.payload.status}`;
     case "membership_updates":
-      const action = n.payload.action === 'added_space' || n.payload.action === 'added_workspace' ? 'added you to' : 'updated your role in';
-      const place = n.payload.space_name || n.payload.workspace_name || 'workspace';
+      const action =
+        n.payload.action === "added_space" ||
+        n.payload.action === "added_workspace"
+          ? "added you to"
+          : "updated your role in";
+      const place =
+        n.payload.space_name || n.payload.workspace_name || "workspace";
       return `${actor} ${action} ${place} as ${n.payload.role}`;
     case "mention_in_comment":
       return `${actor} mentioned you: "${n.payload.comment_snippet}"`;
