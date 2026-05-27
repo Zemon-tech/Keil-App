@@ -1,9 +1,7 @@
-import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import pool from "../config/pg";
-import * as motionPageService from "../services/motion-page.service";
-import { getModel } from "./index";
+import pool from "../../config/pg";
+import * as motionPageService from "../../services/motion-page.service";
 
 // ─── Helper: verify space membership ─────────────────────────────────────────
 
@@ -20,7 +18,7 @@ async function isSpaceMember(
   return (result.rowCount ?? 0) > 0;
 }
 
-// ─── Tools ────────────────────────────────────────────────────────────────────
+// ─── Tool: search_motion_pages ────────────────────────────────────────────────
 
 export const searchMotionPagesTool = createTool({
   id: "search_motion_pages",
@@ -56,7 +54,7 @@ export const searchMotionPagesTool = createTool({
       [orgId, spaceId, inputData.query]
     );
 
-    const pages = result.rows.map((row) => ({
+    const pages = result.rows.map((row: any) => ({
       id: row.id,
       title: row.title,
       updatedAt: row.updated_at,
@@ -69,6 +67,8 @@ export const searchMotionPagesTool = createTool({
     };
   },
 });
+
+// ─── Tool: get_motion_page ────────────────────────────────────────────────────
 
 export const getMotionPageTool = createTool({
   id: "get_motion_page",
@@ -99,23 +99,5 @@ export const getMotionPageTool = createTool({
       return { error: "Page not found or you do not have access to it." };
 
     return { page };
-  },
-});
-
-// ─── Motion Agent ─────────────────────────────────────────────────────────────
-
-export const motionAgent = new Agent({
-  id: "keilhq-motion-agent",
-  name: "keilhq-motion-agent",
-  instructions: `You are the KeilHQ Motion Agent. You help users find their notes and documents.
-
-Search by title keywords using search_motion_pages, then retrieve full content with get_motion_page if needed.
-When presenting search results, show the page title and when it was last updated.
-You cannot create or edit pages — only search and retrieve.
-If the user wants to edit or create notes, direct them to the notes section of the app.`,
-  model: getModel(),
-  tools: {
-    search_motion_pages: searchMotionPagesTool,
-    get_motion_page: getMotionPageTool,
   },
 });

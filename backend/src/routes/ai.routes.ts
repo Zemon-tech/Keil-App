@@ -4,7 +4,11 @@ import * as aiController from "../controllers/ai.controller";
 
 const router = Router();
 
+// All AI routes require authentication
 router.use(protect);
-router.post("/chat", aiController.chat);
+
+// Thread management
+router.get("/threads", aiController.listThreads);
+router.delete("/threads/:threadId", aiController.deleteThread);
 
 export default router;

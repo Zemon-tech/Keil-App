@@ -33,44 +33,29 @@ export function Dashboard() {
   );
 
   const [modelSelection, setModelSelection] = useState<string>(() => {
-    return localStorage.getItem("ai_model_selection") || "openrouter";
+    return localStorage.getItem("ai_model_selection") || "gemini";
   });
 
   const { messages, sendMessage, setMessages, status } = useChat({
     transport: new DefaultChatTransport({
-      api: `${import.meta.env.VITE_API_URL || "http://localhost:5001/api"}/v1/ai/chat`,
-      fetch: async (input, init) => {
+      api: `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}/chat`,
+      headers: async (): Promise<Record<string, string>> => {
         const { data: { session } } = await supabase.auth.getSession();
-        const headers = new Headers(init?.headers);
-        if (session?.access_token) {
-          headers.set("Authorization", `Bearer ${session.access_token}`);
-        }
-
-        // Intercept and inject custom model selection options into the request body
-        let newInit = { ...init };
-        if (init?.body && typeof init.body === "string") {
-          try {
-            const parsedBody = JSON.parse(init.body);
-            parsedBody.stream = true;
-            parsedBody.modelSelection = localStorage.getItem("ai_model_selection") || "openrouter";
-            parsedBody.localAiBaseUrl = localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
-            parsedBody.localAiModel = localStorage.getItem("local_ai_model") || "gemma-4";
-            newInit.body = JSON.stringify(parsedBody);
-          } catch (e) {
-            console.error("Failed to parse request body in fetch:", e);
-          }
-        }
-
-        return fetch(input, {
-          ...newInit,
-          headers,
-        });
+        if (session?.access_token) return { Authorization: `Bearer ${session.access_token}` };
+        return {};
       },
-      body: {
-        stream: true,
-        orgId: activeOrgId ?? undefined,
-        spaceId: activeSpaceId ?? undefined,
-      },
+      prepareSendMessagesRequest: ({ messages: msgs }) => ({
+        body: {
+          messages: [msgs[msgs.length - 1]],
+          modelSelection: localStorage.getItem("ai_model_selection") || "gemini",
+          ...(localStorage.getItem("ai_model_selection") === "local" && {
+            localAiBaseUrl: localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1",
+            localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
+          }),
+          ...(activeOrgId && { orgId: activeOrgId }),
+          ...(activeSpaceId && { spaceId: activeSpaceId }),
+        },
+      }),
     }),
     onError: (error: Error) => {
       console.error("AI request failed:", error);
@@ -82,7 +67,7 @@ export function Dashboard() {
           parts: [
             {
               type: "text" as const,
-              text: "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your OPENROUTER_API_KEY is configured.",
+              text: "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your API keys are configured.",
             },
           ],
         },

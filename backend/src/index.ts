@@ -1,4 +1,4 @@
-import app from "./app";
+import app, { initMastraServer } from "./app";
 import { config } from "./config";
 import pool from "./config/pg";
 import "./config/supabase";
@@ -44,6 +44,10 @@ const startServer = async () => {
         } catch (err: unknown) {
             dbLog.warn({ err }, "Note on creating meeting recordings indexes");
         }
+
+        // Initialize Mastra server (auto-registers agent endpoints)
+        await initMastraServer();
+        log.info("Mastra server initialized (agent endpoints registered)");
 
         server.listen(port, '0.0.0.0', () => {
             log.info({ port }, `Server is running at http://localhost:${port}`);

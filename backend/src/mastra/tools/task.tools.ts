@@ -1,11 +1,9 @@
-import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import pool from "../config/pg";
-import * as personalTaskService from "../services/personal-task.service";
-import * as orgTaskService from "../services/org-task.service";
-import { TaskStatus, TaskPriority } from "../types/enums";
-import { getModel } from "./index";
+import pool from "../../config/pg";
+import * as personalTaskService from "../../services/personal-task.service";
+import * as orgTaskService from "../../services/org-task.service";
+import { TaskStatus, TaskPriority } from "../../types/enums";
 
 // ─── RBAC helpers ─────────────────────────────────────────────────────────────
 
@@ -43,7 +41,7 @@ const priorityEnum = z
   .optional()
   .describe("Optional filter: only include tasks with this priority. Omit to return tasks of ALL priorities.");
 
-// ─── Tool 1: get_personal_tasks ───────────────────────────────────────────────
+// ─── Tool: get_personal_tasks ─────────────────────────────────────────────────
 
 export const getPersonalTasksTool = createTool({
   id: "get_personal_tasks",
@@ -69,7 +67,7 @@ export const getPersonalTasksTool = createTool({
   },
 });
 
-// ─── Tool 2: get_personal_task ────────────────────────────────────────────────
+// ─── Tool: get_personal_task ──────────────────────────────────────────────────
 
 export const getPersonalTaskTool = createTool({
   id: "get_personal_task",
@@ -88,7 +86,7 @@ export const getPersonalTaskTool = createTool({
   },
 });
 
-// ─── Tool 3: create_personal_task ────────────────────────────────────────────
+// ─── Tool: create_personal_task ───────────────────────────────────────────────
 
 export const createPersonalTaskTool = createTool({
   id: "create_personal_task",
@@ -119,7 +117,7 @@ export const createPersonalTaskTool = createTool({
   },
 });
 
-// ─── Tool 4: update_personal_task ────────────────────────────────────────────
+// ─── Tool: update_personal_task ───────────────────────────────────────────────
 
 export const updatePersonalTaskTool = createTool({
   id: "update_personal_task",
@@ -156,7 +154,7 @@ export const updatePersonalTaskTool = createTool({
   },
 });
 
-// ─── Tool 5: delete_personal_task ────────────────────────────────────────────
+// ─── Tool: delete_personal_task ───────────────────────────────────────────────
 
 export const deletePersonalTaskTool = createTool({
   id: "delete_personal_task",
@@ -175,7 +173,7 @@ export const deletePersonalTaskTool = createTool({
   },
 });
 
-// ─── Tool 6: get_org_tasks ────────────────────────────────────────────────────
+// ─── Tool: get_org_tasks ──────────────────────────────────────────────────────
 
 export const getOrgTasksTool = createTool({
   id: "get_org_tasks",
@@ -209,7 +207,7 @@ export const getOrgTasksTool = createTool({
   },
 });
 
-// ─── Tool 7: get_org_task ─────────────────────────────────────────────────────
+// ─── Tool: get_org_task ───────────────────────────────────────────────────────
 
 export const getOrgTaskTool = createTool({
   id: "get_org_task",
@@ -234,7 +232,7 @@ export const getOrgTaskTool = createTool({
   },
 });
 
-// ─── Tool 8: create_org_task ──────────────────────────────────────────────────
+// ─── Tool: create_org_task ────────────────────────────────────────────────────
 
 export const createOrgTaskTool = createTool({
   id: "create_org_task",
@@ -285,7 +283,7 @@ export const createOrgTaskTool = createTool({
   },
 });
 
-// ─── Tool 9: update_org_task ──────────────────────────────────────────────────
+// ─── Tool: update_org_task ────────────────────────────────────────────────────
 
 export const updateOrgTaskTool = createTool({
   id: "update_org_task",
@@ -338,7 +336,7 @@ export const updateOrgTaskTool = createTool({
   },
 });
 
-// ─── Tool 10: delete_org_task ─────────────────────────────────────────────────
+// ─── Tool: delete_org_task ────────────────────────────────────────────────────
 
 export const deleteOrgTaskTool = createTool({
   id: "delete_org_task",
@@ -363,38 +361,5 @@ export const deleteOrgTaskTool = createTool({
 
     await orgTaskService.deleteTask({ orgId, spaceId }, inputData.taskId, userId);
     return { message: "Org task deleted successfully." };
-  },
-});
-
-// ─── Task Agent ───────────────────────────────────────────────────────────────
-
-export const taskAgent = new Agent({
-  id: "keilhq-task-agent",
-  name: "keilhq-task-agent",
-  instructions: `You are the KeilHQ Task Agent. You manage personal and organisation tasks.
-
-IMPORTANT RULES:
-- Always call tools for real data — never fabricate task details.
-- When listing tasks, do NOT pass status or priority filters unless the user explicitly asks to filter by them. Call get_personal_tasks or get_org_tasks with NO filters to get ALL tasks.
-- Confirm every create/update/delete action back to the user.
-
-For org tasks, space role rules apply (enforced automatically by each tool):
-  - admin / manager: full CRUD on all tasks
-  - member: view all tasks, but edit/delete only their assigned tasks
-
-Format task lists with title, status, priority, and due date.
-Present dates in human-readable format (e.g. "June 15, 2025").`,
-  model: getModel(),
-  tools: {
-    get_personal_tasks: getPersonalTasksTool,
-    get_personal_task: getPersonalTaskTool,
-    create_personal_task: createPersonalTaskTool,
-    update_personal_task: updatePersonalTaskTool,
-    delete_personal_task: deletePersonalTaskTool,
-    get_org_tasks: getOrgTasksTool,
-    get_org_task: getOrgTaskTool,
-    create_org_task: createOrgTaskTool,
-    update_org_task: updateOrgTaskTool,
-    delete_org_task: deleteOrgTaskTool,
   },
 });

@@ -263,7 +263,8 @@ function HeroPromptSurface({
             </PromptInputSelectTrigger>
             <PromptInputSelectContent>
               {[
-                { id: "openrouter", name: "OpenRouter AI (Default)" },
+                { id: "gemini", name: "Gemini 3.5 Flash (Default)" },
+                { id: "openrouter", name: "OpenRouter AI" },
                 {
                   id: "local",
                   name: `Local LLM (${(typeof window !== "undefined" ? localStorage.getItem("local_ai_model") : null) || "gemma-4"})`
@@ -328,7 +329,7 @@ export function HeroPromptInput({
   const [text, setText] = useState("");
   
   const [internalModel, setInternalModel] = useState(() => {
-    return localStorage.getItem("ai_model_selection") || "openrouter";
+    return localStorage.getItem("ai_model_selection") || "gemini";
   });
   
   const model = modelSelection !== undefined ? modelSelection : internalModel;

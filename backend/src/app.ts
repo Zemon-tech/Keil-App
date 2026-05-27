@@ -4,6 +4,8 @@ import routes from "./routes/index";
 import { config } from "./config";
 import { errorHandler } from "./middlewares/error";
 import { requestIdMiddleware, requestLogger } from "./middlewares/logger";
+import { MastraServer } from "@mastra/express";
+import { mastra } from "./mastra";
 
 const app: Express = express();
 
@@ -36,11 +38,26 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", routes);
 
 // Base route for testing
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
     res.json({ message: "Welcome to the Keil-App Backend API" });
 });
 
-// Error handling middleware
-app.use(errorHandler);
+// ─── Mastra Server (async init) ───────────────────────────────────────────────
+// MastraServer registers routes (like /api/chat) on the Express app.
+// Error handler is added AFTER init so Mastra routes are matched first.
+
+let _mastraServer: MastraServer | null = null;
+
+export async function initMastraServer(): Promise<void> {
+    _mastraServer = new MastraServer({
+        app,
+        mastra,
+        streamOptions: { redact: false },
+    });
+    await _mastraServer.init();
+
+    // Error handler must be last — after all routes (including Mastra's) are registered
+    app.use(errorHandler);
+}
 
 export default app;

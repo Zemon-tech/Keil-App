@@ -53,21 +53,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy-sevalla:
-    name: Deploy to Sevalla
-    runs-on: ubuntu-latest
-    needs: build-and-push
-
-    steps:
-      - name: Trigger Sevalla deployment
-        uses: sevalla-hosting/sevalla-deploy@v2.0.0
-        with:
-          action: deploy-app
-          sevalla-token: ${{ secrets.SEVALLA_TOKEN }}
-          app-id: 926a001f-850a-4cf9-b7d8-d6973e053ddb
-          docker-image: ghcr.io/zemon-tech/keil-backend:latest
-          wait-for-finish: true
-
   deploy-lightsail:
     name: Deploy to AWS Lightsail
     runs-on: ubuntu-latest

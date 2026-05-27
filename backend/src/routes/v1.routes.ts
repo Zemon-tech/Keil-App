@@ -14,7 +14,6 @@ import meetingRoutes from "./meeting.routes";
 import motionRoutes from "./motion.routes";
 
 import aiRoutes from "./ai.routes";
-import adkRoutes from "./adk.routes"; // ← ADD THIS
 import notificationRoutes from "./notification.routes";
 
 const router = Router();
@@ -48,7 +47,6 @@ router.use("/meetings", meetingRoutes);
 router.use("/ai", aiRoutes);
 
 router.use("/motions", motionRoutes);
-router.use("/adk", adkRoutes); // ← ADD THIS
 
 // ── Motion public links (no auth) ─────────────────────────────────────────────
 // Must be registered before the catch-all activityRoutes below.

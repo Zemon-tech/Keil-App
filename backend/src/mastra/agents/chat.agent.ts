@@ -1,0 +1,25 @@
+import { Agent } from "@mastra/core/agent";
+import { resolveModel } from "../models";
+import {
+  getUserChannelsTool,
+  getChannelMessagesTool,
+  checkUnreadMessagesTool,
+} from "../tools/chat.tools";
+
+export const chatAgent = new Agent({
+  id: "keilhq-chat-agent",
+  name: "keilhq-chat-agent",
+  description:
+    "Handles messaging operations: list channels the user belongs to, check unread message counts, and read recent messages from a channel.",
+  instructions: `You are the KeilHQ Chat Agent. You help users check their messages and channels.
+
+When reporting unread messages, be concise: show channel name (or member names for DMs), sender, and the unread count.
+You cannot send messages on behalf of the user — only read and check status.
+If a user asks to "send" or "reply", let them know that is not supported and they should use the chat interface directly.`,
+  model: ({ requestContext }) => resolveModel(requestContext),
+  tools: {
+    get_user_channels: getUserChannelsTool,
+    get_channel_messages: getChannelMessagesTool,
+    check_unread_messages: checkUnreadMessagesTool,
+  },
+});

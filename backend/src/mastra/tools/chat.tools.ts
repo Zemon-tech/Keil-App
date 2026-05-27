@@ -1,9 +1,7 @@
-import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import pool from "../config/pg";
-import * as orgChatService from "../services/org-chat.service";
-import { getModel } from "./index";
+import pool from "../../config/pg";
+import * as orgChatService from "../../services/org-chat.service";
 
 // ─── Helper: verify channel membership ───────────────────────────────────────
 
@@ -19,7 +17,7 @@ async function isChannelMember(
   return (result.rowCount ?? 0) > 0;
 }
 
-// ─── Tools ────────────────────────────────────────────────────────────────────
+// ─── Tool: get_user_channels ──────────────────────────────────────────────────
 
 export const getUserChannelsTool = createTool({
   id: "get_user_channels",
@@ -43,6 +41,8 @@ export const getUserChannelsTool = createTool({
   },
 });
 
+// ─── Tool: get_channel_messages ───────────────────────────────────────────────
+
 export const getChannelMessagesTool = createTool({
   id: "get_channel_messages",
   description:
@@ -64,9 +64,7 @@ export const getChannelMessagesTool = createTool({
 
     const member = await isChannelMember(inputData.channelId, userId);
     if (!member)
-      return {
-        error: "You are not a member of this channel.",
-      };
+      return { error: "You are not a member of this channel." };
 
     const messages = await orgChatService.getChannelMessages(
       inputData.channelId,
@@ -75,6 +73,8 @@ export const getChannelMessagesTool = createTool({
     return { messages, count: messages.length };
   },
 });
+
+// ─── Tool: check_unread_messages ──────────────────────────────────────────────
 
 export const checkUnreadMessagesTool = createTool({
   id: "check_unread_messages",
@@ -89,22 +89,21 @@ export const checkUnreadMessagesTool = createTool({
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
 
-    // getUserChannels already returns unread_count per channel
     const channels = await orgChatService.getUserChannels(
       userId,
       orgId,
       spaceId
     );
-    const unreadChannels = channels.filter((c) => c.unread_count > 0);
+    const unreadChannels = channels.filter((c: any) => c.unread_count > 0);
     const totalUnread = unreadChannels.reduce(
-      (sum, c) => sum + c.unread_count,
+      (sum: number, c: any) => sum + c.unread_count,
       0
     );
 
     return {
       hasUnread: unreadChannels.length > 0,
       totalUnreadCount: totalUnread,
-      unreadChannels: unreadChannels.map((c) => ({
+      unreadChannels: unreadChannels.map((c: any) => ({
         channelId: c.id,
         channelName: c.name,
         type: c.type,
@@ -112,23 +111,5 @@ export const checkUnreadMessagesTool = createTool({
         members: c.members,
       })),
     };
-  },
-});
-
-// ─── Chat Agent ───────────────────────────────────────────────────────────────
-
-export const chatAgent = new Agent({
-  id: "keilhq-chat-agent",
-  name: "keilhq-chat-agent",
-  instructions: `You are the KeilHQ Chat Agent. You help users check their messages and channels.
-
-When reporting unread messages, be concise: show channel name (or member names for DMs), sender, and the unread count.
-You cannot send messages on behalf of the user — only read and check status.
-If a user asks to "send" or "reply", let them know that is not supported and they should use the chat interface directly.`,
-  model: getModel(),
-  tools: {
-    get_user_channels: getUserChannelsTool,
-    get_channel_messages: getChannelMessagesTool,
-    check_unread_messages: checkUnreadMessagesTool,
   },
 });
