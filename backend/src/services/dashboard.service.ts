@@ -10,7 +10,6 @@ import { TaskStatus, TaskPriority } from '../types/enums';
 // DTOs for dashboard responses
 export interface TaskDTO {
   id: string;
-  workspace_id: string | null;
   parent_task_id: string | null;
   title: string;
   description: string | null;
@@ -40,7 +39,6 @@ export interface DashboardBucketsDTO {
 const taskToDTO = (task: Task): TaskDTO => {
   return {
     id: task.id,
-    workspace_id: task.workspace_id,
     parent_task_id: task.parent_task_id,
     title: task.title,
     description: task.description,

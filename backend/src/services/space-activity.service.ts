@@ -3,7 +3,6 @@ import { LogEntityType } from "../types/enums";
 
 export interface SpaceActivityLogDTO {
   id: string;
-  workspace_id: string | null;
   org_id: string | null;
   space_id: string | null;
   user_id: string | null;
@@ -23,7 +22,6 @@ export interface SpaceActivityLogDTO {
 
 const mapRow = (row: any): SpaceActivityLogDTO => ({
   id: row.id,
-  workspace_id: row.workspace_id,
   org_id: row.org_id,
   space_id: row.space_id,
   user_id: row.user_id,

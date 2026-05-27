@@ -37,7 +37,6 @@ export interface DependencyDTO {
 
 export interface TaskDTO {
   id: string;
-  workspace_id: string | null;
   parent_task_id: string | null;
   type: 'task' | 'event';
   event_type?: string | null;
@@ -100,7 +99,6 @@ export interface UpdateTaskData {
 const taskToDTO = (task: Task & { assignees?: User[] }): TaskDTO => {
   return {
     id: task.id,
-    workspace_id: task.workspace_id,
     parent_task_id: task.parent_task_id,
     type: task.type,
     event_type: task.event_type,

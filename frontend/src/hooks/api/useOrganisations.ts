@@ -12,7 +12,6 @@ export interface Organisation {
   /** The current user's role inside this organisation. */
   role: "owner" | "admin" | "member";
   is_personal: boolean;
-  source_workspace_id: string | null;
 }
 
 export interface OrgMember {

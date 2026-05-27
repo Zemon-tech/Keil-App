@@ -49,7 +49,6 @@ export const findDirectChannel = async (
 };
 
 export const createChannel = async (
-  workspaceId: string | null,
   orgId: string,
   spaceId: string,
   type: "direct" | "group",
@@ -78,11 +77,11 @@ export const createChannel = async (
 
     const channelResult = await client.query(
       `
-        INSERT INTO public.channels (workspace_id, org_id, space_id, type, name)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO public.channels (org_id, space_id, type, name)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
       `,
-      [workspaceId, orgId, spaceId, type, name],
+      [orgId, spaceId, type, name],
     );
 
     const channelId = channelResult.rows[0].id as string;
@@ -297,7 +296,7 @@ export const saveMessage = async (channelId: string, senderId: string, content: 
 
     // Get channel details
     const channelRes = await client.query(
-      `SELECT workspace_id, org_id, space_id, type, name FROM public.channels WHERE id = $1`,
+      `SELECT org_id, space_id, type, name FROM public.channels WHERE id = $1`,
       [channelId]
     );
     const channel = channelRes.rows[0];
@@ -316,10 +315,9 @@ export const saveMessage = async (channelId: string, senderId: string, content: 
         const senderName = sender.name || sender.email || 'Someone';
         
         await client.query(
-          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
-            channel.workspace_id,
             channel.org_id,
             channel.space_id,
             senderId,

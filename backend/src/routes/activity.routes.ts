@@ -4,9 +4,8 @@ import { getDashboardInfo, getActivityFeed } from "../controllers/activity.contr
 
 const router = Router();
 
-// Legacy dashboard + activity — kept for personal mode dashboard in Dashboard.tsx.
-// Uses protect only; workspaceId is resolved inside the controller from the user's
-// first workspace membership. Returns empty gracefully when no workspace exists.
+// Legacy dashboard + activity endpoints — kept for backward compatibility.
+// These now return empty responses. The frontend uses org-scoped endpoints instead.
 router.use(protect);
 
 router.get("/dashboard", getDashboardInfo);

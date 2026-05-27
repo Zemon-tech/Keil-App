@@ -11,10 +11,7 @@ const asString = (value: string | string[] | undefined): string =>
 const getChatContext = (req: Request) => {
   const orgId = asString(req.params.orgId);
   const spaceId = asString(req.params.spaceId);
-  // workspaceId is optional — org-native spaces have no legacy workspace.
-  // channels.workspace_id is now nullable (migration 012).
-  const workspaceId = ((req as any).space?.compatibility_workspace_id as string | null) ?? null;
-  return { orgId, spaceId, workspaceId };
+  return { orgId, spaceId };
 };
 
 export const createDirectChannel = catchAsync(async (req: Request, res: Response) => {
@@ -33,15 +30,13 @@ export const createDirectChannel = catchAsync(async (req: Request, res: Response
 
   let resolvedOrgId = context.orgId;
   let resolvedSpaceId = context.spaceId;
-  let resolvedWorkspaceId = context.workspaceId;
 
   if (isPersonal) {
     const sharedRes = await pool.query(
       `
         SELECT 
           o.id as org_id,
-          s.id as space_id,
-          COALESCE(s.workspace_id, o.source_workspace_id) as compatibility_workspace_id
+          s.id as space_id
         FROM public.space_members sm1
         INNER JOIN public.space_members sm2 
           ON sm1.space_id = sm2.space_id
@@ -68,7 +63,6 @@ export const createDirectChannel = catchAsync(async (req: Request, res: Response
 
     resolvedOrgId = sharedRes.rows[0].org_id;
     resolvedSpaceId = sharedRes.rows[0].space_id;
-    resolvedWorkspaceId = sharedRes.rows[0].compatibility_workspace_id;
   } else {
     const memberCheck = await pool.query(
       `
@@ -99,7 +93,6 @@ export const createDirectChannel = catchAsync(async (req: Request, res: Response
   }
 
   const channelId = await orgChatService.createChannel(
-    resolvedWorkspaceId,
     resolvedOrgId,
     resolvedSpaceId,
     "direct",
@@ -126,7 +119,6 @@ export const createGroupChannel = catchAsync(async (req: Request, res: Response)
 
   const allMembers = Array.from(new Set<string>([...member_ids, userId]));
   const channelId = await orgChatService.createChannel(
-    context.workspaceId,
     context.orgId,
     context.spaceId,
     "group",

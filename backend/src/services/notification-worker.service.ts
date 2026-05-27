@@ -87,7 +87,6 @@ export class NotificationWorkerService {
               if (isOptedIn) {
                 // Insert into system notifications feed
                 const notification = await notificationRepository.create({
-                  workspace_id: job.workspace_id,
                   org_id: job.org_id,
                   space_id: job.space_id,
                   recipient_id: recipientId,

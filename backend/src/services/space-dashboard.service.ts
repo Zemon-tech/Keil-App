@@ -4,7 +4,6 @@ import { OrgTaskDTO } from "./org-task.service";
 
 const toDTO = (task: any): OrgTaskDTO => ({
   id: task.id,
-  workspace_id: task.workspace_id,
   org_id: task.org_id ?? null,
   space_id: task.space_id ?? null,
   parent_task_id: task.parent_task_id,

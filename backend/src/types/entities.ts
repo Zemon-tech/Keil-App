@@ -8,27 +8,10 @@ export interface User {
   created_at: Date;
 }
 
-export interface Workspace {
-  id: string;
-  name: string;
-  owner_id: string;
-  created_at: Date;
-  deleted_at: Date | null;
-}
-
-export interface WorkspaceMember {
-  id: string;
-  workspace_id: string;
-  user_id: string;
-  role: MemberRole;
-  created_at: Date;
-}
-
 export interface Organisation {
   id: string;
   name: string;
   owner_user_id: string;
-  source_workspace_id: string | null;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;
@@ -45,12 +28,10 @@ export interface OrganisationMember {
 
 export interface Space {
   id: string;
-  workspace_id: string | null;
   org_id: string | null;
   name: string;
   visibility: string;
   created_by: string | null;
-  source_workspace_id: string | null;
   created_at: Date;
   updated_at: Date | null;
   deleted_at: Date | null;
@@ -68,7 +49,6 @@ export interface SpaceMember {
 
 export interface Task {
   id: string;
-  workspace_id: string | null;
   org_id?: string | null;
   space_id?: string | null;
   parent_task_id: string | null;
@@ -119,7 +99,6 @@ export interface Comment {
 
 export interface ActivityLog {
   id: string;
-  workspace_id: string | null;
   org_id?: string | null;
   space_id?: string | null;
   user_id: string | null;
@@ -219,7 +198,6 @@ export interface UserNotificationPreference {
 
 export interface Notification {
   id: string;
-  workspace_id: string;
   org_id: string | null;
   space_id: string | null;
   recipient_id: string;
@@ -234,7 +212,6 @@ export interface Notification {
 
 export interface NotificationOutbox {
   id: string;
-  workspace_id: string;
   org_id: string | null;
   space_id: string | null;
   sender_id: string | null;

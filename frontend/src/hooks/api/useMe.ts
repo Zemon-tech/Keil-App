@@ -14,14 +14,13 @@ export interface MeResponse {
   email: string;
   name: string | null;
   created_at: string;
-  workspace: MeWorkspace;
+  workspace: MeWorkspace | null;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Fetches the current authenticated user's profile + workspace from
- * GET /api/users/me. The backend auto-creates a workspace on first call.
+ * Fetches the current authenticated user's profile from GET /api/users/me.
  *
  * Query key: ["me"]
  * staleTime: inherits from QueryClient default (5 min)

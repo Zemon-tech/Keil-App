@@ -34,7 +34,7 @@ router.use("/orgs/:orgId/spaces/:spaceId/notes", motionPageRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId/chat", orgChatRoutes);
 router.use("/orgs/:orgId/spaces/:spaceId", orgActivityRoutes);
 
-// ── Cross-workspace task lookup (auth-only, no org/space scope) ───────────────
+// ── Cross-org task lookup (auth-only, no org/space scope) ─────────────────────
 router.use("/tasks", taskLocatorRoutes);
 
 // ── Integrations ──────────────────────────────────────────────────────────────

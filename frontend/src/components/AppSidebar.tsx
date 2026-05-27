@@ -262,7 +262,7 @@ function OrgSpaceSubmenu({
             )}
           </div>
           <span className="text-sm font-medium truncate">
-            {org.is_personal ? "Personal Workspace" : org.name}
+            {org.is_personal ? "My Space" : org.name}
           </span>
         </div>
         {isActiveOrg && (
@@ -466,7 +466,7 @@ export function AppSidebar({
   // Subtitle shown under the user name in the sidebar button
   const currentSpaceLabel =
     activeOrg?.is_personal
-      ? (activeSpace?.name ?? "Personal Workspace")
+      ? (activeSpace?.name ?? "My Space")
       : (activeSpace?.name ?? activeOrg?.name ?? "Organisation");
 
   const visibleNavigationItems = navigationItems.filter((item) =>

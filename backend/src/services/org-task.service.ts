@@ -16,7 +16,6 @@ const log = createServiceLogger("gcal");
 
 export interface OrgTaskDTO {
   id: string;
-  workspace_id: string | null;
   org_id: string | null;
   space_id: string | null;
   parent_task_id: string | null;
@@ -94,7 +93,6 @@ const toISO = (value: Date | string | null | undefined): string | null => {
 
 const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string }): OrgTaskDTO => ({
   id: task.id,
-  workspace_id: task.workspace_id,
   org_id: task.org_id ?? null,
   space_id: task.space_id ?? null,
   parent_task_id: task.parent_task_id,
@@ -215,10 +213,9 @@ export const createTask = async (
       const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
       await client.query(
-        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          created.workspace_id ?? null,
           context.orgId,
           context.spaceId,
           input.created_by,
@@ -311,10 +308,9 @@ export const updateTask = async (
         const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
         await client.query(
-          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
-            existingTask.workspace_id ?? null,
             context.orgId,
             context.spaceId,
             userId,
@@ -410,10 +406,9 @@ export const changeTaskStatus = async (
       const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
       await client.query(
-        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          existing.workspace_id ?? null,
           context.orgId,
           context.spaceId,
           userId,
@@ -488,17 +483,16 @@ export const assignUser = async (
     );
 
     // Trigger task_assigned outbox job
-    const taskRes = await client.query('SELECT workspace_id, title FROM public.tasks WHERE id = $1', [taskId]);
+    const taskRes = await client.query('SELECT title FROM public.tasks WHERE id = $1', [taskId]);
     const task = taskRes.rows[0];
     if (task) {
       const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
       const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
       await client.query(
-        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          task.workspace_id ?? null,
           context.orgId,
           context.spaceId,
           userId,

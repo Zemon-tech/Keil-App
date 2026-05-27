@@ -44,7 +44,3 @@ export interface ActivityQueryOptions {
   userId?: string;
 }
 
-export interface WorkspaceMemberQueryOptions {
-  pagination?: PaginationOptions;
-  role?: string;
-}

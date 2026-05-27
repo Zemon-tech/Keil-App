@@ -12,7 +12,6 @@ export interface SpaceDTO {
   created_by: string | null;
   created_at: string;
   role: string;
-  compatibility_workspace_id: string | null;
   is_private: boolean;
 }
 
@@ -41,7 +40,6 @@ const toDTO = (row: any): SpaceDTO => ({
   created_by: row.created_by,
   created_at: new Date(row.created_at).toISOString(),
   role: row.membership_role,
-  compatibility_workspace_id: row.compatibility_workspace_id,
   is_private: !!row.is_private,
 });
 
@@ -141,7 +139,6 @@ export const createSpace = async (
     created_by: space.created_by,
     created_at: new Date(space.created_at).toISOString(),
     role: "admin",
-    compatibility_workspace_id: null,
     is_private: !!space.is_private,
   };
 };
@@ -168,7 +165,6 @@ export const renameSpace = async (
     created_by: updated.created_by,
     created_at: new Date(updated.created_at).toISOString(),
     role: "admin",
-    compatibility_workspace_id: null,
     is_private: !!updated.is_private,
   };
 };
@@ -233,7 +229,6 @@ export const restoreSpace = async (
     created_by: restored.created_by,
     created_at: new Date(restored.created_at).toISOString(),
     role: "admin",
-    compatibility_workspace_id: null,
     is_private: !!restored.is_private,
   };
 };
@@ -311,10 +306,9 @@ export const addSpaceMember = async (
     const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
     await client.query(
-      `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
-        null,
         orgId,
         spaceId,
         userId,
@@ -382,10 +376,9 @@ export const updateSpaceMemberRole = async (
     const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
     await client.query(
-      `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
-        null,
         orgId,
         spaceId,
         actorUserId,

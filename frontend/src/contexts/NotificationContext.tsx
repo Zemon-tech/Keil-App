@@ -7,7 +7,6 @@ import { useAuth } from "./AuthContext";
 
 export interface Notification {
   id: string;
-  workspace_id: string;
   org_id: string | null;
   space_id: string | null;
   recipient_id: string;
@@ -56,8 +55,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { user } = useAuth();
   const { activeOrg, activeSpace } = useAppContext();
   
-  // Resolve compatibility workspace ID or source workspace ID
-  const workspaceId = activeSpace?.compatibility_workspace_id || activeOrg?.source_workspace_id || null;
+  // Notifications are now scoped by org/space — no workspace_id needed
+  const orgId = activeOrg?.id || null;
 
   const fetchNotifications = async () => {
     if (!user) return;
@@ -65,7 +64,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       // Get all unread count
       const countRes = await api.get("/v1/notifications/unread-count", {
-        params: workspaceId ? { workspaceId } : undefined,
+        params: orgId ? { orgId } : undefined,
       });
       setUnreadCount(countRes.data.data?.count ?? 0);
 
@@ -73,7 +72,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const listRes = await api.get("/v1/notifications", {
         params: {
           limit: 50,
-          workspaceId: workspaceId || undefined,
+          orgId: orgId || undefined,
         },
       });
       setNotifications(listRes.data.data || []);
@@ -91,7 +90,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotifications([]);
       setUnreadCount(0);
     }
-  }, [user, workspaceId]);
+  }, [user, orgId]);
 
   // Setup live socket listener for real-time notifications
   useEffect(() => {
@@ -111,8 +110,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     function setupSocketListener(s: any) {
       s.on("new_notification", (notification: Notification) => {
-        // If it belongs to our active workspace, prepend in the UI list
-        if (!workspaceId || notification.workspace_id === workspaceId) {
+        // If it belongs to our active org, prepend in the UI list
+        if (!orgId || notification.org_id === orgId) {
           setNotifications((prev) => [notification, ...prev]);
           setUnreadCount((prev) => prev + 1);
         }
@@ -131,7 +130,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const activeSock = getSocket();
       activeSock?.off("new_notification");
     };
-  }, [user, workspaceId]);
+  }, [user, orgId]);
 
   const markAsRead = async (id: string) => {
     try {
@@ -147,7 +146,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const markAllAsRead = async () => {
     try {
-      await api.post("/v1/notifications/read-all", { workspaceId });
+      await api.post("/v1/notifications/read-all", { orgId });
       setNotifications((prev) => prev.map((n) => ({ ...n, read_at: new Date().toISOString() })));
       setUnreadCount(0);
     } catch (err) {
@@ -157,7 +156,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const clearAll = async () => {
     try {
-      await api.delete("/v1/notifications/clear-all", { params: { workspaceId } });
+      await api.delete("/v1/notifications/clear-all", { params: { orgId } });
       setNotifications([]);
       setUnreadCount(0);
     } catch (err) {

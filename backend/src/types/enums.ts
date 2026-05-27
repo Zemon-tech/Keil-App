@@ -34,8 +34,7 @@ export enum EventType {
 
 export enum LogEntityType {
   TASK = 'task',
-  COMMENT = 'comment',
-  WORKSPACE = 'workspace'
+  COMMENT = 'comment'
 }
 
 export enum LogActionType {

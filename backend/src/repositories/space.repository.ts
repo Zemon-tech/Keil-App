@@ -11,17 +11,14 @@ export class SpaceRepository extends BaseRepository<Space> {
     orgId: string,
     userId: string,
     client?: PoolClient,
-  ): Promise<Array<Space & { membership_role: string; compatibility_workspace_id: string | null }>> {
+  ): Promise<Array<Space & { membership_role: string }>> {
     const query = `
       SELECT
         s.*,
-        sm.role as membership_role,
-        COALESCE(s.workspace_id, o.source_workspace_id) as compatibility_workspace_id
+        sm.role as membership_role
       FROM public.spaces s
       INNER JOIN public.space_members sm
         ON sm.space_id = s.id
-      INNER JOIN public.organisations o
-        ON o.id = s.org_id
       WHERE s.org_id = $1
         AND sm.user_id = $2
         AND s.deleted_at IS NULL
@@ -30,7 +27,7 @@ export class SpaceRepository extends BaseRepository<Space> {
 
     const executor = client || this.pool;
     const result = await executor.query(query, [orgId, userId]);
-    return result.rows as Array<Space & { membership_role: string; compatibility_workspace_id: string | null }>;
+    return result.rows as Array<Space & { membership_role: string }>;
   }
 
   async findMembers(

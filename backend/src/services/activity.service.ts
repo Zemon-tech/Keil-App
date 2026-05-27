@@ -11,7 +11,6 @@ import { ActivityQueryOptions } from "../types/repository";
 // DTOs (Data Transfer Objects) for API responses
 export interface ActivityLogDTO {
   id: string;
-  workspace_id: string | null;
   user_id: string | null;
   entity_type: LogEntityType;
   entity_id: string;
@@ -53,7 +52,6 @@ const activityLogToDTO = (
 ): ActivityLogDTO => {
   return {
     id: log.id,
-    workspace_id: log.workspace_id,
     user_id: log.user_id,
     entity_type: log.entity_type,
     entity_id: log.entity_id,
