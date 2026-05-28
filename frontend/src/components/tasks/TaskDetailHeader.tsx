@@ -7,7 +7,6 @@ import {
   PanelRightClose,
   Pencil,
   Trash2,
-  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
