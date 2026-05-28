@@ -5,17 +5,30 @@ import { toAISdkStream } from "@mastra/ai-sdk";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import type { UIMessage } from "ai";
 import jwt from "jsonwebtoken";
-import pool from "../config/pg";
+import { config } from "../config";
 import { supervisor } from "./agents/supervisor";
 import { taskAgent } from "./agents/task.agent";
 import { chatAgent } from "./agents/chat.agent";
 import { motionAgent } from "./agents/motion.agent";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
+// Mastra storage needs a direct/session connection (not transaction pooler)
+// because it runs DDL statements (CREATE TABLE, ALTER TABLE) during init.
+// Supabase session pooler limits to 15 concurrent connections total,
+// so we cap Mastra's pool to 5 to leave room for the app's pool.
+
+import { Pool as PgPool } from "pg";
+
+const mastraPool = new PgPool({
+  connectionString: config.mastraDatabaseUrl,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+  connectionTimeoutMillis: 10000,
+});
 
 const storage = new PostgresStore({
   id: "keilhq-mastra-storage",
-  pool: pool,
+  pool: mastraPool,
   schemaName: "mastra",
 });
 

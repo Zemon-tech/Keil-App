@@ -9,6 +9,8 @@ export const config = {
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || "",
     supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || "",
     databaseUrl: process.env.DATABASE_URL || "",
+    // Direct connection URL for Mastra storage (DDL operations need session/direct mode, not transaction pooler)
+    mastraDatabaseUrl: process.env.MASTRA_DATABASE_URL || process.env.DATABASE_URL || "",
     // Google Calendar OAuth
     googleClientId: process.env.GOOGLE_CLIENT_ID || "",
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",

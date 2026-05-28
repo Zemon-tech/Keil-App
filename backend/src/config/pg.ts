@@ -26,15 +26,16 @@ types.setTypeParser(types.builtins.TIMESTAMPTZ, (value) => {
 });
 
 // Create a new pg Pool (singleton)
+// NOTE: Supabase session pooler (port 5432) limits total connections to 15.
+// Mastra uses a separate pool (max: 5), so this pool gets the remaining 10.
 const pool = new Pool({
     connectionString: config.databaseUrl,
     ssl: {
         rejectUnauthorized: false
     },
-    // Best practice: cap the pool size for standard limits, especially on Direct Connection mode
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
 });
 
 // Event listeners for connection monitoring

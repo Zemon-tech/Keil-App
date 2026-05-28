@@ -13,6 +13,19 @@ const log = createServiceLogger("server");
 const dbLog = createServiceLogger("database");
 const cronLog = createServiceLogger("gcal-renewal");
 
+// Prevent unhandled Mastra storage init rejections from crashing the process.
+// Mastra's PostgresStore uses lazy init with "will retry on next storage call" semantics,
+// but the rejected promise still propagates as unhandled if not caught globally.
+process.on("unhandledRejection", (reason: unknown) => {
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    if (msg.includes("MASTRA_STORAGE") || msg.includes("Connection terminated")) {
+        log.warn({ err: reason }, "Mastra storage init failed (non-fatal, will retry on next call)");
+        return; // swallow — Mastra will retry lazily
+    }
+    log.fatal({ err: reason }, "Unhandled promise rejection");
+    process.exit(1);
+});
+
 const port = Number(config.port);
 
 const server = http.createServer(app);
@@ -46,8 +59,14 @@ const startServer = async () => {
         }
 
         // Initialize Mastra server (auto-registers agent endpoints)
-        await initMastraServer();
-        log.info("Mastra server initialized (agent endpoints registered)");
+        // Storage init may fail on first attempt due to connection pressure;
+        // Mastra retries lazily on the first actual /chat request.
+        try {
+            await initMastraServer();
+            log.info("Mastra server initialized (agent endpoints registered)");
+        } catch (mastraErr) {
+            log.error({ err: mastraErr }, "Mastra server init failed — /chat will be unavailable until storage connects");
+        }
 
         server.listen(port, '0.0.0.0', () => {
             log.info({ port }, `Server is running at http://localhost:${port}`);
