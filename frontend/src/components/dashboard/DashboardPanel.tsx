@@ -22,7 +22,7 @@ interface DashboardPanelProps {
   isLoading: boolean;
 }
 
-const REPLY_COUNT = 3;
+const REPLY_COUNT = 0;
 
 export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
   const [now, setNow] = useState(() => new Date());
