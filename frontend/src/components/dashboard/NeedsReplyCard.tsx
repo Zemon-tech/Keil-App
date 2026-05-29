@@ -7,11 +7,20 @@ interface NeedsReplyCardProps {
 }
 
 export function NeedsReplyCard({ isWheel }: NeedsReplyCardProps) {
-  const replies = [
-    { id: 1, from: "Rahul", message: "clarification on API endpoint" },
-    { id: 2, from: "Design team", message: "feedback on login UI" },
-    { id: 3, from: "Team", message: "PR review request" },
-  ];
+  const replies: { id: number; from: string; message: string }[] = [];
+
+  if (!replies.length) {
+    return (
+      <Card
+        className={cn(
+          "bg-card/90 border border-border/60 rounded-2xl p-4 flex items-center justify-center text-muted-foreground text-xs italic",
+          isWheel ? "size-full rounded-none border-0" : "",
+        )}
+      >
+        No pending replies
+      </Card>
+    );
+  }
 
   return (
     <Card
@@ -45,3 +54,4 @@ export function NeedsReplyCard({ isWheel }: NeedsReplyCardProps) {
     </Card>
   );
 }
+
