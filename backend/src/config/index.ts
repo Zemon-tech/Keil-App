@@ -23,16 +23,17 @@ export const config = {
     // Sarvam AI
     sarvamApiKey: process.env.SARVAM_API_KEY || "",
     sarvamWebhookSecret: process.env.SARVAM_WEBHOOK_SECRET || "",
+    // ElevenLabs STT
+    elevenlabsApiKey: process.env.ELEVENLABS_API_KEY || "",
     // OpenRouter / Vercel AI SDK
     openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     openRouterModel: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
-    // Sevalla S3
-    sevallaS3Endpoint: process.env.SEVALLA_S3_ENDPOINT || "",
-    sevallaS3AccessKeyId: process.env.SEVALLA_S3_ACCESS_KEY_ID || "",
-    sevallaS3SecretAccessKey: process.env.SEVALLA_S3_SECRET_ACCESS_KEY || "",
-    sevallaS3BucketName: process.env.SEVALLA_S3_BUCKET_NAME || "",
-    sevallaS3Region: process.env.SEVALLA_S3_REGION || "auto",
+    // AWS S3
+    awsS3Region: process.env.AWS_S3_REGION || "ap-south-1",
+    awsS3AccessKeyId: process.env.AWS_S3_ACCESS_KEY_ID || "",
+    awsS3SecretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY || "",
+    awsS3BucketName: process.env.AWS_S3_BUCKET_NAME || "",
     // ── Google Generative AI (Gemini via @ai-sdk/google) ─────────────────────
     // Get your API key from https://aistudio.google.com/app/apikey
     googleGenAiApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",

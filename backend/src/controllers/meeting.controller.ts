@@ -9,6 +9,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
 import { processCompletedTranscription, processFailedTranscription } from "../services/transcription-processor";
+import { getTranscriptionProvider, SttProvider } from "../services/transcription";
+import * as userPreferencesService from "../services/user-preferences.service";
 import { createServiceLogger } from "../lib/logger";
 
 const log = createServiceLogger("meeting");
@@ -43,20 +45,36 @@ export const getUploadUrl = catchAsync(async (req: Request, res: Response) => {
         // Unique S3 key matching pattern: meetings/${userId}/${meetingId}/${timestamp}-${fileName}
         const s3Key = `meetings/${userId}/${meetingFolder}/${timestamp}-${safeFileName}`;
 
-        log.debug({ bucket: config.sevallaS3BucketName, s3Key }, "Generating presigned PUT URL");
+        log.debug({ bucket: config.awsS3BucketName, s3Key }, "Generating presigned PUT URL");
 
         const command = new PutObjectCommand({
-            Bucket: config.sevallaS3BucketName,
+            Bucket: config.awsS3BucketName,
             Key: s3Key,
             ContentType: sanitizeMimeType(contentType),
         });
 
         const uploadUrl = await getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
 
-        // Create database row in pending state
-        const recording = await meetingService.createRecording(userId, dbMeetingId, s3Key);
+        // Determine user's STT provider preference
+        const sttProvider = await userPreferencesService.getSttProvider(userId);
 
-        // Create Sarvam batch job early so frontend can upload directly to Sarvam Azure
+        // Create database row in pending state
+        const recording = await meetingService.createRecording(userId, dbMeetingId, s3Key, sttProvider);
+
+        // For ElevenLabs, we only need the S3 upload URL — no Sarvam Azure staging needed
+        if (sttProvider === "elevenlabs") {
+            log.info({ recordingId: recording.id, provider: "elevenlabs" }, "ElevenLabs flow: returning S3 upload URL only");
+            return res.status(200).json(
+                new ApiResponse(200, {
+                    uploadUrl,
+                    s3Key,
+                    recordingId: recording.id,
+                    provider: "elevenlabs"
+                }, "Presigned S3 upload URL generated (ElevenLabs provider)")
+            );
+        }
+
+        // ─── Sarvam flow: Create batch job early for direct frontend upload ───
         const sarvamHeaders = {
             "api-subscription-key": config.sarvamApiKey,
             "Content-Type": "application/json"
@@ -141,15 +159,15 @@ export const getUploadUrl = catchAsync(async (req: Request, res: Response) => {
 });
 
 /**
- * Creates, uploads, and starts a Sarvam Batch STT job.
+ * Creates, uploads, and starts a transcription job.
  * 
- * Supports two flows:
- * - NEW (Phase 3): Frontend passes sarvamJobId — audio already uploaded to Sarvam by frontend.
- *   Backend only starts the job.
- * - LEGACY: Frontend passes s3Key — backend downloads from S3, uploads to Sarvam, starts job.
+ * Supports multiple flows based on provider:
+ * - SARVAM (NEW): Frontend passes sarvamJobId — audio already uploaded to Sarvam by frontend.
+ * - SARVAM (LEGACY): Frontend passes s3Key — backend downloads from S3, uploads to Sarvam, starts job.
+ * - ELEVENLABS: Backend generates presigned S3 GET URL and passes it to ElevenLabs cloud_storage_url.
  */
 export const transcribeRecording = catchAsync(async (req: Request, res: Response) => {
-    const { recordingId, s3Key, sarvamJobId: frontendJobId, durationSeconds, contentType } = req.body;
+    const { recordingId, s3Key, sarvamJobId: frontendJobId, durationSeconds, contentType, provider: requestProvider } = req.body;
     const user = (req as any).user;
 
     try {
@@ -161,7 +179,142 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             return res.status(400).json({ error: "Recording ID is required" });
         }
 
-        // ─── NEW FLOW: Frontend already uploaded to Sarvam Azure ───────────────
+        // Determine provider: use request body override or fall back to user preference
+        const sttProvider: SttProvider = requestProvider || await userPreferencesService.getSttProvider(user.id);
+
+        // ─── ELEVENLABS FLOW ───────────────────────────────────────────────────
+        if (sttProvider === "elevenlabs") {
+            log.info({ recordingId, provider: "elevenlabs", s3Key, durationSeconds, contentType }, "[EL-FLOW] Step 1: ElevenLabs transcription flow started");
+
+            if (!s3Key) {
+                log.error({ recordingId }, "[EL-FLOW] ABORT: s3Key is missing");
+                return res.status(400).json({ error: "s3Key is required for ElevenLabs transcription" });
+            }
+
+            // Update duration if provided
+            if (durationSeconds) {
+                log.debug({ recordingId, durationSeconds }, "[EL-FLOW] Step 2: Updating recording duration");
+                await meetingService.updateRecordingDuration(recordingId, durationSeconds);
+            }
+
+            // Update recording to processing state
+            log.debug({ recordingId }, "[EL-FLOW] Step 3: Setting recording to processing state");
+            await meetingService.updateRecordingJob(recordingId, `el_pending_${Date.now()}`, durationSeconds);
+
+            // Broadcast processing started
+            try {
+                const { broadcastMeetingUpdate } = require("../socket");
+                const updatedRec = await meetingService.getRecordingById(recordingId);
+                broadcastMeetingUpdate(user.id, {
+                    type: "transcription_started",
+                    recordingId,
+                    status: "processing",
+                    recording: updatedRec
+                });
+                log.debug({ recordingId }, "[EL-FLOW] Step 4: Broadcast transcription_started via WebSocket");
+            } catch (sockErr) {
+                log.warn({ sockErr, recordingId }, "[EL-FLOW] Step 4: Failed to broadcast WebSocket transcription start");
+            }
+
+            // Generate presigned GET URL for ElevenLabs to fetch the audio
+            const getCommand = new GetObjectCommand({
+                Bucket: config.awsS3BucketName,
+                Key: s3Key,
+            });
+            const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
+            log.info({ recordingId, presignedUrlPrefix: presignedAudioUrl.substring(0, 80) }, "[EL-FLOW] Step 5: Generated presigned GET URL for S3 audio");
+
+            // Fire-and-forget: run ElevenLabs transcription in background
+            (async () => {
+                try {
+                    log.info({ recordingId }, "[EL-FLOW] Step 6: Calling ElevenLabs provider.startTranscription()");
+                    const provider = getTranscriptionProvider("elevenlabs");
+                    const jobInfo = await provider.startTranscription(presignedAudioUrl, {
+                        recordingId,
+                        durationSeconds,
+                        contentType,
+                    });
+
+                    log.info({ recordingId, jobId: jobInfo.jobId, completed: jobInfo.completed, hasResult: !!jobInfo.result }, "[EL-FLOW] Step 7: ElevenLabs provider returned");
+
+                    if (jobInfo.completed && jobInfo.result) {
+                        log.info({
+                            recordingId,
+                            jobId: jobInfo.jobId,
+                            textLength: jobInfo.result.transcriptText?.length || 0,
+                            language: jobInfo.result.languageDetected,
+                            audioDuration: jobInfo.result.audioDurationSeconds,
+                            hasDiarized: !!jobInfo.result.transcriptDiarized,
+                        }, "[EL-FLOW] Step 8: Transcription completed synchronously, saving to DB");
+
+                        // Synchronous completion — update job ID first, then save final results
+                        await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, jobInfo.result.audioDurationSeconds || durationSeconds);
+                        log.debug({ recordingId }, "[EL-FLOW] Step 8a: Updated recording job ID in DB");
+
+                        const updated = await meetingService.updateRecordingResult(
+                            recordingId,
+                            "completed",
+                            jobInfo.result.transcriptText,
+                            jobInfo.result.transcriptDiarized,
+                            jobInfo.result.languageDetected || undefined
+                        );
+                        log.info({ recordingId, updatedStatus: updated?.transcription_status }, "[EL-FLOW] Step 8b: Saved transcription result to DB");
+
+                        try {
+                            const { broadcastMeetingUpdate } = require("../socket");
+                            broadcastMeetingUpdate(user.id, {
+                                type: "transcription_complete",
+                                recordingId,
+                                status: "completed",
+                                recording: updated
+                            });
+                            log.info({ recordingId }, "[EL-FLOW] Step 9: Broadcast transcription_complete (success) via WebSocket");
+                        } catch (sockErr) {
+                            log.warn({ sockErr }, "[EL-FLOW] Step 9: Failed to broadcast ElevenLabs completion");
+                        }
+                    } else {
+                        // Async — update job ID for polling
+                        log.info({ recordingId, jobId: jobInfo.jobId }, "[EL-FLOW] Step 8: Async mode — updating job ID for polling");
+                        await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, durationSeconds);
+                    }
+                } catch (bgError: any) {
+                    log.error({
+                        err: bgError,
+                        errMessage: bgError?.message,
+                        errStack: bgError?.stack,
+                        recordingId
+                    }, "[EL-FLOW] FAILED: ElevenLabs background transcription error");
+                    const updated = await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => {
+                        log.error({ err: e }, "[EL-FLOW] FAILED: Could not update recording status to 'failed' in DB");
+                        return null;
+                    });
+                    if (updated) {
+                        try {
+                            const { broadcastMeetingUpdate } = require("../socket");
+                            broadcastMeetingUpdate(user.id, {
+                                type: "transcription_complete",
+                                recordingId,
+                                status: "failed",
+                                recording: updated
+                            });
+                            log.warn({ recordingId }, "[EL-FLOW] Broadcast transcription_complete (failed) via WebSocket");
+                        } catch (sockErr) {
+                            log.warn({ sockErr }, "[EL-FLOW] Failed to broadcast ElevenLabs failure");
+                        }
+                    }
+                }
+            })().catch(e => log.error({ err: e, errMessage: (e as any)?.message, errStack: (e as any)?.stack }, "[EL-FLOW] Unhandled ElevenLabs background rejection"));
+
+            return res.status(200).json(
+                new ApiResponse(200, {
+                    jobId: `el_${recordingId}`,
+                    recordingId,
+                    provider: "elevenlabs"
+                }, "ElevenLabs transcription triggered in background")
+            );
+        }
+
+        // ─── SARVAM FLOW (NEW): Frontend already uploaded to Sarvam Azure ─────
         if (frontendJobId) {
             log.info({ recordingId, sarvamJobId: frontendJobId }, "New flow: starting pre-created Sarvam job");
 
@@ -217,12 +370,13 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             return res.status(200).json(
                 new ApiResponse(200, {
                     jobId: frontendJobId,
-                    recordingId
+                    recordingId,
+                    provider: "sarvam"
                 }, "Transcription job started")
             );
         }
 
-        // ─── LEGACY FLOW: Backend handles S3 download + Sarvam upload ──────────
+        // ─── SARVAM FLOW (LEGACY): Backend handles S3 download + Sarvam upload ─
         if (!s3Key) {
             return res.status(400).json({ error: "Either sarvamJobId or s3Key is required" });
         }
@@ -230,7 +384,7 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
         // 1. Generate presigned S3 GET URL
         log.info({ s3Key, step: "1/6" }, "Legacy flow: Generating S3 presigned GET URL");
         const getCommand = new GetObjectCommand({
-            Bucket: config.sevallaS3BucketName,
+            Bucket: config.awsS3BucketName,
             Key: s3Key,
         });
         const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
@@ -419,7 +573,8 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
 });
 
 /**
- * Checks the status of a Sarvam Batch job and saves results upon completion
+ * Checks the status of a transcription job and saves results upon completion.
+ * Supports both Sarvam and ElevenLabs providers.
  */
 export const getTranscriptionStatus = catchAsync(async (req: Request, res: Response) => {
     const { jobId, recordingId } = req.query;
@@ -429,7 +584,7 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
     }
 
     try {
-        // Optimistically check database state first to avoid redundant Sarvam API network calls
+        // Optimistically check database state first to avoid redundant API network calls
         const localRecording = await meetingService.getRecordingById(recordingId as string);
         if (localRecording) {
             if (localRecording.transcription_status === "completed" || localRecording.transcription_status === "failed") {
@@ -443,6 +598,37 @@ export const getTranscriptionStatus = catchAsync(async (req: Request, res: Respo
             }
         }
 
+        // Determine provider from the recording's stt_provider column or job ID prefix
+        const recordingProvider = (localRecording as any)?.stt_provider;
+        const isElevenLabs = recordingProvider === "elevenlabs" || (jobId as string).startsWith("el_");
+
+        if (isElevenLabs) {
+            // ElevenLabs transcription is synchronous — if the DB still shows "processing",
+            // it means the background task hasn't finished yet. We should NOT call the
+            // ElevenLabs API to check status (there's nothing to poll).
+            // Instead, just tell the frontend to keep waiting — the WebSocket will deliver
+            // the result when the background task completes.
+            
+            // Safety check: if transcript data exists but status is still "processing",
+            // it means the result was saved but status wasn't updated correctly — fix it.
+            if (localRecording && localRecording.transcript_text && localRecording.transcription_status === "processing") {
+                log.warn({ recordingId }, "ElevenLabs recording has transcript but status is processing — fixing");
+                const updated = await meetingService.updateRecordingStatus(recordingId as string, "completed");
+                return res.status(200).json(
+                    new ApiResponse(200, {
+                        status: "completed",
+                        recording: updated
+                    }, "Transcription completed (status corrected)")
+                );
+            }
+
+            // Otherwise, just report current status — background task is still running
+            return res.status(200).json(
+                new ApiResponse(200, { status: "processing" }, "ElevenLabs transcription is still processing in background")
+            );
+        }
+
+        // ─── Sarvam flow (existing logic) ──────────────────────────────────────
         const sarvamHeaders = {
             "api-subscription-key": config.sarvamApiKey,
             "Content-Type": "application/json"
@@ -608,7 +794,7 @@ export const getRecordingReview = catchAsync(async (req: Request, res: Response)
 
         // Generate pre-signed URL for the audio file in the bucket
         const getCommand = new GetObjectCommand({
-            Bucket: config.sevallaS3BucketName,
+            Bucket: config.awsS3BucketName,
             Key: recording.audio_s3_key,
         });
         const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
@@ -711,7 +897,7 @@ export const deleteRecording = catchAsync(async (req: Request, res: Response) =>
         if (recording.audio_s3_key) {
             log.info({ recordingId, s3Key: recording.audio_s3_key }, "Deleting audio file from S3 bucket");
             const deleteCommand = new DeleteObjectCommand({
-                Bucket: config.sevallaS3BucketName,
+                Bucket: config.awsS3BucketName,
                 Key: recording.audio_s3_key,
             });
             await getS3Client().send(deleteCommand).catch(s3Err => {

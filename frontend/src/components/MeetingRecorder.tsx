@@ -346,18 +346,98 @@ export const MeetingRecorder: React.FC = () => {
     });
 
     try {
-      // Step 1: Get all upload URLs (S3 + Sarvam) in one call
+      // Step 1: Get all upload URLs (S3 + optionally Sarvam) in one call
       const response = await api.post("v1/meetings/upload-url", {
         meetingId: meetingId || null,
         fileName: `recording-${Date.now()}.webm`,
         contentType: audioBlob.type,
       });
 
-      const { uploadUrl, sarvamUploadUrl, sarvamJobId, s3Key, recordingId: recId } = response.data.data;
+      const { uploadUrl, sarvamUploadUrl, sarvamJobId, s3Key, recordingId: recId, provider } = response.data.data;
       setRecordingId(recId);
 
-      // Step 2: Upload to S3 and Sarvam Azure in parallel (if sarvamUploadUrl available)
+      // ─── ElevenLabs flow: upload to S3 only, backend handles the rest ───
+      if (provider === "elevenlabs") {
+        console.log("[MeetingRecorder] ═══ ElevenLabs Flow Started ═══");
+        console.log("[MeetingRecorder] Step 1: Uploading to S3 presigned URL");
+        console.log("[MeetingRecorder] → Recording ID:", recId);
+        console.log("[MeetingRecorder] → S3 Key:", s3Key);
+        console.log("[MeetingRecorder] → Blob size:", audioBlob.size, "bytes");
+        console.log("[MeetingRecorder] → Blob type:", audioBlob.type);
+        console.log("[MeetingRecorder] → Duration:", duration, "seconds");
+        console.log("[MeetingRecorder] → Upload URL (prefix):", uploadUrl?.substring(0, 80));
+
+        const uploadStart = Date.now();
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: audioBlob,
+          headers: { "Content-Type": audioBlob.type },
+        });
+        const uploadElapsed = Date.now() - uploadStart;
+
+        console.log("[MeetingRecorder] Step 2: S3 upload response:", {
+          status: uploadResponse.status,
+          statusText: uploadResponse.statusText,
+          elapsed: `${uploadElapsed}ms`,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text().catch(() => "Could not read response body");
+          console.error("[MeetingRecorder] ❌ S3 upload FAILED:", {
+            status: uploadResponse.status,
+            statusText: uploadResponse.statusText,
+            headers: Object.fromEntries(uploadResponse.headers.entries()),
+            body: errorText,
+          });
+          throw new Error(`Failed to upload audio to S3 cloud storage. Status: ${uploadResponse.status} - ${errorText}`);
+        }
+
+        console.log("[MeetingRecorder] ✓ S3 upload successful");
+
+        setStatus("transcribing");
+        toast.info("Decoding conversation map...", {
+          description: "Initiating ElevenLabs speech-to-text transcription.",
+        });
+
+        console.log("[MeetingRecorder] Step 3: Calling /v1/meetings/transcribe", {
+          recordingId: recId,
+          s3Key,
+          durationSeconds: duration,
+          contentType: audioBlob.type,
+          provider: "elevenlabs",
+        });
+
+        const transcribeStart = Date.now();
+        const transcribeResponse = await api.post("v1/meetings/transcribe", {
+          recordingId: recId,
+          s3Key,
+          durationSeconds: duration,
+          contentType: audioBlob.type,
+          provider: "elevenlabs",
+        });
+        const transcribeElapsed = Date.now() - transcribeStart;
+
+        console.log("[MeetingRecorder] Step 4: /transcribe response received", {
+          elapsed: `${transcribeElapsed}ms`,
+          data: transcribeResponse.data,
+        });
+
+        setJobId(transcribeResponse.data.data.jobId);
+        console.log("[MeetingRecorder] ═══ ElevenLabs Flow: Request sent, waiting for WebSocket result ═══");
+        toast.success("Meeting Sync Saved", {
+          description: "Transcription and analysis are running in the background.",
+        });
+        resetRecorder();
+        return;
+      }
+
+      // ─── Sarvam flow: Upload to S3 and Sarvam Azure in parallel ─────────
       if (sarvamUploadUrl && sarvamJobId) {
+        console.log("[MeetingRecorder] Sarvam flow: dual upload to S3 + Sarvam Azure");
+        console.log("[MeetingRecorder] S3 Upload URL:", uploadUrl);
+        console.log("[MeetingRecorder] Sarvam Upload URL:", sarvamUploadUrl);
+        console.log("[MeetingRecorder] Blob size:", audioBlob.size, "type:", audioBlob.type);
+
         // New optimized flow: dual upload
         const [s3Result, sarvamResult] = await Promise.allSettled([
           fetch(uploadUrl, {
@@ -374,6 +454,14 @@ export const MeetingRecorder: React.FC = () => {
 
         // Handle S3 upload failure
         if (s3Result.status === "rejected" || (s3Result.status === "fulfilled" && !s3Result.value.ok)) {
+          const errorDetail = s3Result.status === "rejected"
+            ? s3Result.reason
+            : await s3Result.value.text().catch(() => `Status: ${s3Result.value.status}`);
+          console.error("[MeetingRecorder] S3 upload failed (Sarvam flow):", {
+            status: s3Result.status === "fulfilled" ? s3Result.value.status : "rejected",
+            headers: s3Result.status === "fulfilled" ? Object.fromEntries(s3Result.value.headers.entries()) : null,
+            error: errorDetail,
+          });
           throw new Error("Failed to upload audio to S3 cloud storage.");
         }
 

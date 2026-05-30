@@ -5,25 +5,23 @@ import { createServiceLogger } from "./logger";
 const log = createServiceLogger("s3");
 
 const s3Configured =
-    !!config.sevallaS3Endpoint &&
-    !!config.sevallaS3AccessKeyId &&
-    !!config.sevallaS3SecretAccessKey &&
-    !!config.sevallaS3BucketName;
+    !!config.awsS3AccessKeyId &&
+    !!config.awsS3SecretAccessKey &&
+    !!config.awsS3BucketName;
 
 let _s3: S3Client | null = null;
 
 if (s3Configured) {
     _s3 = new S3Client({
-        endpoint: config.sevallaS3Endpoint,
-        region: config.sevallaS3Region,
+        region: config.awsS3Region,
         credentials: {
-            accessKeyId: config.sevallaS3AccessKeyId,
-            secretAccessKey: config.sevallaS3SecretAccessKey,
+            accessKeyId: config.awsS3AccessKeyId,
+            secretAccessKey: config.awsS3SecretAccessKey,
         },
     });
-    log.info("Sevalla S3 client initialized");
+    log.info("AWS S3 client initialized");
 } else {
-    log.warn("Missing Sevalla S3 configuration in .env — S3 features will be unavailable");
+    log.warn("Missing AWS S3 configuration in .env — S3 features will be unavailable");
 }
 
 /**
@@ -33,7 +31,7 @@ if (s3Configured) {
  */
 export function getS3Client(): S3Client {
     if (!_s3) {
-        throw new Error("❌ [s3]: S3 is not configured. Set SEVALLA_S3_* variables in .env.");
+        throw new Error("❌ [s3]: S3 is not configured. Set AWS_S3_* variables in .env.");
     }
     return _s3;
 }
