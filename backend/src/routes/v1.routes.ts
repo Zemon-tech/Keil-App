@@ -15,6 +15,7 @@ import motionRoutes from "./motion.routes";
 
 import aiRoutes from "./ai.routes";
 import notificationRoutes from "./notification.routes";
+import preferencesRoutes from "./preferences.routes";
 
 const router = Router();
 
@@ -42,6 +43,9 @@ router.use("/integrations", integrationRoutes);
 
 // ── Meetings / Recordings ─────────────────────────────────────────────────────
 router.use("/meetings", meetingRoutes);
+
+// ── User App Preferences ──────────────────────────────────────────────────────
+router.use("/preferences", preferencesRoutes);
 
 // ── AI (OpenRouter via Vercel AI SDK) ─────────────────────────────────────────
 router.use("/ai", aiRoutes);

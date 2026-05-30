@@ -11,6 +11,7 @@ export interface MeetingRecording {
     transcript_text: string | null;
     transcript_diarized: any | null;
     language_detected: string | null;
+    stt_provider: string;
     created_at: Date;
     updated_at: Date;
 }
@@ -21,18 +22,20 @@ export interface MeetingRecording {
 export const createRecording = async (
     userId: string,
     meetingId: string | null,
-    audioS3Key: string
+    audioS3Key: string,
+    sttProvider: string = "sarvam"
 ): Promise<MeetingRecording> => {
     const queryText = `
         INSERT INTO public.meeting_recordings (
             user_id,
             meeting_id,
             audio_s3_key,
-            transcription_status
-        ) VALUES ($1, $2, $3, 'pending')
+            transcription_status,
+            stt_provider
+        ) VALUES ($1, $2, $3, 'pending', $4)
         RETURNING *
     `;
-    const result = await pool.query(queryText, [userId, meetingId, audioS3Key]);
+    const result = await pool.query(queryText, [userId, meetingId, audioS3Key, sttProvider]);
     return result.rows[0];
 };
 
@@ -53,7 +56,9 @@ export const updateRecordingJob = async (
         WHERE id = $3
         RETURNING *
     `;
-    const result = await pool.query(queryText, [sarvamJobId, audioDurationSeconds || null, recordingId]);
+    // Round duration to integer — the DB column is integer type
+    const roundedDuration = audioDurationSeconds ? Math.round(audioDurationSeconds) : null;
+    const result = await pool.query(queryText, [sarvamJobId, roundedDuration, recordingId]);
     return result.rows[0];
 };
 
@@ -210,7 +215,8 @@ export const updateRecordingDuration = async (
         WHERE id = $2
         RETURNING *
     `;
-    const result = await pool.query(queryText, [durationSeconds, recordingId]);
+    // Round to integer — the DB column is integer type
+    const result = await pool.query(queryText, [Math.round(durationSeconds), recordingId]);
     return result.rows[0];
 };
 

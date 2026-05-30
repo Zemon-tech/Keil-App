@@ -87,13 +87,14 @@ import {
   type Space,
 } from "@/hooks/api/useSpaces";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
-import { Loader2, Copy } from "lucide-react";
+import { Loader2, Copy, Mic } from "lucide-react";
 import {
   useGoogleCalendarStatus,
   useConnectGoogleCalendar,
   useDisconnectGoogleCalendar,
 } from "@/hooks/api/useGoogleCalendar";
 import { toast } from "sonner";
+import { usePreferences, useUpdateSttProvider, type SttProvider } from "@/hooks/api/usePreferences";
 
 // ─── Helper Functions ─────────────────────────────────────────────────
 const handleCopyToClipboard = async (text: string, label: string) => {
@@ -1503,6 +1504,93 @@ function PreferencesTab() {
           </p>
         </div>
         <Switch />
+      </div>
+
+      <Separator />
+
+      {/* Speech-to-Text Provider */}
+      <SttProviderSelector />
+    </div>
+  );
+}
+
+function SttProviderSelector() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateProvider = useUpdateSttProvider();
+
+  const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
+
+  const handleProviderChange = (provider: SttProvider) => {
+    if (provider === currentProvider) return;
+    updateProvider.mutate(provider, {
+      onSuccess: () => {
+        toast.success(`Speech-to-text provider changed to ${provider === "elevenlabs" ? "ElevenLabs" : "Sarvam AI"}`);
+      },
+      onError: () => {
+        toast.error("Failed to update STT provider");
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading preferences...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <Mic className="size-4 text-muted-foreground" />
+        Speech-to-Text Provider
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose which AI service transcribes your meeting recordings.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => handleProviderChange("sarvam")}
+          disabled={updateProvider.isPending}
+          className={cn(
+            "flex flex-col items-start gap-2 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
+            currentProvider === "sarvam"
+              ? "border-primary bg-primary/5 shadow-sm"
+              : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+          )}
+        >
+          <div className="flex items-center justify-between w-full">
+            <span className="text-sm font-semibold text-foreground">Sarvam AI</span>
+            {currentProvider === "sarvam" && (
+              <Check className="size-4 text-primary" />
+            )}
+          </div>
+          <span className="text-[11px] text-muted-foreground leading-tight">
+            Optimized for Indian languages. Batch processing with diarization.
+          </span>
+        </button>
+        <button
+          onClick={() => handleProviderChange("elevenlabs")}
+          disabled={updateProvider.isPending}
+          className={cn(
+            "flex flex-col items-start gap-2 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
+            currentProvider === "elevenlabs"
+              ? "border-primary bg-primary/5 shadow-sm"
+              : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+          )}
+        >
+          <div className="flex items-center justify-between w-full">
+            <span className="text-sm font-semibold text-foreground">ElevenLabs</span>
+            {currentProvider === "elevenlabs" && (
+              <Check className="size-4 text-primary" />
+            )}
+          </div>
+          <span className="text-[11px] text-muted-foreground leading-tight">
+            Scribe v2 — 90+ languages, fast processing, word-level timestamps.
+          </span>
+        </button>
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ const allowedOrigins = [
     "http://localhost:5176",
     "http://localhost:5177",
     "http://localhost:3000",
+    "https://app.keilhq.in",
     config.frontendUrl,
 ].filter(Boolean);
 
