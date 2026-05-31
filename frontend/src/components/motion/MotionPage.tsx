@@ -38,6 +38,7 @@ import {
 import { useRecordPageView } from "@/hooks/api/useMotionAnalytics";
 import type { JSONContent } from "@tiptap/core";
 import { toast } from "sonner";
+import { saveDraft, getDraft, clearDraft } from "@/lib/motion-drafts";
 
 // ─── Save status indicator ────────────────────────────────────────────────────
 
@@ -67,6 +68,11 @@ export function MotionPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const [pageEditor, setPageEditor] = useState<any>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [editorKey, setEditorKey] = useState<string>(pageId ?? "");
+
+  // Refs for exponential backoff retries
+  const retryCountRef = useRef<number>(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
@@ -163,6 +169,25 @@ export function MotionPage() {
     }
   }, [activeOrgId, activeSpaceId, pageId]);
 
+  // ── Reconcile local draft on mount/navigation ──
+  useEffect(() => {
+    if (!pageId) return;
+
+    const draft = getDraft(pageId);
+    if (draft) {
+      // Reconcile draft
+      useMotionStore.getState().updatePageLocally(pageId, { content: draft });
+      setDirty(pageId);
+      toast.success("Unsaved changes recovered from a local draft.", {
+        description: "We found a newer unsaved draft of this page.",
+      });
+      // Force SimpleEditor to re-mount with the draft content by updating the key
+      setEditorKey(`${pageId}-draft-${Date.now()}`);
+    } else {
+      setEditorKey(pageId);
+    }
+  }, [pageId, setDirty]);
+
   // ── Working copy from store (optimistic) ───────────────────────────────────
   const page = useMemo(
     () => (pageId ? getPageById(pageId) : null),
@@ -257,21 +282,41 @@ export function MotionPage() {
     const content = pendingContent.current;
     pendingContent.current = null;
     setSaveStatus("saving");
+
+    // Clear any active retry timer to prevent concurrent retries
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
     try {
       await updatePage.mutateAsync({ id: pageId, updates: { content } });
       setSaveStatus("saved");
       clearDirty(pageId);
+      retryCountRef.current = 0; // Reset retry counter on success
+      
+      // Clear draft on successful save
+      clearDraft(pageId);
+
       // Reset to idle after a short delay so "Saved" doesn't linger
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch {
       setSaveStatus("error");
-      // Retry once after 3s
-      setTimeout(() => {
-        if (pendingContent.current === null) {
-          pendingContent.current = content;
-          flushSave();
-        }
-      }, 3000);
+      retryCountRef.current += 1;
+
+      if (retryCountRef.current <= 5) {
+        const delay = Math.pow(2, retryCountRef.current - 1) * 1000;
+        retryTimerRef.current = setTimeout(() => {
+          retryTimerRef.current = null;
+          if (pendingContent.current === null) {
+            pendingContent.current = content;
+            flushSave();
+          }
+        }, delay);
+      } else {
+        // Stop retrying after 5 attempts
+        console.warn(`Failed to save page ${pageId} after 5 attempts.`);
+      }
     }
   }, [pageId, updatePage, clearDirty]);
 
@@ -281,6 +326,16 @@ export function MotionPage() {
       pendingContent.current = json;
       setDirty(pageId);
       setSaveStatus("saving");
+
+      // Save draft dynamically to localStorage safety net
+      saveDraft(pageId, json);
+
+      // Clear any pending retry timers and reset retry count on new keystrokes
+      retryCountRef.current = 0;
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
 
       // Reset debounce timer
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -293,6 +348,7 @@ export function MotionPage() {
   useEffect(() => {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       // Fire-and-forget flush — we can't await in cleanup
       if (pendingContent.current && pageId && !isPageReadOnly) {
         updatePage.mutate({
@@ -1197,7 +1253,7 @@ export function MotionPage() {
               {/* Editor */}
               <div className="pt-0">
                 <SimpleEditor
-                  key={pageId}
+                  key={editorKey}
                   content={displayPage.content}
                   onContentChange={handleContentChange}
                   onReady={(editor) => setPageEditor(editor)}

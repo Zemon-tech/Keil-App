@@ -36,6 +36,33 @@ export class MotionPageRepository extends BaseRepository<MotionPage> {
   }
 
   /**
+   * Returns all active (non-deleted) pages for a space without the massive content column.
+   * Used for the sidebar tree rendering.
+   */
+  async findBySpaceLite(
+    orgId: string,
+    spaceId: string,
+    includeDeleted = false,
+    client?: PoolClient,
+  ): Promise<Omit<MotionPage, 'content'>[]> {
+    const deletedClause = includeDeleted ? '' : 'AND deleted_at IS NULL';
+    const query = `
+      SELECT id, org_id, space_id, created_by, updated_by, parent_id, title, icon, cover_image, cover_position, position, small_text, full_width, created_at, updated_at, deleted_at
+      FROM public.motion_pages
+      WHERE org_id = $1
+        AND space_id = $2
+        ${deletedClause}
+      ORDER BY
+        parent_id NULLS FIRST,
+        position ASC,
+        created_at ASC
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [orgId, spaceId]);
+    return result.rows as Omit<MotionPage, 'content'>[];
+  }
+
+  /**
    * Returns only soft-deleted pages for a space (trash view).
    */
   async findTrashBySpace(

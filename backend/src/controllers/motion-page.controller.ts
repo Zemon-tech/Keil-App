@@ -84,6 +84,10 @@ export const updatePage = catchAsync(async (req: Request, res: Response) => {
     if (typeof content !== 'object' || content === null) {
       throw new ApiError(400, 'Content must be a valid JSON object');
     }
+    const serialized = JSON.stringify(content);
+    if (serialized.length > 1024 * 1024) {
+      throw new ApiError(413, 'Content exceeds maximum size of 1MB');
+    }
     input.content = content;
   }
   if (icon !== undefined) input.icon = icon;

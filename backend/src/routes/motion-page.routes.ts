@@ -29,7 +29,27 @@ router.post('/', requireSpaceRole("admin", "manager"), createPage);
 router.get('/trash', requireSpaceRole("admin", "manager", "member"), listTrash);
 router.get('/shared', requireSpaceRole("admin", "manager", "member"), listSharedToSpace);
 router.get('/:id', requireSpaceRole("admin", "manager", "member"), getPage);
-router.patch('/:id', requireSpaceRole("admin", "manager", "member"), updatePage);
+import { rateLimit } from 'express-rate-limit';
+
+const saveRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: () => {
+    return process.env.NODE_ENV === 'test' && !process.env.RATE_LIMIT_TEST ? 1000 : 60;
+  },
+  keyGenerator: (req) => {
+    return (req as any).user?.id || 'anonymous';
+  },
+  handler: (req, res, next) => {
+    res.status(429).json({
+      success: false,
+      message: 'Too many requests. Please try again after a minute.',
+    });
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.patch('/:id', saveRateLimiter, requireSpaceRole("admin", "manager", "member"), updatePage);
 router.delete('/:id', requireSpaceRole("admin", "manager"), softDeletePage);
 router.patch('/:id/restore', requireSpaceRole("admin", "manager"), restorePage);
 router.delete('/:id/permanent', requireSpaceRole("admin", "manager"), hardDeletePage);

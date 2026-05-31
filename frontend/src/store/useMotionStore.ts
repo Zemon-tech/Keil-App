@@ -113,10 +113,10 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
   // ── Hydration ─────────────────────────────────────────────────────────────────
 
   hydratePages: (pages) => {
-    // Guard: only update the store if the content actually changed.
+    // Guard: only update the store if the content actually changed, including positions or parents.
     const current = get().pages;
-    const incomingKey = pages.map((p) => `${p.id}:${p.updated_at}`).join(",");
-    const currentKey = current.map((p) => `${p.id}:${p.updated_at}`).join(",");
+    const incomingKey = pages.map((p) => `${p.id}:${p.updated_at}:${p.parent_id}:${p.position}`).join(",");
+    const currentKey = current.map((p) => `${p.id}:${p.updated_at}:${p.parent_id}:${p.position}`).join(",");
     if (incomingKey === currentKey) return;
     set({ pages });
   },
@@ -162,13 +162,26 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
     })),
 
   removePageLocally: (id) =>
-    set((state) => ({
-      // Remove the page and all its descendants
-      pages: state.pages.filter((p) => p.id !== id && p.parent_id !== id),
-      dirtyPageIds: new Set(
-        [...state.dirtyPageIds].filter((dirtyId) => dirtyId !== id)
-      ),
-    })),
+    set((state) => {
+      const idsToRemove = new Set<string>([id]);
+      let added = true;
+      while (added) {
+        added = false;
+        state.pages.forEach((p) => {
+          if (p.parent_id && idsToRemove.has(p.parent_id) && !idsToRemove.has(p.id)) {
+            idsToRemove.add(p.id);
+            added = true;
+          }
+        });
+      }
+
+      return {
+        pages: state.pages.filter((p) => !idsToRemove.has(p.id)),
+        dirtyPageIds: new Set(
+          [...state.dirtyPageIds].filter((dirtyId) => !idsToRemove.has(dirtyId))
+        ),
+      };
+    }),
 
   // ── Dirty tracking ────────────────────────────────────────────────────────────
 

@@ -99,9 +99,9 @@ vi.mock("@aws-sdk/client-s3", () => {
     };
 });
 
-// ─── Database Lifecycle ──────────────────────────────────────────────────────
 // Import pool AFTER env override so it connects to the test DB
 import pool from "../config/pg";
+import { initMastraServer } from "../app";
 
 beforeAll(async () => {
     // Safety: block if somehow pointing at a remote DB
@@ -113,6 +113,9 @@ beforeAll(async () => {
 
     // Verify connection
     await pool.query("SELECT NOW()");
+
+    // Initialize Mastra Server and register the global JSON error handler
+    await initMastraServer();
 });
 
 beforeEach(async () => {

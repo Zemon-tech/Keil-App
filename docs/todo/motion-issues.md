@@ -107,6 +107,7 @@
 - **Problem**: `motion_page_updates` stores `before_content`, `deleted_content`, and `added_content` as JSONB. Over time, for frequently edited pages, this table will grow significantly. There's no pruning or archival strategy.
 - **Files**: `backend/src/repositories/motion-analytics.repository.ts`
 - **Fix**: Add a retention policy (e.g., keep updates for 90 days). Or compress/summarize old entries. Consider storing diffs instead of full content snapshots.
+- **Status**: Partially addressed (created_at index added in migration 023 to support efficient retention queries).
 - **Priority**: Moderate
 
 ### 4.4 No Rate Limiting on Save Endpoint

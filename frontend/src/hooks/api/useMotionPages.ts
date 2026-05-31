@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import type { JSONContent } from "@tiptap/core";
+import { useMotionStore } from "@/store/useMotionStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ export interface MotionPageDTO {
   updated_by: string;
   parent_id: string | null;
   title: string;
-  content: JSONContent;
+  content?: JSONContent;
   icon: string | null;
   cover_image: string | null;
   cover_position: number;
@@ -140,7 +141,7 @@ export function useMotionPage(
     enabled: !!orgId && !!spaceId && !!pageId,
     retry: noRetryOn4xx,
     staleTime: 5 * 60 * 1000, // 5 min — cache survives refresh via persister
-    placeholderData: (previousData) => previousData,
+    gcTime: 2 * 60 * 1000, // 2 minutes to free memory for visited pages
   });
 }
 
@@ -345,7 +346,21 @@ export function useSoftDeleteMotionPage(
       // Optimistically remove from list (and all descendants)
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.lists(orgId, spaceId),
-        (old) => old?.filter((p) => p.id !== id && p.parent_id !== id) ?? []
+        (old) => {
+          if (!old) return [];
+          const idsToRemove = new Set<string>([id]);
+          let added = true;
+          while (added) {
+            added = false;
+            old.forEach((p) => {
+              if (p.parent_id && idsToRemove.has(p.parent_id) && !idsToRemove.has(p.id)) {
+                idsToRemove.add(p.id);
+                added = true;
+              }
+            });
+          }
+          return old.filter((p) => !idsToRemove.has(p.id));
+        }
       );
     },
     mutationFn: async ({ id }) => {
@@ -552,6 +567,7 @@ export function useMotionSocketListeners(
               motionPageKeys.lists(orgId, spaceId),
               (old) => (old ? [page, ...old] : [page])
             );
+            useMotionStore.getState().upsertPages([page]);
           }
           break;
 
@@ -573,6 +589,7 @@ export function useMotionSocketListeners(
                     page
                 );
             }
+            useMotionStore.getState().upsertPages([page]);
           }
           break;
 
@@ -588,6 +605,7 @@ export function useMotionSocketListeners(
             if (pageId === currentPageId) {
               queryClient.setQueryData(motionPageKeys.detail(orgId, spaceId, pageId), undefined);
             }
+            useMotionStore.getState().removePageLocally(pageId);
           }
           break;
 
@@ -598,6 +616,7 @@ export function useMotionSocketListeners(
               (old) => (old ? [...old, page] : [page])
             );
             queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
+            useMotionStore.getState().upsertPages([page]);
           }
           break;
       }

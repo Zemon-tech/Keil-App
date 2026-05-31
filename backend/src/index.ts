@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import app, { initMastraServer } from "./app";
 import { config } from "./config";
 import pool from "./config/pg";

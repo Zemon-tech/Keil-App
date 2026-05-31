@@ -130,7 +130,8 @@ export function useViewsSummary(
     },
     enabled: !!orgId && !!spaceId && !!pageId,
     retry: noRetryOn4xx,
-    staleTime: 10_000,
+    staleTime: 60_000,
+    gcTime: 0,
   });
 }
 
@@ -199,7 +200,8 @@ export function usePageViewers(
     },
     enabled: !!orgId && !!spaceId && !!pageId,
     retry: noRetryOn4xx,
-    staleTime: 10_000,
+    staleTime: 60_000,
+    gcTime: 0,
   });
 }
 
@@ -247,6 +249,7 @@ export function usePageEditors(
     },
     enabled: !!orgId && !!spaceId && !!pageId,
     retry: noRetryOn4xx,
-    staleTime: 10_000,
+    staleTime: 60_000,
+    gcTime: 0,
   });
 }

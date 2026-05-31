@@ -19,7 +19,7 @@ export interface MotionPageDTO {
   updated_by: string;
   parent_id: string | null;
   title: string;
-  content: Record<string, any>;
+  content?: Record<string, any>;
   icon: string | null;
   cover_image: string | null;
   cover_position: number;
@@ -80,7 +80,7 @@ const toISO = (value: Date | string | null | undefined): string | null => {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 };
 
-const toPageDTO = (page: MotionPage): MotionPageDTO => ({
+const toPageDTO = (page: any): MotionPageDTO => ({
   id: page.id,
   org_id: page.org_id,
   space_id: page.space_id,
@@ -196,7 +196,7 @@ export const getPagesBySpace = async (
   orgId: string,
   spaceId: string,
 ): Promise<MotionPageDTO[]> => {
-  const pages = await motionPageRepository.findBySpace(orgId, spaceId, false);
+  const pages = await motionPageRepository.findBySpaceLite(orgId, spaceId, false);
   return pages.map(toPageDTO);
 };
 
