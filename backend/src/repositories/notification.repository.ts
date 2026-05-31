@@ -24,6 +24,31 @@ export class NotificationRepository extends BaseRepository<Notification> {
     const result = await executor.query(query, [recipientId, limit, offset]);
     return result.rows as Notification[];
   }
+
+  // Find unread comment/mention replies/messages in a specific space
+  async findUnreadRepliesBySpace(
+    recipientId: string,
+    spaceId: string,
+    client?: PoolClient
+  ): Promise<Array<{ id: string; from: string; message: string }>> {
+    const query = `
+      SELECT n.id, u.name as sender_name, u.email as sender_email, n.payload
+      FROM ${this.tableName} n
+      LEFT JOIN public.users u ON n.sender_id = u.id
+      WHERE n.recipient_id = $1
+        AND n.space_id = $2
+        AND n.read_at IS NULL
+        AND n.event_type IN ('comment_created', 'mention_in_comment')
+      ORDER BY n.created_at DESC
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [recipientId, spaceId]);
+    return result.rows.map(row => ({
+      id: row.id,
+      from: row.sender_name || row.sender_email || 'Someone',
+      message: row.payload?.comment_snippet || 'New comment'
+    }));
+  }
 }
 
 export class UserNotificationPreferenceRepository extends BaseRepository<UserNotificationPreference> {

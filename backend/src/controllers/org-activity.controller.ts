@@ -14,7 +14,14 @@ const asString = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] : (value ?? "");
 
 export const getDashboardInfo = catchAsync(async (req: Request, res: Response) => {
-  const data = await getSpaceDashboardBuckets(asString(req.params.orgId), asString(req.params.spaceId));
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new ApiError(401, "Unauthorized");
+
+  const data = await getSpaceDashboardBuckets(
+    asString(req.params.orgId),
+    asString(req.params.spaceId),
+    userId
+  );
   res.status(200).json(new ApiResponse(200, data, "Dashboard data retrieved successfully"));
 });
 

@@ -22,7 +22,6 @@ interface DashboardPanelProps {
   isLoading: boolean;
 }
 
-const REPLY_COUNT = 0;
 
 export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
   const [now, setNow] = useState(() => new Date());
@@ -77,7 +76,7 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
       isLoading={isLoading}
       isWheel
     />,
-    <NeedsReplyCard key="reply" isWheel />,
+    <NeedsReplyCard key="reply" replies={data?.needsReply ?? []} isWheel />,
     <UpNextCard
       key="upnext"
       tasks={data?.today ?? []}
@@ -108,7 +107,7 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
     {
       Icon: MessageCircle,
       label: "Replies",
-      value: REPLY_COUNT,
+      value: data?.needsReply?.length ?? 0,
       tone: "text-blue-500 bg-blue-500/10 border-blue-500/15",
     },
     {
