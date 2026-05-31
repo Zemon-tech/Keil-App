@@ -28,10 +28,10 @@ function getIO() {
  */
 async function getUserDefaultOrgSpace(
   userId: string
-): Promise<{ orgId: string; spaceId: string; workspaceId: string | null } | null> {
+): Promise<{ orgId: string; spaceId: string } | null> {
   // Find the org where the user is the owner (their default org created on signup)
   const result = await pool.query(
-    `SELECT o.id as org_id, s.id as space_id, s.workspace_id
+    `SELECT o.id as org_id, s.id as space_id
      FROM public.organisations o
      INNER JOIN public.spaces s ON s.org_id = o.id AND s.deleted_at IS NULL
      WHERE o.owner_user_id = $1
@@ -44,7 +44,6 @@ async function getUserDefaultOrgSpace(
   return {
     orgId: result.rows[0].org_id,
     spaceId: result.rows[0].space_id,
-    workspaceId: result.rows[0].workspace_id,
   };
 }
 
@@ -569,13 +568,12 @@ export async function processIncomingGoogleEvent(
         // Create as org task in the user's default workspace (General space)
         await pool.query(
           `INSERT INTO public.tasks
-             (org_id, space_id, workspace_id, title, start_date, due_date,
+             (org_id, space_id, title, start_date, due_date,
               google_event_id, ical_uid, status, priority, created_by, type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'task')`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'task')`,
           [
             defaultOrgSpace.orgId,
             defaultOrgSpace.spaceId,
-            defaultOrgSpace.workspaceId,
             event.summary || 'Untitled Google Event',
             startDate,
             dueDate,

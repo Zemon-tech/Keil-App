@@ -3,18 +3,11 @@ import api from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface MeWorkspace {
-  id: string;
-  name: string;
-  role: "owner" | "admin" | "member";
-}
-
 export interface MeResponse {
   id: string;
   email: string;
   name: string | null;
   created_at: string;
-  workspace: MeWorkspace | null;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────

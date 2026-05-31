@@ -15,7 +15,6 @@ export const getNotifications = catchAsync(async (req: Request, res: Response) =
     const limit = parseInt(req.query.limit as string, 10) || 20;
     const offset = parseInt(req.query.offset as string, 10) || 0;
     const unreadOnly = req.query.unread_only === 'true';
-    const workspaceId = req.query.workspaceId as string | undefined;
 
     let query = `
         SELECT n.*, 
@@ -30,12 +29,6 @@ export const getNotifications = catchAsync(async (req: Request, res: Response) =
 
     if (unreadOnly) {
         query += ` AND n.read_at IS NULL`;
-    }
-
-    if (workspaceId) {
-        query += ` AND n.workspace_id = $${paramIndex}`;
-        params.push(workspaceId);
-        paramIndex++;
     }
 
     query += ` ORDER BY n.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
@@ -53,17 +46,8 @@ export const getUnreadCount = catchAsync(async (req: Request, res: Response) => 
     const userId = (req as any).user?.id as string;
     if (!userId) throw new ApiError(401, "Unauthorized");
 
-    const workspaceId = req.query.workspaceId as string | undefined;
-
-    let query = `SELECT COUNT(*)::int as count FROM public.notifications WHERE recipient_id = $1 AND read_at IS NULL`;
-    const params: any[] = [userId];
-
-    if (workspaceId) {
-        query += ` AND workspace_id = $2`;
-        params.push(workspaceId);
-    }
-
-    const result = await pool.query(query, params);
+    const query = `SELECT COUNT(*)::int as count FROM public.notifications WHERE recipient_id = $1 AND read_at IS NULL`;
+    const result = await pool.query(query, [userId]);
     const count = result.rows[0]?.count || 0;
 
     res.status(200).json(new ApiResponse(200, { count }, "Unread count retrieved successfully"));
@@ -100,17 +84,10 @@ export const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
     const userId = (req as any).user?.id as string;
     if (!userId) throw new ApiError(401, "Unauthorized");
 
-    const workspaceId = req.body.workspaceId as string | undefined;
-
-    let query = `UPDATE public.notifications SET read_at = NOW() WHERE recipient_id = $1 AND read_at IS NULL`;
-    const params: any[] = [userId];
-
-    if (workspaceId) {
-        query += ` AND workspace_id = $2`;
-        params.push(workspaceId);
-    }
-
-    await pool.query(query, params);
+    await pool.query(
+        `UPDATE public.notifications SET read_at = NOW() WHERE recipient_id = $1 AND read_at IS NULL`,
+        [userId]
+    );
 
     res.status(200).json(new ApiResponse(200, null, "All notifications marked as read"));
 });
@@ -122,17 +99,7 @@ export const clearAllNotifications = catchAsync(async (req: Request, res: Respon
     const userId = (req as any).user?.id as string;
     if (!userId) throw new ApiError(401, "Unauthorized");
 
-    const workspaceId = req.query.workspaceId as string | undefined;
-
-    let query = `DELETE FROM public.notifications WHERE recipient_id = $1`;
-    const params: any[] = [userId];
-
-    if (workspaceId) {
-        query += ` AND workspace_id = $2`;
-        params.push(workspaceId);
-    }
-
-    await pool.query(query, params);
+    await pool.query(`DELETE FROM public.notifications WHERE recipient_id = $1`, [userId]);
 
     res.status(200).json(new ApiResponse(200, null, "All notifications cleared"));
 });

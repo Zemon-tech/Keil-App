@@ -6,6 +6,9 @@ import { Comment, User } from '../types/entities';
 import { LogEntityType, LogActionType } from '../types/enums';
 import { CommentQueryOptions } from '../types/repository';
 import { ApiError } from '../utils/ApiError';
+import { createServiceLogger } from '../lib/logger';
+
+const log = createServiceLogger('comment-service');
 
 /**
  * Comment Service - Business logic layer using repositories
@@ -40,7 +43,6 @@ export interface CreateCommentData {
 }
 
 export interface CommentActivityContext {
-  workspace_id?: string | null;
   org_id?: string | null;
   space_id?: string | null;
 }
@@ -108,16 +110,18 @@ export const createComment = async (
 
   const context =
     typeof activityContext === 'string'
-      ? { workspace_id: activityContext, org_id: null, space_id: null }
+      ? { org_id: null, space_id: null }
       : activityContext;
+
+  log.debug({ taskId: data.task_id, userId: data.user_id, content: data.content.substring(0, 80), context }, "[createComment] Starting comment creation");
 
   const comment = await commentRepository.executeInTransaction(async (client) => {
     // Create comment
     const newComment = await commentRepository.create(data, client);
+    log.debug({ commentId: newComment.id }, "[createComment] Comment row created");
 
     // Log comment creation
     await activityRepository.log({
-      workspace_id: context.workspace_id,
       org_id: context.org_id ?? null,
       space_id: context.space_id ?? null,
       user_id: data.user_id,
@@ -135,30 +139,34 @@ export const createComment = async (
     
     const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [data.task_id]);
     const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
+
+    log.debug({ taskCreator, taskTitle, assigneeIds, senderId: data.user_id }, "[createComment] Task context resolved");
     
     // Parse @mentions (matches name/email prefixes starting with @)
     const mentions = data.content.match(/@([a-zA-Z0-9_.-]+)/g) || [];
     const cleanMentions = mentions.map(m => m.substring(1).toLowerCase());
+    log.debug({ rawMentions: mentions, cleanMentions }, "[createComment] Parsed @mentions from content");
     
     const mentionedUserIds: string[] = [];
     if (cleanMentions.length > 0) {
       const usersRes = await client.query(
-        `SELECT id FROM public.users WHERE LOWER(name) = ANY($1) OR LOWER(split_part(email, '@', 1)) = ANY($2)`,
+        `SELECT id, name, email FROM public.users WHERE LOWER(name) = ANY($1) OR LOWER(split_part(email, '@', 1)) = ANY($2)`,
         [cleanMentions, cleanMentions]
       );
       mentionedUserIds.push(...usersRes.rows.map((r: any) => r.id as string));
+      log.debug({ cleanMentions, matchedUsers: usersRes.rows.map((r: any) => ({ id: r.id, name: r.name, email: r.email })), mentionedUserIds }, "[createComment] Mention user lookup result");
     }
     
     const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [data.user_id]);
     const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
     if (mentionedUserIds.length > 0) {
+      log.info({ mentionedUserIds, spaceId: context.space_id, senderName, commentId: newComment.id }, "[createComment] Inserting mention_in_comment outbox job");
       // Trigger Mention notification job
       await client.query(
-        `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          context.workspace_id,
           context.org_id ?? null,
           context.space_id ?? null,
           data.user_id,
@@ -173,15 +181,17 @@ export const createComment = async (
           })
         ]
       );
+      log.info("[createComment] mention_in_comment outbox job inserted successfully");
     } else {
       // Standard notification job (to assignees + creator, excluding sender)
       const recipients = Array.from(new Set([...assigneeIds, taskCreator])).filter(id => id && id !== data.user_id);
+      log.debug({ assigneeIds, taskCreator, senderId: data.user_id, filteredRecipients: recipients }, "[createComment] No mentions resolved — falling back to comment_created path");
       if (recipients.length > 0) {
+        log.info({ recipients, spaceId: context.space_id, senderName, commentId: newComment.id }, "[createComment] Inserting comment_created outbox job");
         await client.query(
-          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
-            context.workspace_id,
             context.org_id ?? null,
             context.space_id ?? null,
             data.user_id,
@@ -196,6 +206,9 @@ export const createComment = async (
             })
           ]
         );
+        log.info("[createComment] comment_created outbox job inserted successfully");
+      } else {
+        log.warn({ assigneeIds, taskCreator, senderId: data.user_id }, "[createComment] No recipients after filtering — NO outbox job created");
       }
     }
 
@@ -262,7 +275,7 @@ export const deleteComment = async (
 ): Promise<void> => {
   const context =
     typeof activityContext === 'string'
-      ? { workspace_id: activityContext, org_id: null, space_id: null }
+      ? { org_id: null, space_id: null }
       : activityContext;
 
   await commentRepository.executeInTransaction(async (client) => {
@@ -281,7 +294,6 @@ export const deleteComment = async (
 
     // Log deletion
     await activityRepository.log({
-      workspace_id: context.workspace_id,
       org_id: context.org_id ?? null,
       space_id: context.space_id ?? null,
       user_id: userId,
@@ -305,7 +317,7 @@ export const hardDeleteComment = async (
 ): Promise<void> => {
   const context =
     typeof activityContext === 'string'
-      ? { workspace_id: activityContext, org_id: null, space_id: null }
+      ? { org_id: null, space_id: null }
       : activityContext;
 
   await commentRepository.executeInTransaction(async (client) => {
@@ -324,7 +336,6 @@ export const hardDeleteComment = async (
 
     // Log deletion
     await activityRepository.log({
-      workspace_id: context.workspace_id,
       org_id: context.org_id ?? null,
       space_id: context.space_id ?? null,
       user_id: userId,

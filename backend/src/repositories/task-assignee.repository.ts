@@ -63,26 +63,6 @@ export class TaskAssigneeRepository extends BaseRepository<TaskAssignee> {
   }
 
   /**
-   * Find all task assignments for a user in a workspace
-   */
-  async findByUser(userId: string, workspaceId: string, client?: PoolClient): Promise<TaskAssignee[]> {
-    const query = `
-      SELECT ta.*
-      FROM ${this.tableName} ta
-      INNER JOIN tasks t ON ta.task_id = t.id
-      WHERE ta.user_id = $1
-      AND t.workspace_id = $2
-      AND t.deleted_at IS NULL
-      ORDER BY ta.assigned_at DESC
-    `;
-
-    const executor = client || this.pool;
-    const result = await executor.query(query, [userId, workspaceId]);
-
-    return result.rows as TaskAssignee[];
-  }
-
-  /**
    * Check if a user is assigned to a task
    */
   async isAssigned(taskId: string, userId: string, client?: PoolClient): Promise<boolean> {

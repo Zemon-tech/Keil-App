@@ -21,8 +21,6 @@ export interface TaskDTO {
   due_date?: string;
   start_date?: string;
   parent_task_id?: string;
-  /** @deprecated — will be removed once all routes are org/space-scoped */
-  workspace_id?: string;
   org_id?: string;
   space_id?: string;
   created_by: string;
