@@ -1,6 +1,5 @@
 import { Pool, types } from 'pg';
 import pino from 'pino';
-import { config } from './index';
 
 // Initialize Pino logger for database connection events
 const logger = pino({
@@ -14,7 +13,12 @@ const logger = pino({
     }
 });
 
-if (!config.databaseUrl) {
+// Read DATABASE_URL directly from process.env so that test setup can override
+// it before this module is imported (config/index.ts eagerly snapshots env vars
+// at import time which breaks test DB isolation).
+const databaseUrl = process.env.DATABASE_URL || "";
+
+if (!databaseUrl) {
     logger.error('❌ [database]: DATABASE_URL is not defined in environment variables');
     process.exit(1);
 }
@@ -28,9 +32,11 @@ types.setTypeParser(types.builtins.TIMESTAMPTZ, (value) => {
 // Create a new pg Pool (singleton)
 // NOTE: Supabase session pooler (port 5432) limits total connections to 15.
 // Mastra uses a separate pool (max: 5), so this pool gets the remaining 10.
+const isLocalDb = databaseUrl.includes("localhost") || databaseUrl.includes("127.0.0.1");
+
 const pool = new Pool({
-    connectionString: config.databaseUrl,
-    ssl: {
+    connectionString: databaseUrl,
+    ssl: isLocalDb ? false : {
         rejectUnauthorized: false
     },
     max: 20,

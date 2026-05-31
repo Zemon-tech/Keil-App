@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import logger from "../lib/logger";
 
+import { loggerContext } from "../lib/logger-context";
+
 /**
  * Attach a unique request ID to every incoming request.
  * If the client sends an `x-request-id` header, it is reused (useful for tracing across services).
@@ -11,7 +13,15 @@ export const requestIdMiddleware = (req: Request, res: Response, next: NextFunct
     const requestId = (req.headers["x-request-id"] as string) || crypto.randomUUID();
     (req as any).requestId = requestId;
     res.setHeader("x-request-id", requestId);
-    next();
+
+    const context = {
+        requestId,
+        userId: (req as any).user?.id,
+    };
+
+    loggerContext.run(context, () => {
+        next();
+    });
 };
 
 /**

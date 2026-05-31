@@ -1,5 +1,6 @@
 import pino from "pino";
 import { config } from "../config";
+import { loggerContext } from "./logger-context";
 
 const isProduction = config.env === "production";
 
@@ -34,12 +35,19 @@ if (!isProduction) {
     });
 }
 
+// Dynamic mixin to inject active request/user context
+const mixin = () => {
+    const store = loggerContext.getStore();
+    return store ? { requestId: store.requestId, userId: store.userId } : {};
+};
+
 // Fallback: if production but no Loki configured, log JSON to stdout
 // (container platforms like Sevalla/Lightsail capture stdout automatically)
 const logger = transports.length > 0
     ? pino(
         {
             level: config.logLevel as string,
+            mixin,
             redact: {
                 paths: [
                     "req.headers.authorization",
@@ -57,6 +65,7 @@ const logger = transports.length > 0
     )
     : pino({
         level: config.logLevel as string,
+        mixin,
         redact: {
             paths: [
                 "req.headers.authorization",

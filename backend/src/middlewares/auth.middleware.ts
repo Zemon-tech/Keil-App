@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin } from "../config/supabase";
 import pool from "../config/pg";
 import logger from "../lib/logger";
+import { setInLogContext } from "../lib/logger-context";
 /**
  * Verifies the JWT token from the Authorization header and attaches the user row to req.user.
  * Relies on Supabase webhook/trigger to have already created the user profile.
@@ -62,6 +63,7 @@ export const protect = async (
 
         // Attach user to request object
         (req as any).user = result.rows[0];
+        setInLogContext("userId", result.rows[0].id);
 
         next();
     } catch (err) {
