@@ -68,14 +68,27 @@ export class NotificationWorkerService {
             const actorId = job.sender_id;
             const prefKey = PREFERENCE_KEYS[job.event_type];
 
+            log.debug({
+              jobId: job.id,
+              eventType: job.event_type,
+              spaceId: job.space_id,
+              actorId,
+              recipientIds,
+              prefKey: prefKey || '(none — always deliver)',
+              payload: job.payload
+            }, "[worker] Processing outbox job");
+
             // Filter out actor and get unique active recipient IDs
             const targets = Array.from(new Set(recipientIds)).filter(id => id !== actorId);
 
             if (targets.length === 0) {
+              log.warn({ jobId: job.id, recipientIds, actorId }, "[worker] No valid targets after filtering — deleting job");
               // No valid recipients, delete and continue
               await notificationOutboxRepository.delete(job.id, client);
               continue;
             }
+
+            log.debug({ jobId: job.id, targets }, "[worker] Delivering to targets");
 
             for (const recipientId of targets) {
               // Fetch user preferences
@@ -83,6 +96,8 @@ export class NotificationWorkerService {
               
               // If preference key doesn't match or is enabled, distribute notification
               const isOptedIn = !prefKey || (prefs as any)[prefKey] === true;
+
+              log.debug({ recipientId, prefKey, isOptedIn, hasPrefs: !!prefs }, "[worker] Preference check");
 
               if (isOptedIn) {
                 // Insert into system notifications feed
@@ -97,6 +112,13 @@ export class NotificationWorkerService {
                   payload: job.payload
                 }, client);
 
+                log.info({
+                  notificationId: notification.id,
+                  recipientId,
+                  eventType: job.event_type,
+                  spaceId: job.space_id
+                }, "[worker] Notification created in DB");
+
                 // Push real-time event via WebSocket
                 if (io) {
                   io.to(`user:${recipientId}`).emit("new_notification", {
@@ -104,12 +126,16 @@ export class NotificationWorkerService {
                     created_at: notification.created_at.toISOString(),
                     read_at: null
                   });
+                  log.debug({ recipientId }, "[worker] WebSocket event emitted");
                 }
+              } else {
+                log.debug({ recipientId, prefKey }, "[worker] Recipient opted out — skipping");
               }
             }
 
             // Delete outbox job on successful processing
             await notificationOutboxRepository.delete(job.id, client);
+            log.debug({ jobId: job.id }, "[worker] Outbox job deleted after successful processing");
           } catch (err: any) {
             log.error({ err, jobId: job.id }, "Error processing outbox job");
             

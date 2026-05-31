@@ -9,6 +9,9 @@ import {
   getSpaceEntityActivity,
   getSpaceTaskActivity,
 } from "../services/space-activity.service";
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("org-activity-controller");
 
 const asString = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] : (value ?? "");
@@ -17,11 +20,13 @@ export const getDashboardInfo = catchAsync(async (req: Request, res: Response) =
   const userId = (req as any).user?.id as string;
   if (!userId) throw new ApiError(401, "Unauthorized");
 
-  const data = await getSpaceDashboardBuckets(
-    asString(req.params.orgId),
-    asString(req.params.spaceId),
-    userId
-  );
+  const orgId = asString(req.params.orgId);
+  const spaceId = asString(req.params.spaceId);
+  log.debug({ userId, orgId, spaceId }, "[getDashboardInfo] Fetching dashboard data");
+
+  const data = await getSpaceDashboardBuckets(orgId, spaceId, userId);
+  log.debug({ needsReplyCount: data.needsReply?.length ?? 0, needsReply: data.needsReply }, "[getDashboardInfo] Dashboard data fetched");
+
   res.status(200).json(new ApiResponse(200, data, "Dashboard data retrieved successfully"));
 });
 

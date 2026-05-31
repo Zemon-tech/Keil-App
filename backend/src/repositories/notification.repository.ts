@@ -1,6 +1,9 @@
 import { BaseRepository } from "./base.repository";
 import { Notification, UserNotificationPreference, NotificationOutbox } from "../types/entities";
 import { PoolClient } from "pg";
+import { createServiceLogger } from "../lib/logger";
+
+const log = createServiceLogger("notification-repo");
 
 export class NotificationRepository extends BaseRepository<Notification> {
   constructor() {
@@ -32,7 +35,7 @@ export class NotificationRepository extends BaseRepository<Notification> {
     client?: PoolClient
   ): Promise<Array<{ id: string; from: string; message: string }>> {
     const query = `
-      SELECT n.id, u.name as sender_name, u.email as sender_email, n.payload
+      SELECT n.id, u.name as sender_name, u.email as sender_email, n.payload, n.event_type, n.space_id, n.recipient_id
       FROM ${this.tableName} n
       LEFT JOIN public.users u ON n.sender_id = u.id
       WHERE n.recipient_id = $1
@@ -41,8 +44,25 @@ export class NotificationRepository extends BaseRepository<Notification> {
         AND n.event_type IN ('comment_created', 'mention_in_comment')
       ORDER BY n.created_at DESC
     `;
+    log.debug({ recipientId, spaceId }, "[findUnreadRepliesBySpace] Querying notifications");
     const executor = client || this.pool;
     const result = await executor.query(query, [recipientId, spaceId]);
+    log.debug({ rowCount: result.rows.length, rows: result.rows.slice(0, 5) }, "[findUnreadRepliesBySpace] Query result");
+
+    if (result.rows.length === 0) {
+      // Extra diagnostic: check if ANY notifications exist for this user regardless of space
+      const diagQuery = `
+        SELECT id, event_type, space_id, read_at, created_at
+        FROM ${this.tableName}
+        WHERE recipient_id = $1
+          AND event_type IN ('comment_created', 'mention_in_comment')
+        ORDER BY created_at DESC
+        LIMIT 5
+      `;
+      const diagResult = await executor.query(diagQuery, [recipientId]);
+      log.debug({ recipientId, allSpaceNotifications: diagResult.rows }, "[findUnreadRepliesBySpace] Diagnostic: all comment notifications for user (any space)");
+    }
+
     return result.rows.map(row => ({
       id: row.id,
       from: row.sender_name || row.sender_email || 'Someone',

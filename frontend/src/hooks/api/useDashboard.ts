@@ -18,10 +18,18 @@ export function useOrgDashboard(orgId: string | null, spaceId: string | null) {
     return useQuery<DashboardResponse>({
         queryKey: ["dashboard", "org", orgId, spaceId],
         queryFn: async () => {
+            console.log("[useDashboard] Fetching dashboard", { orgId, spaceId });
             const res = await api.get<{ data: DashboardResponse }>(
                 `v1/orgs/${orgId}/spaces/${spaceId}/dashboard`
             );
-            return res.data.data;
+            const data = res.data.data;
+            console.log("[useDashboard] Response received", {
+                needsReply: data.needsReply,
+                needsReplyCount: data.needsReply?.length ?? 0,
+                immediateCount: data.immediate?.length ?? 0,
+                todayCount: data.today?.length ?? 0,
+            });
+            return data;
         },
         enabled: !!orgId && !!spaceId,
         retry: (failureCount, error: unknown) => {

@@ -8,6 +8,8 @@ interface NeedsReplyCardProps {
 }
 
 export function NeedsReplyCard({ isWheel, replies = [] }: NeedsReplyCardProps) {
+  console.log("[NeedsReplyCard] Rendering", { repliesCount: replies.length, replies });
+
   if (!replies.length) {
     return (
       <Card

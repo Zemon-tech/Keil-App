@@ -38,10 +38,10 @@ export class TaskOverdueWorkerService {
 
     private async checkOverdueTasks() {
         try {
-            // 1. Handle Workspace Tasks (Tenancy model)
+            // 1. Handle Org Tasks
             // Only update "todo" tasks that have a due_date and it's in the past.
             // We use type = 'task' to avoid moving events to backlog.
-            const workspaceResult = await pool.query(`
+            const orgTaskResult = await pool.query(`
                 UPDATE public.tasks
                 SET status = 'backlog', updated_at = NOW()
                 WHERE status = 'todo'
@@ -52,12 +52,12 @@ export class TaskOverdueWorkerService {
                 RETURNING id, org_id, space_id, title
             `);
 
-            if (workspaceResult.rows.length > 0) {
-                log.info({ count: workspaceResult.rows.length, type: 'workspace' }, "Moved tasks to backlog");
+            if (orgTaskResult.rows.length > 0) {
+                log.info({ count: orgTaskResult.rows.length, type: 'org' }, "Moved tasks to backlog");
                 
                 // Broadcast update via Socket.io
                 if (io) {
-                    workspaceResult.rows.forEach(task => {
+                    orgTaskResult.rows.forEach(task => {
                         io.emit('task_overdue_moved', {
                             id: task.id,
                             status: 'backlog',

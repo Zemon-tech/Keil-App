@@ -24,6 +24,8 @@ interface DashboardPanelProps {
 
 
 export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
+  console.log("[DashboardPanel] Render", { isLoading, needsReply: data?.needsReply, needsReplyCount: data?.needsReply?.length ?? 0 });
+
   const [now, setNow] = useState(() => new Date());
   const [dimensions, setDimensions] = useState({
     containerHeight: 154,

@@ -501,10 +501,9 @@ export const createShare = async (
         const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
         await client.query(
-          `INSERT INTO public.notification_outbox (workspace_id, org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
-            null,
             input.target_org_id,
             input.target_space_id,
             userId,
@@ -532,7 +531,7 @@ export const createShare = async (
         page_id: pageId,
         user_id: userId,
         action_type: 'share',
-        description: `shared page with "${spaceName}" workspace of "${orgName}" organisation`,
+        description: `shared page with "${spaceName}" space of "${orgName}" organisation`,
       });
     } catch (err) {
       log.error({ err }, 'Error logging space share creation');
@@ -577,7 +576,7 @@ export const revokeShare = async (
         page_id: pageId,
         user_id: userId,
         action_type: 'share_revoke',
-        description: `revoked sharing with "${spaceName}" workspace of "${orgName}" organisation`,
+        description: `revoked sharing with "${spaceName}" space of "${orgName}" organisation`,
       });
     } else {
       await motionAnalyticsRepository.logUpdate({
@@ -640,7 +639,7 @@ export const updateShare = async (
         page_id: pageId,
         user_id: userId,
         action_type: 'share_update',
-        description: `updated share permission to "${readablePerm}" for "${spaceName}" workspace of "${orgName}" organisation`,
+        description: `updated share permission to "${readablePerm}" for "${spaceName}" space of "${orgName}" organisation`,
       });
     } else {
       await motionAnalyticsRepository.logUpdate({
