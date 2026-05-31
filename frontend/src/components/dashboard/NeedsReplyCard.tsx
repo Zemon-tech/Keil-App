@@ -4,11 +4,10 @@ import { cn } from "@/lib/utils";
 
 interface NeedsReplyCardProps {
   isWheel?: boolean;
+  replies?: Array<{ id: string | number; from: string; message: string }>;
 }
 
-export function NeedsReplyCard({ isWheel }: NeedsReplyCardProps) {
-  const replies: { id: number; from: string; message: string }[] = [];
-
+export function NeedsReplyCard({ isWheel, replies = [] }: NeedsReplyCardProps) {
   if (!replies.length) {
     return (
       <Card

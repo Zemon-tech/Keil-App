@@ -7,6 +7,7 @@ export type DashboardResponse = {
     today: DashboardTaskDTO[];
     blocked: DashboardTaskDTO[];
     backlog: DashboardTaskDTO[];
+    needsReply: Array<{ id: string; from: string; message: string }>;
 };
 
 // ─── Org/space-scoped dashboard ───────────────────────────────────────────────

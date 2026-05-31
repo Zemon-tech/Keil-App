@@ -1,4 +1,4 @@
-import { orgTaskRepository } from "../repositories";
+import { orgTaskRepository, notificationRepository } from "../repositories";
 import { TaskPriority } from "../types/enums";
 import { OrgTaskDTO } from "./org-task.service";
 
@@ -48,12 +48,13 @@ const sortTasksByRanking = (tasks: any[]): any[] =>
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-export const getSpaceDashboardBuckets = async (orgId: string, spaceId: string) => {
-  const [immediate, today, blocked, backlog] = await Promise.all([
+export const getSpaceDashboardBuckets = async (orgId: string, spaceId: string, userId: string) => {
+  const [immediate, today, blocked, backlog, needsReply] = await Promise.all([
     orgTaskRepository.findUrgentAndNearDue(orgId, spaceId, 48),
     orgTaskRepository.findDueToday(orgId, spaceId),
     orgTaskRepository.findBlocked(orgId, spaceId),
     orgTaskRepository.findBacklog(orgId, spaceId),
+    notificationRepository.findUnreadRepliesBySpace(userId, spaceId),
   ]);
 
   return {
@@ -61,5 +62,6 @@ export const getSpaceDashboardBuckets = async (orgId: string, spaceId: string) =
     today: sortTasksByRanking(today).map(toDTO),
     blocked: sortTasksByRanking(blocked).map(toDTO),
     backlog: sortTasksByRanking(backlog).map(toDTO),
+    needsReply,
   };
 };
