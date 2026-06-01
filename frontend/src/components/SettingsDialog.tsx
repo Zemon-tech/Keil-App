@@ -62,6 +62,8 @@ import {
   Archive,
   Eye,
   EyeOff,
+  MessageSquare,
+  PanelRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
@@ -1395,6 +1397,18 @@ function AccountTab() {
 
 function PreferencesTab() {
   const { theme, setTheme } = useTheme();
+  const [chatView, setChatView] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("default_chat_view") || "sidebar";
+    }
+    return "sidebar";
+  });
+
+  const handleChatViewChange = (view: "sidebar" | "dialog") => {
+    setChatView(view);
+    localStorage.setItem("default_chat_view", view);
+    toast.success(`Default chat view set to ${view === "sidebar" ? "Sidebar" : "Dialog"}`);
+  };
 
   return (
     <div className="space-y-8">
@@ -1455,6 +1469,65 @@ function PreferencesTab() {
               <Monitor className="size-5 text-slate-500" />
             </div>
             <span className="text-xs font-medium text-foreground">System</span>
+          </button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Default Chat View */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <MessageSquare className="size-4 text-muted-foreground" />
+          Default Chat View
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Choose where the team chat opens by default when you click the chat icon.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleChatViewChange("sidebar")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              chatView === "sidebar"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <PanelRight className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Sidebar (Drawer)</span>
+              </div>
+              {chatView === "sidebar" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Opens the chat in a collapsible side drawer on the right side of the screen.
+            </span>
+          </button>
+          <button
+            onClick={() => handleChatViewChange("dialog")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              chatView === "dialog"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <Monitor className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Full Dialog (Modal)</span>
+              </div>
+              {chatView === "dialog" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Opens the chat in a larger, centered dialog modal for a more focused conversation.
+            </span>
           </button>
         </div>
       </div>

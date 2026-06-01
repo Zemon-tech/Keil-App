@@ -323,6 +323,7 @@ export function AppSidebar({
   const [orgManageOpen, setOrgManageOpen] = useState(false);
   const [orgManageTab, setOrgManageTab] = useState<"create" | "join">("create");
   const openChat = useChatStore((state) => state.openChat);
+  const openChatDialog = useChatStore((state) => state.openChatDialog);
   const closeChat = useChatStore((state) => state.closeChat);
   const [searchQuery, setSearchQuery] = useState("");
   const { unreadCount } = useNotifications();
@@ -594,7 +595,12 @@ export function AppSidebar({
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => {
-                        openChat();
+                        const defaultView = localStorage.getItem("default_chat_view") || "sidebar";
+                        if (defaultView === "dialog") {
+                          openChatDialog();
+                        } else {
+                          openChat();
+                        }
                         onNotificationDrawerOpenChange?.(false);
                       }}
                       tooltip="Chat"

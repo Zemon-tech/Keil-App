@@ -45,8 +45,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const location = useLocation();
   const { pageId } = useParams<{ pageId: string }>();
-  const openChat = useChatStore((state: any) => state.openChat);
-  const { isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
+  const { openChat, openChatDialog, isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
 
   const { setDrawerOpen, getPageById } = useMotionStore();
   const page = pageId ? getPageById(pageId) : null;
@@ -99,7 +98,12 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
                 onSelect={() => {
                   setIsCommandOpen(false);
                   setNotificationDrawerOpen(false);
-                  openChat();
+                  const defaultView = localStorage.getItem("default_chat_view") || "sidebar";
+                  if (defaultView === "dialog") {
+                    openChatDialog();
+                  } else {
+                    openChat();
+                  }
                 }}
               >
                 <MessageSquare className="mr-2 size-4 text-slate-400" />
