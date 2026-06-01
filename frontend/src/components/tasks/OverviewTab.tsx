@@ -9,6 +9,7 @@ import {
   Clock,
   MapPin,
   Building2,
+  Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -319,6 +320,22 @@ export const OverviewTab = ({
                     <MapPin className="size-3 text-muted-foreground/60 shrink-0" />
                     <span className="truncate max-w-[130px]" title={task.location}>{task.location}</span>
                   </span>
+                </div>
+              )}
+
+              {/* Google Meet Link */}
+              {task.meet_link && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Google Meet</span>
+                  <a
+                    href={task.meet_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-right flex items-center gap-1 text-emerald-500 hover:text-emerald-600 transition-colors"
+                  >
+                    <Video className="size-3 text-emerald-500 shrink-0" />
+                    <span>Join Meet</span>
+                  </a>
                 </div>
               )}
             </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, X } from "lucide-react";
+import { Plus, Search, X, Video } from "lucide-react";
 import { format } from "date-fns";
 
 
@@ -87,6 +87,24 @@ export const EventOverviewTab = ({
               minRows={1}
             />
           </div>
+
+          {/* Google Meet Link */}
+          {event.meet_link && (
+            <div>
+              <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Conference Link
+              </span>
+              <a
+                href={event.meet_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors shadow-md shadow-emerald-500/10 mt-1 cursor-pointer"
+              >
+                <Video className="size-4 shrink-0" />
+                <span>Join Google Meet</span>
+              </a>
+            </div>
+          )}
 
           {/* Event Type */}
           <div>

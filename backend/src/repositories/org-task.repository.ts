@@ -60,10 +60,32 @@ export class OrgTaskRepository extends BaseRepository<Task> {
               WHERE sm2.space_id = t.space_id AND sm2.user_id = $${userIdParamIndex}
             )
           )
+          OR
+          (
+            t.google_event_id IS NOT NULL
+            AND t.id IN (
+              SELECT task_id FROM public.task_assignees WHERE user_id = $${userIdParamIndex}
+            )
+          )
         )
       `;
     } else {
-      query += ` AND t.org_id = $1 AND t.space_id = $2`;
+      if (userId) {
+        query += `
+          AND (
+            (t.org_id = $1 AND t.space_id = $2)
+            OR
+            (
+              t.google_event_id IS NOT NULL
+              AND t.id IN (
+                SELECT task_id FROM public.task_assignees WHERE user_id = $${userIdParamIndex}
+              )
+            )
+          )
+        `;
+      } else {
+        query += ` AND t.org_id = $1 AND t.space_id = $2`;
+      }
     }
 
     if (options.filters?.orgFilter) {
