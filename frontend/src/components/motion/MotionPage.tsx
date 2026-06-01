@@ -73,6 +73,8 @@ export function MotionPage() {
   // Refs for exponential backoff retries
   const retryCountRef = useRef<number>(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard: skip the first onUpdate from Tiptap (fires on mount with initial content)
+  const isInitialMountRef = useRef<boolean>(true);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
@@ -173,6 +175,9 @@ export function MotionPage() {
   useEffect(() => {
     if (!pageId) return;
 
+    // Reset the initial mount guard for the new page
+    isInitialMountRef.current = true;
+
     const draft = getDraft(pageId);
     if (draft) {
       // Reconcile draft
@@ -201,7 +206,13 @@ export function MotionPage() {
   );
 
   // ── Derived display page (null-safe, used before guards) ───────────────────
+  // Use the store page (optimistic) for metadata (title, icon, cover, etc.)
+  // but the editor will only render when content is available from the detail query.
   const displayPage = page ?? serverPage ?? null;
+
+  // Content specifically for the editor — only trust sources that include content.
+  // The list query excludes content for performance, so we must wait for the detail query.
+  const editorContent = (page?.content ? page.content : null) ?? serverPage?.content ?? undefined;
 
   const isSharedPage = displayPage && (displayPage.org_id !== activeOrgId || displayPage.space_id !== activeSpaceId);
 
@@ -323,6 +334,15 @@ export function MotionPage() {
   const handleContentChange = useCallback(
     (json: JSONContent) => {
       if (!pageId || isPageReadOnly) return;
+
+      // Skip the first onUpdate from Tiptap — it fires on mount with the initial
+      // content and should NOT trigger a save (it would overwrite the DB with
+      // potentially stale/empty content from the cache).
+      if (isInitialMountRef.current) {
+        isInitialMountRef.current = false;
+        return;
+      }
+
       pendingContent.current = json;
       setDirty(pageId);
       setSaveStatus("saving");
@@ -1252,13 +1272,19 @@ export function MotionPage() {
 
               {/* Editor */}
               <div className="pt-0">
-                <SimpleEditor
-                  key={editorKey}
-                  content={displayPage.content}
-                  onContentChange={handleContentChange}
-                  onReady={(editor) => setPageEditor(editor)}
-                  onAddSubpage={handleAddSubpage}
-                />
+                {editorContent ? (
+                  <SimpleEditor
+                    key={editorKey}
+                    content={editorContent}
+                    onContentChange={handleContentChange}
+                    onReady={(editor) => setPageEditor(editor)}
+                    onAddSubpage={handleAddSubpage}
+                  />
+                ) : (
+                  <div className="px-4 py-8 text-muted-foreground/40 text-sm animate-pulse">
+                    Loading content…
+                  </div>
+                )}
               </div>
             </main>
           </div>

@@ -118,7 +118,23 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
     const incomingKey = pages.map((p) => `${p.id}:${p.updated_at}:${p.parent_id}:${p.position}`).join(",");
     const currentKey = current.map((p) => `${p.id}:${p.updated_at}:${p.parent_id}:${p.position}`).join(",");
     if (incomingKey === currentKey) return;
-    set({ pages });
+
+    // Merge strategy: incoming list data may lack `content` (the list endpoint
+    // excludes it for performance). Preserve existing content from the store
+    // so that navigating back to a page doesn't lose its loaded content.
+    const contentMap = new Map<string, any>();
+    current.forEach((p) => {
+      if (p.content) contentMap.set(p.id, p.content);
+    });
+
+    const merged = pages.map((p) => {
+      if (!p.content && contentMap.has(p.id)) {
+        return { ...p, content: contentMap.get(p.id) };
+      }
+      return p;
+    });
+
+    set({ pages: merged });
   },
 
   upsertPages: (incoming) => {

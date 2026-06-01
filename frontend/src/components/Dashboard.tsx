@@ -5,7 +5,7 @@ import { HeroSection } from "./dashboard/HeroSection";
 import { DashboardPanel } from "./dashboard/DashboardPanel";
 import { useOrgDashboard } from "@/hooks/api/useDashboard";
 import { useAppContext } from "@/contexts/AppContext";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, SquarePen } from "lucide-react";
 import {
   Message,
   MessageContent,
@@ -21,6 +21,12 @@ import { MessageCircle } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
 import { supabase } from "@/lib/supabase";
 import { DefaultChatTransport } from "ai";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function Dashboard() {
   const { state } = useSidebar();
@@ -162,6 +168,13 @@ export function Dashboard() {
     });
   };
 
+  const handleNewChat = useCallback(() => {
+    const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
+    const newThreadId = crypto.randomUUID();
+    localStorage.setItem(key, newThreadId);
+    setMessages([]);
+  }, [activeOrgId, activeSpaceId, setMessages]);
+
   if (!mounted) return null;
 
   return (
@@ -195,6 +208,24 @@ export function Dashboard() {
           </div>
         ) : (
           <div className="flex size-full flex-col items-center">
+            {/* New Chat button — top-right corner */}
+            <div className="absolute top-3 right-4 z-10">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleNewChat}
+                    disabled={isLoading}
+                    className="size-8 text-muted-foreground hover:text-foreground"
+                  >
+                    <SquarePen className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">New chat</TooltipContent>
+              </Tooltip>
+            </div>
+
             <section className="w-full flex-1 overflow-y-auto pb-48 pt-10 lg:pt-14">
               <div className="w-full max-w-[54rem] mx-auto flex flex-col gap-6 px-4 sm:px-6">
                 {messages.map((message: any) => {
