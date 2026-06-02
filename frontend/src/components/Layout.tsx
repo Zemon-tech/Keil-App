@@ -8,7 +8,7 @@ import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { MeetingDialog } from "./MeetingDialog";
 import { ChatSocketManager } from "./chat/ChatSocketManager";
-import { SidebarProvider, SidebarInset, useSidebar } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
   MessageSquare,
