@@ -91,6 +91,8 @@ export const MeetingDialog: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [localVolumes, setLocalVolumes] = useState<number[]>([0.05, 0.05, 0.05, 0.05, 0.05]);
+  // Track active MediaStream as state so the analyser useEffect re-triggers properly
+  const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
 
   // Audio recording references
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -146,6 +148,7 @@ export const MeetingDialog: React.FC = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
+    setActiveStream(null);
   };
 
   useEffect(() => {
@@ -155,8 +158,11 @@ export const MeetingDialog: React.FC = () => {
   }, []);
 
   // Web Audio real-time micro analyser
+  // NOTE: We depend on `activeStream` (React state) instead of `streamRef.current` (a ref),
+  // so the effect properly re-runs when a new stream becomes available.
   useEffect(() => {
-    if (currentStatus !== "recording" || !streamRef.current || isPaused) {
+    if (currentStatus !== "recording" || !activeStream || isPaused) {
+      // Symmetric fallback when not recording: flat baseline
       setLocalVolumes([0.05, 0.05, 0.05, 0.05, 0.05]);
       setVolumes([0.05, 0.05, 0.05, 0.05, 0.05]);
       return;
@@ -169,37 +175,60 @@ export const MeetingDialog: React.FC = () => {
 
     try {
       audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Resume context in case it was suspended (required by some browsers)
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      analyser.smoothingTimeConstant = 0.45;
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.6;
 
-      source = audioCtx.createMediaStreamSource(streamRef.current);
+      source = audioCtx.createMediaStreamSource(activeStream);
       source.connect(analyser);
+      // NOTE: intentionally do NOT connect to audioCtx.destination to avoid feedback
 
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
 
-      const barCount = 5;
-      const binsPerBar = Math.floor(bufferLength / barCount);
+      // Focus on speech frequency range (approx 80Hz – 4kHz), split into 3 bands.
+      // With fftSize=256 and typical 48kHz sample rate, each bin = ~187Hz.
+      // Speech: bins 1–21 cover ~187Hz–4kHz.
+      const speechStart = 1;
+      const speechEnd = Math.min(22, Math.floor(bufferLength * 0.17));
+      const speechBins = speechEnd - speechStart;
+      const bandCount = 3;
+      const binsPerBand = Math.max(1, Math.floor(speechBins / bandCount));
 
       const updateVolume = () => {
         if (!analyser) return;
         analyser.getByteFrequencyData(dataArray);
 
-        const newBands = new Array(barCount).fill(0.05);
-        for (let i = 0; i < barCount; i++) {
+        // Compute 3 raw bands within speech frequency range
+        const rawBands = new Array(bandCount).fill(0.05);
+        for (let i = 0; i < bandCount; i++) {
           let sum = 0;
-          const start = i * binsPerBar;
-          const end = start + binsPerBar;
+          const start = speechStart + i * binsPerBand;
+          const end = start + binsPerBand;
           for (let j = start; j < end; j++) {
             sum += dataArray[j];
           }
-          const avg = sum / binsPerBar;
-          newBands[i] = Math.min(Math.max((avg / 255) * 2.2, 0.05), 1.0);
+          const avg = sum / binsPerBand;
+          rawBands[i] = Math.min(Math.max((avg / 255) * 3.2, 0.05), 1.0);
         }
 
-        setLocalVolumes(newBands);
-        setVolumes(newBands);
+        // Mirror center-out: [high, mid, low, mid, high]
+        // This puts the loudest frequency (low/mid, band 0-1) in the CENTER
+        // so all visualizers look balanced regardless of audio content.
+        const mirrored = [
+          rawBands[2],           // high   (outer left)
+          rawBands[1],           // mid    (inner left)
+          rawBands[0],           // low    (center — typically loudest)
+          rawBands[1],           // mid    (inner right, same as left)
+          rawBands[2],           // high   (outer right, same as left)
+        ];
+
+        setLocalVolumes(mirrored);
+        setVolumes(mirrored);
         rafId = requestAnimationFrame(updateVolume);
       };
 
@@ -216,7 +245,7 @@ export const MeetingDialog: React.FC = () => {
         audioCtx.close().catch(() => {});
       }
     };
-  }, [currentStatus, streamRef.current, isPaused]);
+  }, [currentStatus, activeStream, isPaused]);
 
   // Handle requestActions from minimized dock
   useEffect(() => {
@@ -254,6 +283,7 @@ export const MeetingDialog: React.FC = () => {
         },
       });
       streamRef.current = stream;
+      setActiveStream(stream); // Trigger re-render so analyser useEffect fires
 
       const options = { mimeType: "audio/webm;codecs=opus" };
       let recorder: MediaRecorder;
@@ -352,6 +382,7 @@ export const MeetingDialog: React.FC = () => {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    setActiveStream(null);
   };
 
   // Audio Upload S3/Sarvam Pipeline
@@ -730,9 +761,13 @@ export const MeetingDialog: React.FC = () => {
   const wordCount = currentTranscript ? currentTranscript.split(/\s+/).filter(Boolean).length.toLocaleString() : "0";
 
   // Visualizer volume converters
+  // IMPORTANT: All 5 visualizers only activate volume-reactive rendering when state === "speaking".
+  // "listening" just shows an idle animation pattern without audio data. So we MUST use
+  // "speaking" during active recording so the volumesOverride/volumeOverride props actually drive the visuals.
   const getVisualizerState = () => {
     if (currentStatus === "recording") {
-      return isPaused ? "idle" : "listening";
+      if (isPaused) return "idle";
+      return "speaking"; // ← MUST be "speaking" for all visualizers to react to audio
     }
     if (currentStatus === "uploading" || currentStatus === "transcribing") {
       return "thinking";
@@ -740,13 +775,16 @@ export const MeetingDialog: React.FC = () => {
     return "idle";
   };
 
+  // True 0-1 average volume (no floor) for wave/aura hooks that expect clean 0-1 range
   const averageVolume = useMemo(() => {
-    if (currentStatus !== "recording" || isPaused) return 0.05;
-    return localVolumes.reduce((sum, v) => sum + v, 0) / localVolumes.length;
+    if (currentStatus !== "recording" || isPaused) return 0;
+    const avg = localVolumes.reduce((sum, v) => sum + v, 0) / localVolumes.length;
+    // Subtract the baseline 0.05 floor we add in the analyser, then clamp 0-1
+    return Math.min(Math.max((avg - 0.05) / 0.95, 0), 1);
   }, [localVolumes, currentStatus, isPaused]);
 
   const interpolateVolumes = (volumes: number[], targetLength: number): number[] => {
-    if (volumes.length === 0) return new Array(targetLength).fill(0.05);
+    if (volumes.length === 0) return new Array(targetLength).fill(0);
     const result: number[] = [];
     for (let i = 0; i < targetLength; i++) {
       const floatIndex = (i / (targetLength - 1)) * (volumes.length - 1);
@@ -760,72 +798,111 @@ export const MeetingDialog: React.FC = () => {
   };
 
   const radialVolumes = useMemo(() => {
-    return currentStatus === "recording" && !isPaused ? interpolateVolumes(localVolumes, 24) : undefined;
+    return currentStatus === "recording" && !isPaused ? interpolateVolumes(localVolumes, 24) : new Array(24).fill(0);
   }, [localVolumes, currentStatus, isPaused]);
 
   // Unified visualizer renderer
+  //
+  // KEY DESIGN:
+  // - isIdlePreview=true  → decorative preview on the idle screen, uses "listening" state + fixed demo volumes
+  // - isIdlePreview=false → live recording screen, uses "speaking" state + real mic volumes
+  //   (All 5 visualizers only render volume-reactively when state === "speaking")
   const renderVisualizer = (isIdlePreview = false) => {
-    const activeState = (isIdlePreview ? "listening" : getVisualizerState()) as AgentState;
-    const demoVolumes = isIdlePreview ? [0.2, 0.4, 0.6, 0.3, 0.1] : localVolumes;
-    const demoAverage = isIdlePreview ? 0.32 : averageVolume;
-    const demoRadial = isIdlePreview ? interpolateVolumes(demoVolumes, 24) : radialVolumes;
+    // For the idle preview: use "listening" for a nice animated look but fixed demo data
+    // For live recording: "speaking" activates all volume-reactive code paths in each component
+    const liveState = getVisualizerState() as AgentState;
+    const activeState: AgentState = isIdlePreview ? "listening" : liveState;
+
+    // Volumes for live mode — always real mic data when speaking; zero otherwise
+    const liveVolumes5 = currentStatus === "recording" && !isPaused ? localVolumes : new Array(5).fill(0);
+    const liveAvg = currentStatus === "recording" && !isPaused ? averageVolume : 0;
+    const liveRadial = currentStatus === "recording" && !isPaused ? radialVolumes : new Array(24).fill(0);
+
+    // Demo volumes for the idle preview — center-heavy pyramid shape for visual balance
+    // Matches the mirrored center-out layout [outer, inner, CENTER, inner, outer]
+    const previewVolumes5 = [0.15, 0.45, 0.80, 0.45, 0.15];
+    const previewAvg = 0.40;
+    const previewRadial = interpolateVolumes(previewVolumes5, 24);
+
+    const volumesFor5   = isIdlePreview ? previewVolumes5 : liveVolumes5;
+    const avgVol        = isIdlePreview ? previewAvg      : liveAvg;
+    const radialVols    = isIdlePreview ? previewRadial   : liveRadial;
 
     const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
     const themeMode = isDark ? "dark" : "light";
 
     switch (visualizerType) {
       case "bar":
+        // Bar: volumesOverride sets bar heights; works with any state when override is provided
         return (
-          <AgentAudioVisualizerBar
-            size="md"
-            state={activeState}
-            barCount={5}
-            volumesOverride={activeState === "listening" || activeState === "speaking" ? demoVolumes : undefined}
-            className="text-cyan-500 scale-[1.05]"
-          />
+          <div className="flex items-center justify-center w-full">
+            <AgentAudioVisualizerBar
+              size="md"
+              state={activeState}
+              barCount={5}
+              volumesOverride={volumesFor5}
+              className="text-cyan-500"
+            />
+          </div>
         );
       case "aura":
+        // Aura: volumeOverride only drives the scale when state="speaking"
         return (
-          <AgentAudioVisualizerAura
-            size="md"
-            state={activeState}
-            color="#06b6d4"
-            themeMode={themeMode}
-            volumeOverride={activeState === "listening" || activeState === "speaking" ? demoAverage : undefined}
-            className="scale-95"
-          />
+          <div className="flex items-center justify-center w-full">
+            <AgentAudioVisualizerAura
+              size="md"
+              state={activeState}
+              color="#06b6d4"
+              themeMode={themeMode}
+              volumeOverride={avgVol}
+              className="scale-95"
+            />
+          </div>
         );
       case "grid":
+        // Grid: volumesOverride only drives cell highlights when state="speaking"
+        // NOTE: wrapped in centering div because CSS grid with 1fr and no explicit width
+        // resolves to min-content in flex parents, causing left-shift
         return (
-          <AgentAudioVisualizerGrid
-            size="md"
-            state={activeState}
-            rowCount={5}
-            columnCount={5}
-            color="#06b6d4"
-            volumesOverride={activeState === "listening" || activeState === "speaking" ? demoVolumes : undefined}
-            className="scale-100"
-          />
+          <div className="flex items-center justify-center w-full">
+            <AgentAudioVisualizerGrid
+              size="md"
+              state={activeState}
+              rowCount={5}
+              columnCount={5}
+              color="#06b6d4"
+              volumesOverride={volumesFor5}
+            />
+          </div>
         );
       case "wave":
+        // Wave: volumeOverride only drives amplitude/frequency when state="speaking"
         return (
-          <AgentAudioVisualizerWave
-            size="md"
-            state={activeState}
-            color="#06b6d4"
-            volumeOverride={activeState === "listening" || activeState === "speaking" ? demoAverage : undefined}
-            className="w-full max-w-[280px] h-[112px]"
-          />
+          <div className="flex items-center justify-center w-full">
+            <AgentAudioVisualizerWave
+              size="md"
+              state={activeState}
+              color="#06b6d4"
+              colorShift={0.3}
+              lineWidth={2}
+              blur={0.1}
+              volumeOverride={avgVol}
+              className="w-full max-w-[280px] h-[112px]"
+            />
+          </div>
         );
       case "radial":
+        // Radial: volumesOverride only drives bar heights when state="speaking"
         return (
-          <AgentAudioVisualizerRadial
-            size="md"
-            state={activeState}
-            barCount={24}
-            color="#06b6d4"
-            volumesOverride={activeState === "listening" || activeState === "speaking" ? demoRadial : undefined}
-          />
+          <div className="flex items-center justify-center w-full">
+            <AgentAudioVisualizerRadial
+              size="md"
+              state={activeState}
+              barCount={24}
+              color="#06b6d4"
+              volumesOverride={radialVols}
+            />
+          </div>
         );
       default:
         return null;
@@ -880,7 +957,7 @@ export const MeetingDialog: React.FC = () => {
           transition={{ type: "spring", stiffness: 350, damping: 25 }}
           className={cn(
             "relative w-full overflow-hidden transition-all duration-300 transform",
-            isCompleted ? "max-w-[840px] px-4 md:px-0" : "max-w-[440px] px-4"
+            isCompleted ? "max-w-[900px] px-4 md:px-0" : "max-w-[520px] px-4"
           )}
         >
           <div className="w-full bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -904,34 +981,18 @@ export const MeetingDialog: React.FC = () => {
               <>
                 {/* IDLE STATE */}
                 {currentStatus === "idle" && (
-                  <div className="w-full flex flex-col p-6 select-none animate-in fade-in zoom-in-95 duration-300 text-center">
-                    <div className="flex items-center justify-between shrink-0 mb-6">
-                      <div className="flex items-center gap-2">
+                  <div className="w-full flex flex-col p-5 select-none animate-in fade-in zoom-in-95 duration-300">
+                    {/* Header: status dot + title | visualizer switcher | close */}
+                    <div className="flex items-center justify-between shrink-0 mb-5 gap-3">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="size-2 rounded-full bg-muted-foreground" />
                         <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                          Workspace Meeting Sync
+                          Meeting Sync
                         </span>
                       </div>
-                      <button
-                        onClick={handleClose}
-                        className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50"
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </div>
 
-                    <div className="h-36 flex flex-col items-center justify-center mb-6 relative bg-muted/10 dark:bg-zinc-950/20 border border-border/40 rounded-xl p-4 overflow-hidden">
-                      {renderVisualizer(true)}
-                      <span className="text-[10px] font-medium text-muted-foreground tracking-wide mt-2 block">
-                        Visualizer Preview
-                      </span>
-                    </div>
-
-                    <div className="mb-6">
-                      <span className="text-[10px] font-semibold text-muted-foreground tracking-wider uppercase mb-2.5 block">
-                        Select Visualizer Style
-                      </span>
-                      <div className="flex flex-wrap items-center justify-center gap-1.5 p-1 bg-muted/40 dark:bg-zinc-900/40 rounded-xl border border-border/40 max-w-[360px] mx-auto">
+                      {/* Visualizer switcher — moved here next to close button */}
+                      <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-zinc-900/40 rounded-lg border border-border/40 flex-1 justify-center">
                         {visualizers.map((vis) => {
                           const Icon = vis.icon;
                           const active = visualizerType === vis.id;
@@ -940,24 +1001,37 @@ export const MeetingDialog: React.FC = () => {
                               key={vis.id}
                               onClick={() => handleVisualizerChange(vis.id)}
                               className={cn(
-                                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer",
+                                "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer",
                                 active
                                   ? "bg-background text-foreground shadow-sm border border-border"
                                   : "text-muted-foreground hover:text-foreground hover:bg-muted/20 dark:hover:bg-zinc-900/20 border border-transparent"
                               )}
+                              title={vis.name}
                             >
                               <Icon className={cn("size-3", active ? "text-cyan-500" : "")} />
-                              {vis.name}
+                              <span>{vis.name}</span>
                             </button>
                           );
                         })}
                       </div>
+
+                      <button
+                        onClick={handleClose}
+                        className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50 shrink-0"
+                      >
+                        <X className="size-3.5" />
+                      </button>
                     </div>
 
-                    <div className="flex justify-center border-t border-border pt-4">
+                    {/* Visualizer — no box, no label, just the component centered */}
+                    <div className="flex items-center justify-center py-6">
+                      {renderVisualizer(true)}
+                    </div>
+
+                    <div className="flex justify-center border-t border-border pt-5">
                       <button
                         onClick={startRecording}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs tracking-wider uppercase px-8 h-10 rounded-full cursor-pointer flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs tracking-wider uppercase px-10 h-11 rounded-full cursor-pointer flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
                       >
                         <Mic className="size-4" />
                         Start Capture
@@ -1019,10 +1093,9 @@ export const MeetingDialog: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="h-44 flex flex-col items-center justify-center mb-4 relative bg-muted/10 dark:bg-zinc-950/20 border border-border/40 rounded-xl p-4 overflow-hidden">
+                    <div className="w-full flex flex-col items-center justify-center py-5">
                       {renderVisualizer(false)}
-
-                      <span className="text-[12px] font-mono font-medium text-foreground mt-4 block">
+                      <span className="text-[13px] font-mono font-medium text-foreground mt-3 block tabular-nums text-center">
                         {formatTime(duration)}
                       </span>
                     </div>
