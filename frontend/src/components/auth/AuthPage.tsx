@@ -9,7 +9,7 @@ export function AuthPage() {
 
   if (mode === "signup") {
     return (
-      <main className={cn("min-h-screen bg-background fade-in")}> 
+      <main className={cn("min-h-screen bg-background fade-in")}>
         <div className="grid min-h-svh lg:grid-cols-2">
           <div className="flex flex-col gap-4 p-6 md:p-10">
             <div className="flex justify-center gap-2 md:justify-start">
@@ -20,11 +20,11 @@ export function AuthPage() {
               </div>
             </div>
           </div>
-          <div className="bg-muted relative hidden lg:block">
+          <div className="relative hidden lg:flex items-center justify-center p-4">
             <img
               src="/placeholder.png"
               alt="Image"
-              className="absolute inset-0 size-full object-cover dark:brightness-[0.2] dark:grayscale"
+              className="w-full h-[95vh] object-cover rounded-[2rem] dark:brightness-[0.2] dark:grayscale"
             />
           </div>
         </div>
