@@ -65,6 +65,7 @@ import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType } from "@/types/task";
 import { getThemeForTask } from "@/lib/calendarTheme";
 import type { TaskDTO } from "@/hooks/api/useTasks";
+import { useAppContext } from "@/contexts/AppContext";
 
 type Props = {
   tasks: TaskDTO[];
@@ -591,7 +592,10 @@ export function TaskSchedulePane({
   onDateChange,
   onTaskSchedule,
 }: Props) {
+  const { activeOrgId, activeSpaceId } = useAppContext();
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [selectedTaskOrgId, setSelectedTaskOrgId] = useState<string>("");
+  const [selectedTaskSpaceId, setSelectedTaskSpaceId] = useState<string>("");
   const [dialogPosition, setDialogPosition] = useState<{
     x: number;
     y: number;
@@ -619,7 +623,7 @@ export function TaskSchedulePane({
   const [events, setEvents] = useState<EventInput[]>([]);
   const [morePopover, setMorePopover] = useState<{
     date: Date;
-    events: { id: string; title: string; status: string; priority: string; type: string; taskId: string }[];
+    events: { id: string; title: string; status: string; priority: string; type: string; taskId: string; orgId: string; spaceId: string }[];
     position: { x: number; y: number };
   } | null>(null);
   const unscheduledTaskIds = useRef<Set<string>>(new Set());
@@ -703,6 +707,8 @@ export function TaskSchedulePane({
           ].filter(Boolean),
           extendedProps: {
             taskId: t.id,
+            orgId: t.org_id ?? activeOrgId,
+            spaceId: t.space_id ?? activeSpaceId,
             taskTitle: t.title,
             projectTitle: t.projectTitle,
             taskStatus: t.status,
@@ -1265,6 +1271,8 @@ export function TaskSchedulePane({
                   priority: seg.event.extendedProps.taskPriority as string || "",
                   type: seg.event.extendedProps.taskType as string || "",
                   taskId: seg.event.extendedProps.taskId as string || seg.event.id,
+                  orgId: (seg.event.extendedProps.orgId as string) || activeOrgId,
+                  spaceId: (seg.event.extendedProps.spaceId as string) || activeSpaceId,
                 }));
 
                 // Position: align to the "more" link, ensure it stays within viewport
@@ -1357,6 +1365,8 @@ export function TaskSchedulePane({
 
                   setDialogPosition({ x, y });
                   setSelectedTaskId(taskId);
+                  setSelectedTaskOrgId(arg.event.extendedProps.orgId || activeOrgId);
+                  setSelectedTaskSpaceId(arg.event.extendedProps.spaceId || activeSpaceId);
                 }
               }}
               dateClick={(arg) => {
@@ -1446,10 +1456,14 @@ export function TaskSchedulePane({
 
       <TaskPreviewDialog
           taskId={selectedTaskId}
+          orgId={selectedTaskOrgId}
+          spaceId={selectedTaskSpaceId}
           open={!!selectedTaskId}
           onOpenChange={(open) => {
             if (!open) {
               setSelectedTaskId("");
+              setSelectedTaskOrgId("");
+              setSelectedTaskSpaceId("");
               setDialogPosition(null);
             }
           }}
@@ -1515,6 +1529,8 @@ export function TaskSchedulePane({
                       onClick={() => {
                         setMorePopover(null);
                         setSelectedTaskId(evt.taskId);
+                        setSelectedTaskOrgId(evt.orgId || activeOrgId);
+                        setSelectedTaskSpaceId(evt.spaceId || activeSpaceId);
                         setDialogPosition(morePopover.position);
                       }}
                       className={cn(
