@@ -837,7 +837,7 @@ export const MeetingDialog: React.FC = () => {
         return (
           <div className="flex items-center justify-center w-full">
             <AgentAudioVisualizerBar
-              size="md"
+              size="lg"
               state={activeState}
               barCount={5}
               volumesOverride={volumesFor5}
@@ -850,7 +850,7 @@ export const MeetingDialog: React.FC = () => {
         return (
           <div className="flex items-center justify-center w-full">
             <AgentAudioVisualizerAura
-              size="md"
+              size="lg"
               state={activeState}
               color="#06b6d4"
               themeMode={themeMode}
@@ -866,7 +866,7 @@ export const MeetingDialog: React.FC = () => {
         return (
           <div className="flex items-center justify-center w-full">
             <AgentAudioVisualizerGrid
-              size="md"
+              size="xl"
               state={activeState}
               rowCount={5}
               columnCount={5}
@@ -880,14 +880,14 @@ export const MeetingDialog: React.FC = () => {
         return (
           <div className="flex items-center justify-center w-full">
             <AgentAudioVisualizerWave
-              size="md"
+              size="xl"
               state={activeState}
               color="#06b6d4"
               colorShift={0.3}
               lineWidth={2}
               blur={0.1}
               volumeOverride={avgVol}
-              className="w-full max-w-[280px] h-[112px]"
+              className="w-full max-w-[400px] h-[160px]"
             />
           </div>
         );
@@ -896,7 +896,7 @@ export const MeetingDialog: React.FC = () => {
         return (
           <div className="flex items-center justify-center w-full">
             <AgentAudioVisualizerRadial
-              size="md"
+              size="lg"
               state={activeState}
               barCount={24}
               color="#06b6d4"
@@ -945,7 +945,7 @@ export const MeetingDialog: React.FC = () => {
       >
         <div
           className={cn(
-            "absolute inset-0 bg-black/40 dark:bg-black/70 backdrop-blur-md transition-opacity duration-500",
+            "absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm transition-opacity duration-500",
             isVisible ? "opacity-100" : "opacity-0"
           )}
           onClick={handleOverlayClick}
@@ -957,7 +957,7 @@ export const MeetingDialog: React.FC = () => {
           transition={{ type: "spring", stiffness: 350, damping: 25 }}
           className={cn(
             "relative w-full overflow-hidden transition-all duration-300 transform",
-            isCompleted ? "max-w-[900px] px-4 md:px-0" : "max-w-[520px] px-4"
+            isCompleted ? "max-w-[900px] px-4 md:px-0" : "max-w-[620px] px-4"
           )}
         >
           <div className="w-full bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -981,59 +981,71 @@ export const MeetingDialog: React.FC = () => {
               <>
                 {/* IDLE STATE */}
                 {currentStatus === "idle" && (
-                  <div className="w-full flex flex-col p-5 select-none animate-in fade-in zoom-in-95 duration-300">
-                    {/* Header: status dot + title | visualizer switcher | close */}
-                    <div className="flex items-center justify-between shrink-0 mb-5 gap-3">
+                  <div className="w-full flex flex-col select-none animate-in fade-in zoom-in-95 duration-300 min-h-[460px]">
+                    {/* Unified header: title | tabs | minimize | close */}
+                    <div className="flex items-center gap-2 shrink-0 px-4 py-2.5 border-b border-border/50">
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="size-2 rounded-full bg-muted-foreground" />
-                        <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                        <span className="text-[12px] font-semibold tracking-wide text-foreground">
                           Meeting Sync
                         </span>
                       </div>
 
-                      {/* Visualizer switcher — moved here next to close button */}
-                      <div className="flex items-center gap-1 p-0.5 bg-muted/40 dark:bg-zinc-900/40 rounded-lg border border-border/40 flex-1 justify-center">
-                        {visualizers.map((vis) => {
-                          const Icon = vis.icon;
-                          const active = visualizerType === vis.id;
-                          return (
-                            <button
-                              key={vis.id}
-                              onClick={() => handleVisualizerChange(vis.id)}
-                              className={cn(
-                                "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-all cursor-pointer",
-                                active
-                                  ? "bg-background text-foreground shadow-sm border border-border"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/20 dark:hover:bg-zinc-900/20 border border-transparent"
-                              )}
-                              title={vis.name}
-                            >
-                              <Icon className={cn("size-3", active ? "text-cyan-500" : "")} />
-                              <span>{vis.name}</span>
-                            </button>
-                          );
-                        })}
+                      {/* Tabs — centered, flex-1 */}
+                      <div className="flex flex-1 justify-center">
+                        <div className="inline-flex items-center gap-0.5 p-0.5 bg-muted/40 dark:bg-zinc-900/40 rounded-lg border border-border/40">
+                          {visualizers.map((vis) => {
+                            const Icon = vis.icon;
+                            const active = visualizerType === vis.id;
+                            return (
+                              <button
+                                key={vis.id}
+                                onClick={() => handleVisualizerChange(vis.id)}
+                                className={cn(
+                                  "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap",
+                                  active
+                                    ? "bg-background text-foreground shadow-sm border border-border"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent"
+                                )}
+                                title={vis.name}
+                              >
+                                <Icon className={cn("size-3", active ? "text-cyan-500" : "")} />
+                                <span>{vis.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      <button
-                        onClick={handleClose}
-                        className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50 shrink-0"
-                      >
-                        <X className="size-3.5" />
-                      </button>
+                      {/* Minimize + Close */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={minimizeDialog}
+                          title="Minimize"
+                          className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50"
+                        >
+                          <Minimize2 className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={handleClose}
+                          className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Visualizer — no box, no label, just the component centered */}
-                    <div className="flex items-center justify-center py-6">
+                    <div className="flex flex-1 items-center justify-center py-10 px-5">
                       {renderVisualizer(true)}
                     </div>
 
-                    <div className="flex justify-center border-t border-border pt-5">
+                    <div className="flex justify-center border-t border-border px-5 py-5">
                       <button
                         onClick={startRecording}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs tracking-wider uppercase px-10 h-11 rounded-full cursor-pointer flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs tracking-wider uppercase px-7 h-9 rounded-full cursor-pointer flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
                       >
-                        <Mic className="size-4" />
+                        <Mic className="size-3.5" />
                         Start Capture
                       </button>
                     </div>
@@ -1042,35 +1054,64 @@ export const MeetingDialog: React.FC = () => {
 
                 {/* RECORDING / PROCESSING / TRANSCRIBING */}
                 {currentStatus !== "idle" && !isCompleted && (
-                  <div className="w-full flex flex-col p-6 select-none animate-in fade-in zoom-in-95 duration-300">
-                    <div className="flex items-center justify-between shrink-0 mb-5">
-                      <div className="flex items-center gap-2">
+                  <div className="w-full flex flex-col select-none animate-in fade-in zoom-in-95 duration-300 min-h-[460px]">
+
+                    {/* Unified header: status | tabs | minimize | close */}
+                    <div className="flex items-center gap-2 shrink-0 px-4 py-2.5 border-b border-border/50">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span
                           className={cn(
                             "size-2 rounded-full transition-all duration-300",
                             currentStatus === "recording" && !isPaused ? "bg-rose-500 animate-pulse" : "bg-muted-foreground"
                           )}
                         />
-                        <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                        <span className="text-[12px] font-semibold tracking-wide text-foreground">
                           {currentStatus === "recording"
-                            ? "Capturing Active Meeting"
+                            ? "Capturing"
                             : currentStatus === "uploading"
-                            ? "Ingesting context stream"
-                            : "Decoding conversation map"}
+                            ? "Uploading"
+                            : "Processing"}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      {/* Tabs — centered, flex-1 — only show during recording */}
+                      <div className="flex flex-1 justify-center">
                         {currentStatus === "recording" && (
-                          <button
-                            onClick={minimizeDialog}
-                            title="Minimize to Sidebar"
-                            className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50"
-                          >
-                            <Minimize2 className="size-3.5" />
-                          </button>
+                          <div className="inline-flex items-center gap-0.5 p-0.5 bg-muted/40 dark:bg-zinc-900/40 rounded-lg border border-border/40">
+                            {visualizers.map((vis) => {
+                              const Icon = vis.icon;
+                              const active = visualizerType === vis.id;
+                              return (
+                                <button
+                                  key={vis.id}
+                                  onClick={() => handleVisualizerChange(vis.id)}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap",
+                                    active
+                                      ? "bg-background text-foreground shadow-sm border border-border"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent"
+                                  )}
+                                  title={vis.name}
+                                >
+                                  <Icon className={cn("size-3", active ? "text-cyan-500" : "")} />
+                                  <span>{vis.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         )}
-                        
+                      </div>
+
+                      {/* Minimize + Cancel/Close */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={minimizeDialog}
+                          title="Minimize to Sidebar"
+                          className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50"
+                        >
+                          <Minimize2 className="size-3.5" />
+                        </button>
+
                         {(currentStatus === "transcribing" || currentStatus === "uploading") && deleteRecordingId && (
                           <button
                             onClick={handleCancelTranscription}
@@ -1081,52 +1122,29 @@ export const MeetingDialog: React.FC = () => {
                           </button>
                         )}
 
-                        {currentStatus === "recording" && (
-                          <button
-                            onClick={handleClose}
-                            title="Close Companion"
-                            className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50"
-                          >
-                            <X className="size-3.5" />
-                          </button>
-                        )}
+                        <button
+                          onClick={handleClose}
+                          title="Close"
+                          className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-border/50"
+                        >
+                          <X className="size-3.5" />
+                        </button>
                       </div>
                     </div>
 
-                    <div className="w-full flex flex-col items-center justify-center py-5">
+                    {/* Visualizer block — full width, not overlapped by any button */}
+                    <div className="relative w-full bg-muted/20 dark:bg-zinc-900/30 border-b border-border/40 flex-1 flex flex-col items-center justify-center py-14 px-4">
                       {renderVisualizer(false)}
-                      <span className="text-[13px] font-mono font-medium text-foreground mt-3 block tabular-nums text-center">
-                        {formatTime(duration)}
-                      </span>
+
+                      {/* Timer — bottom-center */}
+                      <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none">
+                        <span className="text-[13px] font-mono font-medium text-foreground/70 tabular-nums">
+                          {formatTime(duration)}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Switcher positioned below the visualizer card, cleanly centered */}
-                    {currentStatus === "recording" && (
-                      <div className="flex justify-center mb-5">
-                        <div className="flex items-center gap-1.5 p-1 bg-muted/40 dark:bg-zinc-900/40 rounded-xl border border-border/40 shadow-sm">
-                          {visualizers.map((vis) => {
-                            const Icon = vis.icon;
-                            const active = visualizerType === vis.id;
-                            return (
-                              <button
-                                key={vis.id}
-                                onClick={() => handleVisualizerChange(vis.id)}
-                                className={cn(
-                                  "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer",
-                                  active
-                                    ? "bg-background text-foreground shadow-sm border border-border"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/20 dark:hover:bg-zinc-900/20 border border-transparent"
-                                )}
-                                title={`Switch to ${vis.name}`}
-                              >
-                                <Icon className={cn("size-3.5", active ? "text-cyan-500" : "")} />
-                                <span className="text-[9px]">{vis.name}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    <div className="w-full flex flex-col p-6 pt-4 select-none">
 
                     <p className="text-[11px] font-medium text-muted-foreground tracking-wide text-center mb-6">
                       {currentStatus === "recording" && isPaused
@@ -1206,12 +1224,13 @@ export const MeetingDialog: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                </div>
                 )}
 
                 {/* REVIEW / COMPLETED MODE */}
                 {isCompleted && (
                   <div className="w-full flex flex-col select-none relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <header className="h-11 px-5 border-b border-border flex items-center justify-between shrink-0 bg-background/95 z-10">
+                    <header className="h-11 px-4 border-b border-border flex items-center justify-between shrink-0 bg-background/95 z-10">
                       <div className="flex items-center gap-2">
                         <span
                           className={cn(
@@ -1230,18 +1249,18 @@ export const MeetingDialog: React.FC = () => {
                             <button
                               onClick={copyToClipboard}
                               title="Copy Transcript"
-                              className="size-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                              className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
                             >
-                              <Copy className="size-4" />
+                              <Copy className="size-3.5" />
                             </button>
                             <button
                               onClick={downloadTextFile}
                               title="Download Transcript"
-                              className="size-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                              className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
                             >
-                              <Download className="size-4" />
+                              <Download className="size-3.5" />
                             </button>
-                            <div className="h-4 w-[1px] bg-border mx-1" />
+                            <div className="h-4 w-[1px] bg-border mx-0.5" />
                           </>
                         )}
 
@@ -1251,28 +1270,36 @@ export const MeetingDialog: React.FC = () => {
                               onClick={handleDelete}
                               disabled={deleteMutation.isPending}
                               title="Delete Recording"
-                              className="size-8 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 flex items-center justify-center cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="size-7 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 flex items-center justify-center cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               {deleteMutation.isPending ? (
-                                <Loader2 className="size-4 animate-spin" />
+                                <Loader2 className="size-3.5 animate-spin" />
                               ) : (
-                                <Trash2 className="size-4" />
+                                <Trash2 className="size-3.5" />
                               )}
                             </button>
-                            <div className="h-4 w-[1px] bg-border mx-1" />
+                            <div className="h-4 w-[1px] bg-border mx-0.5" />
                           </>
                         )}
 
                         <button
-                          onClick={handleClose}
-                          className="size-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                          onClick={minimizeDialog}
+                          title="Minimize"
+                          className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
                         >
-                          <X className="size-4" />
+                          <Minimize2 className="size-3.5" />
+                        </button>
+
+                        <button
+                          onClick={handleClose}
+                          className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                        >
+                          <X className="size-3.5" />
                         </button>
                       </div>
                     </header>
 
-                    <div className="flex flex-col md:flex-row w-full overflow-hidden h-[420px] bg-background">
+                    <div className="flex flex-col md:flex-row w-full overflow-hidden h-[400px] bg-background">
                       {/* Left Column */}
                       <div className="w-full md:w-[220px] flex flex-col items-center justify-between p-6 shrink-0 border-b md:border-b-0 md:border-r border-border bg-muted/10 transition-all select-none">
                         <div className="flex-1 flex flex-col items-center justify-center">
@@ -1331,7 +1358,7 @@ export const MeetingDialog: React.FC = () => {
                           )}
 
                           {currentStatus === "error" && currentErrorMessage && (
-                            <div className="w-full mt-3 p-3 rounded-lg bg-rose-500/5 border border-rose-500/10 text-rose-500 text-left max-h-[140px] overflow-y-auto">
+                            <div className="w-full mt-3 p-3 rounded-lg bg-rose-500/5 border border-rose-500/10 text-rose-500 text-left max-h-[440px] overflow-y-auto">
                               <p className="text-[10px] text-rose-500/80 leading-relaxed font-normal whitespace-pre-wrap">
                                 {currentErrorMessage}
                               </p>
@@ -1382,7 +1409,7 @@ export const MeetingDialog: React.FC = () => {
                           </div>
                         </div>
 
-                        <ScrollArea className="flex-1 max-h-[380px] overflow-y-auto">
+                        <ScrollArea className="flex-1 max-h-[460px] overflow-y-auto">
                           <div className="p-5 flex flex-col gap-5">
                             {currentDiarizedTranscript?.entries && currentDiarizedTranscript.entries.length > 0 ? (
                               currentDiarizedTranscript.entries.map((entry: any, index: number) => {

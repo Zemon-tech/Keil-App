@@ -8,7 +8,7 @@ import { NotificationDialog } from "@/components/NotificationDialog";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { MeetingDialog } from "./MeetingDialog";
 import { ChatSocketManager } from "./chat/ChatSocketManager";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -25,8 +25,10 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { useState, useEffect } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useChatStore } from "@/store/useChatStore";
+import { useMeetingStore } from "@/store/useMeetingStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
 import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
 import { StitchUpdateDialog } from "./StitchUpdateDialog";
@@ -44,6 +46,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { pageId } = useParams<{ pageId: string }>();
   const { openChat, openChatDialog, isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
 
@@ -62,15 +65,93 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   useTaskOverdueAutoRefresh();
 
   useEffect(() => {
+    const { openSettings } = useSettingsStore.getState();
+    const { openDialog: openMeeting } = useMeetingStore.getState();
+
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      // Skip if focus is inside an input / textarea / contenteditable
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isEditable = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
+
+      const mod = e.metaKey || e.ctrlKey;
+
+      // ⌘K — command palette (allow even in inputs so users can always reach it)
+      if (mod && e.key === "k") {
         e.preventDefault();
-        setIsCommandOpen((open: boolean) => !open);
+        setIsCommandOpen((open) => !open);
+        return;
+      }
+
+      // All remaining shortcuts are blocked inside inputs
+      if (isEditable) return;
+
+      // ⌘, — Settings
+      if (mod && e.key === ",") {
+        e.preventDefault();
+        openSettings("account");
+        return;
+      }
+
+      // ⌘B — Toggle sidebar  (handled by SidebarProvider natively via data-shortcut, but we also support it)
+      // (skip — sidebar already handles its own toggle)
+
+      // ⌘G — Go to Dashboard
+      if (mod && e.key === "g") {
+        e.preventDefault();
+        navigate("/");
+        return;
+      }
+
+      // ⌘T — Go to Tasks
+      if (mod && e.key === "t") {
+        e.preventDefault();
+        navigate("/tasks");
+        return;
+      }
+
+      // ⌘M — Open / restore Meeting Studio
+      if (mod && e.key === "m") {
+        e.preventDefault();
+        const { isMinimized, restoreDialog } = useMeetingStore.getState();
+        if (isMinimized) {
+          restoreDialog();
+        } else {
+          openMeeting();
+        }
+        return;
+      }
+
+      // ⌘J — Toggle Chat
+      if (mod && e.key === "j") {
+        e.preventDefault();
+        const { isChatOpen, isChatDialogOpen, openChat, closeChat, openChatDialog, closeChatDialog } = useChatStore.getState();
+        const defaultView = localStorage.getItem("default_chat_view") || "sidebar";
+        if (defaultView === "dialog") {
+          isChatDialogOpen ? closeChatDialog() : openChatDialog();
+        } else {
+          isChatOpen ? closeChat() : openChat();
+        }
+        return;
+      }
+
+      // ⌘⇧N — Toggle Notifications drawer
+      if (mod && e.shiftKey && e.key === "N") {
+        e.preventDefault();
+        setNotificationDrawerOpen((open) => !open);
+        return;
+      }
+
+      // ⌘P — Go to Motion (Pages)
+      if (mod && e.key === "p") {
+        e.preventDefault();
+        navigate("/motion");
+        return;
       }
     };
+
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
