@@ -1271,8 +1271,8 @@ export function TaskSchedulePane({
                   priority: seg.event.extendedProps.taskPriority as string || "",
                   type: seg.event.extendedProps.taskType as string || "",
                   taskId: seg.event.extendedProps.taskId as string || seg.event.id,
-                  orgId: (seg.event.extendedProps.orgId as string) || activeOrgId,
-                  spaceId: (seg.event.extendedProps.spaceId as string) || activeSpaceId,
+                  orgId: (seg.event.extendedProps.orgId as string) || activeOrgId || "",
+                  spaceId: (seg.event.extendedProps.spaceId as string) || activeSpaceId || "",
                 }));
 
                 // Position: align to the "more" link, ensure it stays within viewport
@@ -1529,8 +1529,8 @@ export function TaskSchedulePane({
                       onClick={() => {
                         setMorePopover(null);
                         setSelectedTaskId(evt.taskId);
-                        setSelectedTaskOrgId(evt.orgId || activeOrgId);
-                        setSelectedTaskSpaceId(evt.spaceId || activeSpaceId);
+                        setSelectedTaskOrgId(evt.orgId || activeOrgId || "");
+                        setSelectedTaskSpaceId(evt.spaceId || activeSpaceId || "");
                         setDialogPosition(morePopover.position);
                       }}
                       className={cn(
