@@ -896,13 +896,17 @@ export const deleteRecording = catchAsync(async (req: Request, res: Response) =>
         // 1. Delete the raw audio file from the S3 bucket to save cloud storage costs
         if (recording.audio_s3_key) {
             log.info({ recordingId, s3Key: recording.audio_s3_key }, "Deleting audio file from S3 bucket");
-            const deleteCommand = new DeleteObjectCommand({
-                Bucket: config.awsS3BucketName,
-                Key: recording.audio_s3_key,
-            });
-            await getS3Client().send(deleteCommand).catch(s3Err => {
-                log.error({ s3Err }, "Failed to delete audio file from S3 bucket during recording deletion");
-            });
+            try {
+                const deleteCommand = new DeleteObjectCommand({
+                    Bucket: config.awsS3BucketName,
+                    Key: recording.audio_s3_key,
+                });
+                await getS3Client().send(deleteCommand).catch(s3Err => {
+                    log.error({ s3Err }, "Failed to delete audio file from S3 bucket during recording deletion");
+                });
+            } catch (s3Err) {
+                log.error({ s3Err }, "Failed to acquire S3 client or delete audio file from S3 bucket");
+            }
         }
 
         // 2. Delete the record from the database
