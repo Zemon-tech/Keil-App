@@ -568,7 +568,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 aria-label="Record meeting"
                 title="Record new meeting"
               >
-                <Mic className="h-[18px] w-[18px] text-violet-500" />
+                <Mic className="h-[18px] w-[18px] text-muted-foreground" />
               </Button>
             ) : (
               <Button
@@ -618,7 +618,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 variant="outline"
                 size="sm"
                 onClick={() => openDialog()}
-                className="gap-1.5 rounded-lg border-violet-500/20 hover:border-violet-500/40 text-violet-500 hover:bg-violet-500/5 cursor-pointer text-xs"
+                className="gap-1.5 rounded-md border-border hover:border-border text-foreground hover:bg-accent cursor-pointer text-xs"
               >
                 <Mic className="size-3.5" />
                 Record Meeting

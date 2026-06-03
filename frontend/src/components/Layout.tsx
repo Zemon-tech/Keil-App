@@ -9,21 +9,7 @@ import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { MeetingDialog } from "./MeetingDialog";
 import { ChatSocketManager } from "./chat/ChatSocketManager";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import {
-  LayoutDashboard,
-  MessageSquare,
-  Activity,
-  User,
-  Settings,
-} from "lucide-react";
-import {
-  CommandDialog,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
+import { GlobalSearchDialog } from "./GlobalSearchDialog";
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams, Outlet } from "react-router-dom";
 import { useChatStore } from "@/store/useChatStore";
@@ -48,7 +34,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { pageId } = useParams<{ pageId: string }>();
-  const { openChat, openChatDialog, isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
+  const { isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
 
   const { setDrawerOpen, getPageById } = useMotionStore();
   const page = pageId ? getPageById(pageId) : null;
@@ -165,48 +151,11 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         />
       )}
       <SidebarInset className="bg-background">
-        {/* Command Palette */}
-        <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
-          <CommandInput placeholder="Type a command or search..." />
-          <CommandList>
-            <CommandEmpty>No results found.</CommandEmpty>
-            <CommandGroup heading="Suggestions">
-              <CommandItem>
-                <LayoutDashboard className="mr-2 size-4 text-slate-400" />
-                <span>Go to Dashboard</span>
-              </CommandItem>
-              <CommandItem
-                onSelect={() => {
-                  setIsCommandOpen(false);
-                  setNotificationDrawerOpen(false);
-                  const defaultView = localStorage.getItem("default_chat_view") || "sidebar";
-                  if (defaultView === "dialog") {
-                    openChatDialog();
-                  } else {
-                    openChat();
-                  }
-                }}
-              >
-                <MessageSquare className="mr-2 size-4 text-slate-400" />
-                <span>Open Chat</span>
-              </CommandItem>
-              <CommandItem>
-                <Activity className="mr-2 size-4 text-slate-400" />
-                <span>View Analytics</span>
-              </CommandItem>
-              <CommandItem>
-                <User className="mr-2 size-4 text-slate-400" />
-                <span>Profile Settings</span>
-              </CommandItem>
-            </CommandGroup>
-            <CommandGroup heading="Settings">
-              <CommandItem>
-                <Settings className="mr-2 size-4 text-slate-400" />
-                <span>Settings</span>
-              </CommandItem>
-            </CommandGroup>
-          </CommandList>
-        </CommandDialog>
+        {/* Global Search / Command Palette */}
+        <GlobalSearchDialog
+          open={isCommandOpen}
+          onOpenChange={setIsCommandOpen}
+        />
         <main
           className={cn(
             "flex-1 transition-all duration-300",

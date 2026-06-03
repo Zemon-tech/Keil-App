@@ -144,21 +144,19 @@ function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManag
         <div className="flex rounded-lg border border-border p-0.5 bg-muted/40 gap-0.5">
           <button
             onClick={() => setTab("create")}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-              tab === "create"
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${tab === "create"
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
           >
             Create
           </button>
           <button
             onClick={() => setTab("join")}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-              tab === "join"
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${tab === "join"
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
           >
             Join
           </button>
@@ -349,7 +347,7 @@ export function AppSidebar({
       recording?: any;
     }) => {
       console.log("[AppSidebar] WebSocket meeting update event received:", payload);
-      
+
       if (payload.status === "processing") {
         toast.info("Meeting Sync Started", {
           description: "Your background capture is now being transcribed using AI.",
@@ -532,7 +530,7 @@ export function AppSidebar({
                 className="h-9 rounded-xl border-border/60 bg-background/75 pl-9 pr-12 text-[13px] shadow-sm"
               />
               <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-border/70 bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                Ctrl F
+                Ctrl + K
               </kbd>
             </div>
           )}
