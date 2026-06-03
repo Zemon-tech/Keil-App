@@ -19,9 +19,11 @@ import { motionAgent } from "./agents/motion.agent";
 
 import { Pool as PgPool } from "pg";
 
+const isLocalMastraDb = config.mastraDatabaseUrl.includes("localhost") || config.mastraDatabaseUrl.includes("127.0.0.1");
+
 const mastraPool = new PgPool({
   connectionString: config.mastraDatabaseUrl,
-  ssl: { rejectUnauthorized: false },
+  ssl: isLocalMastraDb ? false : { rejectUnauthorized: false },
   max: 5,
   connectionTimeoutMillis: 10000,
 });
