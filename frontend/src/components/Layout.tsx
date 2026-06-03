@@ -25,7 +25,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { useState, useEffect } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, Outlet } from "react-router-dom";
 import { useChatStore } from "@/store/useChatStore";
 import { useMeetingStore } from "@/store/useMeetingStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -36,7 +36,7 @@ import { useMotionStore } from "@/store/useMotionStore";
 import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
 
 type LayoutProps = {
-  children: ReactNode;
+  children?: ReactNode;
   className?: string;
   sidebar?: ReactNode;
 };
@@ -214,7 +214,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
             className
           )}
         >
-          {children}
+          {children || <Outlet />}
         </main>
       </SidebarInset>
 

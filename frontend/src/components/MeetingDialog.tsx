@@ -56,14 +56,12 @@ export const MeetingDialog: React.FC = () => {
     isMinimized,
     status,
     duration,
-    volumes,
     closeDialog,
     minimizeDialog,
     restoreDialog,
     setRequestAction,
     setStatus,
     setDuration,
-    setVolumes,
     meetingId,
     requestAction,
   } = useMeetingStore();
@@ -101,6 +99,8 @@ export const MeetingDialog: React.FC = () => {
   const timerIntervalRef = useRef<number | undefined>(undefined);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const startTimeRef = useRef<number>(0);
+  // When true, the next recorder.onstop fires in discard mode — no upload, no processing
+  const discardRef = useRef<boolean>(false);
 
   // Queries & Mutations for historical reviews / actions
   const isHistoricalReview = !!meetingId;
@@ -164,7 +164,6 @@ export const MeetingDialog: React.FC = () => {
     if (currentStatus !== "recording" || !activeStream || isPaused) {
       // Symmetric fallback when not recording: flat baseline
       setLocalVolumes([0.05, 0.05, 0.05, 0.05, 0.05]);
-      setVolumes([0.05, 0.05, 0.05, 0.05, 0.05]);
       return;
     }
 
@@ -228,7 +227,10 @@ export const MeetingDialog: React.FC = () => {
         ];
 
         setLocalVolumes(mirrored);
-        setVolumes(mirrored);
+        // NOTE: intentionally NOT writing to Zustand store here.
+        // setVolumes was being called 60fps which caused global re-renders
+        // across all components subscribed to useMeetingStore, making
+        // navigation to other pages (e.g. Tasks) feel frozen/laggy.
         rafId = requestAnimationFrame(updateVolume);
       };
 
@@ -257,6 +259,8 @@ export const MeetingDialog: React.FC = () => {
       togglePause();
     } else if (requestAction === "stop") {
       stopRecording();
+    } else if (requestAction === "discard") {
+      discardRecording();
     }
 
     setRequestAction(null);
@@ -302,10 +306,29 @@ export const MeetingDialog: React.FC = () => {
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
-        const localUrl = URL.createObjectURL(audioBlob);
-        setLocalAudioUrl(localUrl);
-        await handleAudioUpload(audioBlob);
+        const shouldDiscard = discardRef.current;
+        discardRef.current = false; // reset for future sessions
+
+        if (shouldDiscard) {
+          // Wipe buffered audio chunks so the blob is never created
+          audioChunksRef.current = [];
+          cleanup();
+          resetRecorder(true);
+          closeDialog();
+          toast.info("Recording discarded", {
+            description: "No data was uploaded or processed.",
+          });
+        } else {
+          const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+          const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
+          handleAudioUpload(audioBlob, durationSeconds);
+          cleanup();
+          resetRecorder(true);
+          closeDialog();
+          toast.info("Meeting capture ended", {
+            description: "Starting background processing and sync...",
+          });
+        }
       };
 
       startTimeRef.current = Date.now();
@@ -367,7 +390,7 @@ export const MeetingDialog: React.FC = () => {
     toast.success("Quick note flag captured");
   };
 
-  // Stop Capture
+  // Stop Capture — ends the session and triggers upload + transcription
   const stopRecording = () => {
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
@@ -385,26 +408,26 @@ export const MeetingDialog: React.FC = () => {
     setActiveStream(null);
   };
 
-  // Audio Upload S3/Sarvam Pipeline
-  const handleAudioUpload = async (audioBlob: Blob) => {
-    if (duration > 3600) {
+  // Discard Recording — stops without uploading or processing anything
+  const discardRecording = () => {
+    discardRef.current = true;
+    stopRecording();
+  };
+
+  // Audio Upload S3/Sarvam Pipeline in background
+  const handleAudioUpload = async (audioBlob: Blob, durationSeconds: number) => {
+    if (durationSeconds > 3600) {
       toast.warning("Meeting duration exceeds 60 minutes.");
     }
 
-    setStatus("uploading");
-    toast.info("Uploading meeting audio...", {
-      description: "Saving capture session securely to cloud storage.",
-    });
-
     try {
       const response = await api.post("v1/meetings/upload-url", {
-        meetingId: meetingId || null,
+        meetingId: null,
         fileName: `recording-${Date.now()}.webm`,
         contentType: audioBlob.type,
       });
 
       const { uploadUrl, sarvamUploadUrl, sarvamJobId, s3Key, recordingId: recId, provider } = response.data.data;
-      setRecordingId(recId);
 
       // ElevenLabs flow: upload to S3 only
       if (provider === "elevenlabs") {
@@ -414,22 +437,12 @@ export const MeetingDialog: React.FC = () => {
           headers: { "Content-Type": audioBlob.type },
         });
 
-        setStatus("transcribing");
-        toast.info("Decoding conversation map...", {
-          description: "Initiating ElevenLabs speech-to-text transcription.",
-        });
-
-        const transcribeResponse = await api.post("v1/meetings/transcribe", {
+        await api.post("v1/meetings/transcribe", {
           recordingId: recId,
           s3Key,
-          durationSeconds: duration,
+          durationSeconds: durationSeconds,
           contentType: audioBlob.type,
           provider: "elevenlabs",
-        });
-
-        setJobId(transcribeResponse.data.data.jobId);
-        toast.success("Meeting Sync Saved", {
-          description: "Transcription and analysis are running in the background.",
         });
         return;
       }
@@ -455,39 +468,19 @@ export const MeetingDialog: React.FC = () => {
 
         if (sarvamResult.status === "rejected" || (sarvamResult.status === "fulfilled" && !sarvamResult.value.ok)) {
           // Fall back to legacy flow if direct Sarvam upload fails
-          setStatus("transcribing");
-          toast.info("Decoding conversation map...", {
-            description: "Initiating Sarvam AI speech-to-text transcription.",
-          });
-
-          const transcribeResponse = await api.post("v1/meetings/transcribe", {
+          await api.post("v1/meetings/transcribe", {
             recordingId: recId,
             s3Key,
-            durationSeconds: duration,
+            durationSeconds: durationSeconds,
             contentType: audioBlob.type,
-          });
-
-          setJobId(transcribeResponse.data.data.jobId);
-          toast.success("Meeting Sync Saved", {
-            description: "Transcription and analysis are running in the background.",
           });
           return;
         }
 
-        setStatus("transcribing");
-        toast.info("Decoding conversation map...", {
-          description: "Initiating Sarvam AI speech-to-text transcription.",
-        });
-
-        const transcribeResponse = await api.post("v1/meetings/transcribe", {
+        await api.post("v1/meetings/transcribe", {
           recordingId: recId,
           sarvamJobId,
-          durationSeconds: duration,
-        });
-
-        setJobId(transcribeResponse.data.data.jobId);
-        toast.success("Meeting Sync Saved", {
-          description: "Transcription and analysis are running in the background.",
+          durationSeconds: durationSeconds,
         });
       } else {
         // Legacy S3 flow
@@ -501,27 +494,15 @@ export const MeetingDialog: React.FC = () => {
           throw new Error("Failed to upload audio to S3 cloud storage.");
         }
 
-        setStatus("transcribing");
-        toast.info("Decoding conversation map...", {
-          description: "Initiating Sarvam AI speech-to-text transcription.",
-        });
-
-        const transcribeResponse = await api.post("v1/meetings/transcribe", {
+        await api.post("v1/meetings/transcribe", {
           recordingId: recId,
           s3Key,
-          durationSeconds: duration,
+          durationSeconds: durationSeconds,
           contentType: audioBlob.type,
-        });
-
-        setJobId(transcribeResponse.data.data.jobId);
-        toast.success("Meeting Sync Saved", {
-          description: "Transcription and analysis are running in the background.",
         });
       }
     } catch (err: any) {
-      console.error("[MeetingCompanion] Upload Error:", err);
-      setLocalErrorMessage(err.message || "An error occurred during audio upload/transcription.");
-      setStatus("error");
+      console.error("[MeetingCompanion] Background Upload Error:", err);
       toast.error("Failed to process meeting recording", {
         description: err.message || "Please check developer console logs or try again."
       });
@@ -707,11 +688,8 @@ export const MeetingDialog: React.FC = () => {
 
   const handleClose = () => {
     if (currentStatus === "recording") {
-      if (confirm("Stop and discard current recording?")) {
-        cleanup();
-        resetRecorder();
-        closeDialog();
-      }
+      // Closing during an active recording always discards — no upload, no processing
+      discardRecording();
     } else {
       closeDialog();
     }
@@ -937,12 +915,13 @@ export const MeetingDialog: React.FC = () => {
       <audio ref={audioPlayerRef} src={currentAudioUrl || undefined} onEnded={handleAudioEnded} className="hidden" />
 
       {/* ─── Standard Dialog Overlay ─── */}
-      <div
-        className={cn(
-          "fixed inset-0 z-50 flex items-center justify-center transition-all duration-500",
-          isVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        )}
-      >
+      {isDialogOpen && (
+        <div
+          className={cn(
+            "fixed inset-0 z-50 flex items-center justify-center transition-all duration-500",
+            isVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          )}
+        >
         <div
           className={cn(
             "absolute inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm transition-opacity duration-500",
@@ -1205,14 +1184,24 @@ export const MeetingDialog: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="w-full flex justify-center mt-1">
+                      <div className="w-full flex flex-col items-center gap-2 mt-1">
                         {currentStatus === "recording" ? (
-                          <button
-                            onClick={stopRecording}
-                            className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 font-semibold text-[10px] tracking-widest uppercase py-1.5 px-4.5 rounded-full cursor-pointer flex items-center justify-center transition-all active:scale-[0.98] shadow-md shadow-rose-500/5 hover:border-rose-500/40"
-                          >
-                            End Session
-                          </button>
+                          <>
+                            {/* Primary action: save and process the recording */}
+                            <button
+                              onClick={stopRecording}
+                              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 font-semibold text-[10px] tracking-widest uppercase py-1.5 px-4.5 rounded-full cursor-pointer flex items-center justify-center transition-all active:scale-[0.98] shadow-md shadow-rose-500/5 hover:border-rose-500/40"
+                            >
+                              End Session
+                            </button>
+                            {/* Secondary action: discard without uploading */}
+                            <button
+                              onClick={discardRecording}
+                              className="text-[10px] font-medium text-muted-foreground/60 hover:text-rose-400 tracking-wide transition-colors cursor-pointer underline-offset-2 hover:underline"
+                            >
+                              Discard recording
+                            </button>
+                          </>
                         ) : (
                           <div className="flex items-center gap-2 text-muted-foreground font-medium text-[11px] tracking-wide animate-pulse">
                             <Loader2 className="size-3.5 animate-spin text-cyan-500" />
@@ -1464,6 +1453,7 @@ export const MeetingDialog: React.FC = () => {
           </div>
         </motion.div>
       </div>
+      )}
 
       {/* ─── Minimized Draggable Floating Dock ─── */}
       <AnimatePresence>
@@ -1503,7 +1493,7 @@ export const MeetingDialog: React.FC = () => {
               </div>
 
               <div className="h-6 flex items-center justify-center gap-[3px] mt-0.5">
-                {volumes.map((val, idx) => (
+                {localVolumes.map((val, idx) => (
                   <motion.div
                     key={idx}
                     animate={{
@@ -1551,16 +1541,30 @@ export const MeetingDialog: React.FC = () => {
                   </button>
                 )}
                 {currentStatus === "recording" && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRequestAction("stop");
-                    }}
-                    className="size-7 rounded-lg hover:bg-rose-500/10 border border-border/50 flex items-center justify-center text-rose-500 hover:text-rose-600 transition-colors cursor-pointer"
-                    title="Stop & Process"
-                  >
-                    <X className="size-3.5" />
-                  </button>
+                  <>
+                    {/* End session — stops and processes the recording */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRequestAction("stop");
+                      }}
+                      className="size-7 rounded-lg hover:bg-rose-500/10 border border-border/50 flex items-center justify-center text-rose-500 hover:text-rose-600 transition-colors cursor-pointer"
+                      title="End Session & Process"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                    {/* Discard — stops without uploading or processing */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRequestAction("discard");
+                      }}
+                      className="size-7 rounded-lg hover:bg-muted border border-border/50 flex items-center justify-center text-muted-foreground/50 hover:text-rose-400 transition-colors cursor-pointer"
+                      title="Discard recording (no processing)"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={(e) => {

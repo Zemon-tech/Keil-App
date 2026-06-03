@@ -3,7 +3,7 @@ import { catchAsync } from "../utils/catchAsync";
 import { ApiError } from "../utils/ApiError";
 import { ApiResponse } from "../utils/ApiResponse";
 import * as orgTaskService from "../services/org-task.service";
-import { doIncrementalSync } from "../services/google-calendar.service";
+import { doIncrementalSyncWithCooldown } from "../services/google-calendar.service";
 import { createComment, getThreadedComments, hardDeleteComment } from "../services/comment.service";
 import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
@@ -116,7 +116,7 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
     
     // Background fire-and-forget polling sync for Google Calendar.
     // Extremely useful on localhost since watch webhooks cannot be delivered to localhost.
-    doIncrementalSync(reqUserId).catch(() => {});
+    doIncrementalSyncWithCooldown(reqUserId).catch(() => {});
   }
 
   const isPrivateSpace = (req as any).space?.is_private === true;

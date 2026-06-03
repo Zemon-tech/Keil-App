@@ -1056,3 +1056,36 @@ export async function doIncrementalSync(userId: string): Promise<void> {
     lockClient.release();
   }
 }
+
+/**
+ * Throttled version of doIncrementalSync to avoid hitting Google APIs/DB locks
+ * on every polling request from TasksPage mount/updates.
+ */
+export async function doIncrementalSyncWithCooldown(
+  userId: string,
+  cooldownMs: number = 5 * 60 * 1000 // default 5 minutes
+): Promise<void> {
+  try {
+    const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
+    if (!integration) return;
+
+    if (integration.sync_in_progress) {
+      log.debug({ userId }, 'Sync already in progress, skipping cooldown check');
+      return;
+    }
+
+    if (integration.last_successful_sync_at) {
+      const lastSyncTime = new Date(integration.last_successful_sync_at).getTime();
+      if (Date.now() - lastSyncTime < cooldownMs) {
+        log.debug({ userId }, 'Sync cooldown active — skipping incremental sync');
+        return;
+      }
+    }
+
+    // Cooldown passed or no successful sync yet, execute sync
+    await doIncrementalSync(userId);
+  } catch (err) {
+    log.error({ err, userId }, 'Incremental sync with cooldown failed');
+  }
+}
+

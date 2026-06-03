@@ -31,7 +31,7 @@ import { useSpaceMembers } from "../hooks/api/useSpaces";
 const PAGE_SIZE = 20;
 const EMPTY_BLOCKS: any[] = [];
 const EMPTY_TASKS: TaskDTO[] = [];
-const INITIAL_LIMIT = 10000; // Load all tasks within current month without pagination
+const INITIAL_LIMIT = 200; // Load all tasks within current month without pagination
 
 export function TasksPage() {
   const { state } = useSidebar();

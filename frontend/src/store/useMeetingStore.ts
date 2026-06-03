@@ -9,7 +9,7 @@ interface MeetingStore {
   duration: number;
   meetingId: string | null;
   volumes: number[];
-  requestAction: "pause" | "stop" | "resume" | null;
+  requestAction: "pause" | "stop" | "resume" | "discard" | null;
 
   // Actions
   openDialog: (meetingId?: string | null) => void;
@@ -20,7 +20,7 @@ interface MeetingStore {
   setDuration: (duration: number | ((prev: number) => number)) => void;
   setMeetingId: (meetingId: string | null) => void;
   setVolumes: (volumes: number[]) => void;
-  setRequestAction: (action: "pause" | "stop" | "resume" | null) => void;
+  setRequestAction: (action: "pause" | "stop" | "resume" | "discard" | null) => void;
   reset: () => void;
 }
 

@@ -330,7 +330,12 @@ export function AppSidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const { unreadCount } = useNotifications();
 
-  const { isMinimized, restoreDialog, duration, status, isDialogOpen, openDialog } = useMeetingStore();
+  const isMinimized = useMeetingStore((s) => s.isMinimized);
+  const restoreDialog = useMeetingStore((s) => s.restoreDialog);
+  const duration = useMeetingStore((s) => s.duration);
+  const status = useMeetingStore((s) => s.status);
+  const isDialogOpen = useMeetingStore((s) => s.isDialogOpen);
+  const openDialog = useMeetingStore((s) => s.openDialog);
 
   // Global WebSocket listener for background meeting transcription updates
   useEffect(() => {
