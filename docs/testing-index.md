@@ -107,6 +107,65 @@ Base path: `/api/v1/orgs/:orgId/spaces/:spaceId/notes`
 
 ---
 
+<<<<<<< HEAD
+=======
+### `backend/src/routes/__tests__/org-task.routes.test.ts`
+
+Base path: `/api/v1/orgs/:orgId/spaces/:spaceId/tasks`
+
+| # | Description | Method | Route | Assertion |
+|---|---|---|---|---|
+| 1 | RBAC: Admin creation | `POST` | `/` | 201, matches object details |
+| 2 | RBAC: Manager creation | `POST` | `/` | 201, matches object details |
+| 3 | RBAC: Member creation block | `POST` | `/` | 403 Forbidden |
+| 4 | Task CRUD happy paths | `GET`/`PATCH`/`DELETE` | `/`, `/:id` | Lists task, updates fields, soft-deletes, GET by ID returns 404 |
+| 5 | Unassigned Admin status | `PATCH` | `/:id/status` | 200, updates status regardless of assignment |
+| 6 | Unassigned Member status block | `PATCH` | `/:id/status` | 403, blocked if not assigned to the task |
+| 7 | Assigned Member status | `PATCH` | `/:id/status` | 200, allowed after explicit assignment |
+| 8 | Dependency check - incomplete | `PATCH` | `/:id/status` | 400, blocks completion if dependencies are incomplete |
+| 9 | Dependency check - complete | `PATCH` | `/:id/status` | 200, allows completion once dependencies are marked DONE |
+
+---
+
+### `backend/src/routes/__tests__/personal-task.routes.test.ts`
+
+Base path: `/api/v1/personal/tasks`
+
+| # | Description | Method | Route | Assertion |
+|---|---|---|---|---|
+| 1 | Happy path Personal task CRUD | `POST`/`GET`/`PATCH`/`DELETE` | `/`, `/:id` | Correctly creates, lists, updates, reads, and deletes personal task |
+| 2 | Tenancy isolation boundaries | `GET`/`PATCH`/`DELETE` | `/:id` | Blocks User B from reading, updating, or deleting User A's tasks with 404 |
+
+---
+
+### `backend/src/routes/__tests__/org-chat.routes.test.ts`
+
+Base path: `/api/v1/orgs/:orgId/spaces/:spaceId/chat`
+
+| # | Description | Method | Route | Assertion |
+|---|---|---|---|---|
+| 1 | DM creation and reuse | `POST` | `/channels/direct` | 201 for fresh creation, 200 for subsequent requests reusing same channel |
+| 2 | Group channel space filter | `POST` | `/channels/group` | 201 if members in space, 400 if members not part of the active space |
+| 3 | Unread counts indexing | `GET` | `/channels` | Correctly increments `unread_count` for User B on new messages |
+| 4 | Message pagination (beforeId) | `GET` | `/channels/:id/messages` | Paginated message arrays in correct chronological order matching cursor |
+| 5 | Read state marking | `POST` | `/channels/:id/read` | 200, marks channel as read and clears unread count back to 0 |
+
+---
+
+### `backend/src/routes/__tests__/meeting.routes.test.ts`
+
+Base path: `/api/v1/meetings`
+
+| # | Description | Method | Route | Assertion |
+|---|---|---|---|---|
+| 1 | Paginated meeting history | `GET` | `/history` | Returns paginated list of recordings for the user |
+| 2 | Transcript search queries | `GET` | `/search/query` | Filters recordings containing query string in transcript |
+| 3 | Deletion ownership block | `DELETE` | `/recording/:id` | Blocks user B from deleting user A's recordings (403) |
+| 4 | Deletion happy path | `DELETE` | `/recording/:id` | Allows user A to delete their own recording (200) |
+
+---
+
+>>>>>>> 62e5a55 (test: implement unit and integration test suite)
 ### `backend/src/__tests__/socket.test.ts`
 
 | # | Description | Assertion |
@@ -114,6 +173,60 @@ Base path: `/api/v1/orgs/:orgId/spaces/:spaceId/notes`
 | 1 | Connects with a valid auth token | `socket.connected: true` |
 | 2 | Rejects connection with no auth token | `connect_error` with "Authentication error" |
 | 3 | Sends and receives a message in a channel room | `receive_message` event fires with correct `content` and `sender.id` |
+<<<<<<< HEAD
+=======
+| 4 | Broadcasts typing_start & typing_end | Emitting A broadcasts typing status to other room member B, clears on end |
+| 5 | Blocks unauthorized joins | Join / emit calls from unauthorized non-members are blocked from room |
+
+---
+
+### `backend/src/services/__tests__/org-task.service.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | due_date before start_date on create | Throws 400 ApiError |
+| 2 | due_date before start_date on update | Throws 400 ApiError |
+| 3 | Circular dependency detection | Throws 400 circular dependency ApiError |
+| 4 | Assigned status checks for members | Allows admins, blocks unassigned members, allows assigned members |
+
+---
+
+### `backend/src/services/__tests__/personal-task.service.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | due_date before start_date checks | Throws 400 ApiError on create and update |
+| 2 | Ownership checks | Wrong user retrieval returns null; updates return null; deletions return false |
+
+---
+
+### `backend/src/services/__tests__/org-chat.service.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | saveMessage sender read-dot fix | Automatically marks the sender's own `last_read_at` as NOW |
+| 2 | createChannel member validation | Throws 400 if any target user is not a space member |
+| 3 | getChannelMessages pagination | Retrieves items using cursor-based comparison on timestamp/ID |
+
+---
+
+### `backend/src/services/__tests__/meeting.service.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | Deletion owner matching | Returns `true` for recording owner, `false` for other users |
+| 2 | Float duration rounding | Float durations (e.g. 15.6, 42.4) round to nearest integer in job and duration updates |
+
+---
+
+### `backend/src/repositories/__tests__/base.repository.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | Empty payloads skip DB hit | `update` returns matching entity without executing SQL UPDATE statement |
+| 2 | Actual updates hit DB | Executes UPDATE query when fields are provided |
+| 3 | Soft deletion lifecycle | `softDelete` sets `deleted_at`, `findById` normal filters out, `includeDeleted: true` retrieves, `restore` unsets |
+>>>>>>> 62e5a55 (test: implement unit and integration test suite)
 
 ---
 
@@ -150,13 +263,81 @@ Base path: `/api/v1/orgs/:orgId/spaces/:spaceId/notes`
 
 ---
 
+<<<<<<< HEAD
+=======
+### `frontend/src/hooks/__tests__/useSpaceRole.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | `member` role permissions | Blocks task/page creations, allows commenting/assigned status changes |
+| 2 | `manager` role permissions | Allows task and page creations, blocks editing arbitrary pages |
+| 3 | `admin` role permissions | Full commenting, task control, and space member management overlays |
+| 4 | Org Owner overlay | Allows space configuration overlays and invite permissions |
+
+---
+
+### `frontend/src/hooks/__tests__/useTaskPermissions.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | Default permissions for null task | Returns all permission capability flags as false |
+| 2 | Contextual space match | Resolves permissions using the global activeSpace.role when matches |
+| 3 | Out of context task fallback | Resolves using `task.user_space_role` if different org/space is selected |
+| 4 | Role mappings | Correctly maps all 8 permission capabilities for member, manager, and admin |
+
+---
+
+### `frontend/src/hooks/__tests__/useTaskOverdueAutoRefresh.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | Register and clear listeners | Socket events registered on mount, detached on unmount |
+| 2 | Invalidate queries on overdue | Socket `task_overdue_moved` invalidates active task lists |
+| 3 | Invalidate queries on gcal | Socket `gcal_tasks_updated` invalidates active task lists |
+| 4 | Local auto-refresh timer | Interval invalidates active lists every 30s when context is active, clears on unmount |
+
+---
+
+### `frontend/src/lib/__tests__/date-utils.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | normalizeAllDayRangeLocal defaults | End date defaults to start + 1 day when missing or invalid |
+| 2 | clampTimedRange over max | Clamps long timed ranges to maxDurationMinutes (8 hours) |
+| 3 | clampTimedRange zero/negative | Clamps zero or negative durations to 1 minute |
+| 4 | normalizeTimedRange | Resets to default duration if start is after end |
+| 5 | fromExclusiveRange conversion | Inclusive date shift back and clamping bounds |
+
+---
+
+### `frontend/src/lib/__tests__/tiptap-utils.test.ts`
+
+| # | Description | Assertion |
+|---|---|---|
+| 1 | isAllowedUri schema blocks | Blocks javascript: scheme, allows safe URI/URL links |
+| 2 | sanitizeUrl fallback | Fallback output defaults to '#' on disallowed schemes |
+| 3 | formatShortcutKey symbols | Formats Mac symbols (⌘, ⌥) on macOS and full names (Ctrl, Alt) on other OS |
+
+---
+
+>>>>>>> 62e5a55 (test: implement unit and integration test suite)
 ## Coverage Summary
 
 | Area | Files with Tests | Files without Tests |
 |---|---|---|
+<<<<<<< HEAD
 | Backend routes | `health`, `org`, `motion-page` | `activity`, `ai`, `auth`, `integration`, `meeting`, `motion`, `motion-public`, `notification`, `org-activity`, `org-chat`, `org-task`, `personal-task`, `preferences`, `public-task`, `space` (via org), `task-locator`, `user` |
 | Backend socket | `socket` | typing events, disconnect cleanup, invalid room |
 | Backend services/repos | — | all (tested indirectly via routes) |
 | Frontend stores | `useChatStore`, `useMeetingStore`, `useMotionStore` | — |
 | Frontend components | — | all of `src/components/` |
 | Frontend hooks | — | `useSpaceRole`, `useTaskPermissions`, `useTaskOverdueAutoRefresh` |
+=======
+| Backend routes | `health`, `org`, `motion-page`, `org-task`, `personal-task`, `org-chat`, `meeting` | `activity`, `ai`, `auth`, `integration`, `motion`, `motion-public`, `notification`, `org-activity`, `preferences`, `public-task`, `space` (via org), `task-locator`, `user` |
+| Backend socket | `socket` | disconnect cleanup |
+| Backend services/repos | `org-task`, `personal-task`, `org-chat`, `meeting`, `base` | all others (tested indirectly via routes) |
+| Frontend stores | `useChatStore`, `useMeetingStore`, `useMotionStore` | — |
+| Frontend components | — | all of `src/components/` |
+| Frontend hooks | `useSpaceRole`, `useTaskPermissions`, `useTaskOverdueAutoRefresh` | — |
+| Frontend lib/utils | `date-utils`, `tiptap-utils` | `socket`, `tiptap` |
+>>>>>>> 62e5a55 (test: implement unit and integration test suite)
