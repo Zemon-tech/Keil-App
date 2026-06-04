@@ -1,12 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Globe,
   Building2,
@@ -16,10 +14,14 @@ import {
   HelpCircle,
   Info,
   Search,
+  Check,
+  Trash2,
+  ArrowLeft,
+  ChevronDown,
+  Users,
 } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { type Organisation } from "@/hooks/api/useOrganisations";
 import { type Space } from "@/hooks/api/useSpaces";
 import {
   useMotionPage,
@@ -32,6 +34,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +65,6 @@ const MOCK_KEILHQ_USERS: MockUser[] = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Converts a page title to a URL-friendly slug */
 function toSlug(title: string): string {
   return title
     .toLowerCase()
@@ -73,7 +75,6 @@ function toSlug(title: string): string {
     .replace(/^-|-$/g, "") || "untitled";
 }
 
-/** Builds the clean public URL: /motion/page-slug/pageId */
 function buildPublicUrl(pageTitle: string, pageId: string): string {
   return `${window.location.origin}/motion/${toSlug(pageTitle)}/${pageId}`;
 }
@@ -104,6 +105,46 @@ function getAvatarBg(input: string): string {
   return colors[sum % colors.length];
 }
 
+function formatGuestName(input: string): string {
+  const parts = input.split(/[._-]/);
+  return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+}
+
+// ─── SVGs for Brand Logos ─────────────────────────────────────────────────────
+
+function GoogleLogo() {
+  return (
+    <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
+function SlackLogo() {
+  return (
+    <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none">
+      <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523 2.528 2.528 0 0 1-2.522-2.523 2.528 2.528 0 0 1 2.522-2.52h2.52v2.52zM6.302 15.165a2.528 2.528 0 0 1 2.52-2.52h5.043a2.528 2.528 0 0 1 2.522 2.52v5.043a2.528 2.528 0 0 1-2.522 2.52H8.822a2.528 2.528 0 0 1-2.52-2.52v-5.043z" fill="#e01e5a"/>
+      <path d="M8.822 5.043a2.528 2.528 0 0 1-2.52-2.52A2.528 2.528 0 0 1 8.822 0a2.528 2.528 0 0 1 2.52 2.522v2.52h-2.52zM8.822 6.302a2.528 2.528 0 0 1 2.52 2.52v5.043a2.528 2.528 0 0 1-2.52 2.522H3.778a2.528 2.528 0 0 1-2.522-2.522V8.822a2.528 2.528 0 0 1 2.522-2.52h5.043z" fill="#36c5f0"/>
+      <path d="M18.958 8.822a2.528 2.528 0 0 1 2.52-2.52 2.528 2.528 0 0 1 2.522 2.52 2.528 2.528 0 0 1-2.522 2.52h-2.52v-2.52zM17.698 8.822a2.528 2.528 0 0 1-2.52 2.52h-5.043a2.528 2.528 0 0 1-2.522-2.52V3.778a2.528 2.528 0 0 1 2.522-2.522h5.043a2.528 2.528 0 0 1 2.52 2.522v5.044z" fill="#2eb67d"/>
+      <path d="M15.178 18.958a2.528 2.528 0 0 1 2.52 2.52 2.528 2.528 0 0 1-2.52 2.522 2.528 2.528 0 0 1-2.522-2.522v-2.52h2.52zM15.178 17.698a2.528 2.528 0 0 1-2.52-2.52v-5.043a2.528 2.528 0 0 1 2.52-2.522h5.044a2.528 2.528 0 0 1 2.522 2.522v5.043a2.528 2.528 0 0 1-2.522 2.52h-5.044z" fill="#ecb22e"/>
+    </svg>
+  );
+}
+
+function MicrosoftLogo() {
+  return (
+    <svg className="size-3.5 shrink-0" viewBox="0 0 23 23" fill="none">
+      <path d="M0 0h11v11H0z" fill="#f25022"/>
+      <path d="M12 0h11v11H12z" fill="#7fba00"/>
+      <path d="M0 12h11v11H0z" fill="#00a4ef"/>
+      <path d="M12 12h11v11H12z" fill="#ffb900"/>
+    </svg>
+  );
+}
+
 // ─── Browser Page Preview Component ───────────────────────────────────────────
 
 function BrowserPagePreview({
@@ -123,7 +164,7 @@ function BrowserPagePreview({
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 shrink-0" />
         </div>
       </div>
-      
+
       {/* Page preview content */}
       <div className="bg-background text-foreground flex flex-col min-h-[160px]">
         {/* Navigation Mock */}
@@ -137,7 +178,7 @@ function BrowserPagePreview({
             </span>
           </div>
         </div>
-        
+
         {/* Page Cover Mock */}
         <div className="h-14 w-full bg-muted/40 overflow-hidden relative shrink-0">
           {coverImage ? (
@@ -146,7 +187,7 @@ function BrowserPagePreview({
             <div className="w-full h-full bg-gradient-to-r from-blue-500/5 to-indigo-500/5" />
           )}
         </div>
-        
+
         {/* Page Header Mock */}
         <div className="p-3.5 space-y-2 flex-1">
           <h2 className="text-sm font-bold text-foreground truncate">{pageTitle || "Untitled"}</h2>
@@ -160,6 +201,122 @@ function BrowserPagePreview({
   );
 }
 
+// ─── Custom Notion-Style Role Selector Dropdown ───────────────────────────────
+
+interface RolePopoverProps {
+  value: "full" | "edit" | "comment" | "view";
+  onValueChange: (val: "full" | "edit" | "comment" | "view" | "remove") => void;
+  spaceName?: string;
+  isOwner?: boolean;
+}
+
+function RolePopover({ value, onValueChange, spaceName, isOwner }: RolePopoverProps) {
+  const [open, setOpen] = useState(false);
+
+  const getLabel = (val: string) => {
+    if (val === "full") return "Full access";
+    if (val === "edit") return "Can edit";
+    if (val === "comment") return "Can comment";
+    return "Can view";
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto text-xs gap-1 font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors focus:ring-0 focus-visible:ring-0 cursor-pointer pr-1"
+        >
+          {getLabel(value)}
+          <ChevronDown className="size-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        className="w-[260px] p-1 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl"
+      >
+        <div className="flex flex-col text-xs font-sans text-foreground">
+          {/* Current Access */}
+          <div className="px-2.5 py-1.5 text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
+            Current access
+          </div>
+          <div className="px-2.5 pb-2 text-xs font-medium text-foreground flex items-center justify-between">
+            <span>{getLabel(value)}</span>
+            <span className="text-[9px] text-muted-foreground font-normal">
+              {spaceName ? `via space access on ${spaceName}` : "direct access"}
+            </span>
+          </div>
+
+          <div className="h-px bg-border/60 my-1" />
+
+          {/* User Access */}
+          <div className="px-2.5 py-1.5 text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider">
+            User access
+          </div>
+
+          {/* Options */}
+          {[
+            { key: "full", label: "Full access", desc: "Edit, suggest, comment, and share" },
+            { key: "edit", label: "Can edit", desc: "Edit, suggest, and comment", badge: "Plus" },
+            { key: "comment", label: "Can comment", desc: "Suggest and comment" },
+            { key: "view", label: "Can view", desc: "View only" }
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => {
+                onValueChange(opt.key as any);
+                setOpen(false);
+              }}
+              className={cn(
+                "w-full text-left px-2.5 py-2 rounded hover:bg-muted flex items-start gap-2 cursor-pointer transition-colors",
+                value === opt.key && "bg-muted/40 font-semibold"
+              )}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground">{opt.label}</span>
+                  {opt.badge && (
+                    <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[8px] font-extrabold px-1 py-0.5 rounded flex items-center gap-0.5 uppercase tracking-wide">
+                      ↑ {opt.badge}
+                    </span>
+                  )}
+                </div>
+                {opt.desc && (
+                  <div className="text-[9px] text-muted-foreground mt-0.5 leading-normal font-normal break-words">
+                    {opt.desc}
+                  </div>
+                )}
+              </div>
+              {value === opt.key && (
+                <Check className="size-3.5 text-foreground shrink-0 mt-0.5" />
+              )}
+            </button>
+          ))}
+
+          {/* Remove option */}
+          {!isOwner && (
+            <>
+              <div className="h-px bg-border/60 my-1" />
+              <button
+                onClick={() => {
+                  onValueChange("remove");
+                  setOpen(false);
+                }}
+                className="w-full text-left px-2.5 py-2.5 rounded hover:bg-red-500/10 text-red-500 dark:text-red-400 flex items-center gap-2 cursor-pointer transition-colors font-semibold"
+              >
+                <Trash2 className="size-3.5 shrink-0" />
+                <span>Remove access</span>
+              </button>
+            </>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── MotionSharePanel ─────────────────────────────────────────────────────────
 
 export function MotionSharePanel({
@@ -169,16 +326,16 @@ export function MotionSharePanel({
   orgId,
   spaceId,
 }: MotionSharePanelProps & { open: boolean }) {
-  // Fetch detailed page context (covers, titles)
+  // Fetch detailed page context
   const { data: pageDetail } = useMotionPage(orgId, spaceId, open ? pageId : null);
-  
+
   const { data: shares = [], isLoading } = useMotionPageShares(
     orgId,
     spaceId,
     open ? pageId : null
   );
 
-  const { organisations } = useAppContext();
+  const { organisations, spaces } = useAppContext();
   const { user } = useAuth();
 
   const createShare = useCreateMotionPageShare(orgId, spaceId, pageId);
@@ -186,154 +343,256 @@ export function MotionSharePanel({
   const updateShare = useUpdateMotionPageShare(orgId, spaceId, pageId);
 
   const [activeTab, setActiveTab] = useState<"share" | "publish">("share");
+  
+  // Search View states
+  const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedTarget, setSelectedTarget] = useState<{
-    type: "org" | "user";
-    id: string;
-    name: string;
-    email?: string;
-    username?: string;
-  } | null>(null);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+
+  // Contact Import popover states
+  const [importPopoverOpen, setImportPopoverOpen] = useState(false);
+  const [importedSource, setImportedSource] = useState<"Slack" | "Google" | "Microsoft" | "None">("None");
 
   // Invited users local session state list
   const [invitedUsers, setInvitedUsers] = useState<any[]>([]);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const publicShares = shares.filter((s) => s.share_type === "public_link");
   const isPublicEnabled = publicShares.length > 0;
   const publicUrl = buildPublicUrl(pageTitle, pageId);
 
-  // Close suggestions overlay when clicking outside
+  const [orgSpaces, setOrgSpaces] = useState<Record<string, Space[]>>({});
+  const spaceShares = shares.filter((s) => s.share_type === "space" && s.target_org_id && s.target_space_id);
+
+  // Active space object and name
+  const activeSpaceObj = spaces.find((s) => s.id === spaceId);
+  const activeSpaceName = activeSpaceObj?.name || "General";
+
+  // Active space share (toggled via "Everyone in [SpaceName] space")
+  const activeSpaceShare = shares.find(
+    (s) => s.share_type === "space" && s.target_space_id === spaceId
+  );
+  const isSpaceShared = !!activeSpaceShare;
+
+  // Cache all spaces for autocomplete suggestions (across all orgs)
+  const [allSpaces, setAllSpaces] = useState<{ space: Space; orgName: string }[]>([]);
+
   useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
+    const fetchAllSpaces = async () => {
+      const results: { space: Space; orgName: string }[] = [];
+      for (const org of organisations) {
+        try {
+          const res = await api.get<{ data: { spaces: Space[] } }>(`v1/orgs/${org.id}/spaces`);
+          const spacesList = res.data.data.spaces || [];
+          spacesList.forEach((s) => {
+            // Include active space in general list so we can lookup names, but we filter suggestions later
+            results.push({ space: s, orgName: org.name });
+          });
+        } catch (err) {
+          console.error("Failed to load spaces for org", org.id, err);
+        }
+      }
+      setAllSpaces(results);
+    };
+
+    if (open && organisations.length > 0) {
+      fetchAllSpaces();
+    }
+  }, [organisations, open, orgId, spaceId]);
+
+  useEffect(() => {
+    const fetchSharedSpaces = async () => {
+      const sharedOrgIds = shares
+        .filter((s) => s.share_type === "space" && s.target_org_id)
+        .map((s) => s.target_org_id!);
+      
+      const uniqueOrgIds = Array.from(new Set(sharedOrgIds));
+      
+      for (const targetId of uniqueOrgIds) {
+        if (!orgSpaces[targetId]) {
+          try {
+            const res = await api.get<{ data: { spaces: Space[] } }>(`v1/orgs/${targetId}/spaces`);
+            setOrgSpaces((prev) => ({
+              ...prev,
+              [targetId]: res.data.data.spaces || [],
+            }));
+          } catch (err) {
+            console.error("Failed to fetch spaces for org", targetId, err);
+          }
+        }
       }
     };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
 
-  const handleGeneralAccessChange = (val: string) => {
+    if (open && shares.length > 0) {
+      fetchSharedSpaces();
+    }
+  }, [shares, open]);
+
+  const handleGeneralAccessChange = (val: "invited" | "space" | "public") => {
     if (val === "public") {
-      createShare.mutate({ share_type: "public_link", permission: "view" });
-      toast.success("Page sharing set to public link");
-    } else {
+      // Revoke space access if active
+      if (activeSpaceShare) {
+        revokeShare.mutate(activeSpaceShare.id);
+      }
+      // Create public share
+      if (!isPublicEnabled) {
+        createShare.mutate({ share_type: "public_link", permission: "view" });
+        toast.success("Page sharing set to public link");
+      }
+    } else if (val === "space") {
+      // Revoke public links
       publicShares.forEach((s) => revokeShare.mutate(s.id));
+      // Create space share
+      if (!isSpaceShared) {
+        createShare.mutate({
+          share_type: "space",
+          permission: "view_all",
+          target_org_id: orgId,
+          target_space_id: spaceId,
+        });
+        toast.success(`Page shared with everyone in ${activeSpaceName} space`);
+      }
+    } else {
+      // Restricted / invited only
+      publicShares.forEach((s) => revokeShare.mutate(s.id));
+      if (activeSpaceShare) {
+        revokeShare.mutate(activeSpaceShare.id);
+      }
       toast.success("Page sharing restricted to invited people");
     }
   };
 
-  const handleSelectWorkspaceSuggestion = (org: Organisation) => {
-    setSelectedTarget({
-      type: "org",
-      id: org.id,
-      name: org.name,
-    });
-    setSearchQuery(org.name);
-    setShowSuggestions(false);
-  };
+  // Suggestions filter matching logic
+  // Exclude current space of current page from search suggestions since it's managed via General Access
+  const filteredSpaces = allSpaces.filter(
+    ({ space }) =>
+      !(space.org_id === orgId && space.id === spaceId) &&
+      (searchQuery.trim() === "" ||
+        space.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
-  const handleSelectUserSuggestion = (u: MockUser) => {
-    setSelectedTarget({
-      type: "user",
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      username: u.username,
+  const filteredUsers = MOCK_KEILHQ_USERS.filter(
+    (u) =>
+      u.email !== user?.email &&
+      (searchQuery.trim() === "" ||
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Suggestions toggling
+  const toggleSuggestion = (key: string) => {
+    setSelectedSuggestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
     });
-    setSearchQuery(u.name);
-    setShowSuggestions(false);
   };
 
   const handleShareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const input = searchQuery.trim();
-    if (!input) return;
 
-    if (selectedTarget) {
-      if (selectedTarget.type === "org") {
-        // Share with workspace (share with the workspace's first space)
-        try {
-          const res = await api.get<{ data: { spaces: Space[] } }>(`v1/orgs/${selectedTarget.id}/spaces`);
-          const targetSpace = res.data.data.spaces?.[0];
-          if (targetSpace) {
+    if (selectedSuggestions.size > 0) {
+      selectedSuggestions.forEach((itemKey) => {
+        if (itemKey.startsWith("space-")) {
+          const sId = itemKey.replace("space-", "");
+          const matchedSpace = allSpaces.find((s) => s.space.id === sId);
+          if (matchedSpace) {
             createShare.mutate({
               share_type: "space",
               permission: "view_all",
-              target_org_id: selectedTarget.id,
-              target_space_id: targetSpace.id,
+              target_org_id: matchedSpace.space.org_id,
+              target_space_id: matchedSpace.space.id,
             });
-            toast.success(`Shared with workspace "${selectedTarget.name}" successfully`);
-          } else {
-            toast.error(`Workspace "${selectedTarget.name}" has no spaces to share with`);
+            toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
           }
-        } catch {
-          toast.error("Failed to share with workspace");
-        }
-      } else {
-        // Share with individual user
-        const alreadyInvited = invitedUsers.some(u => u.email === selectedTarget.email);
-        if (!alreadyInvited) {
-          setInvitedUsers(prev => [
-            ...prev,
-            {
-              id: selectedTarget.id,
-              name: selectedTarget.name,
-              email: selectedTarget.email!,
-              username: selectedTarget.username!,
-              permission: "view",
-              role: "member",
+        } else if (itemKey.startsWith("user-")) {
+          const uId = itemKey.replace("user-", "");
+          const matchedUser = MOCK_KEILHQ_USERS.find((u) => u.id === uId);
+          if (matchedUser) {
+            const alreadyInvited = invitedUsers.some((u) => u.email === matchedUser.email);
+            if (!alreadyInvited) {
+              setInvitedUsers((prev) => [
+                ...prev,
+                {
+                  id: matchedUser.id,
+                  name: matchedUser.name,
+                  email: matchedUser.email,
+                  username: matchedUser.username,
+                  permission: "view",
+                  role: "member",
+                },
+              ]);
+              toast.success(`Shared with user "${matchedUser.name}" successfully`);
             }
-          ]);
-          toast.success(`Shared with user "${selectedTarget.name}" successfully`);
-        } else {
-          toast.error("User is already invited");
+          }
         }
-      }
+      });
+      setSelectedSuggestions(new Set());
+      setSearchQuery("");
+      setIsSearching(false);
     } else {
-      // Freeform typing fallback
+      const input = searchQuery.trim();
+      if (!input) return;
+
       const isEmail = input.includes("@");
-      const matchedUser = MOCK_KEILHQ_USERS.find(
-        u => u.email.toLowerCase() === input.toLowerCase() || u.username.toLowerCase() === input.toLowerCase()
+      const matchedSpace = allSpaces.find(
+        ({ space }) => space.name.toLowerCase() === input.toLowerCase()
       );
 
-      if (matchedUser) {
-        const alreadyInvited = invitedUsers.some(u => u.email === matchedUser.email);
-        if (!alreadyInvited) {
-          setInvitedUsers(prev => [
-            ...prev,
-            {
-              id: matchedUser.id,
-              name: matchedUser.name,
-              email: matchedUser.email,
-              username: matchedUser.username,
-              permission: "view",
-              role: "member",
-            }
-          ]);
-          toast.success(`Shared with user "${matchedUser.name}" successfully`);
-        } else {
-          toast.error("User is already invited");
-        }
+      if (matchedSpace) {
+        createShare.mutate({
+          share_type: "space",
+          permission: "view_all",
+          target_org_id: matchedSpace.space.org_id,
+          target_space_id: matchedSpace.space.id,
+        });
+        toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
       } else {
-        // Invite as external guest email
-        const newGuest = {
-          id: `invited-${Date.now()}`,
-          name: isEmail ? input.split("@")[0] : input,
-          email: isEmail ? input : `${input}@keilhq.com`,
-          username: isEmail ? input.split("@")[0] : input,
-          permission: "view",
-          role: "member",
-        };
-        setInvitedUsers(prev => [...prev, newGuest]);
-        toast.success(`Shared with user "${newGuest.name}" successfully`);
-      }
-    }
+        const matchedUser = MOCK_KEILHQ_USERS.find(
+          (u) =>
+            u.email.toLowerCase() === input.toLowerCase() ||
+            u.username.toLowerCase() === input.toLowerCase()
+        );
 
-    setSearchQuery("");
-    setSelectedTarget(null);
+        if (matchedUser) {
+          const alreadyInvited = invitedUsers.some((u) => u.email === matchedUser.email);
+          if (!alreadyInvited) {
+            setInvitedUsers((prev) => [
+              ...prev,
+              {
+                id: matchedUser.id,
+                name: matchedUser.name,
+                email: matchedUser.email,
+                username: matchedUser.username,
+                permission: "view",
+                role: "member",
+              },
+            ]);
+            toast.success(`Shared with user "${matchedUser.name}" successfully`);
+          } else {
+            toast.error("User is already invited");
+          }
+        } else {
+          const guestName = isEmail ? formatGuestName(input.split("@")[0]) : formatGuestName(input);
+          const newGuest = {
+            id: `invited-${Date.now()}`,
+            name: guestName,
+            email: isEmail ? input : `${input}@keilhq.com`,
+            username: isEmail ? input.split("@")[0] : input,
+            permission: "view",
+            role: "member",
+          };
+          setInvitedUsers((prev) => [...prev, newGuest]);
+          toast.success(`Shared with user "${newGuest.name}" successfully`);
+        }
+      }
+      setSearchQuery("");
+      setIsSearching(false);
+    }
   };
 
   const handleCopyLink = async () => {
@@ -341,54 +600,56 @@ export function MotionSharePanel({
     toast.success("Link copied to clipboard");
   };
 
-  // Autocomplete Suggestions Matching
-  const filteredOrgs = organisations.filter(
-    (org) =>
-      org.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      org.id !== orgId &&
-      searchQuery.trim() !== ""
-  );
-
-  const filteredUsers = MOCK_KEILHQ_USERS.filter(
-    (u) =>
-      (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchQuery.toLowerCase())) &&
-      u.email !== user?.email &&
-      searchQuery.trim() !== ""
-  );
-
   const currentUserName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "Shivang Kandoi";
   const currentUserEmail = user?.email || "shivang.k006@gmail.com";
 
+  // General Access State Option
+  const generalAccessVal = isPublicEnabled ? "public" : isSpaceShared ? "space" : "invited";
+
   return (
-    <div className="w-[480px] bg-popover border border-border text-popover-foreground rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans transition-colors">
-      {/* Tabs Header */}
-      <div className="px-4 pt-3 flex flex-col shrink-0 bg-popover border-b border-border/40">
-        <div className="flex gap-5 text-sm font-semibold relative">
+    <div className="w-[480px] h-[440px] bg-popover border border-border text-popover-foreground rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans transition-all duration-200">
+      {/* Dynamic Header */}
+      <div className="px-4 py-3.5 flex items-center justify-between shrink-0 bg-popover border-b border-border/40 min-h-[50px]">
+        {isSearching ? (
           <button
-            onClick={() => setActiveTab("share")}
-            className={`pb-2.5 transition-colors relative focus:outline-none cursor-pointer ${
-              activeTab === "share" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
+            onClick={() => {
+              setIsSearching(false);
+              setSearchQuery("");
+              setSelectedSuggestions(new Set());
+            }}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors font-bold cursor-pointer"
           >
+            <ArrowLeft className="size-4 shrink-0" />
             Share
-            {activeTab === "share" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-            )}
           </button>
-          <button
-            onClick={() => setActiveTab("publish")}
-            className={`pb-2.5 transition-colors relative focus:outline-none cursor-pointer ${
-              activeTab === "publish" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Publish
-            {activeTab === "publish" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-            )}
-          </button>
-        </div>
+        ) : (
+          <div className="flex gap-5 text-sm font-semibold relative w-full">
+            <button
+              onClick={() => setActiveTab("share")}
+              className={cn(
+                "pb-1 transition-colors relative focus:outline-none cursor-pointer",
+                activeTab === "share" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Share
+              {activeTab === "share" && (
+                <span className="absolute bottom-[-14px] left-0 right-0 h-0.5 bg-foreground rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("publish")}
+              className={cn(
+                "pb-1 transition-colors relative focus:outline-none cursor-pointer",
+                activeTab === "publish" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Publish
+              {activeTab === "publish" && (
+                <span className="absolute bottom-[-14px] left-0 right-0 h-0.5 bg-foreground rounded-full" />
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -396,88 +657,222 @@ export function MotionSharePanel({
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="p-4 flex-1 flex flex-col min-h-0 space-y-4 bg-popover">
-          {activeTab === "share" ? (
-            <>
-              {/* Autocomplete share invite input */}
-              <div className="relative">
-                <form onSubmit={handleShareSubmit} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Search workspaces or type email/username..."
-                    value={searchQuery}
-                    onFocus={() => setShowSuggestions(true)}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setShowSuggestions(true);
-                      if (selectedTarget && e.target.value !== selectedTarget.name) {
-                        setSelectedTarget(null);
-                      }
-                    }}
-                    className="flex-1 bg-background border border-input rounded-lg px-3 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring transition-colors"
-                  />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold px-4 cursor-pointer"
-                  >
-                    Share
-                  </Button>
-                </form>
+        <div className="p-4 flex-1 flex flex-col min-h-0 bg-popover">
+          {isSearching ? (
+            /* ─── Search View Mode ─── */
+            <div className="space-y-4 flex flex-col flex-1 min-h-0">
+              <form onSubmit={handleShareSubmit} className="flex gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Email or group, separated by commas"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 bg-background border border-input rounded-lg px-3 py-2 text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring transition-colors shadow-inner"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold px-4 cursor-pointer"
+                >
+                  Share
+                </Button>
+              </form>
 
-                {/* Suggestions Overlay Dropdown */}
-                {showSuggestions && searchQuery.trim() !== "" && (filteredOrgs.length > 0 || filteredUsers.length > 0) && (
-                  <div
-                    ref={suggestionsRef}
-                    className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-xl z-50 max-h-[220px] overflow-y-auto p-1 font-sans text-xs"
-                  >
-                    {filteredOrgs.length > 0 && (
-                      <div className="p-1">
-                        <div className="text-[10px] text-muted-foreground font-semibold px-2 py-1 uppercase tracking-wider">Workspaces</div>
-                        {filteredOrgs.map((org) => (
-                          <button
-                            key={org.id}
-                            type="button"
-                            onMouseDown={() => handleSelectWorkspaceSuggestion(org)}
-                            className="w-full text-left px-2 py-1.5 hover:bg-muted rounded-md flex items-center gap-2 cursor-pointer text-popover-foreground transition-colors font-medium"
-                          >
-                            <Building2 className="size-3.5 text-muted-foreground shrink-0" />
-                            <span className="truncate">{org.name}</span>
-                          </button>
-                        ))}
+              {/* Import contacts Section */}
+              <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="relative w-8 h-8 rounded-lg bg-muted flex items-center justify-center border border-border/50 shrink-0">
+                    <div className="flex items-center gap-0.5 -space-x-1">
+                      <div className="z-10 rounded-full border border-background bg-background overflow-hidden p-0.5">
+                        <GoogleLogo />
                       </div>
-                    )}
-                    {filteredUsers.length > 0 && (
-                      <div className="p-1 border-t border-border/30 mt-1">
-                        <div className="text-[10px] text-muted-foreground font-semibold px-2 py-1 uppercase tracking-wider">People</div>
-                        {filteredUsers.map((u) => (
-                          <button
-                            key={u.id}
-                            type="button"
-                            onMouseDown={() => handleSelectUserSuggestion(u)}
-                            className="w-full text-left px-2 py-1.5 hover:bg-muted rounded-md flex items-center gap-2 cursor-pointer text-popover-foreground transition-colors"
+                      <div className="z-20 rounded-full border border-background bg-background overflow-hidden p-0.5">
+                        <SlackLogo />
+                      </div>
+                      <div className="z-30 rounded-full border border-background bg-background overflow-hidden p-0.5">
+                        <MicrosoftLogo />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-xs font-bold text-foreground">Import contacts</span>
+                    <span className="text-[10px] text-muted-foreground leading-normal">
+                      Add contacts from Google, Slack, or Microsoft
+                    </span>
+                  </div>
+                </div>
+
+                <Popover open={importPopoverOpen} onOpenChange={setImportPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto text-xs text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/80 rounded-md px-2.5 py-1.5 font-bold flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      {importedSource === "None" ? "None" : importedSource}
+                      <ChevronDown className="size-3.5 opacity-60" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    sideOffset={6}
+                    className="w-[180px] p-1 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl"
+                  >
+                    <div className="flex flex-col text-xs font-sans">
+                      <div className="px-2.5 py-1.5 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+                        Import from
+                      </div>
+                      {[
+                        { name: "Slack", icon: <SlackLogo /> },
+                        { name: "Google", icon: <GoogleLogo /> },
+                        { name: "Microsoft", icon: <MicrosoftLogo /> }
+                      ].map((item) => (
+                        <button
+                          key={item.name}
+                          onClick={() => {
+                            setImportedSource(item.name as any);
+                            setImportPopoverOpen(false);
+                            toast.success(`Importing contacts from ${item.name} coming soon!`);
+                          }}
+                          className="w-full text-left px-2.5 py-2 hover:bg-muted rounded flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          {item.icon}
+                          <span className="font-semibold text-foreground">{item.name}</span>
+                        </button>
+                      ))}
+                      <div className="h-px bg-border/60 my-1" />
+                      <a
+                        href="https://google.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-2 hover:bg-muted rounded flex items-center gap-1.5 text-muted-foreground hover:text-foreground font-semibold"
+                      >
+                        <HelpCircle className="size-3.5 shrink-0" />
+                        <span>Learn more</span>
+                      </a>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Suggestions Container */}
+              <div className="flex-1 overflow-y-auto min-h-0 pr-0.5 custom-scrollbar space-y-4">
+                <div>
+                  <div className="text-[10px] text-muted-foreground font-bold px-1.5 py-1 uppercase tracking-wider">
+                    Suggested
+                  </div>
+
+                  <div className="mt-1 space-y-1">
+                    {/* Spaces Suggestions */}
+                    {filteredSpaces.map(({ space, orgName }) => {
+                      const itemKey = `space-${space.id}`;
+                      const isSelected = selectedSuggestions.has(itemKey);
+                      return (
+                        <div
+                          key={space.id}
+                          onClick={() => toggleSuggestion(itemKey)}
+                          className="w-full text-left px-2.5 py-2 hover:bg-muted rounded-lg flex items-center justify-between cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-7 h-7 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-md flex items-center justify-center shrink-0">
+                              <Building2 className="size-3.5" />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-semibold text-foreground truncate">{space.name}</span>
+                              <span className="text-[9px] text-muted-foreground truncate">
+                                Space in {orgName}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div
+                            className={cn(
+                              "w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0",
+                              isSelected
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : "border-border"
+                            )}
                           >
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${getAvatarBg(u.email)}`}>
+                            {isSelected && <Check className="size-2.5 stroke-[3.5]" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Users Suggestions */}
+                    {filteredUsers.map((u) => {
+                      const itemKey = `user-${u.id}`;
+                      const isSelected = selectedSuggestions.has(itemKey);
+                      return (
+                        <div
+                          key={u.id}
+                          onClick={() => toggleSuggestion(itemKey)}
+                          className="w-full text-left px-2.5 py-2 hover:bg-muted rounded-lg flex items-center justify-between cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                              getAvatarBg(u.email)
+                            )}>
                               {getInitials(u.name, u.email)}
                             </div>
                             <div className="flex flex-col min-w-0">
-                              <span className="font-semibold truncate text-foreground">{u.name} (@{u.username})</span>
-                              <span className="text-[9px] text-muted-foreground truncate">{u.email}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-foreground truncate">{u.name}</span>
+                                <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider scale-95 shrink-0">
+                                  Guest
+                                </span>
+                              </div>
+                              <span className="text-[9px] text-muted-foreground truncate">
+                                {u.email}
+                              </span>
                             </div>
-                          </button>
-                        ))}
+                          </div>
+
+                          <div
+                            className={cn(
+                              "w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0",
+                              isSelected
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : "border-border"
+                            )}
+                          >
+                            {isSelected && <Check className="size-2.5 stroke-[3.5]" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {filteredSpaces.length === 0 && filteredUsers.length === 0 && (
+                      <div className="text-center py-6 text-xs text-muted-foreground">
+                        No results found
                       </div>
                     )}
                   </div>
-                )}
+                </div>
+              </div>
+            </div>
+          ) : activeTab === "share" ? (
+            /* ─── Share Tab Mode ─── */
+            <>
+              {/* Trigger Input box */}
+              <div
+                onClick={() => setIsSearching(true)}
+                className="bg-background border border-input rounded-lg px-3 py-2 text-xs text-muted-foreground hover:border-muted-foreground/45 transition-colors cursor-text shadow-sm flex items-center"
+              >
+                Search spaces or type email/username...
               </div>
 
-              {/* Listings of Workspaces and Invited Users */}
-              <div className="space-y-3.5 max-h-[190px] overflow-y-auto pr-0.5 custom-scrollbar">
-                {/* Current User Row */}
+              {/* Shared List */}
+              <div className="space-y-3.5 overflow-y-auto pr-0.5 custom-scrollbar flex-1 min-h-0 mt-4">
+                {/* Current User Owner Row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${getAvatarBg(currentUserEmail)}`}>
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
+                      getAvatarBg(currentUserEmail)
+                    )}>
                       {getInitials(currentUserName, currentUserEmail)}
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -487,98 +882,74 @@ export function MotionSharePanel({
                       <span className="text-[10px] text-muted-foreground truncate">{currentUserEmail}</span>
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-muted-foreground pr-2 select-none">Full access</span>
+                  <RolePopover
+                    value="full"
+                    onValueChange={() => {}}
+                    isOwner={true}
+                  />
                 </div>
 
-                {/* Workspaces in which I am added */}
-                {organisations.map((org) => {
-                  const isActive = org.id === orgId;
-                  const orgShare = shares.find((s) => s.target_org_id === org.id);
-                  let accessValue = "none";
-                  if (isActive) {
-                    accessValue = "full";
-                  } else if (orgShare) {
-                    accessValue = orgShare.permission.startsWith("edit_") ? "edit" : "view";
-                  }
+                {/* Shared Spaces */}
+                {spaceShares.map((share) => {
+                  const org = organisations.find((o) => o.id === share.target_org_id);
+                  const spacesList = share.target_org_id ? orgSpaces[share.target_org_id] : [];
+                  const space = spacesList?.find((s) => s.id === share.target_space_id);
 
-                  const handleOrgAccessChange = async (val: string) => {
-                    if (isActive) return;
+                  const spaceName = space?.name || "General";
+                  const orgName = org?.name || "Workspace";
+                  const accessValue = share.permission.startsWith("edit_") ? "edit" : "view";
 
-                    if (val === "none" || val === "remove") {
-                      if (orgShare) {
-                        revokeShare.mutate(orgShare.id);
-                        toast.success(`Removed workspace "${org.name}" access`);
-                      }
+                  const handleAccessChange = (val: string) => {
+                    if (val === "remove") {
+                      revokeShare.mutate(share.id);
+                      toast.success(`Removed space "${spaceName}" access`);
                     } else {
                       const permission = (val === "edit" ? "edit_all" : "view_all") as MotionPermission;
-                      if (orgShare) {
-                        updateShare.mutate({ shareId: orgShare.id, permission });
-                        toast.success(`Updated workspace "${org.name}" access to ${val === "edit" ? "edit" : "view"}`);
-                      } else {
-                        try {
-                          const res = await api.get<{ data: { spaces: Space[] } }>(`v1/orgs/${org.id}/spaces`);
-                          const targetSpace = res.data.data.spaces?.[0];
-                          if (targetSpace) {
-                            createShare.mutate({
-                              share_type: "space",
-                              permission,
-                              target_org_id: org.id,
-                              target_space_id: targetSpace.id,
-                            });
-                            toast.success(`Shared with workspace "${org.name}" successfully`);
-                          } else {
-                            toast.error(`Workspace "${org.name}" has no spaces to share with`);
-                          }
-                        } catch {
-                          toast.error("Failed to share with workspace");
-                        }
-                      }
+                      updateShare.mutate({ shareId: share.id, permission });
+                      toast.success(`Updated space "${spaceName}" access to ${val}`);
                     }
                   };
 
                   return (
-                    <div key={org.id} className="flex items-center justify-between">
+                    <div key={share.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${getAvatarBg(org.name)}`}>
-                          {getInitials(org.name, "")}
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
+                          getAvatarBg(spaceName)
+                        )}>
+                          {getInitials(spaceName, "")}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-semibold text-foreground truncate">{org.name}</span>
+                          <span className="text-xs font-semibold text-foreground truncate">{spaceName}</span>
                           <span className="text-[10px] text-muted-foreground truncate">
-                            {isActive ? "Active workspace" : "Workspace"}
+                            Space in {orgName}
                           </span>
                         </div>
                       </div>
 
-                      {isActive ? (
-                        <span className="text-xs font-medium text-muted-foreground pr-2 select-none">Full access</span>
-                      ) : (
-                        <Select value={accessValue} onValueChange={handleOrgAccessChange}>
-                          <SelectTrigger className="border-none bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground px-2.5 py-1.5 h-auto text-xs gap-1 font-semibold transition-all cursor-pointer focus:ring-0 focus:ring-offset-0 focus-visible:outline-none">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover border-border text-popover-foreground text-xs">
-                            <SelectItem value="none">No access</SelectItem>
-                            <SelectItem value="view">Can view</SelectItem>
-                            <SelectItem value="edit">Can edit</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
+                      <RolePopover
+                        value={accessValue}
+                        onValueChange={handleAccessChange as any}
+                        spaceName={spaceName}
+                      />
                     </div>
                   );
                 })}
 
-                {/* Invited Users list */}
+                {/* Invited Users (Guests) */}
                 {invitedUsers.map((userItem) => (
                   <div key={userItem.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${getAvatarBg(userItem.email)}`}>
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
+                        getAvatarBg(userItem.email)
+                      )}>
                         {getInitials(userItem.name, userItem.email)}
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
                           {userItem.name}
-                          <span className="bg-amber-500/10 text-amber-500 border border-amber-500/25 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide">
+                          <span className="bg-amber-500/10 text-amber-500 border border-amber-500/25 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide shrink-0">
                             Guest
                           </span>
                         </span>
@@ -586,60 +957,141 @@ export function MotionSharePanel({
                       </div>
                     </div>
 
-                    <Select
+                    <RolePopover
                       value={userItem.permission}
                       onValueChange={(val) => {
                         if (val === "remove") {
-                          setInvitedUsers(prev => prev.filter(u => u.id !== userItem.id));
+                          setInvitedUsers((prev) => prev.filter((u) => u.id !== userItem.id));
                           toast.success(`Removed user "${userItem.name}" access`);
                         } else {
-                          setInvitedUsers(prev => prev.map(u => u.id === userItem.id ? { ...u, permission: val } : u));
+                          setInvitedUsers((prev) =>
+                            prev.map((u) => (u.id === userItem.id ? { ...u, permission: val } : u))
+                          );
                           toast.success(`Updated user "${userItem.name}" access to ${val}`);
                         }
                       }}
-                    >
-                      <SelectTrigger className="border-none bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground px-2.5 py-1.5 h-auto text-xs gap-1 font-semibold transition-all cursor-pointer focus:ring-0 focus:ring-offset-0 focus-visible:outline-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border-border text-popover-foreground text-xs">
-                        <SelectItem value="view">Can view</SelectItem>
-                        <SelectItem value="edit">Can edit</SelectItem>
-                        <SelectItem value="remove" className="text-red-400 focus:text-red-400">Remove access</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                 ))}
               </div>
 
-              {/* General Access */}
-              <div className="space-y-2 pt-2 border-t border-border/80 bg-popover">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider pl-0.5">General access</span>
-                <div className="flex items-center gap-3.5">
-                  <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border/40">
-                    {isPublicEnabled ? <Globe className="size-4" /> : <Lock className="size-4" />}
+              {/* General Access Section */}
+              <div className="space-y-2 pt-2.5 border-t border-border/80 bg-popover mt-4">
+                <span className="text-[9.5px] font-bold text-muted-foreground uppercase tracking-wider pl-0.5">
+                  General access
+                </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0 border border-border/40">
+                      {generalAccessVal === "public" ? (
+                        <Globe className="size-4 text-foreground" />
+                      ) : generalAccessVal === "space" ? (
+                        <Users className="size-4 text-foreground" />
+                      ) : (
+                        <Lock className="size-4 text-foreground" />
+                      )}
+                    </div>
+
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-semibold text-foreground">
+                        {generalAccessVal === "public"
+                          ? "Anyone on the web with link"
+                          : generalAccessVal === "space"
+                          ? `Everyone in ${activeSpaceName} space`
+                          : "Only people invited"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {generalAccessVal === "public"
+                          ? "Anyone with the link can view"
+                          : generalAccessVal === "space"
+                          ? "Members of this space can access"
+                          : "Only invited members have access"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-col min-w-0">
-                    <Select
-                      value={isPublicEnabled ? "public" : "invited"}
-                      onValueChange={handleGeneralAccessChange}
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors rounded-md pr-1 font-bold flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <ChevronDown className="size-3.5 opacity-60" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      sideOffset={6}
+                      className="w-[280px] p-1 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl"
                     >
-                      <SelectTrigger className="border-none p-0 bg-transparent hover:bg-muted/40 text-foreground h-auto text-xs gap-1 font-semibold transition-all cursor-pointer focus:ring-0 focus:ring-offset-0 focus-visible:outline-none max-w-fit">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border-border text-popover-foreground text-xs">
-                        <SelectItem value="invited">Only people invited</SelectItem>
-                        <SelectItem value="public">Anyone with the link</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <span className="text-[10px] text-muted-foreground mt-0.5">
-                      {isPublicEnabled ? "Anyone on the internet with this link can view" : "Only people added can open with this link"}
-                    </span>
-                  </div>
+                      <div className="flex flex-col text-xs font-sans">
+                        <button
+                          onClick={() => handleGeneralAccessChange("invited")}
+                          className={cn(
+                            "w-full text-left px-2.5 py-2.5 hover:bg-muted rounded flex items-center gap-3 cursor-pointer transition-colors",
+                            generalAccessVal === "invited" && "bg-muted/40 font-semibold"
+                          )}
+                        >
+                          <Lock className="size-4 text-muted-foreground shrink-0" />
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-foreground">Only people invited</span>
+                            <span className="text-[9px] text-muted-foreground font-normal mt-0.5">
+                              Restrict access to explicit invitations
+                            </span>
+                          </div>
+                          {generalAccessVal === "invited" && (
+                            <Check className="size-3.5 text-foreground shrink-0 ml-auto" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => handleGeneralAccessChange("space")}
+                          className={cn(
+                            "w-full text-left px-2.5 py-2.5 hover:bg-muted rounded flex items-center gap-3 cursor-pointer transition-colors",
+                            generalAccessVal === "space" && "bg-muted/40 font-semibold"
+                          )}
+                        >
+                          <Users className="size-4 text-muted-foreground shrink-0" />
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-foreground">
+                              Everyone in {activeSpaceName} space
+                            </span>
+                            <span className="text-[9px] text-muted-foreground font-normal mt-0.5">
+                              Allow members of {activeSpaceName} to access
+                            </span>
+                          </div>
+                          {generalAccessVal === "space" && (
+                            <Check className="size-3.5 text-foreground shrink-0 ml-auto" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => handleGeneralAccessChange("public")}
+                          className={cn(
+                            "w-full text-left px-2.5 py-2.5 hover:bg-muted rounded flex items-center gap-3 cursor-pointer transition-colors",
+                            generalAccessVal === "public" && "bg-muted/40 font-semibold"
+                          )}
+                        >
+                          <Globe className="size-4 text-muted-foreground shrink-0" />
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-foreground">Anyone on the web with link</span>
+                            <span className="text-[9px] text-muted-foreground font-normal mt-0.5">
+                              Publish to web so anyone can view
+                            </span>
+                          </div>
+                          {generalAccessVal === "public" && (
+                            <Check className="size-3.5 text-foreground shrink-0 ml-auto" />
+                          )}
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="pt-3 border-t border-border/80 flex items-center justify-between shrink-0 bg-popover">
+              <div className="pt-3 border-t border-border/80 flex items-center justify-between shrink-0 bg-popover mt-4">
                 <a
                   href="https://google.com"
                   target="_blank"
@@ -659,9 +1111,9 @@ export function MotionSharePanel({
               </div>
             </>
           ) : (
+            /* ─── Publish Tab Mode ─── */
             <>
-              {/* Publish to Web Tab (Redesigned like Notion Publish) */}
-              <div className="flex flex-col items-center text-center space-y-4 pt-1 flex-1">
+              <div className="flex flex-col items-center text-center space-y-4 pt-1 flex-1 overflow-y-auto pr-0.5 custom-scrollbar min-h-0">
                 <div>
                   <h3 className="text-sm font-bold text-foreground">Publish to web</h3>
                   <p className="text-[10.5px] text-muted-foreground mt-0.5 flex items-center justify-center gap-1">
@@ -682,11 +1134,12 @@ export function MotionSharePanel({
                 <div className="w-[380px] space-y-3">
                   <Button
                     onClick={() => handleGeneralAccessChange(isPublicEnabled ? "invited" : "public")}
-                    className={`w-full py-2 h-9 rounded-lg font-semibold text-xs cursor-pointer shadow-sm transition-all ${
+                    className={cn(
+                      "w-full py-2 h-9 rounded-lg font-semibold text-xs cursor-pointer shadow-sm transition-all",
                       isPublicEnabled
                         ? "bg-muted border border-border text-foreground hover:bg-muted/80"
                         : "bg-blue-600 hover:bg-blue-700 text-white"
-                    }`}
+                    )}
                   >
                     {createShare.isPending || revokeShare.isPending ? (
                       <Loader2 className="size-3.5 animate-spin mx-auto text-current" />
