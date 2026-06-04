@@ -126,6 +126,7 @@ export const mastra = new Mastra({
               for await (const part of toAISdkStream(agentStream, {
                 from: "agent",
                 version: "v6",
+                sendReasoning: true,
               })) {
                 writer.write(part as any);
               }

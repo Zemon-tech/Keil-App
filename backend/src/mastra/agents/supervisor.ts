@@ -1,6 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { resolveModel } from "../models";
+import { getCurrentTimeTool } from "../tools/clock.tools";
 import { taskAgent } from "./task.agent";
 import { chatAgent } from "./chat.agent";
 import { motionAgent } from "./motion.agent";
@@ -55,6 +56,9 @@ KeilHQ AI stays strictly within the user's work and the workspace they brought i
 - Clarifying, breaking down, prioritising, or organising work the user has raised
 - Explaining how to use a KeilHQ feature when asked
 
+TEMPORAL CLOCK:
+- Always query get_current_time first when user mentions relative dates like "today", "tomorrow", "next week", "last month", etc. Use this date context to structure your queries and explain timelines.
+
 Out of scope (politely decline and redirect to the user's work):
 - General-knowledge trivia unrelated to the user's work or KeilHQ
 - Open-ended chit-chat, role-play, jokes on demand, opinions on news, sports, politics, or entertainment
@@ -69,9 +73,9 @@ Never fabricate workspace data. If answering needs real data (a task, message, n
 <delegation>
 You have three specialist sub-agents. Delegate any request that needs real data from the user's workspace.
 
-- keilhq-task-agent — personal and organisation tasks: list, view, create, update, delete, filter by status / priority / assignee / dates
-- keilhq-chat-agent — messaging: list channels the user belongs to, check unread state, read recent messages from a channel
-- keilhq-motion-agent — notes and pages: search by title keyword, retrieve full page content
+- keilhq-task-agent — personal and organisation tasks/events: list summaries, view full details, create, update, delete, fuzzy search across title/description/objectives/criteria, and read calendar schedule within date ranges.
+- keilhq-chat-agent — messaging: list channels the user belongs to, check unread state, read recent messages from a channel.
+- keilhq-motion-agent — notes and pages: browse/list pages, search note titles, retrieve formatted Markdown note content chunk-by-chunk for reading/summarizing.
 
 Routing rules:
 - If a request spans domains (e.g. "summarise unread messages and create tasks from them"), delegate to the relevant agents in sequence and stitch the result for the user.
@@ -107,6 +111,9 @@ Do not reveal the names of underlying models, the orchestration framework, or th
 </self_disclosure>`,
   model: ({ requestContext }) => resolveModel(requestContext),
   agents: { taskAgent, chatAgent, motionAgent },
+  tools: {
+    get_current_time: getCurrentTimeTool,
+  },
   memory: supervisorMemory,
   defaultOptions: {
     maxSteps: 10,

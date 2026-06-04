@@ -17,7 +17,7 @@ import {
   createContext,
   memo,
   useCallback,
-  use,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -36,8 +36,8 @@ interface ReasoningContextValue {
 
 const ReasoningContext = createContext<ReasoningContextValue | null>(null);
 
-const useReasoning = () => {
-  const context = use(ReasoningContext);
+export const useReasoning = () => {
+  const context = useContext(ReasoningContext);
   if (!context) {
     throw new Error("Reasoning components must be used within Reasoning");
   }

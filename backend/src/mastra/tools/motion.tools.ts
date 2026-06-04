@@ -68,14 +68,94 @@ export const searchMotionPagesTool = createTool({
   },
 });
 
+// ─── Tool: list_motion_pages ──────────────────────────────────────────────────
+
+export const listMotionPagesTool = createTool({
+  id: "list_motion_pages",
+  description: "List all notes and document pages inside the current space. Returns only IDs and titles (lite payload). Useful when the user wants to browse their notes without fetching massive contents.",
+  inputSchema: z.object({}),
+  execute: async (_inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    const orgId = context?.requestContext?.get("orgId") as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
+
+    if (!userId || !orgId || !spaceId)
+      return { error: "Missing org or space context." };
+
+    const member = await isSpaceMember(userId, orgId, spaceId);
+    if (!member)
+      return { error: "You are not a member of this space." };
+
+    const result = await pool.query(
+      `SELECT id, title, parent_id, updated_at
+       FROM public.motion_pages
+       WHERE org_id = $1
+         AND space_id = $2
+         AND deleted_at IS NULL
+       ORDER BY parent_id NULLS FIRST, position ASC, created_at ASC`,
+      [orgId, spaceId]
+    );
+
+    return {
+      pages: result.rows,
+      count: result.rows.length,
+    };
+  },
+});
+
+// Helper to recursively parse Tiptap JSON node structure into Markdown format
+function tiptapToMarkdown(node: any): string {
+  if (!node) return "";
+  
+  if (node.type === "text") {
+    return node.text || "";
+  }
+
+  const childrenText = (node.content || [])
+    .map((child: any) => tiptapToMarkdown(child))
+    .join("");
+
+  switch (node.type) {
+    case "paragraph":
+      return childrenText ? `${childrenText}\n\n` : "\n";
+    case "heading": {
+      const level = node.attrs?.level || 1;
+      return `${"#".repeat(level)} ${childrenText}\n\n`;
+    }
+    case "bulletList":
+      return `${childrenText}`;
+    case "orderedList":
+      return `${childrenText}`;
+    case "listItem":
+      return `- ${childrenText}\n`;
+    case "taskList":
+      return `${childrenText}`;
+    case "taskItem": {
+      const checked = node.attrs?.checked ? "[x]" : "[ ]";
+      return `- ${checked} ${childrenText}\n`;
+    }
+    case "blockquote":
+      return `> ${childrenText.trim().replace(/\n/g, "\n> ")}\n\n`;
+    case "codeBlock":
+      return `\`\`\`${node.attrs?.language || ""}\n${childrenText}\n\`\`\`\n\n`;
+    case "hardBreak":
+      return "\n";
+    case "horizontalRule":
+      return "---\n\n";
+    default:
+      return childrenText;
+  }
+}
+
 // ─── Tool: get_motion_page ────────────────────────────────────────────────────
 
 export const getMotionPageTool = createTool({
   id: "get_motion_page",
   description:
-    "Retrieve the full content of a specific note/page by its ID. The user must be a member of the space.",
+    "Retrieve the content of a specific note/page by its ID in Markdown format. Supports character offset chunking for large documents.",
   inputSchema: z.object({
     pageId: z.string().uuid().describe("The page's UUID"),
+    offset: z.number().int().min(0).optional().default(0).describe("Character offset for reading large documents in chunks (default 0)"),
   }),
   execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
@@ -98,6 +178,33 @@ export const getMotionPageTool = createTool({
     if (!page)
       return { error: "Page not found or you do not have access to it." };
 
-    return { page };
+    let markdown = "";
+    if (page.content) {
+      markdown = tiptapToMarkdown(page.content);
+    }
+
+    const offset = inputData.offset || 0;
+    const limit = 20000; // 20k characters limit per fetch
+    const totalLength = markdown.length;
+    const chunk = markdown.substring(offset, offset + limit);
+    const hasMore = offset + limit < totalLength;
+
+    return {
+      page: {
+        id: page.id,
+        title: page.title,
+        updatedAt: page.updated_at,
+        icon: page.icon,
+        coverImage: page.cover_image,
+      },
+      content: chunk,
+      pagination: {
+        offset,
+        chunkLength: chunk.length,
+        totalLength,
+        hasMore,
+        nextOffset: hasMore ? offset + limit : null
+      }
+    };
   },
 });
