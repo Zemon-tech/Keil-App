@@ -56,9 +56,9 @@ const runMigrations = async () => {
                 console.log(`🎉 [Migrations]: Successfully applied: ${file}`);
             } catch (err: any) {
                 await client.query("ROLLBACK");
-                const isDuplicate = err.message.includes("already exists") || 
-                                    err.message.includes("already a member") ||
-                                    err.message.includes("already exists, skipping");
+                const isDuplicate = err.message.includes("already exists") ||
+                    err.message.includes("already a member") ||
+                    err.message.includes("already exists, skipping");
                 if (isDuplicate) {
                     console.log(`⚠️ [Migrations]: ${file} contains database entities that already exist. Marking as applied.`);
                     await pool.query(

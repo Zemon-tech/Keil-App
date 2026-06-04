@@ -13,6 +13,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { integrationKeys } from "@/hooks/api/useGoogleCalendar";
+import { gitHubKeys } from "@/hooks/api/useGitHub";
 import api from "@/lib/api";
 
 import type { AnyStatus } from "../types/task";
@@ -92,6 +93,16 @@ export function TasksPage() {
       setSearchParams({}, { replace: true });
     } else if (gcal === "error") {
       toast.error("Failed to connect Google Calendar. Please try again.");
+      setSearchParams({}, { replace: true });
+    }
+
+    const github = searchParams.get("github");
+    if (github === "connected") {
+      toast.success("GitHub connected successfully");
+      queryClient.invalidateQueries({ queryKey: gitHubKeys.status });
+      setSearchParams({}, { replace: true });
+    } else if (github === "error") {
+      toast.error("Failed to connect GitHub. Please try again.");
       setSearchParams({}, { replace: true });
     }
     // Run once on mount only — intentionally omitting deps

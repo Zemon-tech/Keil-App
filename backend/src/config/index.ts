@@ -16,6 +16,10 @@ export const config = {
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || "",
     googleOAuthStateSecret: process.env.GOOGLE_OAUTH_STATE_SECRET || "",
+    // GitHub Integration OAuth
+    githubClientId: process.env.GITHUB_CLIENT_ID || "",
+    githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+    githubRedirectUri: process.env.GITHUB_REDIRECT_URI || "",
     frontendUrl: process.env.FRONTEND_URL,
     // Backend public URL — used to construct the Google Calendar webhook address
     // Must be publicly reachable by Google (e.g. https://api.yourdomain.com)

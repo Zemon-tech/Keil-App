@@ -12,6 +12,10 @@ import {
   registerWatch,
   doIncrementalSync,
 } from '../services/google-calendar.service';
+import {
+  getGitHubAuthUrl,
+  handleGitHubCallback,
+} from '../services/github.service';
 import { createServiceLogger } from "../lib/logger";
 
 const log = createServiceLogger("gcal-integration");
@@ -217,3 +221,84 @@ export const handleGoogleWebhook = async (req: Request, res: Response): Promise<
     log.error({ err }, "Webhook handler error");
   }
 };
+
+// ─── GitHub Integration Handlers ──────────────────────────────────────────────
+
+/**
+ * GET /api/v1/integrations/github/connect  (protected)
+ * Returns the GitHub OAuth consent URL for the current user.
+ */
+export const getGitHubConnectUrl = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new ApiError(401, 'Unauthorized');
+
+  if (!config.githubClientId || !config.githubClientSecret) {
+    throw new ApiError(500, 'GitHub integration is not configured on this server');
+  }
+
+  const url = getGitHubAuthUrl(userId);
+  res.json(new ApiResponse(200, { url }, 'GitHub Auth URL generated'));
+});
+
+/**
+ * GET /api/v1/integrations/github/callback  (public — GitHub redirects here)
+ * Exchanges the auth code for GitHub access token and saves it.
+ * Redirects back to the frontend with ?github=connected or ?github=error.
+ */
+export const handleGitHubCallbackRoute = async (req: Request, res: Response): Promise<void> => {
+  const { code, state, error } = req.query;
+
+  if (error || !code || !state) {
+    res.redirect(`${config.frontendUrl}/tasks?github=error`);
+    return;
+  }
+
+  try {
+    await handleGitHubCallback(code as string, state as string);
+    res.redirect(`${config.frontendUrl}/tasks?github=connected`);
+  } catch (err) {
+    log.error({ err }, "GitHub OAuth callback error");
+    res.redirect(`${config.frontendUrl}/tasks?github=error`);
+  }
+};
+
+/**
+ * GET /api/v1/integrations/github/status  (protected)
+ * Returns whether the current user has connected GitHub.
+ */
+export const getGitHubStatus = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new ApiError(401, 'Unauthorized');
+
+  const integration = await integrationRepository.findByUserAndProvider(userId, 'github');
+
+  if (!integration) {
+    res.json(new ApiResponse(200, { connected: false }, 'Not connected'));
+    return;
+  }
+
+  res.json(
+    new ApiResponse(
+      200,
+      {
+        connected: true,
+        connected_at: integration.created_at,
+      },
+      'Connected'
+    )
+  );
+});
+
+/**
+ * DELETE /api/v1/integrations/github  (protected)
+ * Disconnects GitHub by removing stored tokens.
+ */
+export const disconnectGitHub = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new ApiError(401, 'Unauthorized');
+
+  await integrationRepository.delete(userId, 'github');
+
+  res.json(new ApiResponse(200, null, 'GitHub disconnected'));
+});
+

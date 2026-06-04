@@ -11,6 +11,7 @@ import { taskAgent } from "./agents/task.agent";
 import { chatAgent } from "./agents/chat.agent";
 import { motionAgent } from "./agents/motion.agent";
 import { schedulerAgent } from "./agents/scheduler.agent";
+import { githubAgent } from "./agents/github.agent";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 // Mastra storage needs a direct/session connection (not transaction pooler)
@@ -62,6 +63,7 @@ export const mastra = new Mastra({
     "keilhq-chat-agent": chatAgent,
     "keilhq-motion-agent": motionAgent,
     "keilhq-scheduler-agent": schedulerAgent,
+    "keilhq-github-agent": githubAgent,
   },
   storage,
   server: {

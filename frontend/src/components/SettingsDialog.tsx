@@ -89,13 +89,18 @@ import {
   type Space,
 } from "@/hooks/api/useSpaces";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
-import { Loader2, Copy, Mic } from "lucide-react";
+import { Loader2, Copy, Mic, Github } from "lucide-react";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   useGoogleCalendarStatus,
   useConnectGoogleCalendar,
   useDisconnectGoogleCalendar,
 } from "@/hooks/api/useGoogleCalendar";
+import {
+  useGitHubStatus,
+  useConnectGitHub,
+  useDisconnectGitHub,
+} from "@/hooks/api/useGitHub";
 import { toast } from "sonner";
 import { usePreferences, useUpdateSttProvider, type SttProvider } from "@/hooks/api/usePreferences";
 
@@ -2176,9 +2181,13 @@ function ConnectorsTab() {
   const connectGcal = useConnectGoogleCalendar();
   const disconnectGcal = useDisconnectGoogleCalendar();
 
+  const { data: githubStatus, isLoading: githubLoading } =
+    useGitHubStatus();
+  const connectGithub = useConnectGitHub();
+  const disconnectGithub = useDisconnectGitHub();
+
   // Static placeholder connectors (not yet implemented)
   const staticConnectors = [
-    { name: "GitHub", description: "Connect your repositories" },
     { name: "Slack", description: "Send notifications to Slack" },
     { name: "Jira", description: "Sync tasks with Jira" },
     { name: "Figma", description: "View design files inline" },
@@ -2248,6 +2257,66 @@ function ConnectorsTab() {
               onClick={connectGcal}
             >
               {gcalLoading ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                "Connect"
+              )}
+            </Button>
+          )}
+        </div>
+
+        {/* GitHub — live integration */}
+        <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-lg bg-muted flex items-center justify-center">
+              <Github className="size-4 text-muted-foreground" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground">
+                  GitHub
+                </p>
+                {!githubLoading && (
+                  <span
+                    className={cn(
+                      "inline-block size-2 rounded-full",
+                      githubStatus?.connected
+                        ? "bg-emerald-500"
+                        : "bg-muted-foreground/40",
+                    )}
+                  />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {githubStatus?.connected
+                  ? "Repository issues and PRs connected"
+                  : "Link your GitHub account to read issues & PRs"}
+              </p>
+            </div>
+          </div>
+          {githubStatus?.connected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs rounded-lg"
+              disabled={disconnectGithub.isPending}
+              onClick={() => disconnectGithub.mutate()}
+            >
+              {disconnectGithub.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                "Disconnect"
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              className="text-xs rounded-lg"
+              disabled={githubLoading}
+              onClick={connectGithub}
+            >
+              {githubLoading ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (
                 "Connect"

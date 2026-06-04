@@ -6,6 +6,10 @@ import {
   getGoogleStatus,
   disconnectGoogle,
   handleGoogleWebhook,
+  getGitHubConnectUrl,
+  handleGitHubCallbackRoute,
+  getGitHubStatus,
+  disconnectGitHub,
 } from '../controllers/integration.controller';
 
 const router = Router();
@@ -26,5 +30,11 @@ router.get('/google/status', protect, getGoogleStatus);
 
 // Disconnect Google Calendar
 router.delete('/google', protect, disconnectGoogle);
+
+// GitHub Integration
+router.get('/github/connect', protect, getGitHubConnectUrl);
+router.get('/github/callback', handleGitHubCallbackRoute);
+router.get('/github/status', protect, getGitHubStatus);
+router.delete('/github', protect, disconnectGitHub);
 
 export default router;
