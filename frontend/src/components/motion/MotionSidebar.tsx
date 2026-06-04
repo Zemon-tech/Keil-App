@@ -23,6 +23,38 @@ import {
   SquarePen,
   Mic,
   AlertCircle,
+  // Custom icons support
+  Plane,
+  Heart,
+  Star,
+  Cloud,
+  Moon,
+  Sun,
+  Bell,
+  Camera,
+  Gift,
+  Coffee,
+  Music,
+  Code,
+  Terminal,
+  Database,
+  Shield,
+  Layout,
+  Settings,
+  User,
+  Users,
+  Mail,
+  Map,
+  Flag,
+  Bookmark,
+  Calendar,
+  CheckCircle,
+  HelpCircle,
+  Info,
+  AlertTriangle,
+  XCircle,
+  Clock,
+  Zap,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -30,7 +62,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
-import { useMotionStore, type MotionPageRecord } from "@/store/useMotionStore";
+import { useMotionStore } from "@/store/useMotionStore";
+import { useSubpages, useRootPages, type MotionPageDTO } from "@/hooks/api/useMotionPages";
 import { cn } from "@/lib/utils";
 import { MotionSearchDialog } from "./MotionSearchDialog";
 import {
@@ -63,6 +96,38 @@ const mainTabs = [
   { id: "search", title: "Search", icon: Search, url: "#" },
 ];
 
+// ─── PageIcon ─────────────────────────────────────────────────────────────────
+
+function PageIcon({ icon, className }: { icon: string | null; className?: string }) {
+  if (!icon) {
+    return <FileText className={cn("size-4 shrink-0 text-muted-foreground", className)} />;
+  }
+
+  if (icon.startsWith("data:image") || icon.startsWith("http")) {
+    return (
+      <img
+        src={icon}
+        alt="Page icon"
+        className={cn("size-4 shrink-0 object-cover rounded-sm", className)}
+      />
+    );
+  }
+
+  if (icon.startsWith("lucide:")) {
+    const iconName = icon.split(":")[1];
+    const icons: Record<string, any> = { Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, XCircle, Clock, Zap, FileText };
+    const Icon = icons[iconName] || FileText;
+    return <Icon className={cn("size-4 shrink-0", className)} />;
+  }
+
+  // Fallback to emoji text string
+  return (
+    <span className={cn("size-4 shrink-0 text-xs leading-none flex items-center justify-center select-none", className)}>
+      {icon}
+    </span>
+  );
+}
+
 // ─── SidebarPageItem ──────────────────────────────────────────────────────────
 
 function SidebarPageItem({
@@ -74,7 +139,7 @@ function SidebarPageItem({
   onRename,
   level = 0,
 }: {
-  item: MotionPageRecord;
+  item: MotionPageDTO;
   pageId?: string;
   onClose?: () => void;
   onDelete: (id: string, title: string) => void;
@@ -89,6 +154,7 @@ function SidebarPageItem({
 
   const { spaceRole, canCreatePage } = useSpaceRole();
   const { user } = useAuth();
+  const { activeOrgId, activeSpaceId } = useAppContext();
 
   const isPageReadOnly =
     spaceRole === "admin"
@@ -97,8 +163,7 @@ function SidebarPageItem({
         ? item.created_by !== user?.id
         : true;
 
-  const getSubpages = useMotionStore((s) => s.getSubpages);
-  const subpages = getSubpages(item.id);
+  const subpages = useSubpages(activeOrgId, activeSpaceId, item.id);
   const hasSubpages = subpages.length > 0;
   const isActive = pageId === item.id;
   const itemPadding = level * 12 + 8;
@@ -135,7 +200,7 @@ function SidebarPageItem({
         >
           {isRenaming ? (
             <div className="flex min-w-0 flex-1 items-center gap-2 pr-14">
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
+              <PageIcon icon={item.icon} />
               <input
                 ref={inputRef}
                 value={draftTitle}
@@ -154,9 +219,10 @@ function SidebarPageItem({
           ) : (
             <div className="flex min-w-0 flex-1 items-center gap-2 pr-14">
               <span className="relative flex size-5 shrink-0 items-center justify-center">
-                <FileText
+                <PageIcon
+                  icon={item.icon}
                   className={cn(
-                    "size-4 text-muted-foreground transition-opacity group-hover/item:opacity-0",
+                    "transition-opacity group-hover/item:opacity-0",
                     isOpen && "opacity-0",
                   )}
                 />
@@ -365,18 +431,8 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
     };
   }, [queryClient]);
 
-  // ── Zustand store sync ──────────────────────────────────────────────────────
-  const hydratePages = useMotionStore((s) => s.hydratePages);
-  const hydratePagesRef = useRef(hydratePages);
-  hydratePagesRef.current = hydratePages;
-
-  useEffect(() => {
-    hydratePagesRef.current(apiPages);
-  }, [apiPages]);
-
   // ── Derived data ────────────────────────────────────────────────────────────
-  const getRootPages = useMotionStore((s) => s.getRootPages);
-  const rootPages = getRootPages();
+  const rootPages = useRootPages(activeOrgId, activeSpaceId);
   const recentPages = [...apiPages]
     .filter((p) => !p.deleted_at)
     .sort(
@@ -479,7 +535,6 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   };
 
   const handleRenamePage = (id: string, title: string) => {
-    useMotionStore.getState().updatePageLocally(id, { title });
     updatePage.mutate({ id, updates: { title } });
   };
 
@@ -875,7 +930,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                       return (
                         <SidebarMenuItem key={item.id}>
                           <div className="group/trash flex min-h-8 w-full items-center rounded-md px-2 py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground">
-                            <FileText className="mr-2 size-4 shrink-0" />
+                            <PageIcon icon={item.icon} className="mr-2" />
                             <span className="flex-1 truncate text-sm font-medium italic line-through">
                               {item.title}
                             </span>
@@ -946,7 +1001,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                               if (window.innerWidth < 1024) onClose?.();
                             }}
                           >
-                            <FileText className="size-4 shrink-0 text-muted-foreground" />
+                            <PageIcon icon={item.icon} className="mr-2" />
                             <span className="truncate">{item.title}</span>
                           </Link>
                         </SidebarMenuButton>
@@ -974,7 +1029,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
       <MotionSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}
-        pages={apiPages as MotionPageRecord[]}
+        pages={apiPages as MotionPageDTO[]}
       />
     </Sidebar>
   );

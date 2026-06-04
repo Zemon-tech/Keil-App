@@ -3,7 +3,7 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import { FileText, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useMotionStore } from '@/store/useMotionStore'
+import { useCachedPageById } from '@/hooks/api/useMotionPages'
 
 export const SubpageExtension = Node.create({
   name: 'subpage',
@@ -40,7 +40,7 @@ export const SubpageExtension = Node.create({
     return ReactNodeViewRenderer(({ node, updateAttributes }) => {
       const navigate = useNavigate()
       const { id, title, icon } = node.attrs
-      const page = useMotionStore((state) => state.getPageById(id))
+      const page = useCachedPageById(id)
       const displayTitle = page?.title ?? title
       const displayIcon = page?.icon ?? icon
 

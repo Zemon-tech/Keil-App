@@ -19,6 +19,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
 import { StitchUpdateDialog } from "./StitchUpdateDialog";
 import { useMotionStore } from "@/store/useMotionStore";
+import { useCachedPageById } from "@/hooks/api/useMotionPages";
 import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
 
 type LayoutProps = {
@@ -36,8 +37,8 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const { pageId } = useParams<{ pageId: string }>();
   const { isChatOpen, isChatDialogOpen, closeChatDialog } = useChatStore();
 
-  const { setDrawerOpen, getPageById } = useMotionStore();
-  const page = pageId ? getPageById(pageId) : null;
+  const { setDrawerOpen } = useMotionStore();
+  const page = useCachedPageById(pageId);
   const pageTitle = page?.title ?? "Untitled";
 
   // Auto-close Updates & Analytics drawer if path changes away from motion page details

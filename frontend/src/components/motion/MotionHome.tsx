@@ -5,23 +5,17 @@ import { MotionSidebar } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useRef, useMemo } from "react";
+import { useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useMotionPages, useCreateMotionPage } from "@/hooks/api/useMotionPages";
 
 export function MotionHome() {
   const navigate = useNavigate();
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const { sidebarOpen, setSidebarOpen, hydratePages } = useMotionStore();
+  const { sidebarOpen, setSidebarOpen } = useMotionStore();
 
   const { data: pages = [], isLoading } = useMotionPages(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
-
-  const hydratePagesRef = useRef(hydratePages);
-  hydratePagesRef.current = hydratePages;
-  useEffect(() => {
-    hydratePagesRef.current(pages);
-  }, [pages]);
 
   const recentPages = useMemo(
     () =>

@@ -16,12 +16,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import type { MotionPageRecord } from "@/store/useMotionStore";
+import type { MotionPageDTO } from "@/hooks/api/useMotionPages";
 
 interface MotionSearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  pages: MotionPageRecord[];
+  pages: MotionPageDTO[];
 }
 
 const extractTextFromContent = (content: any): string => {

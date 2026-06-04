@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useOrgTasks } from "@/hooks/api/useTasks";
-import { useMotionStore } from "@/store/useMotionStore";
+import { useMotionPages } from "@/hooks/api/useMotionPages";
 import { useMeetingSearch } from "@/hooks/api/useMeetings";
 import { useChatStore } from "@/store/useChatStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -156,7 +156,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
   // ── Hooks (all unconditional) ─────────────────────────────────────────────
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const pages = useMotionStore((s) => s.pages);
+  const { data: pages = [] } = useMotionPages(activeOrgId, activeSpaceId);
   const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId, {});
   const { openChat, openChatDialog } = useChatStore();
   const { openSettings } = useSettingsStore();
