@@ -396,8 +396,16 @@ export function MotionPage() {
 
   // ── Add subpage ─────────────────────────────────────────────────────────────
   const handleAddSubpage = async () => {
-    if (!pageId) return;
+    if (!pageId || !pageEditor) return;
     const newPage = await createPage.mutateAsync({ parent_id: pageId });
+    pageEditor.chain().focus().insertContent({
+      type: "subpage",
+      attrs: {
+        id: newPage.id,
+        title: newPage.title || "Untitled",
+        icon: newPage.icon
+      }
+    }).run();
     navigate(`/motion/${newPage.id}`);
   };
 

@@ -1006,17 +1006,7 @@ export function SimpleEditor({
         icon: <FileText className="size-4" />,
         keywords: ["page", "subpage", "nested"],
         run: () => {
-          const newPage = onAddSubpageRef.current?.()
-          if (newPage && editor) {
-            editor.chain().focus().insertContent({
-              type: "subpage",
-              attrs: {
-                id: (newPage as any).id,
-                title: (newPage as any).title || "Untitled",
-                icon: (newPage as any).icon
-              }
-            }).run()
-          }
+          onAddSubpageRef.current?.()
         },
       },
       {
