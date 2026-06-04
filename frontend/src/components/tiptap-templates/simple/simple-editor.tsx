@@ -28,6 +28,7 @@ import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-detai
 import { BlockIdExtension } from "@/extensions/BlockIdExtension"
 import { EnforceFinalBlockExtension } from "@/extensions/EnforceFinalBlockExtension"
 import { SubpageExtension } from "@/extensions/SubpageExtension"
+import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
 import Paragraph from '@tiptap/extension-paragraph'
 import Heading from '@tiptap/extension-heading'
@@ -45,6 +46,26 @@ const CustomBlockquote = Blockquote.extend({
     }
   }
 })
+
+const CustomDetailsSummary = DetailsSummary.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      level: {
+        default: null,
+        parseHTML: element => {
+          const val = element.getAttribute('data-level')
+          return val ? parseInt(val, 10) : null
+        },
+        renderHTML: attributes => {
+          if (!attributes.level) return {}
+          return { 'data-level': attributes.level }
+        }
+      }
+    }
+  }
+})
+
 import { TextStyle } from "@tiptap/extension-text-style"
 import { Color } from "@tiptap/extension-color"
 import { FontFamily } from "@tiptap/extension-font-family"
@@ -237,12 +258,16 @@ export function SimpleEditor({
   onContentChange,
   onReady,
   onAddSubpage,
+  onDeleteSubpage,
+  onRestoreSubpage,
   editable,
 }: {
   content?: JSONContent
   onContentChange?: (content: JSONContent) => void
   onReady?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void
   onAddSubpage?: () => any
+  onDeleteSubpage?: (id: string) => void
+  onRestoreSubpage?: (id: string) => void
   editable?: boolean
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -273,6 +298,18 @@ export function SimpleEditor({
   useEffect(() => {
     onAddSubpageRef.current = onAddSubpage
   }, [onAddSubpage])
+
+  const onDeleteSubpageRef = useRef(onDeleteSubpage)
+  useEffect(() => {
+    onDeleteSubpageRef.current = onDeleteSubpage
+  }, [onDeleteSubpage])
+
+  const onRestoreSubpageRef = useRef(onRestoreSubpage)
+  useEffect(() => {
+    onRestoreSubpageRef.current = onRestoreSubpage
+  }, [onRestoreSubpage])
+
+  const previousSubpageIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     setSlashSelectedIndex(0)
@@ -326,7 +363,9 @@ export function SimpleEditor({
     Superscript,
     Subscript,
     Link.configure({
-      openOnClick: false,
+      openOnClick: true,
+      autolink: true,
+      defaultProtocol: "https",
       HTMLAttributes: {
         class: "text-primary underline underline-offset-4 cursor-pointer",
       },
@@ -363,8 +402,9 @@ export function SimpleEditor({
         class: "details",
       },
     }),
-    DetailsSummary,
+    CustomDetailsSummary,
     DetailsContent,
+    HorizontalRule,
     TextStyle,
     Color,
     FontFamily,
@@ -411,8 +451,44 @@ export function SimpleEditor({
     content,
     onUpdate: ({ editor }) => {
       onContentChangeRef.current?.(editor.getJSON())
+
+      // Detect subpages added or removed
+      const currentSubpageIds = new Set<string>()
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "subpage" && node.attrs.id) {
+          currentSubpageIds.add(node.attrs.id)
+        }
+      })
+
+      // Find deleted subpage IDs
+      previousSubpageIdsRef.current.forEach((id) => {
+        if (!currentSubpageIds.has(id)) {
+          onDeleteSubpageRef.current?.(id)
+        }
+      })
+
+      // Find restored subpage IDs
+      currentSubpageIds.forEach((id) => {
+        if (!previousSubpageIdsRef.current.has(id)) {
+          onRestoreSubpageRef.current?.(id)
+        }
+      })
+
+      previousSubpageIdsRef.current = currentSubpageIds
     },
   })
+
+  useEffect(() => {
+    if (editor) {
+      const initialIds = new Set<string>()
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "subpage" && node.attrs.id) {
+          initialIds.add(node.attrs.id)
+        }
+      })
+      previousSubpageIdsRef.current = initialIds
+    }
+  }, [editor])
 
   useEffect(() => {
     if (editor && editable !== undefined) {
@@ -974,6 +1050,58 @@ export function SimpleEditor({
         keywords: ["h4", "heading"],
         shortcut: "####",
         run: () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
+      },
+      {
+        title: "Toggle Heading 1",
+        subtitle: "H1 with a toggle drop-down",
+        icon: <Heading1 className="size-4" />,
+        keywords: ["toggle h1", "h1 toggle", "toggle heading 1", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 1 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 1 }).run()
+          }
+        },
+      },
+      {
+        title: "Toggle Heading 2",
+        subtitle: "H2 with a toggle drop-down",
+        icon: <Heading2 className="size-4" />,
+        keywords: ["toggle h2", "h2 toggle", "toggle heading 2", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 2 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 2 }).run()
+          }
+        },
+      },
+      {
+        title: "Toggle Heading 3",
+        subtitle: "H3 with a toggle drop-down",
+        icon: <Heading3 className="size-4" />,
+        keywords: ["toggle h3", "h3 toggle", "toggle heading 3", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 3 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 3 }).run()
+          }
+        },
+      },
+      {
+        title: "Toggle Heading 4",
+        subtitle: "H4 with a toggle drop-down",
+        icon: <Heading3 className="size-4 opacity-70" />,
+        keywords: ["toggle h4", "h4 toggle", "toggle heading 4", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 4 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 4 }).run()
+          }
+        },
       },
       {
         title: "Bullet list",
@@ -1890,7 +2018,66 @@ export function SimpleEditor({
                   { id: 'bulletList', title: 'Bulleted list', icon: <List className="size-4" />, run: () => editor?.chain().focus().toggleBulletList().run() },
                   { id: 'orderedList', title: 'Numbered list', icon: <ListOrdered className="size-4" />, run: () => editor?.chain().focus().toggleOrderedList().run() },
                   { id: 'taskList', title: 'To-do list', icon: <CheckSquare className="size-4" />, run: () => editor?.chain().focus().toggleTaskList().run() },
-                  { id: 'details', title: 'Toggle list', icon: <ChevronRight className="size-4" />, run: () => editor?.chain().focus().setDetails().run() },
+                  { 
+                    id: 'details', 
+                    title: 'Toggle list', 
+                    icon: <ChevronRight className="size-4" />, 
+                    run: () => {
+                      if (editor?.isActive('detailsSummary')) {
+                        editor.chain().focus().updateAttributes('detailsSummary', { level: null }).run()
+                      } else {
+                        editor?.chain().focus().setDetails().run()
+                      }
+                    }
+                  },
+                  { 
+                    id: 'toggle_h1', 
+                    title: 'Toggle Heading 1', 
+                    icon: <Heading1 className="size-4" />, 
+                    run: () => {
+                      if (editor?.isActive('detailsSummary')) {
+                        editor.chain().focus().updateAttributes('detailsSummary', { level: 1 }).run()
+                      } else {
+                        editor?.chain().focus().setDetails().updateAttributes('detailsSummary', { level: 1 }).run()
+                      }
+                    }
+                  },
+                  { 
+                    id: 'toggle_h2', 
+                    title: 'Toggle Heading 2', 
+                    icon: <Heading2 className="size-4" />, 
+                    run: () => {
+                      if (editor?.isActive('detailsSummary')) {
+                        editor.chain().focus().updateAttributes('detailsSummary', { level: 2 }).run()
+                      } else {
+                        editor?.chain().focus().setDetails().updateAttributes('detailsSummary', { level: 2 }).run()
+                      }
+                    }
+                  },
+                  { 
+                    id: 'toggle_h3', 
+                    title: 'Toggle Heading 3', 
+                    icon: <Heading3 className="size-4" />, 
+                    run: () => {
+                      if (editor?.isActive('detailsSummary')) {
+                        editor.chain().focus().updateAttributes('detailsSummary', { level: 3 }).run()
+                      } else {
+                        editor?.chain().focus().setDetails().updateAttributes('detailsSummary', { level: 3 }).run()
+                      }
+                    }
+                  },
+                  { 
+                    id: 'toggle_h4', 
+                    title: 'Toggle Heading 4', 
+                    icon: <Heading3 className="size-4 opacity-70" />, 
+                    run: () => {
+                      if (editor?.isActive('detailsSummary')) {
+                        editor.chain().focus().updateAttributes('detailsSummary', { level: 4 }).run()
+                      } else {
+                        editor?.chain().focus().setDetails().updateAttributes('detailsSummary', { level: 4 }).run()
+                      }
+                    }
+                  },
                   { id: 'codeBlock', title: 'Code', icon: <Code className="size-4" />, run: () => editor?.chain().focus().toggleCodeBlock().run() },
                   { id: 'blockquote', title: 'Quote', icon: <Quote className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
                   { id: 'callout', title: 'Callout', icon: <SquareTerminal className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },

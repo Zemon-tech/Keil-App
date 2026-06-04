@@ -167,6 +167,11 @@ body,
     align-items: flex-start;
     margin: 0.5rem 0;
 
+    &:has([data-level="1"]) > button[type="button"] { margin-top: 14px; }
+    &:has([data-level="2"]) > button[type="button"] { margin-top: 10px; }
+    &:has([data-level="3"]) > button[type="button"] { margin-top: 6px; }
+    &:has([data-level="4"]) > button[type="button"] { margin-top: 4px; }
+
     /* Tiptap NodeView Toggle Button */
     >button[type="button"] {
       display: flex;
@@ -240,6 +245,39 @@ body,
     min-height: 24px;
     line-height: 1.5;
     cursor: text;
+
+    &[data-level="1"] {
+      font-size: 2.25rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 1rem;
+      color: var(--foreground);
+    }
+    &[data-level="2"] {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 0.8rem;
+      color: var(--foreground);
+    }
+    &[data-level="3"] {
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 0.6rem;
+      color: var(--foreground);
+    }
+    &[data-level="4"] {
+      font-size: 1.1rem;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 0.4rem;
+      color: var(--foreground);
+    }
 
     /* Remove native arrow */
     &::-webkit-details-marker,

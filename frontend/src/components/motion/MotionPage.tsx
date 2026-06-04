@@ -34,6 +34,7 @@ import {
   useSoftDeleteMotionPage,
   useCreateMotionPage,
   useMotionSocketListeners,
+  useRestoreMotionPage,
 } from "@/hooks/api/useMotionPages";
 import { useRecordPageView } from "@/hooks/api/useMotionAnalytics";
 import type { JSONContent } from "@tiptap/core";
@@ -149,6 +150,7 @@ export function MotionPage() {
   );
   const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
   const softDelete = useSoftDeleteMotionPage(activeOrgId, activeSpaceId);
+  const restorePage = useRestoreMotionPage(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
   const recordPageView = useRecordPageView(activeOrgId, activeSpaceId, pageId ?? null);
 
@@ -410,6 +412,22 @@ export function MotionPage() {
       navigate("/motion");
     }
   };
+
+  const handleDeleteSubpage = useCallback(
+    (subpageId: string) => {
+      const pageRecord = getPageById(subpageId);
+      const title = pageRecord?.title ?? "Untitled";
+      softDelete.mutate({ id: subpageId, title });
+    },
+    [getPageById, softDelete]
+  );
+
+  const handleRestoreSubpage = useCallback(
+    (subpageId: string) => {
+      restorePage.mutate(subpageId);
+    },
+    [restorePage]
+  );
 
   const toggleSmallText = () => {
     if (!pageId || !displayPage) return;
@@ -1279,6 +1297,8 @@ export function MotionPage() {
                     onContentChange={handleContentChange}
                     onReady={(editor) => setPageEditor(editor)}
                     onAddSubpage={handleAddSubpage}
+                    onDeleteSubpage={handleDeleteSubpage}
+                    onRestoreSubpage={handleRestoreSubpage}
                   />
                 ) : (
                   <div className="px-4 py-8 text-muted-foreground/40 text-sm animate-pulse">
@@ -1303,10 +1323,14 @@ export function MotionPage() {
             font-size: 14px !important;
             line-height: 1.5 !important;
           }
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor h1 { font-size: 1.9rem !important; }
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor h2 { font-size: 1.45rem !important; }
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor h3 { font-size: 1.05rem !important; }
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor h4 { font-size: 0.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h1,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="1"] { font-size: 1.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h2,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="2"] { font-size: 1.45rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h3,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="3"] { font-size: 1.05rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor h4,
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="4"] { font-size: 0.9rem !important; }
           .motion-page-small-text .tiptap.ProseMirror.simple-editor p,
           .motion-page-small-text .tiptap.ProseMirror.simple-editor li,
           .motion-page-small-text .tiptap.ProseMirror.simple-editor td,
