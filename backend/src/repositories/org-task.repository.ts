@@ -28,7 +28,9 @@ export class OrgTaskRepository extends BaseRepository<Task> {
 
     let query = `
       SELECT
-        t.*,
+        t.id, t.org_id, t.space_id, t.parent_task_id, t.type, t.event_type, t.location, t.is_all_day, 
+        t.title, t.status, t.priority, t.start_date, t.due_date, t.created_by, t.created_at, t.updated_at, 
+        t.google_event_id, t.ical_uid, t.meet_link, t.objective,
         o.name as org_name,
         s.name as space_name,
         (
