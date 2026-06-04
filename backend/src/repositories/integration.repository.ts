@@ -1,3 +1,4 @@
+import { PoolClient } from 'pg';
 import pool from '../config/pg';
 import { UserIntegration } from '../types/entities';
 
@@ -15,9 +16,11 @@ export class IntegrationRepository {
    */
   async findByUserAndProvider(
     userId: string,
-    provider: string
+    provider: string,
+    client?: PoolClient
   ): Promise<UserIntegration | null> {
-    const result = await pool.query(
+    const queryExecutor = client ?? pool;
+    const result = await queryExecutor.query(
       `SELECT * FROM public.user_integrations
        WHERE user_id = $1 AND provider = $2
        LIMIT 1`,
@@ -161,8 +164,13 @@ export class IntegrationRepository {
    * Sets watch_channel_id, watch_resource_id, watch_expires_at, gcal_sync_token
    * to NULL and watch_status back to 'pending'.
    */
-  async clearWatchChannel(userId: string, provider: string): Promise<void> {
-    await pool.query(
+  async clearWatchChannel(
+    userId: string,
+    provider: string,
+    client?: PoolClient
+  ): Promise<void> {
+    const queryExecutor = client ?? pool;
+    await queryExecutor.query(
       `UPDATE public.user_integrations
        SET watch_channel_id  = NULL,
            watch_resource_id = NULL,

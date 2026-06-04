@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { calendar_v3 } from 'googleapis';
 import * as crypto from 'crypto';
+import { PoolClient } from 'pg';
 import pool from '../config/pg';
 import { config } from '../config';
 import { integrationRepository } from '../repositories';
@@ -114,7 +115,22 @@ function verifyState(signedState: string): { userId: string; ts: number } {
     throw new Error('State signature mismatch — possible CSRF attempt');
   }
 
-  return JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+  const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+  if (Date.now() - decoded.ts > 10 * 60 * 1000) {
+    throw new Error('State token expired — possible replay attack');
+  }
+
+  return decoded;
+}
+
+/** Fixed namespace for Google Calendar advisory locks (two-arg pg_advisory_lock form) */
+const GCAL_LOCK_NAMESPACE = 1735289200; // arbitrary stable integer
+
+/**
+ * Generate a consistent lock key for user's Google Calendar sync operations.
+ */
+function syncLockKey(userId: string): string {
+  return `gcal-sync:${userId}`;
 }
 
 /**
@@ -321,7 +337,7 @@ export async function deleteCalendarEvent(
   if (!integration) return;
 
   const calendarId = integration.calendar_id || 'primary';
-  const calendar = google.calendar({ version: 'v3', auth: authClient });
+  const calendar = google.calendar({ version: 'v3', auth: authClient, timeout: 10000 } as any);
 
   try {
     await calendar.events.delete({ calendarId, eventId: googleEventId });
@@ -354,13 +370,15 @@ function buildEventBody(task: SyncableTask): object {
 
   if (task.is_all_day) {
     // All-day events use date strings (YYYY-MM-DD), not dateTime
+    // Since Keil-App stores inclusive due_date, we add 1 day to make it exclusive for Google Calendar.
+    const exclusiveEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
     return {
       summary: task.title,
       description: task.description ?? undefined,
       location: task.location ?? undefined,
       status: mapStatusToGoogle(task.status),
       start: { date: formatDate(startDate) },
-      end: { date: formatDate(endDate) },
+      end: { date: formatDate(exclusiveEndDate) },
       extendedProperties,
     };
   }
@@ -421,6 +439,7 @@ interface MatchedTask {
   updated_at: Date;
   start_date: Date | null;
   due_date: Date | null;
+  is_all_day?: boolean;
   owner_user_id?: string;
   created_by?: string;
   location?: string | null;
@@ -432,33 +451,40 @@ async function findTaskByGoogleEventIdOrIcalUidOrTaskId(
   icalUid?: string | null,
   taskId?: string | null
 ): Promise<MatchedTask | null> {
-  // 1. Search personal_tasks first
-  const personalResult = await pool.query(
-    `SELECT id, title, updated_at, start_date, due_date, owner_user_id, location, meet_link
-     FROM public.personal_tasks
-     WHERE deleted_at IS NULL
-       AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
+  const result = await pool.query(
+    `SELECT * FROM (
+      (SELECT id, title, updated_at, start_date, due_date, owner_user_id, NULL::uuid AS created_by, location, meet_link, false AS is_all_day, 'personal_tasks' AS source
+       FROM public.personal_tasks
+       WHERE deleted_at IS NULL
+         AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
+       LIMIT 1)
+       UNION ALL
+       (SELECT id, title, updated_at, start_date, due_date, NULL::uuid AS owner_user_id, created_by, location, meet_link, is_all_day, 'tasks' AS source
+        FROM public.tasks
+        WHERE deleted_at IS NULL
+          AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
+        LIMIT 1)
+     ) sub
+     ORDER BY (CASE WHEN sub.source = 'personal_tasks' THEN 0 ELSE 1 END)
      LIMIT 1`,
     [googleEventId, icalUid ?? null, taskId ?? null]
   );
-  if (personalResult.rows.length > 0) {
-    return { ...personalResult.rows[0], source: 'personal_tasks' as const };
-  }
 
-  // 2. Fall back to org tasks
-  const orgResult = await pool.query(
-    `SELECT id, title, updated_at, start_date, due_date, created_by, location, meet_link
-     FROM public.tasks
-     WHERE deleted_at IS NULL
-       AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
-     LIMIT 1`,
-    [googleEventId, icalUid ?? null, taskId ?? null]
-  );
-  if (orgResult.rows.length > 0) {
-    return { ...orgResult.rows[0], source: 'tasks' as const };
-  }
-
-  return null;
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    source: row.source as 'tasks' | 'personal_tasks',
+    title: row.title,
+    updated_at: row.updated_at,
+    start_date: row.start_date,
+    due_date: row.due_date,
+    is_all_day: row.is_all_day,
+    owner_user_id: row.owner_user_id ?? undefined,
+    created_by: row.created_by ?? undefined,
+    location: row.location,
+    meet_link: row.meet_link,
+  };
 }
 
 // ─── Helper: soft-delete a task from Google cancellation ─────────────────────
@@ -489,7 +515,8 @@ async function softDeleteTaskFromGoogle(
  */
 export async function processIncomingGoogleEvent(
   userId: string,
-  event: calendar_v3.Schema$Event
+  event: calendar_v3.Schema$Event,
+  defaultOrgSpace?: { orgId: string; spaceId: string } | null
 ): Promise<void> {
   const source = event.extendedProperties?.private?.['source'];
   const privateTaskId = event.extendedProperties?.private?.['taskId'];
@@ -553,26 +580,26 @@ export async function processIncomingGoogleEvent(
     ? new Date(event.start!.date!)
     : new Date(event.start!.dateTime!);
   const dueDate = isAllDay
-    ? new Date(event.end!.date!)
+    ? new Date(new Date(event.end!.date!).getTime() - 24 * 60 * 60 * 1000)
     : new Date(event.end!.dateTime!);
 
   // --- NO MATCHING TASK: create new org task in user's default workspace ---
   if (!matchingTask) {
     try {
       // Look up the user's default org and space
-      const defaultOrgSpace = await getUserDefaultOrgSpace(userId);
+      const resolvedOrgSpace = defaultOrgSpace !== undefined ? defaultOrgSpace : await getUserDefaultOrgSpace(userId);
 
-      if (defaultOrgSpace) {
+      if (resolvedOrgSpace) {
         // Create as org task in the user's default workspace (General space)
         const taskRes = await pool.query(
           `INSERT INTO public.tasks
              (org_id, space_id, title, start_date, due_date,
-              google_event_id, ical_uid, status, priority, created_by, type, event_type, location, meet_link)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'event', 'meeting', $11, $12)
+              google_event_id, ical_uid, status, priority, created_by, type, event_type, location, meet_link, is_all_day)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'event', 'meeting', $11, $12, $13)
            RETURNING id`,
           [
-            defaultOrgSpace.orgId,
-            defaultOrgSpace.spaceId,
+            resolvedOrgSpace.orgId,
+            resolvedOrgSpace.spaceId,
             event.summary || 'Untitled Google Event',
             startDate,
             dueDate,
@@ -583,6 +610,7 @@ export async function processIncomingGoogleEvent(
             userId,
             event.location || null,
             event.hangoutLink || null,
+            isAllDay,
           ]
         );
         const newTaskId = taskRes.rows[0].id;
@@ -595,7 +623,7 @@ export async function processIncomingGoogleEvent(
           [newTaskId, userId]
         );
         
-        log.info({ eventId: googleEventId, userId, spaceId: defaultOrgSpace.spaceId, taskId: newTaskId }, 'Created org event from Google Calendar meeting');
+        log.info({ eventId: googleEventId, userId, spaceId: resolvedOrgSpace.spaceId, taskId: newTaskId }, 'Created org event from Google Calendar meeting');
       } else {
         // Fallback to personal task if no org/space found
         await personalTaskRepository.create({
@@ -643,7 +671,8 @@ export async function processIncomingGoogleEvent(
     sameDates(matchingTask.start_date, startDate) &&
     sameDates(matchingTask.due_date, dueDate) &&
     matchingTask.location === (event.location || null) &&
-    matchingTask.meet_link === (event.hangoutLink || null)
+    matchingTask.meet_link === (event.hangoutLink || null) &&
+    (matchingTask.source !== 'tasks' || matchingTask.is_all_day === isAllDay)
   ) {
     log.debug({ taskId: matchingTask.id, reason: 'up-to-date' }, 'Task already up-to-date — skipping write');
     return;
@@ -676,9 +705,9 @@ export async function processIncomingGoogleEvent(
     // Update org task directly via pool query to avoid circular import with task.service.
     await pool.query(
       `UPDATE public.tasks
-       SET title = $1, start_date = $2, due_date = $3, location = $4, meet_link = $5
-       WHERE id = $6 AND deleted_at IS NULL`,
-      [newTitle, startDate, dueDate, event.location || null, event.hangoutLink || null, matchingTask.id]
+       SET title = $1, start_date = $2, due_date = $3, location = $4, meet_link = $5, is_all_day = $6
+       WHERE id = $7 AND deleted_at IS NULL`,
+      [newTitle, startDate, dueDate, event.location || null, event.hangoutLink || null, isAllDay, matchingTask.id]
     );
   }
 
@@ -711,6 +740,8 @@ export async function doFullSync(
 
   log.info({ userId, calendarId }, 'Starting full sync');
 
+  const cachedOrgSpace = await getUserDefaultOrgSpace(userId);
+
   do {
     const response = await calendar.events.list({
       calendarId,
@@ -722,8 +753,12 @@ export async function doFullSync(
 
     const items = response.data.items ?? [];
     for (const event of items) {
-      await processIncomingGoogleEvent(userId, event);
-      totalProcessed++;
+      try {
+        await processIncomingGoogleEvent(userId, event, cachedOrgSpace);
+        totalProcessed++;
+      } catch (err) {
+        log.error({ err, eventId: event.id, userId }, 'Failed to process event in full sync — skipping');
+      }
     }
 
     pageToken = response.data.nextPageToken ?? undefined;
@@ -741,8 +776,8 @@ export async function doFullSync(
  * Called when a user disconnects Google Calendar.
  * Errors are swallowed — the channel may already be expired.
  */
-export async function stopWatch(userId: string): Promise<void> {
-  const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
+export async function stopWatch(userId: string, client?: PoolClient): Promise<void> {
+  const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER, client);
   if (!integration?.watch_channel_id || !integration?.watch_resource_id) {
     // No active watch channel — nothing to stop
     return;
@@ -751,7 +786,7 @@ export async function stopWatch(userId: string): Promise<void> {
   const authClient = await getAuthorizedClient(userId);
   if (!authClient) {
     // Token revoked — just clear the DB fields
-    await integrationRepository.clearWatchChannel(userId, PROVIDER);
+    await integrationRepository.clearWatchChannel(userId, PROVIDER, client);
     return;
   }
 
@@ -770,7 +805,7 @@ export async function stopWatch(userId: string): Promise<void> {
     log.warn({ err, userId, channelId: integration.watch_channel_id }, 'Failed to stop watch channel');
   }
 
-  await integrationRepository.clearWatchChannel(userId, PROVIDER);
+  await integrationRepository.clearWatchChannel(userId, PROVIDER, client);
 }
 
 // ─── registerWatch ────────────────────────────────────────────────────────────
@@ -798,14 +833,14 @@ export async function registerWatch(userId: string): Promise<void> {
   if (!integration) return;
 
   // Acquire advisory lock to prevent concurrent registrations
-  const watchLockKey = `gcal-watch:${userId}`;
+  const lockKey = syncLockKey(userId);
   const lockClient = await pool.connect();
   let acquired = false;
 
   try {
     const lockRes = await lockClient.query(
-      'SELECT pg_try_advisory_lock(hashtext($1))',
-      [watchLockKey]
+      'SELECT pg_try_advisory_lock($1, hashtext($2))',
+      [GCAL_LOCK_NAMESPACE, lockKey]
     );
     acquired = lockRes.rows[0].pg_try_advisory_lock;
     if (!acquired) {
@@ -814,7 +849,7 @@ export async function registerWatch(userId: string): Promise<void> {
     }
 
     // Stop any existing channel before registering a new one
-    await stopWatch(userId);
+    await stopWatch(userId, lockClient);
 
     const channelId = crypto.randomUUID();
     const ttlMs = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -893,7 +928,7 @@ export async function registerWatch(userId: string): Promise<void> {
   } finally {
     if (acquired) {
       try {
-        await lockClient.query('SELECT pg_advisory_unlock(hashtext($1))', [watchLockKey]);
+        await lockClient.query('SELECT pg_advisory_unlock($1, hashtext($2))', [GCAL_LOCK_NAMESPACE, lockKey]);
       } catch (unlockErr) {
         log.error({ err: unlockErr, userId }, 'Failed to unlock watch advisory lock');
       }
@@ -914,12 +949,13 @@ export async function doIncrementalSync(userId: string): Promise<void> {
   // Check out a dedicated connection for the advisory lock
   const lockClient = await pool.connect();
   let acquired = false;
+  const lockKey = syncLockKey(userId);
 
   try {
     // Acquire non-blocking advisory lock
     const lockResult = await lockClient.query(
-      'SELECT pg_try_advisory_lock(hashtext($1))',
-      [userId]
+      'SELECT pg_try_advisory_lock($1, hashtext($2))',
+      [GCAL_LOCK_NAMESPACE, lockKey]
     );
     acquired = lockResult.rows[0].pg_try_advisory_lock;
     if (!acquired) {
@@ -934,14 +970,25 @@ export async function doIncrementalSync(userId: string): Promise<void> {
     }
 
     const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
-    if (!integration || !integration.gcal_sync_token) {
-      log.debug({ userId, hasSyncToken: !!integration?.gcal_sync_token }, 'Skipping incremental sync — no integration or sync token');
-      return;
-    }
+    if (!integration) return;
 
     if (integration.watch_status === 'revoked') {
       log.debug({ userId }, 'Skipping incremental sync — integration revoked');
       return;
+    }
+
+    // Recover from a stuck lock if sync_in_progress is true but updated_at is older than 5 minutes
+    if (
+      integration.sync_in_progress &&
+      integration.updated_at &&
+      new Date().getTime() - new Date(integration.updated_at).getTime() > 5 * 60 * 1000
+    ) {
+      log.warn({ userId }, 'sync_in_progress flag stuck for more than 5 minutes — resetting to FALSE');
+      await pool.query(
+        `UPDATE public.user_integrations SET sync_in_progress = FALSE WHERE user_id = $1`,
+        [userId]
+      );
+      integration.sync_in_progress = false;
     }
 
     // Mark sync as in-progress
@@ -951,6 +998,31 @@ export async function doIncrementalSync(userId: string): Promise<void> {
        WHERE user_id = $1`,
       [userId]
     );
+
+    // Auto-initialize if gcal_sync_token is missing
+    if (!integration.gcal_sync_token) {
+      log.info({ userId }, 'No sync token found — performing full sync initialization');
+      
+      const syncToken = await doFullSync(
+        userId,
+        integration.calendar_id || 'primary',
+        authClient
+      );
+
+      await integrationRepository.saveSyncToken(userId, PROVIDER, syncToken ?? null);
+      await pool.query(
+        `UPDATE public.user_integrations
+         SET sync_in_progress = FALSE,
+             watch_status = CASE WHEN watch_status = 'pending' THEN 'degraded'::public.gcal_watch_status ELSE watch_status END,
+             last_successful_sync_at = NOW(),
+             last_sync_at = NULL
+         WHERE user_id = $1`,
+        [userId]
+      );
+      
+      log.info({ userId }, 'Full sync initialization complete');
+      return;
+    }
 
     const calendar = google.calendar({ version: 'v3', auth: authClient, timeout: 10000 } as any);
 
@@ -965,8 +1037,14 @@ export async function doIncrementalSync(userId: string): Promise<void> {
       const items = response.data.items ?? [];
       log.info({ userId, eventCount: items.length }, 'Incremental sync processing events');
 
+      const cachedOrgSpace = await getUserDefaultOrgSpace(userId);
+
       for (const event of items) {
-        await processIncomingGoogleEvent(userId, event);
+        try {
+          await processIncomingGoogleEvent(userId, event, cachedOrgSpace);
+        } catch (err) {
+          log.error({ err, eventId: event.id, userId }, 'Failed to process event in incremental sync — skipping');
+        }
       }
 
       // Save the new syncToken
@@ -1045,10 +1123,20 @@ export async function doIncrementalSync(userId: string): Promise<void> {
     }
 
   } finally {
+    // Safety net: always reset sync_in_progress to FALSE on completion or unexpected crash
+    try {
+      await pool.query(
+        `UPDATE public.user_integrations SET sync_in_progress = FALSE WHERE user_id = $1`,
+        [userId]
+      );
+    } catch (dbErr) {
+      log.error({ err: dbErr, userId }, 'Failed to reset sync_in_progress in finally block');
+    }
+
     // Always release the advisory lock and return the connection to the pool
     if (acquired) {
       try {
-        await lockClient.query('SELECT pg_advisory_unlock(hashtext($1))', [userId]);
+        await lockClient.query('SELECT pg_advisory_unlock($1, hashtext($2))', [GCAL_LOCK_NAMESPACE, lockKey]);
       } catch (unlockErr) {
         log.error({ err: unlockErr, userId }, 'Failed to unlock sync advisory lock');
       }
