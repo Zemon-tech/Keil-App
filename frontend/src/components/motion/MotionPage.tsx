@@ -585,17 +585,6 @@ export function MotionPage() {
               </Popover>
             )}
 
-            {!isPageReadOnly && !isSharedPage && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground/50 hover:text-destructive transition-colors"
-                onClick={handleDelete}
-                disabled={softDelete.isPending}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
