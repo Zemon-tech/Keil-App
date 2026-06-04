@@ -37,6 +37,8 @@ export const config = {
     // ── Google Generative AI (Gemini via @ai-sdk/google) ─────────────────────
     // Get your API key from https://aistudio.google.com/app/apikey
     googleGenAiApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+    // ── Exa API ──────────────────────────────────────────────────────────────
+    exaApiKey: process.env.EXA_API_KEY || "",
     // ── Logging ──────────────────────────────────────────────────────────────
     logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug"),
     grafanaLokiHost: process.env.GRAFANA_LOKI_HOST || "",

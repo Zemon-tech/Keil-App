@@ -30,7 +30,6 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import {
-  MessageCircle,
   Clock,
   ListTodo,
   PlusCircle,
@@ -38,8 +37,6 @@ import {
   MessageSquareCode,
   FileText,
   Bot,
-  Sparkles,
-  Brain,
 } from "lucide-react";
 import {
   Reasoning,
@@ -656,7 +653,7 @@ export function Dashboard() {
     <div className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none flex">
       {/* Main Viewport Container */}
       <main className="flex-1 min-w-0 h-full flex flex-col items-center relative overflow-hidden overscroll-none transition-all duration-300">
-        
+
         {/* Top-Right Control Buttons */}
         <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5">
           {hasChatStarted && (
@@ -685,8 +682,8 @@ export function Dashboard() {
                 disabled={isLoadingHistory}
                 className={cn(
                   "size-8 rounded-full transition-colors",
-                  isHistoryOpen 
-                    ? "text-primary bg-primary/5 hover:bg-primary/10" 
+                  isHistoryOpen
+                    ? "text-primary bg-primary/5 hover:bg-primary/10"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/65"
                 )}
               >
