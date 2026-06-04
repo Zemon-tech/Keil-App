@@ -5,7 +5,6 @@ import {
   ArrowUp,
   ArrowRight,
   FileText,
-  Ghost,
   GlobeIcon,
   Image,
   Plus,
@@ -390,12 +389,6 @@ export function HeroPromptInput({
         isChatStarted ? "gap-0 py-4" : "gap-6 pt-12 sm:gap-7 sm:pt-14",
       )}
     >
-      {!isChatStarted && (
-        <div className="fixed top-6 right-6 text-muted-foreground/55 transition-colors hover:text-foreground">
-          <Ghost className="size-6" />
-        </div>
-      )}
-
       {!isChatStarted && (
         <div className="flex items-center gap-5 text-center">
           <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl">
