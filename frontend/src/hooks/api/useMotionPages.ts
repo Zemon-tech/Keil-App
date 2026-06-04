@@ -646,7 +646,6 @@ export function useMotionSocketListeners(
               (old) => (old ? [...old, page] : [page])
             );
             queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
-            useMotionStore.getState().upsertPages([page]);
           }
           break;
       }
