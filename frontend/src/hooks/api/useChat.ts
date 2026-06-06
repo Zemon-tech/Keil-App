@@ -36,6 +36,7 @@ export interface ChatMessage {
   sender: ChatMember;
   content: string;
   created_at: string;
+  reply_to?: { messageId: string; senderName: string; text: string } | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -127,9 +128,9 @@ export function useReadChannel(orgId: string | null, spaceId: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useSendMessage() {
-  return useCallback((channelId: string, content: string) => {
+  return useCallback((channelId: string, content: string, replyTo?: { messageId: string; senderName: string; text: string } | null) => {
     const socket = getSocket();
-    socket?.emit("send_message", { channel_id: channelId, content });
+    socket?.emit("send_message", { channel_id: channelId, content, reply_to: replyTo });
   }, []); // stable ref — socket is a module-level singleton
 }
 

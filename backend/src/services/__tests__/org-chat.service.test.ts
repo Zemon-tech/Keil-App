@@ -162,4 +162,38 @@ describe("Org Chat Service Unit Tests", () => {
             expect(thirdPage[0].id).toBe(m1.id);
         });
     });
+
+    // ── Reply Feature Tests ──────────────────────────────────────────────────────
+    describe("saveMessage and getChannelMessages - Reply Support", () => {
+        it("should successfully save a message as a reply and retrieve it with reply_to fields", async () => {
+            const channelId = await orgChatService.createChannel(
+                orgId,
+                spaceId,
+                "group",
+                "Reply Group",
+                [userAId, userBId],
+                userAId
+            );
+
+            // Send original message
+            const originalMsg = await orgChatService.saveMessage(channelId, userAId, "Original text");
+            
+            // Send reply message
+            const replyToPayload = {
+                messageId: originalMsg.id,
+                senderName: "User A",
+                text: "Original text"
+            };
+            const replyMsg = await orgChatService.saveMessage(channelId, userBId, "Reply text", replyToPayload);
+
+            // Verify replyMsg returned from saveMessage contains reply_to
+            expect(replyMsg.reply_to).toEqual(replyToPayload);
+
+            // Fetch messages and verify reply_to is correctly loaded from DB
+            const messages = await orgChatService.getChannelMessages(channelId);
+            const retrievedReply = messages.find(m => m.id === replyMsg.id);
+            expect(retrievedReply).toBeDefined();
+            expect(retrievedReply!.reply_to).toEqual(replyToPayload);
+        });
+    });
 });

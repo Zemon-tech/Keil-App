@@ -247,6 +247,97 @@ describe("Socket.io Integration Tests", () => {
         });
     });
 
+    // ── Added Tests: Message Replies ─────────────────────────────────────────────
+    it("should broadcast reply_to payload to other members in the channel when replying to a message", async () => {
+        await seedUser(mockUserId, mockUserEmail, mockUserName);
+        await seedUser(otherUserId, otherUserEmail, otherUserName);
+
+        const orgId = "b12852ab-d731-4db3-ae7c-2b28c312781a";
+        const spaceId = "e57c66ba-a1e6-4252-a50d-ebcb5a3d76e4";
+        const channelId = "0f27c6de-6e7e-40dc-84c4-f25cb0647c88";
+
+        await seedOrg(orgId, "Reply Socket Org", mockUserId);
+        await seedSpace(spaceId, orgId, "Reply Socket Space", mockUserId);
+        await seedChannel(channelId, orgId, spaceId, "reply-socket", mockUserId);
+
+        await pool.query(
+            `INSERT INTO public.organisation_members (org_id, user_id, role)
+             VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+            [orgId, otherUserId]
+        );
+        await pool.query(
+            `INSERT INTO public.space_members (org_id, space_id, user_id, role)
+             VALUES ($1, $2, $3, 'member') ON CONFLICT DO NOTHING`,
+            [orgId, spaceId, otherUserId]
+        );
+        await pool.query(
+            `INSERT INTO public.channel_members (channel_id, user_id, role)
+             VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+            [channelId, otherUserId]
+        );
+
+        const socketA = Client(`http://localhost:${port}`, {
+            auth: { token: mockToken },
+            transports: ["websocket"],
+        });
+
+        const socketB = Client(`http://localhost:${port}`, {
+            auth: { token: otherToken },
+            transports: ["websocket"],
+        });
+
+        await Promise.all([
+            new Promise<void>((resolve, reject) => {
+                if (socketA.connected) resolve();
+                else {
+                    socketA.once("connect", () => resolve());
+                    socketA.once("connect_error", reject);
+                }
+            }),
+            new Promise<void>((resolve, reject) => {
+                if (socketB.connected) resolve();
+                else {
+                    socketB.once("connect", () => resolve());
+                    socketB.once("connect_error", reject);
+                }
+            })
+        ]);
+
+        socketA.emit("join_channel", { channel_id: channelId });
+        socketB.emit("join_channel", { channel_id: channelId });
+
+        await new Promise((r) => setTimeout(r, 200));
+
+        await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                socketA.disconnect();
+                socketB.disconnect();
+                reject(new Error("Reply broadcast timed out"));
+            }, 8000);
+
+            const replyToPayload = {
+                messageId: "mock-message-uuid",
+                senderName: "Socket User",
+                text: "Original message content"
+            };
+
+            socketB.on("receive_message", (message) => {
+                expect(message).toHaveProperty("content", "This is a reply message");
+                expect(message.reply_to).toEqual(replyToPayload);
+                socketA.disconnect();
+                socketB.disconnect();
+                clearTimeout(timeout);
+                resolve();
+            });
+
+            socketA.emit("send_message", {
+                channel_id: channelId,
+                content: "This is a reply message",
+                reply_to: replyToPayload
+            });
+        });
+    });
+
     // ── Added Tests: Room Access Authorization ───────────────────────────────────
     it("should block unauthorized users from joining or sending messages to a channel", async () => {
         // 1. Seed two users: mockUserId is in the channel, otherUserId is NOT in the channel!

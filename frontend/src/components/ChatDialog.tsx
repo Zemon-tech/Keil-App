@@ -63,6 +63,19 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     const bottomRef = useRef<HTMLDivElement>(null);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const [replyingTo, setReplyingTo] = useState<{ messageId: string; senderName: string; text: string } | null>(null);
+    const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+    const scrollToMessage = (msgId: string) => {
+        const el = document.getElementById(`msg-${msgId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            setHighlightedMessageId(msgId);
+            setTimeout(() => {
+                setHighlightedMessageId(null);
+            }, 1500);
+        }
+    };
 
     const handleSelectEmoji = (emoji: string) => {
         const input = inputRef.current;
@@ -106,8 +119,9 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
 
     const handleSendMessage = () => {
         if (!messageText.trim() || !activeChannelId) return;
-        sendMessage(activeChannelId, messageText.trim());
+        sendMessage(activeChannelId, messageText.trim(), replyingTo);
         setMessageText("");
+        setReplyingTo(null);
         getSocket()?.emit("typing_end", { channel_id: activeChannelId });
     };
 
@@ -415,17 +429,69 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             messages.map((msg) => {
                                                 const isMine = msg.sender.id === me?.id;
                                                 return (
-                                                    <div key={msg.id} className={`flex flex-col gap-1 w-full ${isMine ? "items-end" : "items-start"}`}>
+                                                    <div
+                                                        key={msg.id}
+                                                        id={`msg-${msg.id}`}
+                                                        className={`flex flex-col gap-1 w-full group transition-all duration-300 ${isMine ? "items-end" : "items-start"}`}
+                                                        onTouchStart={(e) => {
+                                                            const touch = e.touches[0];
+                                                            (e.currentTarget as any).startX = touch.clientX;
+                                                        }}
+                                                        onTouchEnd={(e) => {
+                                                            const startX = (e.currentTarget as any).startX;
+                                                            if (startX === undefined) return;
+                                                            const touch = e.changedTouches[0];
+                                                            const diffX = touch.clientX - startX;
+                                                            if (diffX > 60) {
+                                                                setReplyingTo({
+                                                                    messageId: msg.id,
+                                                                    senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
+                                                                    text: msg.content,
+                                                                });
+                                                            }
+                                                        }}
+                                                    >
                                                         <span className="text-[11px] font-semibold text-muted-foreground px-1">
                                                             {isMine ? "You" : (msg.sender.name ?? "Unknown")}
                                                         </span>
-                                                        <div className={cn(
-                                                            "max-w-[70%] rounded-2xl px-4 py-2.5 text-sm",
-                                                            isMine 
-                                                                ? "bg-primary text-primary-foreground rounded-br-md" 
-                                                                : "bg-muted text-foreground rounded-bl-md"
-                                                        )}>
-                                                            <p>{msg.content}</p>
+                                                        <div className={`flex items-center gap-2 max-w-[70%] ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                                                            <div className={cn(
+                                                                "rounded-2xl px-4 py-2.5 text-sm transition-all duration-300",
+                                                                isMine 
+                                                                    ? "bg-primary text-primary-foreground rounded-tr-md" 
+                                                                    : "bg-muted text-foreground rounded-bl-md",
+                                                                highlightedMessageId === msg.id && (isMine ? "ring-4 ring-primary/30 scale-102" : "ring-4 ring-muted-foreground/20 scale-102")
+                                                            )}>
+                                                                {msg.reply_to && (
+                                                                    <div
+                                                                        onClick={() => scrollToMessage(msg.reply_to!.messageId)}
+                                                                        className={`mb-1.5 p-2 rounded-lg text-xs cursor-pointer border-l-2 border-foreground select-none text-left ${
+                                                                            isMine
+                                                                                ? "bg-primary-foreground/15 text-primary-foreground/90"
+                                                                                : "bg-background text-foreground border border-border"
+                                                                        }`}
+                                                                    >
+                                                                        <div className="font-bold text-[10px] truncate">
+                                                                            {msg.reply_to.senderName}
+                                                                        </div>
+                                                                        <div className="truncate text-[11px] leading-tight opacity-90">
+                                                                            {msg.reply_to.text}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                <p>{msg.content}</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setReplyingTo({
+                                                                    messageId: msg.id,
+                                                                    senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
+                                                                    text: msg.content,
+                                                                })}
+                                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted text-muted-foreground cursor-pointer flex items-center justify-center shrink-0"
+                                                                title="Reply"
+                                                            >
+                                                                <span className="text-xs font-semibold">↩</span>
+                                                            </button>
                                                         </div>
                                                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground px-1">
                                                             <span>
@@ -442,11 +508,15 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                         )}
 
                                         {/* Typing indicator */}
-                                        {typingUsers[activeChannelId] && typingUsers[activeChannelId].length > 0 && (
-                                            <div className="flex gap-1 text-[11px] text-muted-foreground italic px-1">
-                                                {typingUsers[activeChannelId].map(u => u.name).join(", ")} is typing...
-                                            </div>
-                                        )}
+                                        {(() => {
+                                            const otherTypingUsers = (typingUsers[activeChannelId] || []).filter((u) => u.userId !== me?.id);
+                                            if (otherTypingUsers.length === 0) return null;
+                                            return (
+                                                <div className="flex gap-1 text-[11px] text-muted-foreground italic px-1">
+                                                    {otherTypingUsers.map(u => u.name).join(", ")} is typing...
+                                                </div>
+                                            );
+                                        })()}
 
                                         <div ref={bottomRef} />
                                     </div>
@@ -454,6 +524,25 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
 
                                 {/* Message Input */}
                                 <div className="p-4 shrink-0 border-t border-border bg-card/50 backdrop-blur-sm">
+                                    {replyingTo && (
+                                        <div className="flex items-center justify-between bg-muted rounded-xl px-4 py-2.5 mb-2.5 text-xs border-l-4 border-foreground animate-in slide-in-from-bottom-2 duration-200">
+                                            <div className="flex flex-col min-w-0 pr-4 text-left">
+                                                <span className="font-bold text-[11px] text-foreground">
+                                                    Reply to {replyingTo.senderName}
+                                                </span>
+                                                <span className="text-muted-foreground truncate text-[11px] mt-0.5">
+                                                    {replyingTo.text}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => setReplyingTo(null)}
+                                                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer font-bold shrink-0 text-sm"
+                                                aria-label="Cancel reply"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    )}
                                     <div className="flex items-end gap-2">
                                         <Button variant="ghost" size="icon" className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0">
                                             <Paperclip className="size-5" />
