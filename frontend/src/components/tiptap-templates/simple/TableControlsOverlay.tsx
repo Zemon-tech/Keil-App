@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   GripVertical,
@@ -70,7 +70,7 @@ export function TableControlsOverlay({ editor }: { editor: any }) {
   const [colSearch, setColSearch] = useState('')
 
   // Hover delay timer
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const startHideTimeout = () => {
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current)
