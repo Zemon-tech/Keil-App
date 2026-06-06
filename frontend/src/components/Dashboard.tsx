@@ -59,6 +59,9 @@ import {
 // ─── AI Tool Helper Mapping Functions ──────────────────────────────────────────
 
 const getToolIcon = (toolName: string) => {
+  if (toolName.includes("schedule")) {
+    return Calendar;
+  }
   if (toolName.includes("task") || toolName.includes("org")) {
     if (toolName.includes("create")) return PlusCircle;
     if (toolName.includes("update")) return FilePenLine;
@@ -94,6 +97,12 @@ const getToolLabel = (toolName: string, args: any) => {
       return "Delegated to Chat Agent";
     case "keilhq-motion-agent":
       return "Delegated to Motion Agent";
+    case "keilhq-scheduler-agent":
+      return "Delegated to Scheduler Agent";
+    case "get_unscheduled_tasks":
+      return "Retrieving unscheduled tasks";
+    case "auto_schedule_tasks":
+      return "Auto-scheduling tasks into calendar free slots";
     case "get_current_time":
       return "Checking current date and time context";
     case "get_calendar_events":
@@ -140,6 +149,10 @@ const getToolDescription = (toolName: string, _args: any, result: any) => {
   }
 
   switch (toolName) {
+    case "get_unscheduled_tasks":
+      return `Found ${result.tasks?.length || 0} unscheduled tasks`;
+    case "auto_schedule_tasks":
+      return `Successfully scheduled ${result.scheduledCount || 0} tasks`;
     case "get_current_time":
       return `Context: ${result.localTime || result.iso || ""}`;
     case "get_calendar_events":
@@ -178,11 +191,33 @@ const getToolDescription = (toolName: string, _args: any, result: any) => {
   }
 };
 
-const formatToolResult = (_toolName: string, result: any) => {
+const formatToolResult = (toolName: string, result: any) => {
   if (!result) return "";
 
   if (result.success === false || result.error) {
     return `Error: ${result.error || result.message || "Failed to execute"}`;
+  }
+
+  if (toolName === "auto_schedule_tasks") {
+    const lines = [];
+    if (result.message) lines.push(result.message);
+    if (Array.isArray(result.scheduledTasks) && result.scheduledTasks.length > 0) {
+      lines.push("\nScheduled Tasks:");
+      result.scheduledTasks.forEach((t: any) => {
+        if (!t.error) {
+          lines.push(`- ${t.title}: ${new Date(t.start_date).toLocaleString()} to ${new Date(t.due_date).toLocaleString()}`);
+        } else {
+          lines.push(`- ${t.title}: Error (${t.error})`);
+        }
+      });
+    }
+    if (Array.isArray(result.unscheduledTasks) && result.unscheduledTasks.length > 0) {
+      lines.push("\nCould not schedule (calendar full):");
+      result.unscheduledTasks.forEach((t: any) => {
+        lines.push(`- ${t.title} (Priority: ${t.priority || "Medium"})`);
+      });
+    }
+    return lines.join("\n");
   }
 
   // Handle tasks lists
@@ -395,8 +430,13 @@ export function Dashboard() {
     } else if (toolName === "keilhq-motion-agent") {
       agent = "Motion Agent";
       status = "Delegating to notes specialist...";
+    } else if (toolName === "keilhq-scheduler-agent") {
+      agent = "Scheduler Agent";
+      status = "Delegating to calendar specialist...";
     } else {
-      if (toolName.includes("task") || toolName.includes("org")) {
+      if (toolName.includes("schedule")) {
+        agent = "Scheduler Agent";
+      } else if (toolName.includes("task") || toolName.includes("org")) {
         agent = "Task Agent";
       } else if (
         toolName.includes("chat") ||
@@ -409,6 +449,12 @@ export function Dashboard() {
       }
 
       switch (toolName) {
+        case "get_unscheduled_tasks":
+          status = "Finding unscheduled tasks...";
+          break;
+        case "auto_schedule_tasks":
+          status = "Calculating free calendar slots and scheduling...";
+          break;
         case "get_org_tasks":
         case "get_personal_tasks":
           status = "Fetching tasks list...";

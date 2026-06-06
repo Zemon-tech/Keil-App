@@ -406,6 +406,7 @@ export function HeroPromptInput({
               ? "[&_[data-slot=input-group]]:rounded-[1.35rem]"
               : "[&_[data-slot=input-group]]:rounded-[1.25rem]",
             "[&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
+            "[&_[data-slot=input-group]]:has-[[data-slot=input-group-control]:focus-visible]:border-border/70",
             "[&_[data-slot=input-group]]:bg-background/88",
             isChatStarted
               ? "[&_[data-slot=input-group]]:shadow-[0_18px_55px_-36px_rgba(15,23,42,0.4)]"
