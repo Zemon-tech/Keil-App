@@ -16,10 +16,8 @@ import { Typography } from "@tiptap/extension-typography"
 import { Highlight } from "@tiptap/extension-highlight"
 import { Subscript } from "@tiptap/extension-subscript"
 import { Superscript } from "@tiptap/extension-superscript"
-import { Table } from "@tiptap/extension-table"
+import { CustomTable, CustomTableCell, CustomTableHeader } from "@/extensions/CustomTableExtension"
 import { TableRow } from "@tiptap/extension-table-row"
-import { TableCell } from "@tiptap/extension-table-cell"
-import { TableHeader } from "@tiptap/extension-table-header"
 import { Placeholder } from "@tiptap/extension-placeholder"
 import { Link } from "@tiptap/extension-link"
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight"
@@ -150,7 +148,6 @@ import {
   Underline as UnderlineIcon,
   ArrowRight,
   ChevronUp,
-  ChevronLeft,
   RotateCcw,
   MessageSquare,
   PencilLine,
@@ -181,6 +178,7 @@ import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
+import { TableControlsOverlay } from "./TableControlsOverlay"
 
 const lowlight = createLowlight(common)
 
@@ -381,12 +379,12 @@ export function SimpleEditor({
         return "Type '/' for commands..."
       },
     }),
-    Table.configure({
+    CustomTable.configure({
       resizable: true,
     }),
     TableRow,
-    TableHeader,
-    TableCell,
+    CustomTableHeader,
+    CustomTableCell,
     CodeBlockLowlight.configure({
       lowlight,
     }),
@@ -672,6 +670,13 @@ export function SimpleEditor({
       if (!pos) return null
 
       const $pos = editor.state.doc.resolve(pos.pos)
+
+      for (let depth = $pos.depth; depth > 0; depth -= 1) {
+        const node = $pos.node(depth)
+        if (node.type.name === "table" || node.type.name === "details") {
+          return { from: $pos.before(depth), to: $pos.after(depth) }
+        }
+      }
 
       for (let depth = $pos.depth; depth > 0; depth -= 1) {
         const node = $pos.node(depth)
@@ -1449,11 +1454,22 @@ export function SimpleEditor({
   const deleteBlockTarget = useCallback((target: BlockTarget | null) => {
     if (!editor || !target) return
     console.log("Deleting block at", target)
-    editor
-      .chain()
-      .focus()
-      .deleteRange({ from: target.from, to: target.to })
-      .run()
+    
+    editor.commands.focus()
+    const { state, view } = editor
+    
+    try {
+      // Create a node selection at target.from
+      const selection = NodeSelection.create(state.doc, target.from)
+      const tr = state.tr.setSelection(selection).deleteSelection()
+      view.dispatch(tr)
+    } catch (err) {
+      // Fallback: delete the range directly
+      console.warn("NodeSelection delete failed, falling back to raw delete:", err)
+      const tr = state.tr.delete(target.from, target.to)
+      view.dispatch(tr)
+    }
+    
     setBlockMenu(null)
     closeSlashMenu()
   }, [editor, closeSlashMenu])
@@ -1638,82 +1654,7 @@ export function SimpleEditor({
   return (
     <div ref={wrapperRef} className="simple-editor-wrapper relative" onClick={handleWrapperClick}>
       <EditorContext.Provider value={{ editor }}>
-        {editor && (
-          <BubbleMenu
-            editor={editor}
-            shouldShow={({ editor }: { editor: Editor }) => editor.isActive("table")}
-            options={{ placement: 'top' }}
-          >
-            <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addColumnBefore().run()}
-                title="Add column before"
-              >
-                <ChevronLeft className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addColumnAfter().run()}
-                title="Add column after"
-              >
-                <ChevronRight className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addRowBefore().run()}
-                title="Add row before"
-              >
-                <ChevronUp className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addRowAfter().run()}
-                title="Add row after"
-              >
-                <ChevronDown className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 hover:text-destructive"
-                onClick={() => editor.chain().focus().deleteColumn().run()}
-                title="Delete column"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 hover:text-destructive"
-                onClick={() => editor.chain().focus().deleteRow().run()}
-                title="Delete row"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 hover:text-destructive"
-                onClick={() => editor.chain().focus().deleteTable().run()}
-                title="Delete table"
-              >
-                <TableIcon className="size-3.5 text-destructive" />
-              </Button>
-            </div>
-          </BubbleMenu>
-        )}
+        {/* Custom Table handles are handled natively inside TableNodeView */}
         
         {/* Text Formatting Bubble Menu */}
         {editor && (
@@ -1723,7 +1664,7 @@ export function SimpleEditor({
               const { selection } = state
               const { empty } = selection
               
-              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
+              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("codeBlock")) {
                 return false
               }
               return true
@@ -1868,6 +1809,8 @@ export function SimpleEditor({
           role="presentation"
           className="simple-editor-content"
         />
+
+        {editor && <TableControlsOverlay editor={editor} />}
 
 
         {/* {isEmpty && (

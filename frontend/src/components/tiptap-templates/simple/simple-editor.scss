@@ -517,3 +517,53 @@ body,
     font-weight: 400;
   }
 }
+
+/* Notion-like Table Interactive Overlays & Styles */
+.table-node-wrapper {
+  position: relative;
+  
+  table {
+    border-collapse: collapse;
+    margin: 0;
+    width: 100%;
+    
+    tr {
+      transition: background-color 0.1s ease;
+    }
+    
+    tr.row-selected {
+      td, th {
+        border-top: 1.5px solid #3b82f6 !important;
+        border-bottom: 1.5px solid #3b82f6 !important;
+        background-color: rgba(59, 130, 246, 0.08) !important;
+        
+        &:first-child {
+          border-left: 1.5px solid #3b82f6 !important;
+        }
+        
+        &:last-child {
+          border-right: 1.5px solid #3b82f6 !important;
+        }
+      }
+    }
+    
+    td.col-selected, th.col-selected {
+      border-left: 1.5px solid #3b82f6 !important;
+      border-right: 1.5px solid #3b82f6 !important;
+      background-color: rgba(59, 130, 246, 0.08) !important;
+    }
+    
+    tr:first-child {
+      td.col-selected, th.col-selected {
+        border-top: 1.5px solid #3b82f6 !important;
+      }
+    }
+    
+    tr:last-child {
+      td.col-selected, th.col-selected {
+        border-bottom: 1.5px solid #3b82f6 !important;
+      }
+    }
+  }
+}
+
