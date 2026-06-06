@@ -274,6 +274,7 @@ function HeroPromptSurface({
             <PromptInputSelectContent>
               {[
                 { id: "gemini", name: "Gemini 3.5 Flash (Default)" },
+                { id: "github", name: "GitHub Models" },
                 { id: "openrouter", name: "OpenRouter AI" },
                 {
                   id: "local",

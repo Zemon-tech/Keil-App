@@ -31,7 +31,7 @@ import {
 // ─── Types ─────────────────────────────────────────────────────────
 type AiMode = "hidden" | "floating" | "sidebar" | "fullscreen";
 
-type ModelSelection = "gemini" | "openrouter" | "local";
+type ModelSelection = "gemini" | "github" | "openrouter" | "local";
 
 interface ThreadItem {
     id: string;
@@ -227,7 +227,7 @@ export function AiAssistant() {
 
     const cycleModel = useCallback(() => {
         setModelSelection((prev) => {
-            const order: ModelSelection[] = ["gemini", "openrouter", "local"];
+            const order: ModelSelection[] = ["gemini", "github", "openrouter", "local"];
             const idx = order.indexOf(prev);
             return order[(idx + 1) % order.length];
         });

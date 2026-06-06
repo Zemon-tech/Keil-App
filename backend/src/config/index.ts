@@ -43,6 +43,10 @@ export const config = {
     googleGenAiApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
     // ── Exa API ──────────────────────────────────────────────────────────────
     exaApiKey: process.env.EXA_API_KEY || "",
+    // ── GitHub Models AI ─────────────────────────────────────────────────────
+    githubToken: process.env.GITHUB_TOKEN || process.env.GITHUB_MODELS_API_KEY || "",
+    githubModelsBaseUrl: process.env.GITHUB_MODELS_BASE_URL || "https://models.inference.ai.azure.com",
+    githubModelsModel: process.env.GITHUB_MODELS_MODEL || "gpt-4o-mini",
     // ── Logging ──────────────────────────────────────────────────────────────
     logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug"),
     grafanaLokiHost: process.env.GRAFANA_LOKI_HOST || "",

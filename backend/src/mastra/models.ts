@@ -50,6 +50,25 @@ function createLocalModel(baseUrl: string, modelName: string) {
   return provider(modelName);
 }
 
+// ─── GitHub Models ────────────────────────────────────────────────────────────
+
+let _githubModel: ReturnType<ReturnType<typeof createOpenAICompatible>> | null = null;
+
+function getGithubModel() {
+  if (!_githubModel) {
+    if (!config.githubToken) {
+      throw new Error("GITHUB_TOKEN is not configured for GitHub Models");
+    }
+    const github = createOpenAICompatible({
+      name: "github-models",
+      baseURL: config.githubModelsBaseUrl,
+      apiKey: config.githubToken,
+    });
+    _githubModel = github(config.githubModelsModel);
+  }
+  return _githubModel;
+}
+
 // ─── Model resolver ───────────────────────────────────────────────────────────
 
 /**
@@ -62,6 +81,9 @@ export function resolveModel(requestContext?: RequestContext) {
   switch (modelSelection) {
     case "openrouter":
       return getOpenRouterModel();
+
+    case "github":
+      return getGithubModel();
 
     case "local": {
       const baseUrl = (requestContext?.get("localAiBaseUrl") as string) || "http://localhost:8080/v1";
