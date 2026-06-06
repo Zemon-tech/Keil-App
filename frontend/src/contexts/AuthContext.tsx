@@ -106,7 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             localStorage.removeItem("motion:lastOpenedPages");
         } catch { /* ignore */ }
         useMotionStore.setState({
-            pages: [],
             dirtyPageIds: new Set<string>(),
             lastOpenedPages: {}
         });

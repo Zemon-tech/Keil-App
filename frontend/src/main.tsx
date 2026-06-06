@@ -80,7 +80,7 @@ createRoot(document.getElementById('root')!).render(
           </AuthProvider>
         </BrowserRouter>
         {/* Only rendered in development builds */}
-        <ReactQueryDevtools initialIsOpen={false} />
+        <ReactQueryDevtools initialIsOpen={false}  />
       </PersistQueryClientProvider>
     </RootErrorBoundary>
   </StrictMode>,

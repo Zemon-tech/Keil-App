@@ -13,8 +13,18 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  PopoverClose,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -122,7 +132,10 @@ function PriorityBadge({
 
   if (!onPriorityChange) {
     return (
-      <Badge variant="outline" className={cn("h-5 gap-1 px-1.5 text-[11px]", cfg.color)}>
+      <Badge
+        variant="outline"
+        className={cn("h-5 gap-1 px-1.5 text-[11px]", cfg.color)}
+      >
         <Flag className="size-3" />
         {priority}
       </Badge>
@@ -134,7 +147,10 @@ function PriorityBadge({
       <PopoverTrigger asChild>
         <Badge
           variant="outline"
-          className={cn("h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors", cfg.color)}
+          className={cn(
+            "h-5 gap-1 px-1.5 text-[11px] cursor-pointer hover:bg-accent transition-colors",
+            cfg.color,
+          )}
         >
           <Flag className="size-3" />
           {priority}
@@ -164,7 +180,11 @@ function PriorityBadge({
 // ─── AssigneesChip ────────────────────────────────────────────────────────────
 
 /** Stacked avatar chips with tooltip for each assignee */
-function AssigneesChip({ assignees }: { assignees: { id: string, name: string | null, email: string }[] }) {
+function AssigneesChip({
+  assignees,
+}: {
+  assignees: { id: string; name: string | null; email: string }[];
+}) {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex items-center -space-x-1.5">
@@ -197,7 +217,15 @@ function AssigneesChip({ assignees }: { assignees: { id: string, name: string | 
 // ─── CreatedByChip ────────────────────────────────────────────────────────────
 
 /** Shows who created the task and when */
-function CreatedByChip({ name, email, createdAt }: { name?: string | null; email?: string | null; createdAt: string }) {
+function CreatedByChip({
+  name,
+  email,
+  createdAt,
+}: {
+  name?: string | null;
+  email?: string | null;
+  createdAt: string;
+}) {
   const displayName = name || email || "Unknown";
   const initial = displayName.charAt(0).toUpperCase();
   const dateStr = formatDate(createdAt);
@@ -263,8 +291,10 @@ export function TaskDetailHeader({
     canChangeAssignedStatus,
   } = useTaskPermissions(task);
 
-  const isAssignee = task.assignees?.some((a) => a.id === currentUserId) ?? false;
-  const canUpdateStatus = canChangeAnyStatus || (canChangeAssignedStatus && isAssignee);
+  const isAssignee =
+    task.assignees?.some((a) => a.id === currentUserId) ?? false;
+  const canUpdateStatus =
+    canChangeAnyStatus || (canChangeAssignedStatus && isAssignee);
 
   const handleStatusChange = (newStatus: TaskStatus) => {
     if (!canUpdateStatus) return;
@@ -283,7 +313,6 @@ export function TaskDetailHeader({
 
   return (
     <div className="shrink-0 border-b border-border px-5 pt-4 pb-3">
-
       {/* Breadcrumb + Actions row */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0 pr-4">
@@ -355,7 +384,11 @@ export function TaskDetailHeader({
             variant={task.status === "done" ? "secondary" : "default"}
             className="h-6 px-3 text-xs"
             onClick={handleMarkDone}
-            disabled={task.status === "done" || changeStatus.isPending || !canUpdateStatus}
+            disabled={
+              task.status === "done" ||
+              changeStatus.isPending ||
+              !canUpdateStatus
+            }
           >
             {task.status === "done" ? "Done ✓" : "Mark done"}
           </Button>
@@ -418,7 +451,11 @@ export function TaskDetailHeader({
         )}
 
         {(task.labels ?? []).map((label) => (
-          <Badge key={label} variant="secondary" className="h-5 px-1.5 text-[10px]">
+          <Badge
+            key={label}
+            variant="secondary"
+            className="h-5 px-1.5 text-[10px]"
+          >
             {label}
           </Badge>
         ))}
@@ -436,7 +473,8 @@ export function TaskDetailHeader({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete task</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>"{task.title}"</strong>? This action cannot be undone.
+              Are you sure you want to delete <strong>"{task.title}"</strong>?
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

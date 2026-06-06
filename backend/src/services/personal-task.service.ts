@@ -22,6 +22,8 @@ export interface PersonalTaskDTO {
   due_date: string | null;
   created_at: string;
   updated_at: string;
+  location?: string | null;
+  meet_link?: string | null;
 }
 
 export interface CreatePersonalTaskInput {
@@ -35,6 +37,8 @@ export interface CreatePersonalTaskInput {
   priority?: TaskPriority;
   start_date?: Date | null;
   due_date?: Date | null;
+  location?: string | null;
+  meet_link?: string | null;
 }
 
 export interface UpdatePersonalTaskInput {
@@ -46,6 +50,8 @@ export interface UpdatePersonalTaskInput {
   priority?: TaskPriority;
   start_date?: Date | null;
   due_date?: Date | null;
+  location?: string | null;
+  meet_link?: string | null;
 }
 
 const toDTO = (task: PersonalTask): PersonalTaskDTO => ({
@@ -62,6 +68,8 @@ const toDTO = (task: PersonalTask): PersonalTaskDTO => ({
   due_date: task.due_date ? task.due_date.toISOString() : null,
   created_at: task.created_at.toISOString(),
   updated_at: task.updated_at.toISOString(),
+  location: task.location,
+  meet_link: task.meet_link ?? null,
 });
 
 const validateDateOrder = (startDate?: Date | null, dueDate?: Date | null): void => {
@@ -105,9 +113,10 @@ export const createPersonalTask = async (
       start_date: task.start_date,
       due_date: task.due_date,
       is_all_day: false,
-      location: null,
+      location: task.location ?? null,
       status: task.status,
       google_event_id: task.google_event_id,
+      meet_link: task.meet_link ?? null,
       source: 'personal_tasks',
     }).catch(err => log.error({ err }, 'Personal task create sync failed'));
   }
@@ -143,9 +152,10 @@ export const updatePersonalTask = async (
       start_date: updated.start_date,
       due_date: updated.due_date,
       is_all_day: false, // personal tasks don't have is_all_day
-      location: null,
+      location: updated.location ?? null,
       status: updated.status,
       google_event_id: updated.google_event_id,
+      meet_link: updated.meet_link ?? null,
       source: 'personal_tasks',
     }).catch(err => log.error({ err }, 'Personal task sync failed'));
   }

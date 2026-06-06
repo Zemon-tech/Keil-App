@@ -13,6 +13,7 @@ export interface TaskDTO {
   event_type?: EventType | null;
   location?: string | null;
   is_all_day?: boolean;
+  meet_link?: string | null;
   description?: string;
   objective?: string;
   success_criteria?: string;
@@ -77,6 +78,7 @@ export interface CreateTaskInput {
   event_type?: EventType | null;
   location?: string | null;
   is_all_day?: boolean;
+  meet_link?: string | null;
   description?: string;
   objective?: string;
   success_criteria?: string;
@@ -96,6 +98,7 @@ export interface UpdateTaskInput {
   event_type?: EventType | null;
   location?: string | null;
   is_all_day?: boolean;
+  meet_link?: string | null;
   description?: string;
   objective?: string;
   success_criteria?: string;

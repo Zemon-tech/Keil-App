@@ -5,7 +5,6 @@ import { AuthPage } from "./components/auth/AuthPage";
 import { Dashboard } from "./components/Dashboard";
 import { TasksPage } from "./components/TasksPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import { TaskDetailRoute } from "./components/auth/TaskDetailRoute";
 import { useAuth } from "./contexts/AuthContext";
 import { InvitePage } from "./components/workspace/InvitePage";
 
@@ -33,11 +32,7 @@ function MotionIndexRoute() {
   if (lastOpenedPageId && !isHomeRequested) {
     return <Navigate to={`/motion/${lastOpenedPageId}`} replace />;
   }
-  return (
-    <Layout>
-      <MotionHome />
-    </Layout>
-  );
+  return <MotionHome />;
 }
 
 
@@ -45,6 +40,18 @@ function MotionIndexRoute() {
 /**
  * Main application component.
  * Configures application routes and protected access.
+ *
+ * ROUTING DESIGN:
+ *
+ * /tasks/:taskId and /events/:eventId live INSIDE ProtectedRoute > Layout so
+ * the global <Layout> (which contains <MeetingDialog />) is never unmounted
+ * when the user navigates into a task detail pane. Previously these routes were
+ * outside Layout (served by a top-level TaskDetailRoute that mounted its own
+ * Layout), which caused the MeetingDialog cleanup to fire and kill the recording.
+ *
+ * PUBLIC DEEP LINKS (unauthenticated visitors on /tasks/:id or /events/:id):
+ * ProtectedRoute detects these paths and renders TaskDetailRoute → PublicTaskView
+ * directly instead of redirecting to /login. See ProtectedRoute.tsx for details.
  */
 function App() {
   const { user } = useAuth();
@@ -57,68 +64,55 @@ function App() {
         element={!user ? <AuthPage /> : <Navigate to="/" replace />}
       />
 
-      {/* ── Public task / event deep links ───────────────────────────────── */}
-      {/* These routes are auth-AWARE (not auth-required).                  */}
-      {/* Authenticated  → full interactive Layout + TasksPage.             */}
-      {/* Unauthenticated → read-only PublicTaskView, no redirect to login. */}
-      <Route path="/tasks/:taskId" element={<TaskDetailRoute />} />
-      <Route path="/events/:eventId" element={<TaskDetailRoute />} />
-
       {/* ── Public Motion pages (no auth, no layout) ─────────────────────── */}
       <Route path="/notes/public/:token" element={<MotionPublicPage mode="token" />} />
       <Route path="/motion/:slug/:pageId" element={<MotionPublicPage mode="pageId" />} />
 
-      {/* ── Protected Routes ─────────────────────────────────────────────── */}
       <Route element={<ProtectedRoute />}>
-        <Route
-          path="/"
-          element={
-            <Layout>
-              <Dashboard />
-            </Layout>
-          }
-        />
-        {/* /tasks and /events without an ID → task list + calendar */}
-        <Route
-          path="/tasks"
-          element={
-            <Layout>
-              <TasksPage />
-            </Layout>
-          }
-        />
-
-        <Route
-          path="/events"
-          element={
-            <Layout>
-              <TasksPage />
-            </Layout>
-          }
-        />
+        <Route element={<Layout />}>
+          <Route
+            path="/"
+            element={<Dashboard />}
+          />
+          {/* /tasks and /events without an ID → task list + calendar */}
+          <Route
+            path="/tasks"
+            element={<TasksPage />}
+          />
+          <Route
+            path="/events"
+            element={<TasksPage />}
+          />
+          {/*
+            /tasks/:taskId and /events/:eventId for authenticated users.
+            MUST stay inside Layout so the global MeetingDialog is never
+            unmounted during task navigation — keeping recording sessions alive.
+            TasksPage reads useParams() for the taskId/eventId param.
+          */}
+          <Route
+            path="/tasks/:taskId"
+            element={<TasksPage />}
+          />
+          <Route
+            path="/events/:eventId"
+            element={<TasksPage />}
+          />
+          <Route
+            path="/motion"
+            element={<MotionIndexRoute />}
+          />
+          <Route
+            path="/motion/profile"
+            element={<MotionProfile />}
+          />
+          <Route
+            path="/motion/:pageId"
+            element={<MotionPage />}
+          />
+        </Route>
         <Route
           path="/my-tasks"
           element={<Navigate to="/tasks" replace />}
-        />
-        <Route
-          path="/motion"
-          element={<MotionIndexRoute />}
-        />
-        <Route
-          path="/motion/profile"
-          element={
-            <Layout>
-              <MotionProfile />
-            </Layout>
-          }
-        />
-        <Route
-          path="/motion/:pageId"
-          element={
-            <Layout>
-              <MotionPage />
-            </Layout>
-          }
         />
         {/* New Meetings route - redirect to motion */}
         <Route

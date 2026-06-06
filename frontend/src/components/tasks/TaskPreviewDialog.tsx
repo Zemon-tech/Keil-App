@@ -58,6 +58,8 @@ import { CreateTaskDialog } from "./CreateTaskDialog";
 interface TaskPreviewDialogProps {
   /** The task or event ID to preview. */
   taskId: string;
+  orgId?: string;    // the task's home org
+  spaceId?: string;  // the task's home space
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUnschedule?: (taskId: string) => void;
@@ -124,6 +126,8 @@ function getEventIcon(eventType?: string | null) {
 
 export function TaskPreviewDialog({
   taskId,
+  orgId,
+  spaceId,
   open,
   onOpenChange,
   onUnschedule,
@@ -132,10 +136,13 @@ export function TaskPreviewDialog({
 }: TaskPreviewDialogProps) {
   const navigate = useNavigate();
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const { data: task, isLoading } = useOrgTask(activeOrgId, activeSpaceId, taskId);
-  const updateTask = useUpdateOrgTask(activeOrgId, activeSpaceId);
-  const deleteTask = useDeleteOrgTask(activeOrgId, activeSpaceId);
-  const changeTaskStatus = useChangeOrgTaskStatus(activeOrgId, activeSpaceId);
+  const resolvedOrgId = orgId || activeOrgId;
+  const resolvedSpaceId = spaceId || activeSpaceId;
+
+  const { data: task, isLoading } = useOrgTask(resolvedOrgId, resolvedSpaceId, taskId);
+  const updateTask = useUpdateOrgTask(resolvedOrgId, resolvedSpaceId);
+  const deleteTask = useDeleteOrgTask(resolvedOrgId, resolvedSpaceId);
+  const changeTaskStatus = useChangeOrgTaskStatus(resolvedOrgId, resolvedSpaceId);
 
   const [descExpanded, setDescExpanded] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);

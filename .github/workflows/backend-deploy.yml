@@ -97,29 +97,28 @@ jobs:
             --service-name keil-backend-service \
             --label keil-backend \
             --image ghcr.io/zemon-tech/keil-backend:latest
-          
+
           # Query the latest pushed image name using AWS CLI directly from the API (sorted by creation time)
           echo "🔍 Querying the registered image name from Lightsail..."
           image_name=$(aws lightsail get-container-images \
             --service-name keil-backend-service \
             --query "containerImages[?contains(image, '.keil-backend.')] | sort_by(@, &createdAt)[-1].image" \
             --output text)
-          
+
           echo "IMAGE_NAME=$image_name" >> $GITHUB_ENV
           echo "✅ Pushed image name is: $image_name"
-
 
       # 5. Fetch current deployment config, swap the image, and trigger a rolling update
       - name: Dynamic Deployment (Preserving Environment Variables)
         run: |
           echo "🔄 Fetching current active deployment to preserve your environment variables..."
-          
+
           # Get the active deployment JSON
           current_deploy=$(aws lightsail get-container-service-deployments \
             --service-name keil-backend-service \
             --query "deployments[0]" \
             --output json)
-          
+
           # If no deployments exist yet (first deploy), fallback to a default structure
           if [ "$current_deploy" = "null" ] || [ -z "$current_deploy" ]; then
             echo "⚠️ No active deployment found. Creating your first default configuration..."
@@ -163,13 +162,11 @@ jobs:
               --argjson endpt "$public_endpoint" \
               '{serviceName: $svc, containers: $conts, publicEndpoint: $endpt}' > deployment.json
           fi
-          
+
           echo "📦 Final Deployment JSON:"
           cat deployment.json
-          
+
           echo "🚀 Deploying to AWS Lightsail..."
           aws lightsail create-container-service-deployment --cli-input-json file://deployment.json
-          
+
           echo "🎉 Deployment initiated successfully!"
-
-

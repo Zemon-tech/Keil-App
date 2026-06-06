@@ -10,6 +10,7 @@ import { supervisor } from "./agents/supervisor";
 import { taskAgent } from "./agents/task.agent";
 import { chatAgent } from "./agents/chat.agent";
 import { motionAgent } from "./agents/motion.agent";
+import { schedulerAgent } from "./agents/scheduler.agent";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 // Mastra storage needs a direct/session connection (not transaction pooler)
@@ -62,6 +63,7 @@ export const mastra = new Mastra({
     "keilhq-task-agent": taskAgent,
     "keilhq-chat-agent": chatAgent,
     "keilhq-motion-agent": motionAgent,
+    "keilhq-scheduler-agent": schedulerAgent,
   },
   storage,
   server: {
@@ -128,6 +130,7 @@ export const mastra = new Mastra({
               for await (const part of toAISdkStream(agentStream, {
                 from: "agent",
                 version: "v6",
+                sendReasoning: true,
               })) {
                 writer.write(part as any);
               }

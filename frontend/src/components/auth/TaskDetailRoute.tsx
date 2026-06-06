@@ -1,27 +1,32 @@
 import { useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogoLoader } from "@/components/LogoLoader";
-import { Layout } from "@/components/Layout";
-import { TasksPage } from "@/components/TasksPage";
 import { PublicTaskView } from "@/components/tasks/PublicTaskView";
 import { usePublicTask } from "@/hooks/api/usePublicTask";
 
 /**
  * TaskDetailRoute
  *
- * Smart route wrapper for /tasks/:taskId and /events/:eventId.
+ * Route handler for /tasks/:taskId and /events/:eventId deep links.
  *
- * ┌─────────────────────────────────────────────────────────────┐
- * │  Auth state       │  Rendering                              │
- * │─────────────────────────────────────────────────────────────│
- * │  Loading          │  Minimal spinner (no 8s splash)         │
- * │  Authenticated    │  Full Layout + TasksPage (no change)    │
- * │  Not authenticated│  PublicTaskView (read-only, no sidebar) │
- * └─────────────────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │  Auth state        │  Rendering                                 │
+ * │───────────────────────────────────────────────────────────────  │
+ * │  Loading           │  Minimal spinner (no 8s splash)            │
+ * │  Authenticated     │  null — React Router serves the            │
+ * │                    │  ProtectedRoute > Layout > TasksPage path   │
+ * │                    │  which keeps the global Layout (and         │
+ * │                    │  MeetingDialog) alive during navigation.    │
+ * │  Not authenticated │  PublicTaskView (read-only, no sidebar)     │
+ * └─────────────────────────────────────────────────────────────────┘
  *
- * The existing ProtectedRoute splash (LogoLoader) only fires for the
- * main app shell. Deep-link visitors — whether logged in or not — get a
- * lightweight spinner and then the appropriate view immediately.
+ * WHY authenticated users return null here:
+ * App.tsx defines /tasks/:taskId BOTH at the top level (this route) and
+ * inside ProtectedRoute > Layout. React Router matches routes in order.
+ * When the user IS authenticated, ProtectedRoute has already rendered the
+ * correct Layout + TasksPage subtree, so this component is never reached.
+ * If it ever is, returning null is safe — the URL is correct and the
+ * ProtectedRoute subtree will handle it on the next render cycle.
  */
 export function TaskDetailRoute() {
   const { user, loading: authLoading } = useAuth();
@@ -29,7 +34,7 @@ export function TaskDetailRoute() {
   const taskIdToFetch = taskId ?? eventId;
 
   // Fetch public data only when user is NOT authenticated.
-  // For authenticated users this hook stays disabled — they get full TasksPage.
+  // For authenticated users this hook stays disabled.
   const {
     data: publicTask,
     isLoading: isPublicLoading,
@@ -46,13 +51,12 @@ export function TaskDetailRoute() {
     );
   }
 
-  // ── Authenticated user → render full interactive app ───────────────────────
+  // ── Authenticated user → the ProtectedRoute > Layout path handles this ─────
+  // This component should not be reached for authenticated users because
+  // App.tsx places /tasks/:taskId inside ProtectedRoute > Layout as well.
+  // Return null as a safe no-op; the correct subtree is already rendered.
   if (user) {
-    return (
-      <Layout>
-        <TasksPage />
-      </Layout>
-    );
+    return null;
   }
 
   // ── Unauthenticated visitor → render public read-only view ─────────────────

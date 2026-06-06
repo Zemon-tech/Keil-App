@@ -397,7 +397,7 @@ export function StitchUpdateDialog() {
               {/* ── Close button ──────────────────────────────────────── */}
               <button
                 onClick={handleClose}
-                className="absolute top-4 right-4 z-10 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 hover:bg-accent text-muted-foreground hover:text-foreground"
+                className="absolute top-4 right-4 z-50 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 hover:bg-accent text-muted-foreground hover:text-foreground"
                 aria-label="Close"
               >
                 <X size={16} />

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -53,6 +54,7 @@ import { useTheme } from "next-themes";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { useChatStore } from "@/store/useChatStore";
 import { useMeetingStore } from "@/store/useMeetingStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
 import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
 import type { Organisation } from "@/hooks/api/useOrganisations";
@@ -71,7 +73,6 @@ import { useCreateOrganisation, useJoinOrganisation } from "@/hooks/api/useOrgan
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
-  { title: "Meetings", action: "meetings", icon: Mic },
   { title: "Motion", url: "/motion", icon: Image },
   { title: "Notifications", action: "notifications", icon: Bell },
 ];
@@ -143,21 +144,19 @@ function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManag
         <div className="flex rounded-lg border border-border p-0.5 bg-muted/40 gap-0.5">
           <button
             onClick={() => setTab("create")}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-              tab === "create"
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${tab === "create"
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
           >
             Create
           </button>
           <button
             onClick={() => setTab("join")}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${
-              tab === "join"
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${tab === "join"
                 ? "bg-background shadow-sm text-foreground"
                 : "text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
           >
             Join
           </button>
@@ -320,14 +319,21 @@ export function AppSidebar({
   const [settingsInitialTab, setSettingsInitialTab] = useState<
     "account" | "org-general"
   >("account");
+  const { isOpen: settingsStoreOpen, initialTab: settingsStoreTab, closeSettings } = useSettingsStore();
   const [orgManageOpen, setOrgManageOpen] = useState(false);
   const [orgManageTab, setOrgManageTab] = useState<"create" | "join">("create");
   const openChat = useChatStore((state) => state.openChat);
+  const openChatDialog = useChatStore((state) => state.openChatDialog);
   const closeChat = useChatStore((state) => state.closeChat);
   const [searchQuery, setSearchQuery] = useState("");
   const { unreadCount } = useNotifications();
 
-  const { isMinimized, restoreDialog, duration, status, isDialogOpen, openDialog } = useMeetingStore();
+  const isMinimized = useMeetingStore((s) => s.isMinimized);
+  const restoreDialog = useMeetingStore((s) => s.restoreDialog);
+  const duration = useMeetingStore((s) => s.duration);
+  const status = useMeetingStore((s) => s.status);
+  const isDialogOpen = useMeetingStore((s) => s.isDialogOpen);
+  const openDialog = useMeetingStore((s) => s.openDialog);
 
   // Global WebSocket listener for background meeting transcription updates
   useEffect(() => {
@@ -341,7 +347,7 @@ export function AppSidebar({
       recording?: any;
     }) => {
       console.log("[AppSidebar] WebSocket meeting update event received:", payload);
-      
+
       if (payload.status === "processing") {
         toast.info("Meeting Sync Started", {
           description: "Your background capture is now being transcribed using AI.",
@@ -524,7 +530,7 @@ export function AppSidebar({
                 className="h-9 rounded-xl border-border/60 bg-background/75 pl-9 pr-12 text-[13px] shadow-sm"
               />
               <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-border/70 bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                Ctrl F
+                Ctrl + K
               </kbd>
             </div>
           )}
@@ -553,9 +559,7 @@ export function AppSidebar({
                       <SidebarMenuButton
                         onClick={() => {
                           if ("action" in item) {
-                            if (item.action === "meetings") {
-                              openDialog();
-                            } else if (item.action === "notifications") {
+                            if (item.action === "notifications") {
                               closeChat();
                               onNotificationDrawerOpenChange?.(true);
                             }
@@ -563,9 +567,7 @@ export function AppSidebar({
                         }}
                         isActive={
                           "action" in item
-                            ? item.action === "meetings"
-                              ? (isDialogOpen && !isMinimized)
-                              : item.action === "notifications"
+                            ? item.action === "notifications"
                               ? (notificationDrawerOpen || notificationDialogOpen)
                               : false
                             : false
@@ -594,7 +596,12 @@ export function AppSidebar({
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => {
-                        openChat();
+                        const defaultView = localStorage.getItem("default_chat_view") || "sidebar";
+                        if (defaultView === "dialog") {
+                          openChatDialog();
+                        } else {
+                          openChat();
+                        }
                         onNotificationDrawerOpenChange?.(false);
                       }}
                       tooltip="Chat"
@@ -615,46 +622,51 @@ export function AppSidebar({
 
         {/* ── Footer: profile dropdown ── */}
         <SidebarFooter className="shrink-0 border-t border-border/50 p-1.5 px-2 gap-2">
-          {/* Minimized meeting recording widget */}
-          {isMinimized && (
-            isCollapsed ? (
-              <div 
-                onClick={restoreDialog}
-                className="flex items-center justify-center size-9 mx-auto rounded-xl bg-violet-600/10 dark:bg-violet-500/10 border border-violet-500/20 hover:bg-violet-600 dark:hover:bg-violet-500 hover:text-white cursor-pointer transition-all duration-300 relative group/mini"
-                title="Recording meeting - Click to open"
+          {/* ── Meeting Mic Button ── always visible above user section */}
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => {
+                  if (isMinimized) {
+                    restoreDialog();
+                  } else {
+                    openDialog();
+                  }
+                }}
+                isActive={isDialogOpen && !isMinimized}
+                tooltip={isMinimized ? `${status === "recording" ? "Recording" : status === "uploading" ? "Uploading" : "Processing"} — click to open` : "Meetings"}
+                className={cn(
+                  "h-9 rounded-xl px-3 text-[13px] font-medium transition-all duration-300",
+                  "data-[active=true]:bg-background data-[active=true]:shadow-sm data-[active=true]:ring-1 data-[active=true]:ring-border/60",
+                  isMinimized
+                    ? "bg-violet-500/10 border border-violet-500/30 shadow-[0_0_10px_2px_rgba(139,92,246,0.2)] hover:bg-violet-500/15"
+                    : ""
+                )}
               >
-                <Mic className="size-4 text-violet-500 dark:text-violet-400 group-hover/mini:text-white animate-pulse" />
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                </span>
-              </div>
-            ) : (
-              <div 
-                onClick={restoreDialog}
-                className="group/mini relative flex items-center gap-3 rounded-xl bg-violet-600/10 dark:bg-violet-500/10 border border-violet-500/20 hover:border-violet-500/40 p-2.5 cursor-pointer transition-all duration-300 hover:shadow-md animate-in fade-in slide-in-from-bottom-2"
-              >
-                <div className="relative flex items-center justify-center size-8 rounded-lg bg-violet-600 text-white shrink-0 shadow-sm shadow-violet-500/20">
-                  <Mic className="size-4 animate-pulse" />
-                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col text-left">
-                  <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider leading-none">
-                    {status === "recording" ? "Recording" : status === "uploading" ? "Uploading" : "Processing"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground truncate font-medium mt-1 leading-none">
-                    Click to open Studio
-                  </span>
-                </div>
-                <span className="text-xs font-mono font-bold text-foreground tabular-nums bg-background/50 dark:bg-black/20 px-2 py-0.5 rounded border border-border/40 shrink-0">
-                  {formatTime(duration)}
-                </span>
-              </div>
-            )
-          )}
+                <Mic
+                  className={cn(
+                    "shrink-0 transition-all duration-300",
+                    isMinimized
+                      ? "text-violet-500 dark:text-violet-400 animate-pulse drop-shadow-[0_0_4px_rgba(139,92,246,0.8)]"
+                      : "text-muted-foreground"
+                  )}
+                />
+                {/* When minimized (expanded sidebar): show status + timer instead of plain label */}
+                {isMinimized ? (
+                  <div className="flex flex-1 items-center justify-between min-w-0">
+                    <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 truncate">
+                      {status === "recording" ? "Recording" : status === "uploading" ? "Uploading" : "Processing"}
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-foreground tabular-nums shrink-0 ml-2">
+                      {formatTime(duration)}
+                    </span>
+                  </div>
+                ) : (
+                  <span>Meetings</span>
+                )}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
 
           <SidebarMenu>
             <SidebarMenuItem>
@@ -791,9 +803,16 @@ export function AppSidebar({
         initialTab={orgManageTab}
       />
       <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        initialTab={settingsInitialTab}
+        open={settingsOpen || settingsStoreOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSettingsOpen(false);
+            closeSettings();
+          } else {
+            setSettingsOpen(true);
+          }
+        }}
+        initialTab={settingsStoreOpen ? settingsStoreTab : settingsInitialTab}
       />
     </>
   );

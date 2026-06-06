@@ -15,6 +15,9 @@ import { WheelPicker } from "./WheelPicker";
 import { ImmediateBlockersCard } from "./ImmediateBlockersCard";
 import { NeedsReplyCard } from "./NeedsReplyCard";
 import { UpNextCard } from "./UpNextCard";
+import { CurrentFocusCard } from "./CurrentFocusCard";
+import { NextEventCard } from "./NextEventCard";
+import { QuickCaptureCard } from "./QuickCaptureCard";
 import type { DashboardResponse } from "@/hooks/api/useDashboard";
 
 interface DashboardPanelProps {
@@ -72,6 +75,12 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
   }, []);
 
   const wheelItems = [
+    <CurrentFocusCard
+      key="focus"
+      task={data?.today?.[0] || data?.immediate?.[0] || null}
+      isLoading={isLoading}
+      isWheel
+    />,
     <ImmediateBlockersCard
       key="blockers"
       tasks={data?.immediate ?? []}
@@ -79,6 +88,8 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
       isWheel
     />,
     <NeedsReplyCard key="reply" replies={data?.needsReply ?? []} isWheel />,
+    <NextEventCard key="nextevent" isWheel />,
+    <QuickCaptureCard key="quickcapture" isWheel />,
     <UpNextCard
       key="upnext"
       tasks={data?.today ?? []}
@@ -124,13 +135,13 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
     <div className="w-full max-w-[54rem] px-4 mt-4 sm:mt-5">
       <div
         className={cn(
-          "flex w-full flex-col overflow-hidden rounded-[1.45rem] border border-border/70 bg-background/92 backdrop-blur-xl",
+          "flex w-full flex-col overflow-hidden rounded-[1.45rem] border border-border/70 bg-background/92 backdrop-blur-xl no-scrollbar",
           "shadow-[0_22px_70px_-54px_rgba(15,23,42,0.48)] transition-all duration-300 ease-in-out",
           "sm:flex-row",
         )}
         style={{ height: dimensions.containerHeight }}
       >
-        <div className="relative size-full shrink-0 border-b border-border/60 bg-muted/15 sm:w-[31%] sm:border-b-0 sm:border-r">
+        <div className="relative size-full shrink-0 border-b border-border/60 bg-muted/15 sm:w-[31%] sm:border-b-0 sm:border-r no-scrollbar">
           <WheelPicker
             items={wheelItems}
             containerHeight={dimensions.containerHeight}
@@ -143,7 +154,7 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-muted/20 via-transparent to-transparent" />
           <div className="relative z-10 grid min-h-0 w-full grid-cols-[1.15fr_1fr] gap-3 p-3 sm:p-4">
-            <div className="flex min-w-0 flex-col justify-between rounded-2xl border border-border/60 bg-card/55 p-3">
+            <div className="flex min-w-0 flex-col justify-between p-3 bg-transparent">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <CalendarDays className="size-4 shrink-0 text-muted-foreground" />

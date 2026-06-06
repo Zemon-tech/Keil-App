@@ -16,10 +16,8 @@ import { Typography } from "@tiptap/extension-typography"
 import { Highlight } from "@tiptap/extension-highlight"
 import { Subscript } from "@tiptap/extension-subscript"
 import { Superscript } from "@tiptap/extension-superscript"
-import { Table } from "@tiptap/extension-table"
+import { CustomTable, CustomTableCell, CustomTableHeader } from "@/extensions/CustomTableExtension"
 import { TableRow } from "@tiptap/extension-table-row"
-import { TableCell } from "@tiptap/extension-table-cell"
-import { TableHeader } from "@tiptap/extension-table-header"
 import { Placeholder } from "@tiptap/extension-placeholder"
 import { Link } from "@tiptap/extension-link"
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight"
@@ -28,7 +26,8 @@ import { Details, DetailsSummary, DetailsContent } from "@tiptap/extension-detai
 import { BlockIdExtension } from "@/extensions/BlockIdExtension"
 import { EnforceFinalBlockExtension } from "@/extensions/EnforceFinalBlockExtension"
 import { SubpageExtension } from "@/extensions/SubpageExtension"
-import GlobalDragHandle from 'tiptap-extension-global-drag-handle'
+import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
+
 import Paragraph from '@tiptap/extension-paragraph'
 import Heading from '@tiptap/extension-heading'
 import Blockquote from '@tiptap/extension-blockquote'
@@ -45,6 +44,26 @@ const CustomBlockquote = Blockquote.extend({
     }
   }
 })
+
+const CustomDetailsSummary = DetailsSummary.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      level: {
+        default: null,
+        parseHTML: element => {
+          const val = element.getAttribute('data-level')
+          return val ? parseInt(val, 10) : null
+        },
+        renderHTML: attributes => {
+          if (!attributes.level) return {}
+          return { 'data-level': attributes.level }
+        }
+      }
+    }
+  }
+})
+
 import { TextStyle } from "@tiptap/extension-text-style"
 import { Color } from "@tiptap/extension-color"
 import { FontFamily } from "@tiptap/extension-font-family"
@@ -105,7 +124,6 @@ import {
   Italic,
   Strikethrough,
   Code,
-  Link as LinkIcon,
   Heading1,
   Heading2,
   Heading3,
@@ -120,21 +138,9 @@ import {
   FileText,
   Youtube as YoutubeIcon,
   ChevronRight,
-  Trash2,
-  Copy,
-  ChevronDown,
   Palette,
-  Check,
   Search,
   Underline as UnderlineIcon,
-  ArrowRight,
-  ChevronUp,
-  ChevronLeft,
-  RotateCcw,
-  MessageSquare,
-  PencilLine,
-  SquareTerminal,
-  Sigma,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -143,7 +149,6 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 
 // --- Tiptap Node ---
 import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
@@ -160,6 +165,8 @@ import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
+import { TableControlsOverlay } from "./TableControlsOverlay"
+import { BlockDragHandle } from "./BlockDragHandle"
 
 const lowlight = createLowlight(common)
 
@@ -177,37 +184,6 @@ type BlockTarget = {
   to: number
 }
 
-const DRAG_HANDLE_WIDTH = 56
-const DRAG_HANDLE_GAP = 48
-
-const NOTION_COLORS = [
-  { name: 'Default', color: 'inherit', bg: 'transparent' },
-  { name: 'Gray', color: '#9B9A97', bg: '#EBeced' },
-  { name: 'Brown', color: '#64473A', bg: '#E9E5E3' },
-  { name: 'Orange', color: '#D9730D', bg: '#FAEBDD' },
-  { name: 'Yellow', color: '#DFAB01', bg: '#FBF3DB' },
-  { name: 'Green', color: '#0F7B6C', bg: '#DDEDEA' },
-  { name: 'Blue', color: '#0B6E99', bg: '#DDEBF1' },
-  { name: 'Purple', color: '#6940A5', bg: '#EAE4F2' },
-  { name: 'Pink', color: '#AD1A72', bg: '#F4DFEB' },
-  { name: 'Red', color: '#E03E3E', bg: '#FBE4E4' },
-]
-const BLOCK_HOVER_SELECTOR = [
-  "li",
-  "p",
-  "pre",
-  "blockquote",
-  ".callout",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "hr",
-  "table",
-  '[data-type="details"]',
-].join(", ")
 
 function getTextBeforeCursorInParent(editor: NonNullable<ReturnType<typeof useEditor>>) {
   const { selection } = editor.state
@@ -226,23 +202,21 @@ function rangeSpansMultipleBlocks(doc: any, from: number, to: number) {
   return blockCount > 1
 }
 
-function selectionSpansMultipleBlocks(state: EditorState) {
-  const { selection } = state
-  if (selection.empty) return false
-  return rangeSpansMultipleBlocks(state.doc, selection.from, selection.to)
-}
-
 export function SimpleEditor({
   content,
   onContentChange,
   onReady,
   onAddSubpage,
+  onDeleteSubpage,
+  onRestoreSubpage,
   editable,
 }: {
   content?: JSONContent
   onContentChange?: (content: JSONContent) => void
   onReady?: (editor: NonNullable<ReturnType<typeof useEditor>>) => void
   onAddSubpage?: () => any
+  onDeleteSubpage?: (id: string) => void
+  onRestoreSubpage?: (id: string) => void
   editable?: boolean
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -274,22 +248,23 @@ export function SimpleEditor({
     onAddSubpageRef.current = onAddSubpage
   }, [onAddSubpage])
 
+  const onDeleteSubpageRef = useRef(onDeleteSubpage)
+  useEffect(() => {
+    onDeleteSubpageRef.current = onDeleteSubpage
+  }, [onDeleteSubpage])
+
+  const onRestoreSubpageRef = useRef(onRestoreSubpage)
+  useEffect(() => {
+    onRestoreSubpageRef.current = onRestoreSubpage
+  }, [onRestoreSubpage])
+
+  const previousSubpageIdsRef = useRef<Set<string>>(new Set())
+
   useEffect(() => {
     setSlashSelectedIndex(0)
   }, [slashQuery])
 
-  const [blockMenu, setBlockMenu] = useState<{
-    left: number
-    top: number
-    target: BlockTarget | null
-    type: string
-  } | null>(null)
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'turn-into' | 'color' | 'move-to'>('none')
-  const [menuSearch, setMenuSearch] = useState("")
   const virtualSlashStartRef = useRef<number | null>(null)
-  const currentBlockTargetRef = useRef<BlockTarget | null>(null)
-  const blockMenuOpenRef = useRef(false)
-  const hideHandleTimerRef = useRef<number | null>(null)
 
   const [editorEmojiPicker, setEditorEmojiPicker] = useState<{
     left: number
@@ -301,11 +276,6 @@ export function SimpleEditor({
   const extensions = useMemo(() => [
     BlockIdExtension,
     EnforceFinalBlockExtension,
-    GlobalDragHandle.configure({
-      dragHandleWidth: DRAG_HANDLE_WIDTH,
-      scrollTreshold: 100,
-      customNodes: ['taskItem', 'listItem', 'subpage'],
-    }),
     StarterKit.configure({
       paragraph: false,
       heading: false,
@@ -326,7 +296,9 @@ export function SimpleEditor({
     Superscript,
     Subscript,
     Link.configure({
-      openOnClick: false,
+      openOnClick: true,
+      autolink: true,
+      defaultProtocol: "https",
       HTMLAttributes: {
         class: "text-primary underline underline-offset-4 cursor-pointer",
       },
@@ -342,12 +314,12 @@ export function SimpleEditor({
         return "Type '/' for commands..."
       },
     }),
-    Table.configure({
+    CustomTable.configure({
       resizable: true,
     }),
     TableRow,
-    TableHeader,
-    TableCell,
+    CustomTableHeader,
+    CustomTableCell,
     CodeBlockLowlight.configure({
       lowlight,
     }),
@@ -363,8 +335,9 @@ export function SimpleEditor({
         class: "details",
       },
     }),
-    DetailsSummary,
+    CustomDetailsSummary,
     DetailsContent,
+    HorizontalRule,
     TextStyle,
     Color,
     FontFamily,
@@ -411,8 +384,44 @@ export function SimpleEditor({
     content,
     onUpdate: ({ editor }) => {
       onContentChangeRef.current?.(editor.getJSON())
+
+      // Detect subpages added or removed
+      const currentSubpageIds = new Set<string>()
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "subpage" && node.attrs.id) {
+          currentSubpageIds.add(node.attrs.id)
+        }
+      })
+
+      // Find deleted subpage IDs
+      previousSubpageIdsRef.current.forEach((id) => {
+        if (!currentSubpageIds.has(id)) {
+          onDeleteSubpageRef.current?.(id)
+        }
+      })
+
+      // Find restored subpage IDs
+      currentSubpageIds.forEach((id) => {
+        if (!previousSubpageIdsRef.current.has(id)) {
+          onRestoreSubpageRef.current?.(id)
+        }
+      })
+
+      previousSubpageIdsRef.current = currentSubpageIds
     },
   })
+
+  useEffect(() => {
+    if (editor) {
+      const initialIds = new Set<string>()
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "subpage" && node.attrs.id) {
+          initialIds.add(node.attrs.id)
+        }
+      })
+      previousSubpageIdsRef.current = initialIds
+    }
+  }, [editor])
 
   useEffect(() => {
     if (editor && editable !== undefined) {
@@ -430,70 +439,6 @@ export function SimpleEditor({
       editor.commands.focus()
     }
   }, [editor])
-
-  useEffect(() => {
-    blockMenuOpenRef.current = Boolean(blockMenu)
-  }, [blockMenu])
-
-  const getDragHandle = useCallback(
-    () => wrapperRef.current?.querySelector<HTMLElement>(".drag-handle") ?? null,
-    []
-  )
-
-  const clearScheduledHandleHide = useCallback(() => {
-    if (hideHandleTimerRef.current === null) return
-
-    window.clearTimeout(hideHandleTimerRef.current)
-    hideHandleTimerRef.current = null
-  }, [])
-
-  const showDragHandle = useCallback(
-    (handle: HTMLElement, pinned = false) => {
-      clearScheduledHandleHide()
-      handle.dataset.show = "true"
-      if (pinned) handle.dataset.pinned = "true"
-      handle.classList.remove("hide")
-    },
-    [clearScheduledHandleHide]
-  )
-
-  const hasSelectedBlock = useCallback(() => {
-    return editor?.state.selection instanceof NodeSelection
-  }, [editor])
-
-  const hideDragHandle = useCallback(
-    (force = false) => {
-      const handle = getDragHandle()
-      if (!handle) return
-
-      if (
-        !force &&
-        (blockMenuOpenRef.current ||
-          handle.matches(":hover") ||
-          hasSelectedBlock())
-      ) {
-        showDragHandle(handle, blockMenuOpenRef.current || hasSelectedBlock())
-        return
-      }
-
-      currentBlockTargetRef.current = null
-      handle.removeAttribute("data-show")
-      handle.removeAttribute("data-pinned")
-      handle.classList.add("hide")
-    },
-    [getDragHandle, hasSelectedBlock, showDragHandle]
-  )
-
-  const scheduleHandleHide = useCallback(
-    (delay = 120) => {
-      clearScheduledHandleHide()
-      hideHandleTimerRef.current = window.setTimeout(() => {
-        hideHandleTimerRef.current = null
-        hideDragHandle()
-      }, delay)
-    },
-    [clearScheduledHandleHide, hideDragHandle]
-  )
 
   const calculateSlashPosition = useCallback((coords: { left: number; top: number; bottom: number }) => {
     const spaceBelow = window.innerHeight - coords.bottom - 8
@@ -552,149 +497,10 @@ export function SimpleEditor({
     [editor, calculateSlashPosition]
   )
 
-  const getTargetFromDragHandle = useCallback((): BlockTarget | null => {
-    if (!editor) return null
-    if (currentBlockTargetRef.current) return currentBlockTargetRef.current
-
-    const handle = wrapperRef.current?.querySelector<HTMLElement>(".drag-handle")
-    if (!handle) return null
-
-    const rect = handle.getBoundingClientRect()
-    const pos = editor.view.posAtCoords({
-      left: rect.right + DRAG_HANDLE_GAP + 8,
-      top: rect.top + rect.height / 2,
-    })
-    if (!pos) return null
-
-    const $pos = editor.state.doc.resolve(pos.pos)
-    for (let depth = $pos.depth; depth > 0; depth -= 1) {
-      const node = $pos.node(depth)
-      if (node.type.name === "listItem" || node.type.name === "taskItem") {
-        return { from: $pos.before(depth), to: $pos.after(depth) }
-      }
-    }
-
-    for (let depth = $pos.depth; depth > 0; depth -= 1) {
-      const node = $pos.node(depth)
-      if (node.isBlock) {
-        return { from: $pos.before(depth), to: $pos.after(depth) }
-      }
-    }
-
-    return null
-  }, [editor])
-
-  const getBlockTargetFromElement = useCallback(
-    (element: HTMLElement): BlockTarget | null => {
-      if (!editor) return null
-
-      const rect = element.getBoundingClientRect()
-      const pos = editor.view.posAtCoords({
-        left: Math.min(rect.left + 8, rect.right - 1),
-        top: rect.top + Math.min(12, Math.max(1, rect.height / 2)),
-      })
-      if (!pos) return null
-
-      const $pos = editor.state.doc.resolve(pos.pos)
-
-      for (let depth = $pos.depth; depth > 0; depth -= 1) {
-        const node = $pos.node(depth)
-        if (node.type.name === "listItem" || node.type.name === "taskItem") {
-          return { from: $pos.before(depth), to: $pos.after(depth) }
-        }
-      }
-
-      for (let depth = $pos.depth; depth > 0; depth -= 1) {
-        const node = $pos.node(depth)
-        if (node.isBlock) {
-          return { from: $pos.before(depth), to: $pos.after(depth) }
-        }
-      }
-
-      return null
-    },
-    [editor]
-  )
-
-  const getBlockElementAtPoint = useCallback(
-    (clientX: number, clientY: number): HTMLElement | null => {
-      if (!editor) return null
-
-      const editorDom = editor.view.dom
-      const findCandidate = (x: number, y: number) => {
-        const elements = document.elementsFromPoint(x, y)
-
-        for (const element of elements) {
-          if (!(element instanceof HTMLElement)) continue
-          if (!editorDom.contains(element)) continue
-
-          const listItem = element.closest<HTMLElement>("li")
-          if (listItem && editorDom.contains(listItem)) return listItem
-
-          const details = element.closest<HTMLElement>('[data-type="details"]')
-          if (details && editorDom.contains(details)) return details
-
-          const block = element.closest<HTMLElement>(BLOCK_HOVER_SELECTOR)
-          if (block && editorDom.contains(block)) return block
-        }
-
-        return null
-      }
-
-      const blockAtCursor = findCandidate(clientX, clientY)
-      if (blockAtCursor) return blockAtCursor
-
-      const editorRect = editorDom.getBoundingClientRect()
-      const inEditorRow = clientY >= editorRect.top && clientY <= editorRect.bottom
-      const inLeftGutter =
-        clientX >= editorRect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP - 16 &&
-        clientX < editorRect.left
-
-      if (inEditorRow && inLeftGutter) {
-        return findCandidate(editorRect.left + 8, clientY)
-      }
-
-      return null
-    },
-    [editor]
-  )
-
-  const positionDragHandleForBlock = useCallback((block: HTMLElement) => {
-    const handle = getDragHandle()
-    if (!handle) return
-
-    const rect = block.getBoundingClientRect()
-    const style = window.getComputedStyle(block)
-    const parsedLineHeight = Number.parseFloat(style.lineHeight)
-    const parsedFontSize = Number.parseFloat(style.fontSize)
-    const lineHeight = Number.isFinite(parsedLineHeight)
-      ? parsedLineHeight
-      : parsedFontSize * 1.2
-    const paddingTop = Number.parseFloat(style.paddingTop) || 0
-    const top = rect.top + paddingTop + (lineHeight - 20) / 2
-    const left = rect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP
-
-    handle.style.left = `${Math.round(left)}px`
-    handle.style.top = `${Math.round(top)}px`
-    showDragHandle(handle)
-  }, [getDragHandle, showDragHandle])
-
-  const selectBlockTarget = useCallback(
-    (target: BlockTarget | null) => {
-      if (!editor || !target) return false
-
-      try {
-        const selection = NodeSelection.create(editor.state.doc, target.from)
-        editor.view.dispatch(editor.state.tr.setSelection(selection))
-        editor.view.focus()
-        return true
-      } catch {
-        editor.chain().focus().setTextSelection(target.from).run()
-        return false
-      }
-    },
-    [editor]
-  )
+  useEffect(() => {
+    if (!editor) return
+    onReady?.(editor)
+  }, [editor, onReady])
 
   const insertParagraphAfterTarget = useCallback(
     (target: BlockTarget | null) => {
@@ -715,211 +521,6 @@ export function SimpleEditor({
     [editor, openSlashMenuAtSelection]
   )
 
-  useEffect(() => {
-    if (!editor) return
-    onReady?.(editor)
-  }, [editor, onReady])
-
-  useEffect(() => {
-    if (!editor) return
-
-    let handle: HTMLElement | null = null
-    let plusButton: HTMLButtonElement | null = null
-    let keepHandleVisible: (() => void) | null = null
-    let releaseHandle: ((event: PointerEvent) => void) | null = null
-
-    const openBlockMenu = (event: MouseEvent) => {
-      if (!handle || plusButton?.contains(event.target as Node)) return
-
-      event.preventDefault()
-      event.stopPropagation()
-
-      const target = currentBlockTargetRef.current
-      if (!target) return
-
-      const { selection } = editor.state
-      const spansMultiple = selectionSpansMultipleBlocks(editor.state)
-      const isTargetInSelection = spansMultiple && 
-                                  target.from < selection.to && 
-                                  target.to > selection.from
-
-      if (!isTargetInSelection) {
-        selectBlockTarget(target)
-      }
-      showDragHandle(handle, true)
-
-      const rect = handle.getBoundingClientRect()
-      const wrapperRect = wrapperRef.current?.getBoundingClientRect()
-      if (!wrapperRect) return
-
-      setBlockMenu({
-        left: rect.right + 12,
-        top: rect.top - 8,
-        target: isTargetInSelection ? { from: selection.from, to: selection.to } : target,
-        type: editor.state.doc.nodeAt(target.from)?.type.name || "text"
-      })
-      setActiveSubmenu('none')
-      setMenuSearch("")
-      closeSlashMenu()
-    }
-
-    const addBlockFromHandle = (event: MouseEvent) => {
-      event.preventDefault()
-      event.stopPropagation()
-
-      setBlockMenu(null)
-      const handle = getDragHandle()
-      if (handle) showDragHandle(handle, true)
-      insertParagraphAfterTarget(currentBlockTargetRef.current)
-    }
-
-    const wireHandle = () => {
-      const nextHandle =
-        wrapperRef.current?.querySelector<HTMLElement>(".drag-handle") ?? null
-      if (!nextHandle || nextHandle === handle) return
-
-      handle?.removeEventListener("click", openBlockMenu)
-      if (keepHandleVisible) {
-        handle?.removeEventListener("pointerenter", keepHandleVisible)
-      }
-      if (releaseHandle) {
-        handle?.removeEventListener("pointerleave", releaseHandle)
-      }
-      plusButton?.removeEventListener("click", addBlockFromHandle)
-
-      handle = nextHandle
-      handle.setAttribute("aria-label", "Open block actions")
-      handle.setAttribute("title", "Click for actions. Drag to move.")
-
-      plusButton = document.createElement("button")
-      plusButton.type = "button"
-      plusButton.innerHTML = "+"
-      plusButton.className = "plus-button"
-      plusButton.title = "Add a block below"
-      plusButton.setAttribute("aria-label", "Add a block below")
-
-      handle.querySelector(".plus-button")?.remove()
-      handle.prepend(plusButton)
-
-      keepHandleVisible = () => showDragHandle(handle!)
-      releaseHandle = (event: PointerEvent) => {
-        const relatedTarget = event.relatedTarget as Element | null
-        if (
-          relatedTarget?.closest(".motion-block-menu") ||
-          relatedTarget?.closest(".drag-handle")
-        ) {
-          return
-        }
-
-        scheduleHandleHide()
-      }
-
-      handle.addEventListener("click", openBlockMenu)
-      handle.addEventListener("pointerenter", keepHandleVisible)
-      handle.addEventListener("pointerleave", releaseHandle)
-      plusButton.addEventListener("click", addBlockFromHandle)
-    }
-
-    const frame = window.requestAnimationFrame(wireHandle)
-    const observer = new MutationObserver(wireHandle)
-    if (wrapperRef.current) {
-      observer.observe(wrapperRef.current, { childList: true, subtree: true })
-    }
-    const editorParent = editor.view.dom.parentElement
-    const keepExtensionFromHidingHandle = (event: MouseEvent) => {
-      const relatedTarget = event.relatedTarget as Element | null
-      if (
-        relatedTarget?.closest(".drag-handle") ||
-        relatedTarget?.closest(".motion-block-menu")
-      ) {
-        event.stopImmediatePropagation()
-      }
-    }
-    editorParent?.addEventListener("mouseout", keepExtensionFromHidingHandle, true)
-
-    return () => {
-      window.cancelAnimationFrame(frame)
-      observer.disconnect()
-      clearScheduledHandleHide()
-      editorParent?.removeEventListener(
-        "mouseout",
-        keepExtensionFromHidingHandle,
-        true
-      )
-      handle?.removeEventListener("click", openBlockMenu)
-      if (keepHandleVisible) {
-        handle?.removeEventListener("pointerenter", keepHandleVisible)
-      }
-      if (releaseHandle) {
-        handle?.removeEventListener("pointerleave", releaseHandle)
-      }
-      plusButton?.removeEventListener("click", addBlockFromHandle)
-    }
-  }, [
-    closeSlashMenu,
-    clearScheduledHandleHide,
-    editor,
-    getDragHandle,
-    getTargetFromDragHandle,
-    insertParagraphAfterTarget,
-    scheduleHandleHide,
-    selectBlockTarget,
-    showDragHandle,
-  ])
-
-  useEffect(() => {
-    if (!editor) return
-
-    const wrapper = wrapperRef.current
-    if (!wrapper) return
-
-    const onPointerMove = (event: PointerEvent) => {
-      const target = event.target as Element | null
-      if (target?.closest(".motion-block-menu") || target?.closest(".drag-handle")) {
-        clearScheduledHandleHide()
-        return
-      }
-
-      const block = getBlockElementAtPoint(event.clientX, event.clientY)
-      if (!block) {
-        scheduleHandleHide()
-        return
-      }
-
-      currentBlockTargetRef.current = getBlockTargetFromElement(block)
-      positionDragHandleForBlock(block)
-    }
-
-    const onPointerLeave = (event: PointerEvent) => {
-      const relatedTarget = event.relatedTarget as Element | null
-      if (
-        relatedTarget?.closest(".drag-handle") ||
-        relatedTarget?.closest(".motion-block-menu")
-      ) {
-        return
-      }
-
-      if (!blockMenu) scheduleHandleHide()
-    }
-
-    wrapper.addEventListener("pointermove", onPointerMove)
-    wrapper.addEventListener("pointerleave", onPointerLeave)
-
-    return () => {
-      wrapper.removeEventListener("pointermove", onPointerMove)
-      wrapper.removeEventListener("pointerleave", onPointerLeave)
-    }
-  }, [
-    blockMenu,
-    clearScheduledHandleHide,
-    editor,
-    getBlockElementAtPoint,
-    getBlockTargetFromElement,
-    positionDragHandleForBlock,
-    scheduleHandleHide,
-  ])
-
-
 
   const slashItems = useMemo<SlashItem[]>(() => {
     if (!editor) return []
@@ -930,17 +531,7 @@ export function SimpleEditor({
         icon: <FileText className="size-4" />,
         keywords: ["page", "subpage", "nested"],
         run: () => {
-          const newPage = onAddSubpageRef.current?.()
-          if (newPage && editor) {
-            editor.chain().focus().insertContent({
-              type: "subpage",
-              attrs: {
-                id: (newPage as any).id,
-                title: (newPage as any).title || "Untitled",
-                icon: (newPage as any).icon
-              }
-            }).run()
-          }
+          onAddSubpageRef.current?.()
         },
       },
       {
@@ -974,6 +565,58 @@ export function SimpleEditor({
         keywords: ["h4", "heading"],
         shortcut: "####",
         run: () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
+      },
+      {
+        title: "Toggle Heading 1",
+        subtitle: "H1 with a toggle drop-down",
+        icon: <Heading1 className="size-4" />,
+        keywords: ["toggle h1", "h1 toggle", "toggle heading 1", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 1 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 1 }).run()
+          }
+        },
+      },
+      {
+        title: "Toggle Heading 2",
+        subtitle: "H2 with a toggle drop-down",
+        icon: <Heading2 className="size-4" />,
+        keywords: ["toggle h2", "h2 toggle", "toggle heading 2", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 2 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 2 }).run()
+          }
+        },
+      },
+      {
+        title: "Toggle Heading 3",
+        subtitle: "H3 with a toggle drop-down",
+        icon: <Heading3 className="size-4" />,
+        keywords: ["toggle h3", "h3 toggle", "toggle heading 3", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 3 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 3 }).run()
+          }
+        },
+      },
+      {
+        title: "Toggle Heading 4",
+        subtitle: "H4 with a toggle drop-down",
+        icon: <Heading3 className="size-4 opacity-70" />,
+        keywords: ["toggle h4", "h4 toggle", "toggle heading 4", "details"],
+        run: () => {
+          if (editor.isActive("detailsSummary")) {
+            editor.chain().focus().updateAttributes("detailsSummary", { level: 4 }).run()
+          } else {
+            editor.chain().focus().setDetails().updateAttributes("detailsSummary", { level: 4 }).run()
+          }
+        },
       },
       {
         title: "Bullet list",
@@ -1283,30 +926,6 @@ export function SimpleEditor({
   }, [slashSelectedIndex])
 
   useEffect(() => {
-    if (!blockMenu) return
-
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Element | null
-      if (target?.closest(".motion-block-menu") || target?.closest(".drag-handle")) {
-        return
-      }
-      setBlockMenu(null)
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setBlockMenu(null)
-    }
-
-    window.addEventListener("pointerdown", onPointerDown)
-    window.addEventListener("keydown", onKeyDown)
-
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown)
-      window.removeEventListener("keydown", onKeyDown)
-    }
-  }, [blockMenu])
-
-  useEffect(() => {
     if (!editorEmojiPicker) return
 
     const onPointerDown = (event: PointerEvent) => {
@@ -1328,135 +947,11 @@ export function SimpleEditor({
     }
   }, [editorEmojiPicker])
 
-  const deleteBlockTarget = useCallback((target: BlockTarget | null) => {
-    if (!editor || !target) return
-    console.log("Deleting block at", target)
-    editor
-      .chain()
-      .focus()
-      .deleteRange({ from: target.from, to: target.to })
-      .run()
-    setBlockMenu(null)
-    closeSlashMenu()
-  }, [editor, closeSlashMenu])
-
-  const duplicateBlockTarget = useCallback((target: BlockTarget | null) => {
-    if (!editor || !target) return
-    console.log("Duplicating block at", target)
-    const { from, to } = target
-
-    const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, from, to)
-
-    if (isMultiBlock) {
-      const slice = editor.state.doc.slice(from, to)
-      const content = slice.content.toJSON()
-      editor
-        .chain()
-        .focus()
-        .insertContentAt(to, content)
-        .run()
-    } else {
-      const node = editor.state.doc.nodeAt(from)
-      if (!node) return
-      const content = node.content.toJSON()
-      editor
-        .chain()
-        .focus()
-        .insertContentAt(to, {
-          type: node.type.name,
-          attrs: { ...node.attrs, id: undefined }, // Let extension generate new ID
-          content: content
-        })
-        .run()
-    }
-      
-    setBlockMenu(null)
-    closeSlashMenu()
-  }, [editor, closeSlashMenu])
-
-  const copyBlockTarget = useCallback((target: BlockTarget | null) => {
-    if (!editor || !target) return
-    const node = editor.state.doc.nodeAt(target.from)
-    const blockId = node?.attrs.id
-    const url = blockId 
-      ? `${window.location.origin}${window.location.pathname}#${blockId}`
-      : window.location.href
-    
-    navigator.clipboard?.writeText(url).then(() => {
-      // Small feedback
-      console.log("Link copied:", url)
-    }).catch(() => undefined)
-    setBlockMenu(null)
-    closeSlashMenu()
-  }, [editor, closeSlashMenu])
-
-  const commentOnBlock = useCallback((target: BlockTarget | null) => {
-    if (!editor || !target) return
-    alert("Comment feature coming soon!")
-    setBlockMenu(null)
-  }, [editor])
-
-  const moveToBlock = useCallback((target: BlockTarget | null) => {
-    if (!editor || !target) return
-    setActiveSubmenu('move-to')
-  }, [])
-
-  const executeMoveTo = useCallback((position: 'top' | 'bottom') => {
-    if (!editor || !blockMenu?.target) return
-    const target = blockMenu.target
-
-    const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, target.from, target.to)
-
-    let contentJSON: any
-    if (isMultiBlock) {
-      const slice = editor.state.doc.slice(target.from, target.to)
-      contentJSON = slice.content.toJSON()
-    } else {
-      const node = editor.state.doc.nodeAt(target.from)
-      if (!node) return
-      contentJSON = node.toJSON()
-    }
-    
-    if (position === 'top') {
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: target.from, to: target.to })
-        .insertContentAt(0, contentJSON)
-        .run()
-    } else {
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: target.from, to: target.to })
-        .command(({ tr }) => {
-          if (Array.isArray(contentJSON)) {
-            contentJSON.forEach((nodeObj) => {
-              tr.insert(tr.doc.content.size, editor.schema.nodeFromJSON(nodeObj))
-            })
-          } else {
-            tr.insert(tr.doc.content.size, editor.schema.nodeFromJSON(contentJSON))
-          }
-          return true
-        })
-        .run()
-    }
-      
-    setBlockMenu(null)
-  }, [editor, blockMenu])
-
-  const suggestOnBlock = useCallback((target: BlockTarget | null) => {
-    if (!editor || !target) return
-    alert("Suggest edits feature coming soon!")
-    setBlockMenu(null)
-  }, [editor])
-
   // Global Keyboard Shortcuts for selected blocks
   useEffect(() => {
     if (!editor) return
 
     const onKeyDown = (e: KeyboardEvent) => {
-      // Only handle if a block is selected (NodeSelection)
       const { selection } = editor.state
       if (!(selection instanceof NodeSelection)) return
 
@@ -1465,38 +960,38 @@ export function SimpleEditor({
       // Duplicate: Ctrl+D
       if (e.ctrlKey && e.key === "d") {
         e.preventDefault()
-        duplicateBlockTarget(target)
+        const { from, to } = target
+        const isMulti = rangeSpansMultipleBlocks(editor.state.doc, from, to)
+        if (isMulti) {
+          const slice = editor.state.doc.slice(from, to)
+          editor.chain().focus().insertContentAt(to, slice.content.toJSON()).run()
+        } else {
+          const node = editor.state.doc.nodeAt(from)
+          if (node) {
+            editor.chain().focus().insertContentAt(to, {
+              type: node.type.name,
+              attrs: { ...node.attrs, id: undefined },
+              content: node.content.toJSON()
+            }).run()
+          }
+        }
       }
       // Delete: Del
       if (e.key === "Delete") {
         e.preventDefault()
-        deleteBlockTarget(target)
-      }
-      // Copy Link: Alt+Shift+L
-      if (e.altKey && e.shiftKey && e.key === "L") {
-        e.preventDefault()
-        copyBlockTarget(target)
-      }
-      // Comment: Ctrl+Shift+M
-      if (e.ctrlKey && e.shiftKey && e.key === "M") {
-        e.preventDefault()
-        commentOnBlock(target)
-      }
-      // Move to: Ctrl+Shift+P
-      if (e.ctrlKey && e.shiftKey && e.key === "P") {
-        e.preventDefault()
-        moveToBlock(target)
-      }
-      // Suggest edits: Ctrl+Alt+X
-      if (e.ctrlKey && e.altKey && e.key === "x") {
-        e.preventDefault()
-        suggestOnBlock(target)
+        try {
+          const sel = NodeSelection.create(editor.state.doc, target.from)
+          const tr = editor.state.tr.setSelection(sel).deleteSelection()
+          editor.view.dispatch(tr)
+        } catch {
+          editor.view.dispatch(editor.state.tr.delete(target.from, target.to))
+        }
       }
     }
 
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [editor, duplicateBlockTarget, deleteBlockTarget, copyBlockTarget, commentOnBlock, moveToBlock, suggestOnBlock])
+  }, [editor])
 
   const handleWrapperClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (editor && !editor.isEditable) {
@@ -1520,82 +1015,7 @@ export function SimpleEditor({
   return (
     <div ref={wrapperRef} className="simple-editor-wrapper relative" onClick={handleWrapperClick}>
       <EditorContext.Provider value={{ editor }}>
-        {editor && (
-          <BubbleMenu
-            editor={editor}
-            shouldShow={({ editor }: { editor: Editor }) => editor.isActive("table")}
-            options={{ placement: 'top' }}
-          >
-            <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addColumnBefore().run()}
-                title="Add column before"
-              >
-                <ChevronLeft className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addColumnAfter().run()}
-                title="Add column after"
-              >
-                <ChevronRight className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addRowBefore().run()}
-                title="Add row before"
-              >
-                <ChevronUp className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => editor.chain().focus().addRowAfter().run()}
-                title="Add row after"
-              >
-                <ChevronDown className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 hover:text-destructive"
-                onClick={() => editor.chain().focus().deleteColumn().run()}
-                title="Delete column"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 hover:text-destructive"
-                onClick={() => editor.chain().focus().deleteRow().run()}
-                title="Delete row"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 hover:text-destructive"
-                onClick={() => editor.chain().focus().deleteTable().run()}
-                title="Delete table"
-              >
-                <TableIcon className="size-3.5 text-destructive" />
-              </Button>
-            </div>
-          </BubbleMenu>
-        )}
+        {/* Custom Table handles are handled natively inside TableNodeView */}
         
         {/* Text Formatting Bubble Menu */}
         {editor && (
@@ -1605,7 +1025,7 @@ export function SimpleEditor({
               const { selection } = state
               const { empty } = selection
               
-              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("table") || editor.isActive("codeBlock")) {
+              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("codeBlock")) {
                 return false
               }
               return true
@@ -1751,288 +1171,16 @@ export function SimpleEditor({
           className="simple-editor-content"
         />
 
+        {editor && <TableControlsOverlay editor={editor} />}
 
-        {/* {isEmpty && (
-          <div className="pointer-events-none max-w-[900px] mx-auto w-full text-muted-foreground/50 text-sm pt-2">
-            Type <span className="text-muted-foreground">/</span> for commands
-          </div>
-        )} */}
-
-        {blockMenu && (
-          <div className="fixed z-[100] flex gap-1" style={{ left: blockMenu.left, top: blockMenu.top }}>
-            {/* Main Block Menu */}
-            <div
-              className="motion-block-menu w-[260px] rounded-xl border bg-background p-1.5 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in zoom-in-95 duration-100"
-            >
-              <div className="px-2 pb-2 pt-1">
-                <input 
-                  autoFocus
-                  placeholder="Search actions..."
-                  value={menuSearch}
-                  onChange={(e) => setMenuSearch(e.target.value)}
-                  className="w-full bg-muted/50 rounded-md px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted-foreground/50 border border-transparent focus:border-border/50"
-                />
-              </div>
-
-              <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-tight">
-                {blockMenu.type.replace(/([A-Z])/g, ' $1').trim()}
-              </div>
-
-              <button
-                type="button"
-                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'turn-into' && "bg-accent")}
-                onMouseEnter={() => setActiveSubmenu('turn-into')}
-              >
-                <div className="flex items-center gap-2.5">
-                  <RotateCcw className="size-4" />
-                  <span>Turn into</span>
-                </div>
-                <ChevronRight className="size-3.5 text-muted-foreground/50" />
-              </button>
-
-              <button
-                type="button"
-                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'color' && "bg-accent")}
-                onMouseEnter={() => setActiveSubmenu('color')}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="size-4 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center">
-                    <div className="size-2 rounded-full bg-primary/40" />
-                  </div>
-                  <span>Color</span>
-                </div>
-                <ChevronRight className="size-3.5 text-muted-foreground/50" />
-              </button>
-
-              <div className="my-1.5 h-px bg-border/50" />
-
-              <button className="motion-block-menu__item justify-between" onClick={() => copyBlockTarget(blockMenu.target)}>
-                <div className="flex items-center gap-2.5">
-                  <LinkIcon className="size-4" />
-                  <span>Copy link to block</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground/40 font-mono">Alt+⇧+L</span>
-              </button>
-
-              <button className="motion-block-menu__item justify-between" onClick={() => duplicateBlockTarget(blockMenu.target)}>
-                <div className="flex items-center gap-2.5">
-                  <Copy className="size-4" />
-                  <span>Duplicate</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+D</span>
-              </button>
-
-              <button 
-                className={cn("motion-block-menu__item justify-between group", activeSubmenu === 'move-to' && "bg-accent")}
-                onMouseEnter={() => setActiveSubmenu('move-to')}
-                onClick={() => moveToBlock(blockMenu.target)}
-              >
-                <div className="flex items-center gap-2.5">
-                  <ArrowRight className="size-4" />
-                  <span>Move to</span>
-                </div>
-                <ChevronRight className="size-3.5 text-muted-foreground/50" />
-              </button>
-
-              <button className="motion-block-menu__item motion-block-menu__item--danger justify-between" onClick={() => deleteBlockTarget(blockMenu.target)}>
-                <div className="flex items-center gap-2.5">
-                  <Trash2 className="size-4" />
-                  <span>Delete</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground/40 font-mono">Del</span>
-              </button>
-
-              <div className="my-1.5 h-px bg-border/50" />
-
-              <button className="motion-block-menu__item justify-between" onClick={() => commentOnBlock(blockMenu.target)}>
-                <div className="flex items-center gap-2.5">
-                  <MessageSquare className="size-4" />
-                  <span>Comment</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+⇧+M</span>
-              </button>
-
-              <button className="motion-block-menu__item justify-between" onClick={() => suggestOnBlock(blockMenu.target)}>
-                <div className="flex items-center gap-2.5">
-                  <PencilLine className="size-4" />
-                  <span>Suggest edits</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+Alt+X</span>
-              </button>
-
-              <div className="my-1.5 h-px bg-border/50" />
-
-              <button className="motion-block-menu__item justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Sparkles className="size-4 text-primary" />
-                  <span>Ask AI</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground/40 font-mono">Ctrl+J</span>
-              </button>
-
-              <div className="mt-2 px-2.5 py-2 border-t border-border/40 text-[10px] text-muted-foreground/50 leading-relaxed">
-                Last edited by Rohan Vashist<br />
-                May 15, 2026, 7:55 PM
-              </div>
-            </div>
-
-            {/* Turn Into Submenu */}
-            {activeSubmenu === 'turn-into' && (
-              <div className="motion-block-menu w-[220px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150 h-fit max-h-[400px] overflow-y-auto custom-scrollbar">
-                {[
-                  { id: 'paragraph', title: 'Text', icon: <FileText className="size-4" />, run: () => editor?.chain().focus().setParagraph().run() },
-                  { id: 'heading1', title: 'Heading 1', icon: <Heading1 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 1 }).run() },
-                  { id: 'heading2', title: 'Heading 2', icon: <Heading2 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 2 }).run() },
-                  { id: 'heading3', title: 'Heading 3', icon: <Heading3 className="size-4" />, run: () => editor?.chain().focus().toggleHeading({ level: 3 }).run() },
-                  { id: 'heading4', title: 'Heading 4', icon: <Heading3 className="size-4 opacity-70" />, run: () => editor?.chain().focus().toggleHeading({ level: 4 }).run() },
-                  { id: 'page', title: 'Page', icon: <FileText className="size-4" />, run: () => onAddSubpage?.() },
-                  { id: 'page_in', title: 'Page in', icon: <FileText className="size-4" />, run: () => {}, hasSub: true },
-                  { id: 'bulletList', title: 'Bulleted list', icon: <List className="size-4" />, run: () => editor?.chain().focus().toggleBulletList().run() },
-                  { id: 'orderedList', title: 'Numbered list', icon: <ListOrdered className="size-4" />, run: () => editor?.chain().focus().toggleOrderedList().run() },
-                  { id: 'taskList', title: 'To-do list', icon: <CheckSquare className="size-4" />, run: () => editor?.chain().focus().toggleTaskList().run() },
-                  { id: 'details', title: 'Toggle list', icon: <ChevronRight className="size-4" />, run: () => editor?.chain().focus().setDetails().run() },
-                  { id: 'codeBlock', title: 'Code', icon: <Code className="size-4" />, run: () => editor?.chain().focus().toggleCodeBlock().run() },
-                  { id: 'blockquote', title: 'Quote', icon: <Quote className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
-                  { id: 'callout', title: 'Callout', icon: <SquareTerminal className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
-                  { id: 'equation', title: 'Block equation', icon: <Sigma className="size-4" />, run: () => {} },
-                  { id: 'synced', title: 'Synced block', icon: <RotateCcw className="size-4" />, run: () => {} },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    className="motion-block-menu__item justify-between"
-                    onClick={() => {
-                      if (!item.hasSub) {
-                        item.run();
-                        setBlockMenu(null);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {item.icon}
-                      <span>{item.title}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {blockMenu.type.toLowerCase().includes(item.id.toLowerCase()) && <Check className="size-3.5 text-primary" />}
-                      {item.hasSub && <ChevronRight className="size-3.5 text-muted-foreground/30" />}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Move To Submenu */}
-            {activeSubmenu === 'move-to' && (
-              <div className="motion-block-menu w-[200px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150">
-                <button className="motion-block-menu__item" onClick={() => executeMoveTo('top')}>
-                  <ChevronUp className="size-4" />
-                  <span>Move to top</span>
-                </button>
-                <button className="motion-block-menu__item" onClick={() => executeMoveTo('bottom')}>
-                  <ChevronDown className="size-4" />
-                  <span>Move to bottom</span>
-                </button>
-                <div className="my-1 h-px bg-border/50" />
-                <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground/50 italic leading-tight">
-                  Search pages feature coming soon...
-                </div>
-              </div>
-            )}
-
-            {/* Color Submenu */}
-            {activeSubmenu === 'color' && (
-              <div className="motion-block-menu w-[220px] rounded-xl border bg-background p-1 text-popover-foreground shadow-[0_10px_40px_rgba(0,0,0,0.15)] animate-in fade-in slide-in-from-left-2 duration-150 h-fit max-h-[400px] overflow-y-auto custom-scrollbar">
-                <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                  Color
-                </div>
-                {NOTION_COLORS.map((c) => (
-                  <button
-                    key={`text-${c.name}`}
-                    className="motion-block-menu__item gap-2.5"
-                    onClick={() => {
-                      if (blockMenu?.target && editor) {
-                        const { from, to } = blockMenu.target;
-                        
-                        const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, from, to)
-
-                        if (isMultiBlock) {
-                          editor.chain()
-                            .focus()
-                            .updateAttributes('paragraph', { color: c.color })
-                            .updateAttributes('heading', { color: c.color })
-                            .run();
-                        } else {
-                          const node = editor.state.doc.nodeAt(from);
-                          if (node) {
-                            editor.chain()
-                              .focus()
-                              .setNodeSelection(from)
-                              .updateAttributes(node.type.name, { color: c.color })
-                              .run();
-                          }
-                        }
-                        setBlockMenu(null);
-                      }
-                    }}
-                  >
-                    <div className="size-5 rounded border border-border/50 flex items-center justify-center text-[11px] font-bold" style={{ color: c.color }}>
-                      A
-                    </div>
-                    <span>{c.name}</span>
-                    {(() => {
-                      if (!editor || !blockMenu?.target) return null;
-                      const node = editor.state.doc.nodeAt(blockMenu.target.from);
-                      const attrs = editor.getAttributes(node?.type.name || 'paragraph');
-                      return attrs.color === c.color && <Check className="size-3 ml-auto text-primary" />;
-                    })()}
-                  </button>
-                ))}
-                <div className="my-1 h-px bg-border/50" />
-                <div className="px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                  Background
-                </div>
-                {NOTION_COLORS.slice(1).map((c) => (
-                  <button
-                    key={`bg-${c.name}`}
-                    className="motion-block-menu__item gap-2.5"
-                    onClick={() => {
-                      if (blockMenu?.target && editor) {
-                        const { from, to } = blockMenu.target;
-                        
-                        const isMultiBlock = rangeSpansMultipleBlocks(editor.state.doc, from, to)
-
-                        if (isMultiBlock) {
-                          editor.chain()
-                            .focus()
-                            .updateAttributes('paragraph', { backgroundColor: c.bg })
-                            .updateAttributes('heading', { backgroundColor: c.bg })
-                            .run();
-                        } else {
-                          const node = editor.state.doc.nodeAt(from);
-                          if (node) {
-                            editor.chain()
-                              .focus()
-                              .setNodeSelection(from)
-                              .updateAttributes(node.type.name, { backgroundColor: c.bg })
-                              .run();
-                          }
-                        }
-                        setBlockMenu(null);
-                      }
-                    }}
-                  >
-                    <div className="size-5 rounded border border-border/50" style={{ backgroundColor: c.bg }} />
-                    <span>{c.name} background</span>
-                    {(() => {
-                      if (!editor || !blockMenu?.target) return null;
-                      const node = editor.state.doc.nodeAt(blockMenu.target.from);
-                      const attrs = editor.getAttributes(node?.type.name || 'paragraph');
-                      return attrs.backgroundColor === c.bg && <Check className="size-3 ml-auto text-primary" />;
-                    })()}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Block Drag Handle + Context Menu */}
+        {editor && (
+          <BlockDragHandle
+            editor={editor}
+            wrapperRef={wrapperRef}
+            onInsertBlock={insertParagraphAfterTarget}
+            onAddSubpage={onAddSubpage}
+          />
         )}
 
         {slashOpen && slashPos && editor && (

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Plus, MoreHorizontal, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useMotionStore } from "@/store/useMotionStore";
-import { useUpdateMotionPage } from "@/hooks/api/useMotionPages";
+import { useUpdateMotionPage, useCachedPageById } from "@/hooks/api/useMotionPages";
 import { useAppContext } from "@/contexts/AppContext";
 
 interface KanbanColumn {
@@ -50,9 +49,8 @@ const initialData: KanbanData = {
 
 export function KanbanComponent({ pageId }: { pageId: string }) {
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const { updatePageLocally, getPageById } = useMotionStore();
   const updatePage = useUpdateMotionPage(activeOrgId, activeSpaceId);
-  const page = getPageById(pageId);
+  const page = useCachedPageById(pageId);
   
   // Use page content as kanban data if it exists, otherwise use initialData
   const [data, setData] = useState<KanbanData>(() => {
@@ -64,9 +62,7 @@ export function KanbanComponent({ pageId }: { pageId: string }) {
 
   const saveData = (newData: KanbanData) => {
     setData(newData);
-    // 1. Update optimistic store
-    updatePageLocally(pageId, { content: { kanbanData: newData } as any });
-    // 2. Persist to API
+    // Persist to API (which handles query cache updates optimistically)
     updatePage.mutate({ id: pageId, updates: { content: { kanbanData: newData } as any } });
   };
 

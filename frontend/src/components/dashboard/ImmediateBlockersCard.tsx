@@ -20,8 +20,8 @@ export function ImmediateBlockersCard({
     return (
       <Card
         className={cn(
-          "bg-card/90 border border-border/60 rounded-2xl p-4 gap-2",
-          isWheel ? "size-full rounded-none border-0" : "",
+          isWheel ? "size-full rounded-l-[1.45rem] rounded-r-none border-0 bg-background/92 shadow-none" : "bg-card/90 border border-border/60 rounded-2xl",
+          "p-4 gap-2",
         )}
       >
         <div className="flex items-center gap-2 mb-1">
@@ -39,8 +39,8 @@ export function ImmediateBlockersCard({
     return (
       <Card
         className={cn(
-          "bg-card/90 border border-border/60 rounded-2xl p-4 flex items-center justify-center text-muted-foreground text-xs italic",
-          isWheel ? "size-full rounded-none border-0" : "",
+          isWheel ? "size-full rounded-l-[1.45rem] rounded-r-none border-0 bg-background/92 shadow-none" : "bg-card/90 border border-border/60 rounded-2xl",
+          "p-4 flex items-center justify-center text-muted-foreground text-xs italic",
         )}
       >
         No blockers
@@ -50,9 +50,9 @@ export function ImmediateBlockersCard({
 
   return (
     <Card
-      className={cn(
-        "bg-card/90 border border-border/60 rounded-2xl p-4 gap-2 hover:bg-card transition-all duration-300 cursor-pointer shadow-sm group",
-        isWheel ? "size-full rounded-none border-0" : "",
+      className={cn( 
+        isWheel ? "size-full rounded-l-[1.45rem] rounded-r-none border-0 bg-background/92 shadow-none" : "bg-card/90 border border-border/60 rounded-2xl shadow-sm",
+        "p-4 gap-2 hover:bg-card transition-all duration-300 cursor-pointer group",
       )}
     >
       <h3 className="text-[9px] uppercase tracking-[0.25em] text-destructive font-bold mb-2 flex items-center gap-2">

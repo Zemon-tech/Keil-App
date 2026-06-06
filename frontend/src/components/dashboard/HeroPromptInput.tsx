@@ -5,7 +5,6 @@ import {
   ArrowUp,
   ArrowRight,
   FileText,
-  Ghost,
   GlobeIcon,
   Image,
   Plus,
@@ -391,12 +390,6 @@ export function HeroPromptInput({
       )}
     >
       {!isChatStarted && (
-        <div className="fixed top-6 right-6 text-muted-foreground/55 transition-colors hover:text-foreground">
-          <Ghost className="size-6" />
-        </div>
-      )}
-
-      {!isChatStarted && (
         <div className="flex items-center gap-5 text-center">
           <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl">
             Hey, {userName}
@@ -413,6 +406,7 @@ export function HeroPromptInput({
               ? "[&_[data-slot=input-group]]:rounded-[1.35rem]"
               : "[&_[data-slot=input-group]]:rounded-[1.25rem]",
             "[&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
+            "[&_[data-slot=input-group]]:has-[[data-slot=input-group-control]:focus-visible]:border-border/70",
             "[&_[data-slot=input-group]]:bg-background/88",
             isChatStarted
               ? "[&_[data-slot=input-group]]:shadow-[0_18px_55px_-36px_rgba(15,23,42,0.4)]"

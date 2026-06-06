@@ -39,6 +39,9 @@ export interface OrgTaskDTO {
   parent_task_title?: string;
   type?: 'task' | 'event';
   event_type?: string | null;
+  location?: string | null;
+  is_all_day?: boolean;
+  meet_link?: string | null;
   user_space_role?: string;
   org_name?: string;
   space_name?: string;
@@ -69,6 +72,7 @@ export interface CreateOrgTaskInput {
   assignee_ids?: string[];
   story_points?: number | null;
   time_estimate?: number | null;
+  meet_link?: string | null;
 }
 
 export interface UpdateOrgTaskInput {
@@ -86,6 +90,7 @@ export interface UpdateOrgTaskInput {
   is_all_day?: boolean;
   story_points?: number | null;
   time_estimate?: number | null;
+  meet_link?: string | null;
 }
 
 const toISO = (value: Date | string | null | undefined): string | null => {
@@ -99,9 +104,9 @@ const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string; crea
   space_id: task.space_id ?? null,
   parent_task_id: task.parent_task_id,
   title: task.title,
-  description: task.description,
-  objective: task.objective,
-  success_criteria: task.success_criteria,
+  description: task.description ?? null,
+  objective: task.objective ?? null,
+  success_criteria: task.success_criteria ?? null,
   status: task.status,
   priority: task.priority,
   start_date: toISO(task.start_date),
@@ -115,6 +120,9 @@ const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string; crea
   subtask_count: task.subtask_count ? parseInt(task.subtask_count.toString(), 10) : 0,
   type: task.type,
   event_type: task.event_type,
+  location: task.location,
+  is_all_day: task.is_all_day,
+  meet_link: task.meet_link ?? null,
   user_space_role: task.user_space_role,
   org_name: (task as any).org_name,
   space_name: (task as any).space_name,
@@ -203,12 +211,19 @@ export const createTask = async (
   // Separate assignee_ids from the DB columns
   const { assignee_ids, story_points, time_estimate, ...taskData } = input;
 
+  // Auto assign the task to the creator who is creating it
+  const creatorId = input.created_by;
+  const finalAssigneeIds = assignee_ids ? [...assignee_ids] : [];
+  if (creatorId && !finalAssigneeIds.includes(creatorId)) {
+    finalAssigneeIds.push(creatorId);
+  }
+
   const task = await orgTaskRepository.executeInTransaction(async (client) => {
     const created = await orgTaskRepository.create(taskData as Partial<Task>, client);
 
     // Insert assignees if provided
-    if (assignee_ids && assignee_ids.length > 0) {
-      for (const userId of assignee_ids) {
+    if (finalAssigneeIds.length > 0) {
+      for (const userId of finalAssigneeIds) {
         await taskAssigneeRepository.assign(created.id, userId, client);
       }
 
@@ -227,7 +242,7 @@ export const createTask = async (
           'task',
           created.id,
           JSON.stringify({
-            recipient_ids: assignee_ids,
+            recipient_ids: assignee_ids ?? [], // Keep original assignee_ids here to avoid echoing notification to creator
             task_title: created.title,
             sender_name: senderName
           })
@@ -256,10 +271,11 @@ export const createTask = async (
       description: task.description,
       start_date: task.start_date ? new Date(task.start_date) : null,
       due_date: task.due_date ? new Date(task.due_date) : null,
-      is_all_day: false,
-      location: null,
+      is_all_day: task.is_all_day ?? false,
+      location: task.location ?? null,
       status: task.status,
       google_event_id: task.google_event_id,
+      meet_link: task.meet_link ?? null,
       source: 'tasks',
     }).catch(err => log.error({ err }, 'Org task create sync failed'));
   }
@@ -352,10 +368,11 @@ export const updateTask = async (
       description: result.description,
       start_date: result.start_date ? new Date(result.start_date) : null,
       due_date: result.due_date ? new Date(result.due_date) : null,
-      is_all_day: false,
-      location: null,
+      is_all_day: result.is_all_day ?? false,
+      location: result.location ?? null,
       status: result.status,
       google_event_id: result.google_event_id,
+      meet_link: result.meet_link ?? null,
       source: 'tasks',
     }).catch(err => log.error({ err }, 'Org task update sync failed'));
   }

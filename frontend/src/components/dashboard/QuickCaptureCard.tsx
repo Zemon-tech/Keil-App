@@ -11,8 +11,8 @@ export function QuickCaptureCard({ isWheel }: QuickCaptureCardProps) {
   return (
     <Card
       className={cn(
-        "bg-card/90 border border-border/60 rounded-2xl px-4 py-3 gap-2 shadow-sm hover:bg-card transition-all duration-300 group relative overflow-hidden",
-        isWheel ? "size-full md:col-span-1" : "md:col-span-3",
+        isWheel ? "size-full rounded-l-[1.45rem] rounded-r-none border-0 bg-background/92 shadow-none" : "bg-card/90 border border-border/60 rounded-2xl shadow-sm md:col-span-3",
+        "px-4 py-3 gap-2 hover:bg-card transition-all duration-300 group relative overflow-hidden",
       )}
     >
       <div className="flex flex-col h-full justify-between">

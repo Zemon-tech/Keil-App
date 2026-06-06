@@ -16,18 +16,11 @@
  */
 
 import { create } from 'zustand';
-import type { MotionPageDTO } from '@/hooks/api/useMotionPages';
 
-// Re-export the DTO type under the legacy name so existing component
-// imports of MotionPageRecord continue to work during the migration.
-export type MotionPageRecord = MotionPageDTO;
 export type MotionPageId = string;
 
 interface MotionStore {
-  // ── Working copy ────────────────────────────────────────────────────────────
-  /** In-memory page map. Seeded from API, updated optimistically while editing. */
-  pages: MotionPageRecord[];
-
+  // ── Client state ────────────────────────────────────────────────────────────
   /** Set of page ids that have unsaved content changes. */
   dirtyPageIds: Set<string>;
 
@@ -42,46 +35,10 @@ interface MotionStore {
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
-  /**
-   * Seeds the store from the API response.
-   * Called after useMotionPages resolves. Replaces the current page list.
-   */
-  hydratePages: (pages: MotionPageRecord[]) => void;
-
-  /**
-   * Merges specific pages into the store.
-   * Updates existing pages by ID and adds new ones. Does NOT remove missing pages.
-   */
-  upsertPages: (pages: MotionPageRecord[]) => void;
-
-  /**
-   * Optimistically updates a page in the working copy.
-   * Does NOT call the API — the component is responsible for debounced saves.
-   */
-  updatePageLocally: (id: MotionPageId, updates: Partial<MotionPageRecord>) => void;
-
-  /**
-   * Optimistically adds a page to the working copy.
-   * Called after useCreateMotionPage succeeds (with the server-returned page).
-   */
-  addPageLocally: (page: MotionPageRecord) => void;
-
-  /**
-   * Removes a page (and its descendants) from the working copy.
-   * Called after soft-delete or hard-delete succeeds.
-   */
-  removePageLocally: (id: MotionPageId) => void;
-
   // ── Dirty tracking ────────────────────────────────────────────────────────────
   setDirty: (id: MotionPageId) => void;
   clearDirty: (id: MotionPageId) => void;
   isDirty: (id: MotionPageId) => boolean;
-
-  // ── Selectors ─────────────────────────────────────────────────────────────────
-  getPageById: (id: MotionPageId) => MotionPageRecord | undefined;
-  getRootPages: () => MotionPageRecord[];
-  getSubpages: (parentId: MotionPageId) => MotionPageRecord[];
-  getTrashPages: () => MotionPageRecord[];
 
   // ── UI ────────────────────────────────────────────────────────────────────────
   setSidebarOpen: (open: boolean) => void;
@@ -97,7 +54,6 @@ interface MotionStore {
 }
 
 export const useMotionStore = create<MotionStore>()((set, get) => ({
-  pages: [],
   dirtyPageIds: new Set<string>(),
   sidebarOpen: true,
   drawerOpen: false,
@@ -109,79 +65,6 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   })(),
-
-  // ── Hydration ─────────────────────────────────────────────────────────────────
-
-  hydratePages: (pages) => {
-    // Guard: only update the store if the content actually changed, including positions or parents.
-    const current = get().pages;
-    const incomingKey = pages.map((p) => `${p.id}:${p.updated_at}:${p.parent_id}:${p.position}`).join(",");
-    const currentKey = current.map((p) => `${p.id}:${p.updated_at}:${p.parent_id}:${p.position}`).join(",");
-    if (incomingKey === currentKey) return;
-    set({ pages });
-  },
-
-  upsertPages: (incoming) => {
-    set((state) => {
-      const nextPages = [...state.pages];
-      incoming.forEach((inPage) => {
-        const idx = nextPages.findIndex((p) => p.id === inPage.id);
-        if (idx > -1) {
-          const current = nextPages[idx];
-          const inTime = new Date(inPage.updated_at).getTime();
-          const curTime = new Date(current.updated_at).getTime();
-
-          // Only update if incoming is newer or we are not in a dirty state.
-          // This prevents older server responses from overwriting newer optimistic updates.
-          if (inTime >= curTime) {
-            nextPages[idx] = { ...current, ...inPage };
-          }
-        } else {
-          nextPages.push(inPage);
-        }
-      });
-      return { pages: nextPages };
-    });
-  },
-
-  // ── Local optimistic mutations ────────────────────────────────────────────────
-
-  updatePageLocally: (id, updates) =>
-    set((state) => ({
-      pages: state.pages.map((p) =>
-        p.id === id
-          ? { ...p, ...updates, updated_at: new Date().toISOString() }
-          : p
-      ),
-    })),
-
-  addPageLocally: (page) =>
-    set((state) => ({
-      // Prepend — new pages appear at the top of the list
-      pages: [page, ...state.pages.filter((p) => p.id !== page.id)],
-    })),
-
-  removePageLocally: (id) =>
-    set((state) => {
-      const idsToRemove = new Set<string>([id]);
-      let added = true;
-      while (added) {
-        added = false;
-        state.pages.forEach((p) => {
-          if (p.parent_id && idsToRemove.has(p.parent_id) && !idsToRemove.has(p.id)) {
-            idsToRemove.add(p.id);
-            added = true;
-          }
-        });
-      }
-
-      return {
-        pages: state.pages.filter((p) => !idsToRemove.has(p.id)),
-        dirtyPageIds: new Set(
-          [...state.dirtyPageIds].filter((dirtyId) => !idsToRemove.has(dirtyId))
-        ),
-      };
-    }),
 
   // ── Dirty tracking ────────────────────────────────────────────────────────────
 
@@ -198,22 +81,6 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
     }),
 
   isDirty: (id) => get().dirtyPageIds.has(id),
-
-  // ── Selectors ─────────────────────────────────────────────────────────────────
-
-  getPageById: (id) => get().pages.find((p) => p.id === id),
-
-  getRootPages: () =>
-    get()
-      .pages.filter((p) => !p.parent_id && !p.deleted_at)
-      .sort((a, b) => a.position - b.position),
-
-  getSubpages: (parentId) =>
-    get()
-      .pages.filter((p) => p.parent_id === parentId && !p.deleted_at)
-      .sort((a, b) => a.position - b.position),
-
-  getTrashPages: () => get().pages.filter((p) => !!p.deleted_at),
 
   // ── UI ────────────────────────────────────────────────────────────────────────
 

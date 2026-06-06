@@ -55,26 +55,23 @@ async function getPersonalOrgSpace(userId: string): Promise<{ orgId: string; spa
   return { orgId: result.rows[0].org_id, spaceId: result.rows[0].space_id };
 }
 
-// ─── Tool: search_tasks_by_title ──────────────────────────────────────────────
+// ─── Tool: search_tasks ───────────────────────────────────────────────────────
 
-export const searchTasksByTitleTool = createTool({
-  id: "search_tasks_by_title",
-  description: "Search for tasks by title using fuzzy matching. Searches across ALL the user's tasks (personal + org tasks assigned to them). Use this when the user refers to a task by name instead of ID.",
+export const searchTasksTool = createTool({
+  id: "search_tasks",
+  description: "Search for tasks by keyword fuzzy matching. Searches across title, description, objectives, and success criteria in both personal and org tasks. Returns matching task summaries.",
   inputSchema: z.object({
-    title: z.string().min(1).describe("The task title or partial title to search for (case-insensitive, fuzzy match)"),
+    query: z.string().min(1).describe("The fuzzy keyword search query (e.g. 'AWS')"),
     limit: z.number().int().min(1).max(20).optional().default(5),
   }),
   execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    // Search across all tasks the user has access to:
-    // 1. Tasks in their personal org's private space (created_by = userId)
-    // 2. Tasks assigned to them in any org space they belong to
-    const searchPattern = `%${inputData.title.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+    const searchPattern = `%${inputData.query.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
 
     const result = await pool.query(
-      `SELECT DISTINCT t.id, t.title, t.status, t.priority, t.due_date,
+      `SELECT DISTINCT t.id, t.title, t.status, t.priority, t.due_date, t.start_date, t.type,
               t.org_id, t.space_id, o.name as org_name, s.name as space_name,
               CASE
                 WHEN t.title ILIKE $2 THEN 1
@@ -85,7 +82,12 @@ export const searchTasksByTitleTool = createTool({
        LEFT JOIN public.organisations o ON o.id = t.org_id
        LEFT JOIN public.spaces s ON s.id = t.space_id
        WHERE t.deleted_at IS NULL
-         AND t.title ILIKE $3
+         AND (
+           t.title ILIKE $3
+           OR t.description ILIKE $3
+           OR t.objective ILIKE $3
+           OR t.success_criteria ILIKE $3
+         )
          AND (
            t.created_by = $1
            OR t.id IN (SELECT task_id FROM public.task_assignees WHERE user_id = $1)
@@ -93,14 +95,28 @@ export const searchTasksByTitleTool = createTool({
          )
        ORDER BY relevance ASC, t.updated_at DESC
        LIMIT $4`,
-      [userId, inputData.title, searchPattern, inputData.limit ?? 5]
+      [userId, inputData.query, searchPattern, inputData.limit ?? 5]
     );
 
-    if (result.rows.length === 0) {
-      return { tasks: [], count: 0, message: `No tasks found matching "${inputData.title}".` };
+    const summaryTasks = result.rows.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      start_date: t.start_date,
+      due_date: t.due_date,
+      type: t.type,
+      org_name: t.org_name,
+      space_name: t.space_name,
+      org_id: t.org_id,
+      space_id: t.space_id,
+    }));
+
+    if (summaryTasks.length === 0) {
+      return { tasks: [], count: 0, message: `No tasks found matching "${inputData.query}".` };
     }
 
-    return { tasks: result.rows, count: result.rows.length };
+    return { tasks: summaryTasks, count: summaryTasks.length };
   },
 });
 
@@ -108,7 +124,7 @@ export const searchTasksByTitleTool = createTool({
 
 export const getPersonalTasksTool = createTool({
   id: "get_personal_tasks",
-  description: "List the current user's personal tasks (tasks in their personal org's private space). Returns ALL tasks by default. Only pass status or priority if the user explicitly asks to filter.",
+  description: "List the current user's personal tasks (tasks in their personal org's private space). Returns summarized payloads. Only pass status or priority if the user explicitly asks to filter.",
   inputSchema: z.object({
     status: statusEnum,
     priority: priorityEnum,
@@ -129,7 +145,19 @@ export const getPersonalTasksTool = createTool({
       pagination: { limit: inputData.limit ?? 10, offset: 0 },
     });
 
-    return { tasks, count: tasks.length };
+    const summaryTasks = tasks.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      start_date: t.start_date,
+      due_date: t.due_date,
+      type: t.type,
+      org_id: t.org_id,
+      space_id: t.space_id,
+    }));
+
+    return { tasks: summaryTasks, count: summaryTasks.length };
   },
 });
 
@@ -163,12 +191,17 @@ export const getPersonalTaskTool = createTool({
 
 export const createPersonalTaskTool = createTool({
   id: "create_personal_task",
-  description: "Create a new personal task for the current user (in their personal org's private space).",
+  description: "Create a new personal task or event for the current user.",
   inputSchema: z.object({
     title: z.string().min(1).describe("Task title"),
     description: z.string().optional(),
     priority: priorityEnum,
     status: statusEnum,
+    type: z.enum(["task", "event"]).optional().default("task"),
+    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
+    location: z.string().optional(),
+    is_all_day: z.boolean().optional(),
+    meet_link: z.string().optional(),
     start_date: z.string().optional().describe("ISO 8601 date, e.g. 2025-06-01"),
     due_date: z.string().optional().describe("ISO 8601 date, e.g. 2025-06-15"),
   }),
@@ -188,6 +221,11 @@ export const createPersonalTaskTool = createTool({
         description: inputData.description ?? null,
         priority: inputData.priority as TaskPriority | undefined,
         status: inputData.status as TaskStatus | undefined,
+        type: inputData.type as "task" | "event" | undefined,
+        event_type: inputData.event_type,
+        location: inputData.location ?? null,
+        is_all_day: inputData.is_all_day ?? false,
+        meet_link: inputData.meet_link ?? null,
         start_date: inputData.start_date ? new Date(inputData.start_date) : null,
         due_date: inputData.due_date ? new Date(inputData.due_date) : null,
         assignee_ids: [userId],
@@ -195,7 +233,7 @@ export const createPersonalTaskTool = createTool({
       }
     );
 
-    return { task, message: `Personal task "${task.title}" created.` };
+    return { task, message: `Personal task/event "${task.title}" created.` };
   },
 });
 
@@ -203,13 +241,18 @@ export const createPersonalTaskTool = createTool({
 
 export const updatePersonalTaskTool = createTool({
   id: "update_personal_task",
-  description: "Update an existing personal task.",
+  description: "Update an existing personal task or event.",
   inputSchema: z.object({
     taskId: z.string().uuid(),
     title: z.string().optional(),
     description: z.string().nullable().optional(),
     priority: priorityEnum,
     status: statusEnum,
+    type: z.enum(["task", "event"]).optional(),
+    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
+    location: z.string().nullable().optional(),
+    is_all_day: z.boolean().optional(),
+    meet_link: z.string().nullable().optional(),
     start_date: z.string().nullable().optional(),
     due_date: z.string().nullable().optional(),
   }),
@@ -236,6 +279,11 @@ export const updatePersonalTaskTool = createTool({
         description: rest.description,
         priority: rest.priority as TaskPriority | undefined,
         status: rest.status as TaskStatus | undefined,
+        type: rest.type as "task" | "event" | undefined,
+        event_type: rest.event_type,
+        location: rest.location,
+        is_all_day: rest.is_all_day,
+        meet_link: rest.meet_link,
         start_date: rest.start_date !== undefined
           ? rest.start_date ? new Date(rest.start_date) : null
           : undefined,
@@ -246,7 +294,7 @@ export const updatePersonalTaskTool = createTool({
     );
 
     if (!updated) return { error: "Task not found." };
-    return { task: updated, message: `Task "${updated.title}" updated.` };
+    return { task: updated, message: `Task/event "${updated.title}" updated.` };
   },
 });
 
@@ -328,7 +376,7 @@ export const getMySpacesTool = createTool({
 
 export const getMyAssignedTasksTool = createTool({
   id: "get_my_assigned_tasks",
-  description: "List all org tasks assigned to the current user across ALL organisations and spaces they belong to. Useful for a global view of the user's workload.",
+  description: "List all org tasks assigned to the current user across ALL organisations and spaces. Returns summarized payloads.",
   inputSchema: z.object({
     status: statusEnum,
     priority: priorityEnum,
@@ -340,8 +388,8 @@ export const getMyAssignedTasksTool = createTool({
 
     const params: any[] = [userId];
     let query = `
-      SELECT t.id, t.title, t.description, t.status, t.priority,
-             t.start_date, t.due_date, t.created_at,
+      SELECT t.id, t.title, t.status, t.priority,
+             t.start_date, t.due_date, t.created_at, t.type,
              o.name as org_name, s.name as space_name,
              t.org_id, t.space_id
       FROM public.tasks t
@@ -365,7 +413,22 @@ export const getMyAssignedTasksTool = createTool({
     query += ` LIMIT $${params.length}`;
 
     const result = await pool.query(query, params);
-    return { tasks: result.rows, count: result.rows.length };
+
+    const summaryTasks = result.rows.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      start_date: t.start_date,
+      due_date: t.due_date,
+      type: t.type,
+      org_name: t.org_name,
+      space_name: t.space_name,
+      org_id: t.org_id,
+      space_id: t.space_id,
+    }));
+
+    return { tasks: summaryTasks, count: summaryTasks.length };
   },
 });
 
@@ -373,7 +436,7 @@ export const getMyAssignedTasksTool = createTool({
 
 export const getOrgTasksTool = createTool({
   id: "get_org_tasks",
-  description: "List tasks in the current organisation space. Optionally filter by status, priority, or assignee.",
+  description: "List tasks in the current organisation space. Optionally filter by status, priority, or assignee. Returns summarized payloads.",
   inputSchema: z.object({
     status: statusEnum,
     priority: priorityEnum,
@@ -399,7 +462,19 @@ export const getOrgTasksTool = createTool({
       pagination: { limit: inputData.limit ?? 20, offset: 0 },
     });
 
-    return { tasks, count: tasks.length };
+    const summaryTasks = tasks.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      start_date: t.start_date,
+      due_date: t.due_date,
+      type: t.type,
+      org_id: t.org_id,
+      space_id: t.space_id,
+    }));
+
+    return { tasks: summaryTasks, count: summaryTasks.length };
   },
 });
 
@@ -432,13 +507,17 @@ export const getOrgTaskTool = createTool({
 
 export const createOrgTaskTool = createTool({
   id: "create_org_task",
-  description: "Create a new task in the current organisation space.",
+  description: "Create a new task or event in the current organisation space.",
   inputSchema: z.object({
     title: z.string().min(1),
     description: z.string().optional(),
     priority: priorityEnum,
     status: statusEnum,
     type: z.enum(["task", "event"]).optional().default("task"),
+    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
+    location: z.string().optional(),
+    is_all_day: z.boolean().optional(),
+    meet_link: z.string().optional(),
     start_date: z.string().optional(),
     due_date: z.string().optional(),
     assignee_ids: z.array(z.string().uuid()).optional(),
@@ -468,6 +547,10 @@ export const createOrgTaskTool = createTool({
         priority: inputData.priority as TaskPriority | undefined,
         status: inputData.status as TaskStatus | undefined,
         type: inputData.type as "task" | "event" | undefined,
+        event_type: inputData.event_type,
+        location: inputData.location ?? null,
+        is_all_day: inputData.is_all_day ?? false,
+        meet_link: inputData.meet_link ?? null,
         start_date: inputData.start_date ? new Date(inputData.start_date) : null,
         due_date: inputData.due_date ? new Date(inputData.due_date) : null,
         assignee_ids: inputData.assignee_ids,
@@ -475,7 +558,7 @@ export const createOrgTaskTool = createTool({
       }
     );
 
-    return { task, message: `Org task "${task.title}" created.` };
+    return { task, message: `Org task/event "${task.title}" created.` };
   },
 });
 
@@ -483,13 +566,18 @@ export const createOrgTaskTool = createTool({
 
 export const updateOrgTaskTool = createTool({
   id: "update_org_task",
-  description: "Update an existing task in the current organisation space.",
+  description: "Update an existing task or event in the current organisation space.",
   inputSchema: z.object({
     taskId: z.string().uuid(),
     title: z.string().optional(),
     description: z.string().nullable().optional(),
     priority: priorityEnum,
     status: statusEnum,
+    type: z.enum(["task", "event"]).optional(),
+    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
+    location: z.string().nullable().optional(),
+    is_all_day: z.boolean().optional(),
+    meet_link: z.string().nullable().optional(),
     start_date: z.string().nullable().optional(),
     due_date: z.string().nullable().optional(),
   }),
@@ -518,6 +606,11 @@ export const updateOrgTaskTool = createTool({
         description: rest.description,
         priority: rest.priority as TaskPriority | undefined,
         status: rest.status as TaskStatus | undefined,
+        type: rest.type as "task" | "event" | undefined,
+        event_type: rest.event_type,
+        location: rest.location,
+        is_all_day: rest.is_all_day,
+        meet_link: rest.meet_link,
         start_date: rest.start_date !== undefined
           ? rest.start_date ? new Date(rest.start_date) : null
           : undefined,
@@ -528,7 +621,7 @@ export const updateOrgTaskTool = createTool({
     );
 
     if (!updated) return { error: "Task not found." };
-    return { task: updated, message: `Task "${updated.title}" updated.` };
+    return { task: updated, message: `Task/event "${updated.title}" updated.` };
   },
 });
 
@@ -557,5 +650,54 @@ export const deleteOrgTaskTool = createTool({
 
     await orgTaskService.deleteTask({ orgId, spaceId }, inputData.taskId, userId);
     return { message: "Org task deleted successfully." };
+  },
+});
+
+// ─── Tool: get_calendar_events ────────────────────────────────────────────────
+
+export const getCalendarEventsTool = createTool({
+  id: "get_calendar_events",
+  description: "Get the user's calendar schedule / events for a specified date range. Useful for checking what meetings, calls, or events are scheduled.",
+  inputSchema: z.object({
+    startDate: z.string().describe("ISO 8601 date-time string (e.g. '2026-06-04T00:00:00Z') specifying start of range"),
+    endDate: z.string().describe("ISO 8601 date-time string (e.g. '2026-06-08T00:00:00Z') specifying end of range"),
+    limit: z.number().int().min(1).max(100).optional().default(50),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    const start = new Date(inputData.startDate);
+    const end = new Date(inputData.endDate);
+
+    const result = await pool.query(
+      `SELECT DISTINCT t.id, t.title, t.status, t.priority,
+              t.start_date, t.due_date, t.type, t.event_type, t.location, t.meet_link, t.is_all_day,
+              o.name as org_name, s.name as space_name, t.org_id, t.space_id
+       FROM public.tasks t
+       LEFT JOIN public.organisations o ON o.id = t.org_id
+       LEFT JOIN public.spaces s ON s.id = t.space_id
+       WHERE t.deleted_at IS NULL
+         AND t.start_date IS NOT NULL
+         AND (
+           (t.start_date >= $2 AND t.start_date <= $3)
+           OR (t.due_date >= $2 AND t.due_date <= $3)
+           OR (t.start_date <= $2 AND t.due_date >= $3)
+         )
+         AND (
+           t.created_by = $1
+           OR t.id IN (SELECT task_id FROM public.task_assignees WHERE user_id = $1)
+           OR t.space_id IN (SELECT space_id FROM public.space_members WHERE user_id = $1)
+         )
+       ORDER BY t.start_date ASC
+       LIMIT $4`,
+      [userId, start, end, inputData.limit ?? 50]
+    );
+
+    return {
+      events: result.rows,
+      count: result.rows.length,
+      range: { start: inputData.startDate, end: inputData.endDate }
+    };
   },
 });

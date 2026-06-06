@@ -62,6 +62,8 @@ import {
   Archive,
   Eye,
   EyeOff,
+  MessageSquare,
+  PanelRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
@@ -88,6 +90,7 @@ import {
 } from "@/hooks/api/useSpaces";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { Loader2, Copy, Mic } from "lucide-react";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   useGoogleCalendarStatus,
   useConnectGoogleCalendar,
@@ -120,7 +123,7 @@ type AccountTab =
 
 type WorkspaceTab = "org-general" | "org-members" | "org-spaces" | "api" | "enterprise";
 
-type SettingsTab = AccountTab | WorkspaceTab;
+export type SettingsTab = AccountTab | WorkspaceTab;
 
 interface AccountNavItem {
   id: AccountTab;
@@ -1395,6 +1398,18 @@ function AccountTab() {
 
 function PreferencesTab() {
   const { theme, setTheme } = useTheme();
+  const [chatView, setChatView] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("default_chat_view") || "sidebar";
+    }
+    return "sidebar";
+  });
+
+  const handleChatViewChange = (view: "sidebar" | "dialog") => {
+    setChatView(view);
+    localStorage.setItem("default_chat_view", view);
+    toast.success(`Default chat view set to ${view === "sidebar" ? "Sidebar" : "Dialog"}`);
+  };
 
   return (
     <div className="space-y-8">
@@ -1455,6 +1470,65 @@ function PreferencesTab() {
               <Monitor className="size-5 text-slate-500" />
             </div>
             <span className="text-xs font-medium text-foreground">System</span>
+          </button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Default Chat View */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <MessageSquare className="size-4 text-muted-foreground" />
+          Default Chat View
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Choose where the team chat opens by default when you click the chat icon.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleChatViewChange("sidebar")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              chatView === "sidebar"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <PanelRight className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Sidebar (Drawer)</span>
+              </div>
+              {chatView === "sidebar" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Opens the chat in a collapsible side drawer on the right side of the screen.
+            </span>
+          </button>
+          <button
+            onClick={() => handleChatViewChange("dialog")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              chatView === "dialog"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <Monitor className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Full Dialog (Modal)</span>
+              </div>
+              {chatView === "dialog" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Opens the chat in a larger, centered dialog modal for a more focused conversation.
+            </span>
           </button>
         </div>
       </div>
@@ -1782,14 +1856,57 @@ function AssistantTab() {
 }
 
 function ShortcutsTab() {
-  const shortcuts = [
-    { keys: ["⌘", "K"], action: "Open command palette" },
-    { keys: ["⌘", "B"], action: "Toggle sidebar" },
-    { keys: ["⌘", "N"], action: "New item" },
-    { keys: ["⌘", "⇧", "P"], action: "Open settings" },
-    { keys: ["⌘", "/"], action: "Toggle assistant" },
-    { keys: ["⌘", "D"], action: "Go to dashboard" },
-    { keys: ["Esc"], action: "Close dialog / cancel" },
+  const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform);
+  const mod = isMac ? "⌘" : "Ctrl";
+
+  const groups: Array<{
+    label: string;
+    items: Array<{ keys: string[]; description: string; implemented: boolean }>;
+  }> = [
+    {
+      label: "Navigation",
+      items: [
+        { keys: [mod, "G"],       description: "Go to Dashboard",          implemented: true  },
+        { keys: [mod, "T"],       description: "Go to Tasks",               implemented: true  },
+        { keys: [mod, "P"],       description: "Go to Motion (Pages)",      implemented: true  },
+        { keys: [mod, "K"],       description: "Open command palette",      implemented: true  },
+      ],
+    },
+    {
+      label: "Meetings",
+      items: [
+        { keys: [mod, "M"],       description: "Open / restore Meeting Studio", implemented: true  },
+        { keys: ["Esc"],          description: "Minimize Meeting Studio",   implemented: false },
+      ],
+    },
+    {
+      label: "Chat",
+      items: [
+        { keys: [mod, "J"],       description: "Toggle Chat",               implemented: true  },
+      ],
+    },
+    {
+      label: "Notifications",
+      items: [
+        { keys: [mod, "⇧", "N"], description: "Toggle Notification drawer", implemented: true  },
+      ],
+    },
+    {
+      label: "Settings",
+      items: [
+        { keys: [mod, ","],       description: "Open Settings",             implemented: true  },
+        { keys: [mod, "⇧", "S"], description: "Open Shortcuts",             implemented: false },
+      ],
+    },
+    {
+      label: "General",
+      items: [
+        { keys: ["Esc"],          description: "Close dialog / cancel",     implemented: true  },
+        { keys: [mod, "B"],       description: "Toggle sidebar",            implemented: false },
+        { keys: [mod, "N"],       description: "New task",                  implemented: false },
+        { keys: [mod, "/"],       description: "Toggle AI Assistant",       implemented: false },
+      ],
+    },
   ];
 
   return (
@@ -1797,27 +1914,59 @@ function ShortcutsTab() {
       <div>
         <h2 className="text-lg font-semibold text-foreground">Shortcuts</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Keyboard shortcuts to help you work faster.
+          Keyboard shortcuts to help you move faster across KeilHQ.
+          <span className="ml-1 text-muted-foreground/60">
+            {isMac ? "Mac shortcuts shown." : "Windows/Linux shortcuts shown."}
+          </span>
         </p>
       </div>
 
-      <Separator />
+      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+          Implemented
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-muted-foreground/30 shrink-0" />
+          Coming soon
+        </span>
+      </div>
 
-      <div className="space-y-1">
-        {shortcuts.map((shortcut, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-muted/50 transition-colors"
-          >
-            <span className="text-sm text-foreground">{shortcut.action}</span>
-            <div className="flex items-center gap-1">
-              {shortcut.keys.map((key, j) => (
-                <kbd
-                  key={j}
-                  className="min-w-[24px] h-6 px-1.5 flex items-center justify-center rounded-md border border-border bg-muted/70 text-[11px] font-mono font-medium text-muted-foreground"
+      <div className="space-y-8">
+        {groups.map((group) => (
+          <div key={group.label}>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 px-3">
+              {group.label}
+            </p>
+            <div className="rounded-xl border border-border/50 divide-y divide-border/40 overflow-hidden">
+              {group.items.map((item, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex items-center justify-between py-2.5 px-3 transition-colors",
+                    item.implemented
+                      ? "hover:bg-muted/40"
+                      : "opacity-50 cursor-not-allowed"
+                  )}
                 >
-                  {key}
-                </kbd>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "size-1.5 rounded-full shrink-0",
+                        item.implemented ? "bg-emerald-500" : "bg-muted-foreground/30"
+                      )}
+                    />
+                    <span className="text-sm text-foreground">{item.description}</span>
+                    {!item.implemented && (
+                      <span className="text-[10px] text-muted-foreground/50 font-medium">Soon</span>
+                    )}
+                  </div>
+                  <KbdGroup>
+                    {item.keys.map((key, j) => (
+                      <Kbd key={j}>{key}</Kbd>
+                    ))}
+                  </KbdGroup>
+                </div>
               ))}
             </div>
           </div>

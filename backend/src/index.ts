@@ -8,7 +8,7 @@ import "./config/supabase";
 import http from "http";
 import { initSocket } from "./socket";
 import { taskOverdueWorkerService } from "./services/task-overdue-worker.service";
-import { renewExpiringWatchChannels, healDegradedWatchChannels } from "./services/gcal-watch-renewal.service";
+import { renewExpiringWatchChannels, healDegradedWatchChannels, cleanupWebhookReceipts } from "./services/gcal-watch-renewal.service";
 import { NotificationWorkerService } from "./services/notification-worker.service";
 import { createServiceLogger } from "./lib/logger";
 
@@ -93,6 +93,9 @@ const startServer = async () => {
             );
             await healDegradedWatchChannels().catch(err =>
                 cronLog.error({ err }, "healDegradedWatchChannels error")
+            );
+            await cleanupWebhookReceipts().catch(err =>
+                cronLog.error({ err }, "cleanupWebhookReceipts error")
             );
         }, TWELVE_HOURS_MS);
 

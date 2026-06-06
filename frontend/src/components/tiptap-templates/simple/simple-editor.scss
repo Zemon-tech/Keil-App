@@ -167,6 +167,11 @@ body,
     align-items: flex-start;
     margin: 0.5rem 0;
 
+    &:has([data-level="1"]) > button[type="button"] { margin-top: 14px; }
+    &:has([data-level="2"]) > button[type="button"] { margin-top: 10px; }
+    &:has([data-level="3"]) > button[type="button"] { margin-top: 6px; }
+    &:has([data-level="4"]) > button[type="button"] { margin-top: 4px; }
+
     /* Tiptap NodeView Toggle Button */
     >button[type="button"] {
       display: flex;
@@ -240,6 +245,39 @@ body,
     min-height: 24px;
     line-height: 1.5;
     cursor: text;
+
+    &[data-level="1"] {
+      font-size: 2.25rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 1rem;
+      color: var(--foreground);
+    }
+    &[data-level="2"] {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 0.8rem;
+      color: var(--foreground);
+    }
+    &[data-level="3"] {
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 0.6rem;
+      color: var(--foreground);
+    }
+    &[data-level="4"] {
+      font-size: 1.1rem;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 0.5em;
+      margin-top: 0.4rem;
+      color: var(--foreground);
+    }
 
     /* Remove native arrow */
     &::-webkit-details-marker,
@@ -324,92 +362,73 @@ body,
   }
 }
 
-/* Global Drag Handle - Notion-style */
-.drag-handle {
+/* ── New React-based BlockDragHandle ─────────────────────────────────────── */
+
+
+
+/* React-rendered drag handle wrapper */
+.block-drag-handle {
   position: fixed;
   z-index: 50;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  width: 56px;
+  gap: 2px;
   height: 24px;
+  pointer-events: auto;
+  opacity: 1;
+  transition: opacity 0.12s ease;
+}
+
+.block-drag-handle--hidden {
+  opacity: 0;
   pointer-events: none;
-  
-  .plus-button,
-  &::before {
-    pointer-events: auto;
-  }
+}
 
-  &::before {
-    content: "";
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 10px;
-    height: 14px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 14' width='10' height='14'%3E%3Cpath d='M3 2a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm6-10a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z' fill='rgba(155, 155, 155, 0.5)'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: contain;
-    cursor: grab;
-  }
+.block-drag-handle__plus,
+.block-drag-handle__grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  padding: 0;
+  flex-shrink: 0;
 
-  &.hide {
-    opacity: 0 !important;
+  svg {
     pointer-events: none;
   }
 
-  /* Show when hovering the block, handle, or a pinned block menu target */
-  &:not(.hide),
-  &[data-show="true"],
-  &[data-pinned="true"],
   &:hover {
-    opacity: 1 !important;
-    pointer-events: auto;
-  }
-
-  .plus-button {
-    position: absolute;
-    left: 4px;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    font-weight: 300;
-    color: var(--muted-foreground);
-    opacity: 0.6;
-    transition: all 0.1s ease;
-    border-radius: 4px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    line-height: 1;
-    padding: 0;
-
-    &:hover {
-      background-color: var(--muted);
-      opacity: 1;
-      color: var(--foreground);
-    }
+    background-color: var(--muted);
+    opacity: 1;
+    color: var(--foreground);
   }
 }
 
-.drag-handle:active {
-  cursor: grabbing;
+.block-drag-handle__grip {
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
 }
 
-/* Notion-style drag border and padding */
+/* Notion-style drag border and padding - fixed margin */
 .tiptap.ProseMirror.simple-editor .ProseMirror-selectednode {
   outline: none !important;
   background-color: color-mix(in oklch, var(--muted) 64%, transparent);
-  box-shadow: 0 0 0 1px var(--border);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 25%, transparent);
   border-radius: 4px;
   box-sizing: border-box;
-  margin-inline: -10px;
-  padding-inline: 10px;
+  margin-inline: -4px;
+  padding-inline: 4px;
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -479,3 +498,53 @@ body,
     font-weight: 400;
   }
 }
+
+/* Notion-like Table Interactive Overlays & Styles */
+.table-node-wrapper {
+  position: relative;
+  
+  table {
+    border-collapse: collapse;
+    margin: 0;
+    width: 100%;
+    
+    tr {
+      transition: background-color 0.1s ease;
+    }
+    
+    tr.row-selected {
+      td, th {
+        border-top: 1.5px solid #3b82f6 !important;
+        border-bottom: 1.5px solid #3b82f6 !important;
+        background-color: rgba(59, 130, 246, 0.08) !important;
+        
+        &:first-child {
+          border-left: 1.5px solid #3b82f6 !important;
+        }
+        
+        &:last-child {
+          border-right: 1.5px solid #3b82f6 !important;
+        }
+      }
+    }
+    
+    td.col-selected, th.col-selected {
+      border-left: 1.5px solid #3b82f6 !important;
+      border-right: 1.5px solid #3b82f6 !important;
+      background-color: rgba(59, 130, 246, 0.08) !important;
+    }
+    
+    tr:first-child {
+      td.col-selected, th.col-selected {
+        border-top: 1.5px solid #3b82f6 !important;
+      }
+    }
+    
+    tr:last-child {
+      td.col-selected, th.col-selected {
+        border-bottom: 1.5px solid #3b82f6 !important;
+      }
+    }
+  }
+}
+

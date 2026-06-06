@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import type { JSONContent } from "@tiptap/core";
-import { useMotionStore } from "@/store/useMotionStore";
+import { useAppContext } from "@/contexts/AppContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,6 +122,41 @@ export function useMotionPages(orgId: string | null, spaceId: string | null) {
     retry: noRetryOn4xx,
     staleTime: 30_000, // 30s — pages don't change that often
   });
+}
+
+/** Synchronously/Reactively retrieves a page from the active space's page lists query cache. */
+export function useCachedPageById(id: string | null | undefined): MotionPageDTO | undefined {
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: pages } = useMotionPages(activeOrgId, activeSpaceId);
+  return useMemo(() => {
+    if (!id || !pages) return undefined;
+    return pages.find((p) => p.id === id);
+  }, [id, pages]);
+}
+
+/** Filters and returns root-level pages from the active space's page lists query cache. */
+export function useRootPages(orgId: string | null, spaceId: string | null): MotionPageDTO[] {
+  const { data: pages = [] } = useMotionPages(orgId, spaceId);
+  return useMemo(() => {
+    return pages
+      .filter((p) => !p.parent_id && !p.deleted_at)
+      .sort((a, b) => a.position - b.position);
+  }, [pages]);
+}
+
+/** Filters and returns subpages from the active space's page lists query cache. */
+export function useSubpages(
+  orgId: string | null,
+  spaceId: string | null,
+  parentId: string | null | undefined
+): MotionPageDTO[] {
+  const { data: pages = [] } = useMotionPages(orgId, spaceId);
+  return useMemo(() => {
+    if (!parentId) return [];
+    return pages
+      .filter((p) => p.parent_id === parentId && !p.deleted_at)
+      .sort((a, b) => a.position - b.position);
+  }, [pages, parentId]);
 }
 
 /** Fetches a single page by id. */
@@ -540,6 +575,7 @@ export function useUpdateMotionPageShare(
   });
 }
 
+
 // ─── Socket Listeners ─────────────────────────────────────────────────────────
 
 export function useMotionSocketListeners(
@@ -567,7 +603,6 @@ export function useMotionSocketListeners(
               motionPageKeys.lists(orgId, spaceId),
               (old) => (old ? [page, ...old] : [page])
             );
-            useMotionStore.getState().upsertPages([page]);
           }
           break;
 
@@ -579,17 +614,13 @@ export function useMotionSocketListeners(
               (old) => old?.map((p) => (p.id === pageId ? page : p))
             );
             
-            // Update detail cache ONLY if it's not the page we are currently editing
-            // Or if it is, we might want to be careful. For now, let's update it
-            // but only if it's not "us". But we don't have a userId here easily.
-            // Let's just update detail if it's the current page.
+            // Update detail cache ONLY if it's the page we are currently editing
             if (pageId === currentPageId) {
                 queryClient.setQueryData(
                     motionPageKeys.detail(orgId, spaceId, pageId),
                     page
                 );
             }
-            useMotionStore.getState().upsertPages([page]);
           }
           break;
 
@@ -605,7 +636,6 @@ export function useMotionSocketListeners(
             if (pageId === currentPageId) {
               queryClient.setQueryData(motionPageKeys.detail(orgId, spaceId, pageId), undefined);
             }
-            useMotionStore.getState().removePageLocally(pageId);
           }
           break;
 
@@ -616,7 +646,6 @@ export function useMotionSocketListeners(
               (old) => (old ? [...old, page] : [page])
             );
             queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
-            useMotionStore.getState().upsertPages([page]);
           }
           break;
       }

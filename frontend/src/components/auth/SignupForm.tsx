@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldSeparator,
+  FieldDescription,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
@@ -89,18 +89,18 @@ export function SignupForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-8", className)} {...props}>
-      <div className="flex flex-col gap-2 text-left">
-        <h1 className="text-3xl font-semibold">Create your account</h1>
+    <div className={cn("flex flex-col gap-4", className)} {...props}>
+      <div className="flex flex-col gap-1 text-left">
+        <h1 className="text-2xl font-semibold">Create your account</h1>
         <p className="text-muted-foreground text-sm">
           Fill in the form below to create your account
         </p>
       </div>
 
-      <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
-        <FieldGroup>
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <FieldGroup className="gap-3.5">
           {error && <div className="text-destructive text-sm font-medium">{error}</div>}
-          <Field>
+          <Field className="gap-1.5">
             <FieldLabel htmlFor="fullName">Full Name</FieldLabel>
             <Input
               id="fullName"
@@ -111,7 +111,7 @@ export function SignupForm({
               required
             />
           </Field>
-          <Field>
+          <Field className="gap-1.5">
             <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input
               id="email"
@@ -121,11 +121,8 @@ export function SignupForm({
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <FieldDescription>
-              We&apos;ll use this to contact you.
-            </FieldDescription>
           </Field>
-          <Field>
+          <Field className="gap-1.5">
             <FieldLabel htmlFor="password">Password</FieldLabel>
             <Input
               id="password"
@@ -134,9 +131,8 @@ export function SignupForm({
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-            <FieldDescription>Must be at least 8 characters long.</FieldDescription>
           </Field>
-          <Field>
+          <Field className="gap-1.5">
             <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
             <Input
               id="confirm-password"
@@ -146,7 +142,7 @@ export function SignupForm({
               required
             />
           </Field>
-          <Field>
+          <Field className="gap-1.5">
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating Account..." : "Create Account"}
             </Button>
@@ -154,7 +150,7 @@ export function SignupForm({
           <FieldSeparator className=":data-[slot=field-separator-content]:bg-background">
             Or continue with
           </FieldSeparator>
-          <Field className="grid grid-cols-3 gap-4">
+          <Field className="grid grid-cols-3 gap-4 gap-y-1.5">
             <Button variant="outline" type="button" disabled={loading}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path
@@ -165,9 +161,9 @@ export function SignupForm({
               <span className="sr-only">Sign up with Apple</span>
             </Button>
             <Button variant="outline" type="button" disabled={loading} onClick={handleGoogleLogin}>
-              <img 
-                src="https://cdn.brandfetch.io/id6O2oGzv-/theme/dark/symbol.svg?c=1bxid64Mup7aczewSAYMX&t=1755835725776" 
-                alt="Google" 
+              <img
+                src="https://cdn.brandfetch.io/id6O2oGzv-/theme/dark/symbol.svg?c=1bxid64Mup7aczewSAYMX&t=1755835725776"
+                alt="Google"
                 className="size-5"
               />
               <span className="sr-only">Sign up with Google</span>
@@ -182,7 +178,7 @@ export function SignupForm({
               <span className="sr-only">Sign up with Meta</span>
             </Button>
           </Field>
-          <FieldDescription className="text-left text-sm">
+          <FieldDescription className="text-left text-sm mt-0">
             Already have an account?{" "}
             <button
               type="button"

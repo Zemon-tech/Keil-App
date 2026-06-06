@@ -3,6 +3,7 @@ import { catchAsync } from "../utils/catchAsync";
 import { ApiError } from "../utils/ApiError";
 import { ApiResponse } from "../utils/ApiResponse";
 import * as orgTaskService from "../services/org-task.service";
+import { doIncrementalSyncWithCooldown } from "../services/google-calendar.service";
 import { createComment, getThreadedComments, hardDeleteComment } from "../services/comment.service";
 import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
@@ -51,7 +52,7 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
     title, status, priority, start_date, due_date, parent_task_id,
     description, objective, success_criteria,
     type, event_type, location, is_all_day, assignee_ids,
-    story_points, time_estimate,
+    story_points, time_estimate, meet_link,
   } = req.body;
 
   if (!title || typeof title !== "string" || title.trim() === "") {
@@ -90,6 +91,7 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
     assignee_ids: Array.isArray(assignee_ids) ? assignee_ids : undefined,
     story_points: story_points ?? null,
     time_estimate: time_estimate ?? null,
+    meet_link: meet_link ?? null,
   });
 
   res.status(201).json(new ApiResponse(201, task, "Task created successfully"));
@@ -111,6 +113,10 @@ export const getTasks = catchAsync(async (req: Request, res: Response) => {
   const reqUserId = (req as any).user?.id;
   if (reqUserId && isUuid(reqUserId)) {
     options.filters!.userId = reqUserId;
+    
+    // Background fire-and-forget polling sync for Google Calendar.
+    // Extremely useful on localhost since watch webhooks cannot be delivered to localhost.
+    doIncrementalSyncWithCooldown(reqUserId).catch(() => {});
   }
 
   const isPrivateSpace = (req as any).space?.is_private === true;
@@ -167,7 +173,7 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
   const updates: any = {};
   const allowedFields = [
     "title", "description", "objective", "success_criteria",
-    "status", "priority", "type", "event_type", "location", "is_all_day",
+    "status", "priority", "type", "event_type", "location", "is_all_day", "meet_link",
   ];
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
