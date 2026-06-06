@@ -229,6 +229,7 @@ export const getChannelMessages = async (channelId: string, limit = 50, beforeId
       m.channel_id,
       m.content,
       m.created_at,
+      m.reply_to,
       json_build_object('id', u.id, 'name', COALESCE(u.name, u.email)) AS sender
     FROM public.messages m
     JOIN public.users u ON m.sender_id = u.id
@@ -263,18 +264,18 @@ export const markAsRead = async (channelId: string, userId: string): Promise<voi
   );
 };
 
-export const saveMessage = async (channelId: string, senderId: string, content: string) => {
+export const saveMessage = async (channelId: string, senderId: string, content: string, replyTo?: any) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
     const result = await client.query(
       `
-        INSERT INTO public.messages (channel_id, sender_id, content)
-        VALUES ($1, $2, $3)
-        RETURNING id, channel_id, content, created_at
+        INSERT INTO public.messages (channel_id, sender_id, content, reply_to)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, channel_id, content, created_at, reply_to
       `,
-      [channelId, senderId, content],
+      [channelId, senderId, content, replyTo ? JSON.stringify(replyTo) : null],
     );
 
     const senderResult = await client.query(
@@ -343,6 +344,7 @@ export const saveMessage = async (channelId: string, senderId: string, content: 
       channel_id: result.rows[0].channel_id,
       content: result.rows[0].content,
       created_at: toISO(result.rows[0].created_at),
+      reply_to: result.rows[0].reply_to,
       sender: {
         id: sender.id,
         name: sender.name || sender.email,

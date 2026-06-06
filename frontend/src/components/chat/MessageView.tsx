@@ -39,6 +39,19 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ messageId: string; senderName: string; text: string } | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+  const scrollToMessage = (msgId: string) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMessageId(msgId);
+      setTimeout(() => {
+        setHighlightedMessageId(null);
+      }, 1500);
+    }
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -62,8 +75,9 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
 
   const handleSend = () => {
     if (!text.trim()) return;
-    sendMessage(channelId, text.trim());
+    sendMessage(channelId, text.trim(), replyingTo);
     setText("");
+    setReplyingTo(null);
     const socket = getSocket();
     if (socket) {
       socket.emit("typing_end", { channel_id: channelId });
@@ -169,23 +183,78 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             return (
               <motion.div
                 key={msg.id}
+                id={`msg-${msg.id}`}
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                className={`flex flex-col gap-1 w-full ${isMine ? "items-end" : "items-start"}`}
+                className={`flex flex-col gap-1 w-full group transition-all duration-300 ${isMine ? "items-end" : "items-start"}`}
+                onTouchStart={(e) => {
+                  const touch = e.touches[0];
+                  (e.currentTarget as any).startX = touch.clientX;
+                }}
+                onTouchEnd={(e) => {
+                  const startX = (e.currentTarget as any).startX;
+                  if (startX === undefined) return;
+                  const touch = e.changedTouches[0];
+                  const diffX = touch.clientX - startX;
+                  if (diffX > 60) {
+                    setReplyingTo({
+                      messageId: msg.id,
+                      senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
+                      text: msg.content,
+                    });
+                  }
+                }}
               >
                 {!isMine && (
                   <span className="text-[10px] font-medium text-muted-foreground ml-1">
                     {msg.sender.name ?? "Unknown"}
                   </span>
                 )}
-                <div
-                  className={`relative text-[13px] rounded-2xl px-4 py-2 w-fit max-w-[85%] leading-relaxed shadow-sm ${
-                    isMine 
-                      ? "bg-primary text-primary-foreground rounded-tr-sm" 
-                      : "bg-card text-card-foreground border border-border/50 rounded-tl-sm"
-                  }`}
-                >
-                  {msg.content}
+                <div className={`flex items-center gap-2 max-w-[85%] ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                  <div
+                    className={`relative text-[13px] rounded-2xl px-4 py-2 w-fit leading-relaxed shadow-sm transition-all duration-300 ${
+                      isMine 
+                        ? "bg-primary text-primary-foreground rounded-tr-sm" 
+                        : "bg-card text-card-foreground border border-border/50 rounded-tl-sm"
+                    } ${
+                      highlightedMessageId === msg.id
+                        ? isMine
+                          ? "ring-4 ring-primary/30 scale-102"
+                          : "bg-muted/80 ring-4 ring-muted-foreground/20 scale-102"
+                        : ""
+                    }`}
+                  >
+                    {msg.reply_to && (
+                      <div
+                        onClick={() => scrollToMessage(msg.reply_to!.messageId)}
+                        className={`mb-1.5 p-2 rounded-lg text-xs cursor-pointer border-l-2 border-foreground select-none text-left ${
+                          isMine
+                            ? "bg-primary-foreground/15 text-primary-foreground/90"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <div className="font-bold text-[10px] truncate">
+                          {msg.reply_to.senderName}
+                        </div>
+                        <div className="truncate text-[11px] leading-tight opacity-90">
+                          {msg.reply_to.text}
+                        </div>
+                      </div>
+                    )}
+                    <div>{msg.content}</div>
+                  </div>
+
+                  <button
+                    onClick={() => setReplyingTo({
+                      messageId: msg.id,
+                      senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
+                      text: msg.content,
+                    })}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted text-muted-foreground cursor-pointer flex items-center justify-center shrink-0"
+                    title="Reply"
+                  >
+                    <span className="text-xs font-semibold">↩</span>
+                  </button>
                 </div>
                 <div className={`flex items-center gap-1 text-[10px] text-muted-foreground ${isMine ? "mr-1" : "ml-1"}`}>
                   <span>
@@ -201,41 +270,66 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
           })}
         </AnimatePresence>
 
-        {typingUsers[channelId] && typingUsers[channelId].length > 0 && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex gap-2 items-center text-[11px] text-muted-foreground italic px-2"
-          >
-            <div className="flex gap-1">
-              <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-              <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-              <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce"></span>
-            </div>
-            {typingUsers[channelId].map((u) => u.name).join(", ")} is typing...
-          </motion.div>
-        )}
+        {(() => {
+          const otherTypingUsers = (typingUsers[channelId] || []).filter((u) => u.userId !== me?.id);
+          if (otherTypingUsers.length === 0) return null;
+          return (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex gap-2 items-center text-[11px] text-muted-foreground italic px-2"
+            >
+              <div className="flex gap-1">
+                <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                <span className="size-1.5 bg-muted-foreground/60 rounded-full animate-bounce"></span>
+              </div>
+              {otherTypingUsers.map((u) => u.name).join(", ")} is typing...
+            </motion.div>
+          );
+        })()}
 
         <div ref={bottomRef} />
       </div>
 
       {/* ── Send input ── */}
-      <div className="flex items-center gap-3 px-4 py-3 shrink-0 bg-card border-t border-border">
-        <input
-          value={text}
-          onChange={handleInputChange}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Message..."
-          className="flex-1 text-sm bg-muted rounded-full px-5 py-2.5 outline-none placeholder:text-muted-foreground border border-transparent focus:border-primary/20 transition-colors"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!text.trim()}
-          className="flex items-center justify-center size-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary transition-all active:scale-95"
-          aria-label="Send message"
-        >
-          <Send className="size-4 ml-0.5" />
-        </button>
+      <div className="flex flex-col gap-2 px-4 py-3 shrink-0 bg-card border-t border-border">
+        {replyingTo && (
+          <div className="flex items-center justify-between bg-muted rounded-xl px-4 py-2.5 text-xs border-l-4 border-foreground animate-in slide-in-from-bottom-2 duration-200">
+            <div className="flex flex-col min-w-0 pr-4 text-left">
+              <span className="font-bold text-[11px] text-foreground">
+                Reply to {replyingTo.senderName}
+              </span>
+              <span className="text-muted-foreground truncate text-[11px] mt-0.5">
+                {replyingTo.text}
+              </span>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="text-muted-foreground hover:text-foreground p-1 cursor-pointer font-bold shrink-0 text-sm"
+              aria-label="Cancel reply"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <input
+            value={text}
+            onChange={handleInputChange}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Message..."
+            className="flex-1 text-sm bg-muted rounded-full px-5 py-2.5 outline-none placeholder:text-muted-foreground border border-transparent focus:border-primary/20 transition-colors"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!text.trim()}
+            className="flex items-center justify-center size-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary transition-all active:scale-95"
+            aria-label="Send message"
+          >
+            <Send className="size-4 ml-0.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
