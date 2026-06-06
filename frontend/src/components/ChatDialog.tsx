@@ -148,7 +148,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
              <DialogContent
                 showCloseButton={true}
-                className="!flex !flex-col !max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden [&_[data-slot=dialog-close]]:text-red-500 hover:[&_[data-slot=dialog-close]]:text-red-600 [&_[data-slot=dialog-close]]:opacity-90 transition-colors"
+                className="!flex !flex-col !max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden [&_[data-slot=dialog-close]]:!top-5 [&_[data-slot=dialog-close]]:text-red-500 hover:[&_[data-slot=dialog-close]]:text-red-600 [&_[data-slot=dialog-close]]:opacity-90 transition-colors"
             >
                 <VisuallyHidden.Root>
                     <DialogTitle>Chat</DialogTitle>
@@ -159,7 +159,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                     <div className="w-80 shrink-0 grow-0 bg-card border-r border-border flex flex-col h-full overflow-hidden">
                         {/* Sidebar Header */}
                         {searchOpen ? (
-                            <div className="flex items-center gap-2 px-3 py-2 shrink-0 border-b border-border h-12">
+                            <div className="flex items-center gap-2 px-3 py-2 shrink-0 border-b border-border h-14">
                                 <div className="relative flex-1">
                                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                                     <Input
@@ -183,7 +183,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                 </Button>
                             </div>
                         ) : (
-                            <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border h-12">
+                            <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border h-14">
                                 <span className="text-sm font-semibold">Messages</span>
                                 <div className="flex items-center gap-1">
                                     <Button
