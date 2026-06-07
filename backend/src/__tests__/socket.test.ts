@@ -338,6 +338,121 @@ describe("Socket.io Integration Tests", () => {
         });
     });
 
+    // ── Kicked Member: Real-time Access Revocation ───────────────────────────────
+    it("should block a kicked member from sending messages after being removed and reconnecting", async () => {
+        // 1. Seed two users: mockUserId (admin) and otherUserId (member to be kicked)
+        await seedUser(mockUserId, mockUserEmail, mockUserName);
+        await seedUser(otherUserId, otherUserEmail, otherUserName);
+
+        const orgId = "b12852ab-d731-4db3-ae7c-2b28c312782b";
+        const spaceId = "e57c66ba-a1e6-4252-a50d-ebcb5a3d76e5";
+        const channelId = "0f27c6de-6e7e-40dc-84c4-f25cb0647c55";
+
+        await seedOrg(orgId, "Kick Test Org", mockUserId);
+        await seedSpace(spaceId, orgId, "Kick Test Space", mockUserId);
+        await seedChannel(channelId, orgId, spaceId, "kick-test-channel", mockUserId);
+
+        // Add otherUser to the org, space, and channel
+        await pool.query(
+            `INSERT INTO public.organisation_members (org_id, user_id, role)
+             VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+            [orgId, otherUserId]
+        );
+        await pool.query(
+            `INSERT INTO public.space_members (org_id, space_id, user_id, role)
+             VALUES ($1, $2, $3, 'member') ON CONFLICT DO NOTHING`,
+            [orgId, spaceId, otherUserId]
+        );
+        await pool.query(
+            `INSERT INTO public.channel_members (channel_id, user_id, role)
+             VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+            [channelId, otherUserId]
+        );
+
+        // 2. Connect as otherUser WHILE still a member — verify they CAN send messages
+        const priorSocket = Client(`http://localhost:${port}`, {
+            auth: { token: otherToken },
+            transports: ["websocket"],
+        });
+
+        await new Promise<void>((resolve, reject) => {
+            priorSocket.once("connect", () => resolve());
+            priorSocket.once("connect_error", reject);
+        });
+
+        // Channel should be auto-joined on connect (server queries channel_members)
+        await new Promise((r) => setTimeout(r, 300));
+
+        // Send a message as member — should succeed
+        const preSentPromise = new Promise<void>((resolve, reject) => {
+            const t = setTimeout(() => {
+                priorSocket.disconnect();
+                reject(new Error("Pre-kick message was not received — member should be able to send"));
+            }, 5000);
+            priorSocket.once("receive_message", () => {
+                clearTimeout(t);
+                resolve();
+            });
+            priorSocket.emit("send_message", { channel_id: channelId, content: "Pre-kick message" });
+        });
+        await preSentPromise;
+
+        // 3. KICK the member: remove from channel_members (simulates removeChannelMember API)
+        await pool.query(
+            `DELETE FROM public.channel_members WHERE channel_id = $1 AND user_id = $2`,
+            [channelId, otherUserId]
+        );
+
+        // Disconnect the old socket — a fresh reconnect will re-query channel_members on connect
+        priorSocket.disconnect();
+
+        // 4. Reconnect as the kicked user — the server's on-connect room setup will now
+        //    NOT join `channel:${channelId}` because they are absent from channel_members
+        const kickedSocket = Client(`http://localhost:${port}`, {
+            auth: { token: otherToken },
+            transports: ["websocket"],
+        });
+
+        await new Promise<void>((resolve, reject) => {
+            kickedSocket.once("connect", () => resolve());
+            kickedSocket.once("connect_error", reject);
+        });
+
+        // Wait for server on-connect room setup to complete
+        await new Promise((r) => setTimeout(r, 300));
+
+        // 5. Kicked member attempts to send a message — server's isChannelMember check:
+        //    socket.rooms.has() → false (room was never joined on reconnect)
+        //    DB check → false (removed from channel_members)
+        //    → message is silently dropped, nothing persisted
+        await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(async () => {
+                // Assert no post-kick messages were inserted by the kicked user
+                const checkDb = await pool.query(
+                    `SELECT * FROM public.messages WHERE channel_id = $1 AND sender_id = $2 AND content = $3`,
+                    [channelId, otherUserId, "Post-kick message attempt"]
+                );
+                expect(checkDb.rowCount).toBe(0);
+
+                kickedSocket.disconnect();
+                resolve();
+            }, 2000);
+
+            kickedSocket.emit("send_message", {
+                channel_id: channelId,
+                content: "Post-kick message attempt",
+            });
+
+            kickedSocket.on("receive_message", (msg) => {
+                if (msg.content === "Post-kick message attempt") {
+                    clearTimeout(timeout);
+                    kickedSocket.disconnect();
+                    reject(new Error("Kicked member's message was delivered — access was NOT revoked on reconnect!"));
+                }
+            });
+        });
+    });
+
     // ── Added Tests: Room Access Authorization ───────────────────────────────────
     it("should block unauthorized users from joining or sending messages to a channel", async () => {
         // 1. Seed two users: mockUserId is in the channel, otherUserId is NOT in the channel!

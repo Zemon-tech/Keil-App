@@ -656,4 +656,120 @@ describe("Motion Page Routes", () => {
                 .expect(401);
         });
     });
+
+    // ── Space Role Access & Document Ownership Boundaries ───────────────────────
+
+    describe("Space Role Access and Document Ownership Boundaries", () => {
+        it("should allow Space manager to edit, share, or delete pages they created, but receive 403 on others' pages", async () => {
+            // 1. Manager creates their own page
+            const managerPageRes = await request(app)
+                .post(basePath)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .send({ title: "Manager Private Page" })
+                .expect(201);
+            const managerPageId = managerPageRes.body.data.id;
+
+            // 2. Admin creates a page
+            const adminPageRes = await request(app)
+                .post(basePath)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ title: "Admin Page" })
+                .expect(201);
+            const adminPageId = adminPageRes.body.data.id;
+
+            // 3. Manager edits their own page -> 200
+            await request(app)
+                .patch(`${basePath}/${managerPageId}`)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .send({ title: "Manager Page Edited" })
+                .expect(200);
+
+            // 4. Manager tries to edit Admin's page -> 403
+            await request(app)
+                .patch(`${basePath}/${adminPageId}`)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .send({ title: "Manager Hacked Title" })
+                .expect(403);
+
+            // 5. Manager creates a share for their own page -> 201
+            await request(app)
+                .post(`${basePath}/${managerPageId}/shares`)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .send({ share_type: "public_link", permission: "view" })
+                .expect(201);
+
+            // 6. Manager tries to share Admin's page -> 403
+            await request(app)
+                .post(`${basePath}/${adminPageId}/shares`)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .send({ share_type: "public_link", permission: "view" })
+                .expect(403);
+
+            // 7. Manager tries to delete Admin's page -> 403
+            await request(app)
+                .delete(`${basePath}/${adminPageId}`)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .expect(403);
+
+            // 8. Manager deletes their own page -> 200
+            await request(app)
+                .delete(`${basePath}/${managerPageId}`)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .expect(200);
+        });
+
+        it("should allow Space admin to edit, share, or delete any page in the space", async () => {
+            // 1. Manager creates a page
+            const managerPageRes = await request(app)
+                .post(basePath)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .send({ title: "Page by Manager" })
+                .expect(201);
+            const pageId = managerPageRes.body.data.id;
+
+            // 2. Admin edits manager's page -> 200
+            await request(app)
+                .patch(`${basePath}/${pageId}`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ title: "Edited by Admin" })
+                .expect(200);
+
+            // 3. Admin shares manager's page -> 201
+            await request(app)
+                .post(`${basePath}/${pageId}/shares`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ share_type: "public_link", permission: "view" })
+                .expect(201);
+
+            // 4. Admin deletes manager's page -> 200
+            await request(app)
+                .delete(`${basePath}/${pageId}`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .expect(200);
+        });
+
+        it("should block standard Space members from creating pages or requesting page shares", async () => {
+            // 1. Member tries to create a page -> 403
+            await request(app)
+                .post(basePath)
+                .set("Authorization", `Bearer ${memberToken}`)
+                .send({ title: "Member Attempt" })
+                .expect(403);
+
+            // 2. Admin creates a page for sharing test
+            const pageRes = await request(app)
+                .post(basePath)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ title: "Shared Page" })
+                .expect(201);
+            const pageId = pageRes.body.data.id;
+
+            // 3. Member tries to share the page -> 403
+            await request(app)
+                .post(`${basePath}/${pageId}/shares`)
+                .set("Authorization", `Bearer ${memberToken}`)
+                .send({ share_type: "public_link", permission: "view" })
+                .expect(403);
+        });
+    });
 });

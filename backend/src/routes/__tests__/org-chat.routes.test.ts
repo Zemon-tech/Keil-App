@@ -184,4 +184,60 @@ describe("Org Chat Routes Integration Tests", () => {
             expect(channelAfterRead.unread_count).toBe(0);
         });
     });
+
+    // ── DM Privacy: Third-party access block ──────────────────────────────────────
+    describe("GET /channels/:id/messages - DM Privacy (User C blocked)", () => {
+        it("should return 403 when User C tries to read messages from a private DM between User A and User B", async () => {
+            const userCId = "a1000000-0000-0000-0000-000000000003";
+            const userCEmail = "user-c@test.com";
+            const userCName = "User C";
+            const userCToken = `mock-user-id-${userCId}`;
+
+            // Seed User C and add them to the org and space (they are a legitimate space member)
+            await seedUser(userCId, userCEmail, userCName);
+            await pool.query(
+                `INSERT INTO public.organisation_members (org_id, user_id, role)
+                 VALUES ($1, $2, 'member')
+                 ON CONFLICT (org_id, user_id) DO NOTHING`,
+                [orgId, userCId]
+            );
+            await pool.query(
+                `INSERT INTO public.space_members (org_id, space_id, user_id, role)
+                 VALUES ($1, $2, $3, 'member')
+                 ON CONFLICT (space_id, user_id) DO UPDATE SET role = 'member'`,
+                [orgId, spaceId, userCId]
+            );
+
+            // 1. Create a DM channel between User A and User B
+            const dmRes = await request(app)
+                .post(`${basePath}/channels/direct`)
+                .set("Authorization", `Bearer ${userAToken}`)
+                .send({ target_user_id: userBId })
+                .expect(201);
+
+            const dmChannelId = dmRes.body.data.channel.id;
+            expect(dmChannelId).toBeDefined();
+
+            // 2. User A sends a message into the DM
+            await orgChatService.saveMessage(dmChannelId, userAId, "Secret message between A and B");
+
+            // 3. User C (NOT a member of this DM) tries to read its messages -> 403 Forbidden
+            const res = await request(app)
+                .get(`${basePath}/channels/${dmChannelId}/messages`)
+                .set("Authorization", `Bearer ${userCToken}`)
+                .expect(403);
+
+            expect(res.body.message).toContain("Not a member of this channel");
+
+            // 4. Confirm User A (a member) CAN read the messages -> 200 OK
+            const validRes = await request(app)
+                .get(`${basePath}/channels/${dmChannelId}/messages`)
+                .set("Authorization", `Bearer ${userAToken}`)
+                .expect(200);
+
+            expect(validRes.body.success).toBe(true);
+            expect(validRes.body.data.messages.length).toBeGreaterThanOrEqual(1);
+            expect(validRes.body.data.messages[0].content).toBe("Secret message between A and B");
+        });
+    });
 });
