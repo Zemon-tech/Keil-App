@@ -21,6 +21,7 @@ import { StitchUpdateDialog } from "./StitchUpdateDialog";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useCachedPageById } from "@/hooks/api/useMotionPages";
 import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
+import { CreateTaskDialog } from "./tasks/CreateTaskDialog";
 
 type LayoutProps = {
   children?: ReactNode;
@@ -32,6 +33,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { pageId } = useParams<{ pageId: string }>();
@@ -89,13 +91,6 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         return;
       }
 
-      // ⌘T — Go to Tasks
-      if (mod && e.key === "t") {
-        e.preventDefault();
-        navigate("/tasks");
-        return;
-      }
-
       // ⌘M — Open / restore Meeting Studio
       if (mod && e.key === "m") {
         e.preventDefault();
@@ -121,10 +116,40 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         return;
       }
 
-      // ⌘⇧N — Toggle Notifications drawer
-      if (mod && e.shiftKey && e.key === "N") {
+      // ⌘L — Toggle Notifications drawer
+      if (mod && !e.shiftKey && e.key === "l") {
         e.preventDefault();
         setNotificationDrawerOpen((open) => !open);
+        return;
+      }
+
+      // ⌘Q — Go to Tasks
+      if (mod && e.key === "q") {
+        e.preventDefault();
+        navigate("/tasks");
+        return;
+      }
+
+      // ⌘/ — Open Shortcuts settings page
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        const { openSettings } = useSettingsStore.getState();
+        openSettings("shortcuts");
+        return;
+      }
+
+      // ⌘⇧X — Open task/event creation dialog
+      if (mod && e.shiftKey && e.key === "X") {
+        e.preventDefault();
+        setCreateTaskOpen(true);
+        return;
+      }
+
+      // ⌘⇧C — Open Chat full dialog (modal)
+      if (mod && e.shiftKey && e.key === "C") {
+        e.preventDefault();
+        const { openChatDialog } = useChatStore.getState();
+        openChatDialog();
         return;
       }
 
@@ -207,6 +232,12 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
       <Toaster />
       {/* Stitch AI feature announcement — shows once per session */}
       <StitchUpdateDialog />
+
+      {/* Global Quick Create Task Dialog (Ctrl+Shift+W) */}
+      <CreateTaskDialog
+        open={createTaskOpen}
+        onOpenChange={setCreateTaskOpen}
+      />
         </SidebarProvider>
       </div>
 

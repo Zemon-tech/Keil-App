@@ -1872,7 +1872,7 @@ function ShortcutsTab() {
       label: "Navigation",
       items: [
         { keys: [mod, "G"],       description: "Go to Dashboard",          implemented: true  },
-        { keys: [mod, "T"],       description: "Go to Tasks",               implemented: true  },
+        { keys: [mod, "Q"],       description: "Go to Tasks",               implemented: true  },
         { keys: [mod, "P"],       description: "Go to Motion (Pages)",      implemented: true  },
         { keys: [mod, "K"],       description: "Open command palette",      implemented: true  },
       ],
@@ -1888,19 +1888,26 @@ function ShortcutsTab() {
       label: "Chat",
       items: [
         { keys: [mod, "J"],       description: "Toggle Chat",               implemented: true  },
+        { keys: [mod, "⇧", "C"], description: "Open Chat full dialog",     implemented: true  },
       ],
     },
     {
       label: "Notifications",
       items: [
-        { keys: [mod, "⇧", "N"], description: "Toggle Notification drawer", implemented: true  },
+        { keys: [mod, "L"],       description: "Toggle Notifications",      implemented: true  },
+      ],
+    },
+    {
+      label: "Tasks",
+      items: [
+        { keys: [mod, "⇧", "X"], description: "Create task / event",       implemented: true  },
       ],
     },
     {
       label: "Settings",
       items: [
         { keys: [mod, ","],       description: "Open Settings",             implemented: true  },
-        { keys: [mod, "⇧", "S"], description: "Open Shortcuts",             implemented: false },
+        { keys: [mod, "/"],       description: "Open Shortcuts",            implemented: true  },
       ],
     },
     {
@@ -1908,8 +1915,6 @@ function ShortcutsTab() {
       items: [
         { keys: ["Esc"],          description: "Close dialog / cancel",     implemented: true  },
         { keys: [mod, "B"],       description: "Toggle sidebar",            implemented: false },
-        { keys: [mod, "N"],       description: "New task",                  implemented: false },
-        { keys: [mod, "/"],       description: "Toggle AI Assistant",       implemented: false },
       ],
     },
   ];
