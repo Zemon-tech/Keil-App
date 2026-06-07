@@ -5,7 +5,7 @@ import {
   Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User,
   AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil,
   SlidersHorizontal, CalendarClock, UserCheck,
-  CalendarRange, ShieldAlert, Check, CheckSquare,
+  CalendarRange, ShieldAlert, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ import type { Task, AnyStatus, TaskPriority } from "@/types/task";
 import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
-import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
+import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon } from "./task-detail-shared";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useSpaces } from "@/hooks/api/useSpaces";
 
@@ -95,27 +95,6 @@ function formatTaskDateRange(start?: string, end?: string) {
   }
 
   return `${format(startDate, "MMM d")} – ${format(endDate, "MMM d")}`;
-}
-
-function getStatusTextColor(status: AnyStatus): string {
-  switch (status) {
-    case "done":
-    case "completed":
-      return "text-green-500 dark:text-[#86EFAC]";
-    case "in-progress":
-    case "confirmed":
-      return "text-blue-500";
-    case "in-review":
-    case "todo":
-      return "text-violet-500";
-    case "backlog":
-    case "cancelled":
-      return "text-red-500";
-    case "tentative":
-      return "text-yellow-500";
-    default:
-      return "text-zinc-500";
-  }
 }
 
 // Using STATUS_COLOR from task-detail-shared
@@ -205,11 +184,11 @@ function SubtaskList({
                     onClick={(e) => e.stopPropagation()}
                     className="shrink-0 transition-transform hover:scale-110 flex items-center justify-center"
                   >
-                    {(sub as any).type === "event" ? (
-                      <Calendar className={cn("size-3.5 shrink-0", getStatusTextColor(sub.status as AnyStatus))} />
-                    ) : (
-                      <CheckSquare className={cn("size-3.5 shrink-0", getStatusTextColor(sub.status as AnyStatus))} />
-                    )}
+                    <StatusIcon
+                      status={sub.status as AnyStatus}
+                      type={(sub as any).type === "event" ? "event" : "task"}
+                      className="size-3.5 shrink-0"
+                    />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
@@ -222,11 +201,11 @@ function SubtaskList({
                         }}
                         className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
                       >
-                        {(sub as any).type === "event" ? (
-                          <Calendar className={cn("size-3 shrink-0", getStatusTextColor(s))} />
-                        ) : (
-                          <CheckSquare className={cn("size-3 shrink-0", getStatusTextColor(s))} />
-                        )}
+                        <StatusIcon
+                          status={s}
+                          type={(sub as any).type === "event" ? "event" : "task"}
+                          className="size-3 shrink-0"
+                        />
                         {s}
                       </button>
                     </PopoverClose>
@@ -922,11 +901,11 @@ export function TaskListPane({
                             onClick={(e) => e.stopPropagation()}
                             className="shrink-0 transition-transform hover:scale-110 group-hover/item:opacity-0 transition-opacity flex items-center justify-center"
                           >
-                            {t.type === "event" ? (
-                              <Calendar className={cn("size-4 shrink-0", getStatusTextColor(t.status))} />
-                            ) : (
-                              <CheckSquare className={cn("size-4 shrink-0", getStatusTextColor(t.status))} />
-                            )}
+                            <StatusIcon
+                              status={t.status}
+                              type={t.type === "event" ? "event" : "task"}
+                              className="size-4 shrink-0"
+                            />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent
@@ -942,11 +921,11 @@ export function TaskListPane({
                                 }}
                                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
                               >
-                                {t.type === "event" ? (
-                                  <Calendar className={cn("size-3.5 shrink-0", getStatusTextColor(s))} />
-                                ) : (
-                                  <CheckSquare className={cn("size-3.5 shrink-0", getStatusTextColor(s))} />
-                                )}
+                                <StatusIcon
+                                  status={s}
+                                  type={t.type === "event" ? "event" : "task"}
+                                  className="size-3.5 shrink-0"
+                                />
                                 {s}
                               </button>
                             </PopoverClose>
@@ -1119,11 +1098,10 @@ export function TaskListPane({
                           className="text-xs capitalize gap-2"
                           onClick={() => handleBulkStatusChange(s)}
                         >
-                          <CheckSquare
-                            className={cn(
-                              "size-3 shrink-0",
-                              getStatusTextColor(s)
-                            )}
+                          <StatusIcon
+                            status={s}
+                            type="task"
+                            className="size-3 shrink-0"
                           />
                           {s}
                         </DropdownMenuItem>
@@ -1139,11 +1117,10 @@ export function TaskListPane({
                           className="text-xs capitalize gap-2"
                           onClick={() => handleBulkStatusChange(s)}
                         >
-                          <Calendar
-                            className={cn(
-                              "size-3 shrink-0",
-                              getStatusTextColor(s)
-                            )}
+                          <StatusIcon
+                            status={s}
+                            type="event"
+                            className="size-3 shrink-0"
                           />
                           {s}
                         </DropdownMenuItem>

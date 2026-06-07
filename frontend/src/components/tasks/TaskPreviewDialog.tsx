@@ -16,7 +16,6 @@ import {
   Users,
   Phone,
   Brain,
-  CheckSquare,
   Calendar,
   Pencil,
   Trash2,
@@ -49,7 +48,7 @@ import {
   useChangeOrgTaskStatus,
 } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
-import { STATUS_COLOR } from "./task-detail-shared";
+import { STATUS_COLOR, StatusIcon } from "./task-detail-shared";
 import type { AnyStatus, TaskStatus, EventStatus } from "@/types/task";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 
@@ -211,7 +210,11 @@ export function TaskPreviewDialog({
                   {isEvent ? (
                     <div className="shrink-0">{getEventIcon(task.event_type)}</div>
                   ) : (
-                    <CheckSquare className="size-4 text-primary shrink-0" />
+                    <StatusIcon
+                      status={task.status as AnyStatus}
+                      type="task"
+                      className="size-4 shrink-0"
+                    />
                   )}
 
                   <h3
