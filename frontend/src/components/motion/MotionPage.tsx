@@ -116,6 +116,7 @@ export function MotionPage() {
     shareOpen,
     setShareOpen,
     setLastOpenedPageId,
+    addRecentlyOpenedPageId,
   } = useMotionStore();
 
   const handleToggleDrawer = (tab: "updates" | "analytics") => {
@@ -139,8 +140,9 @@ export function MotionPage() {
   useEffect(() => {
     if (pageId && activeOrgId && activeSpaceId) {
       setLastOpenedPageId(activeOrgId, activeSpaceId, pageId);
+      addRecentlyOpenedPageId(activeOrgId, activeSpaceId, pageId);
     }
-  }, [pageId, activeOrgId, activeSpaceId, setLastOpenedPageId]);
+  }, [pageId, activeOrgId, activeSpaceId, setLastOpenedPageId, addRecentlyOpenedPageId]);
   // Stable ref so upsertPages is never a useEffect dependency
   const queryClient = useQueryClient();
 
