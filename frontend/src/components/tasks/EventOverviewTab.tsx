@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Search, X, Video } from "lucide-react";
-import { format } from "date-fns";
+import { format, subDays, startOfDay } from "date-fns";
 
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -225,7 +225,12 @@ export const EventOverviewTab = ({
                 <span className="text-muted-foreground">End</span>
                 <span className="font-medium">
                   {event.due_date || event.dueDateISO 
-                    ? format(new Date(event.due_date || event.dueDateISO!), event.is_all_day ? "d MMM" : "d MMM, h:mm a") 
+                    ? format(
+                        event.is_all_day
+                          ? subDays(startOfDay(new Date(event.due_date || event.dueDateISO!)), 1)
+                          : new Date(event.due_date || event.dueDateISO!),
+                        event.is_all_day ? "d MMM" : "d MMM, h:mm a"
+                      )
                     : "—"}
                 </span>
               </div>
