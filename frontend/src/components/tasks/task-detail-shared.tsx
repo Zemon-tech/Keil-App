@@ -1,6 +1,85 @@
-import { FileText, Box, Github, Link2 } from "lucide-react";
+import { FileText, Box, Github, Link2, Circle, CircleDashed, CheckCircle2, XCircle, type LucideProps } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { TaskPriority, TaskStatus, EventStatus, AnyStatus } from "@/types/task";
+import { cn } from "@/lib/utils";
+
+// Custom half-filled circle for in-progress tasks to resemble Linear/Jira
+export const HalfCircleIcon = (props: LucideProps) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <circle cx="12" cy="12" r="10" />
+    <path d="M 12 2 A 10 10 0 0 1 12 22 Z" fill="currentColor" opacity="0.35" />
+  </svg>
+);
+
+export function getStatusTextColor(status: AnyStatus): string {
+  switch (status) {
+    case "done":
+    case "completed":
+      return "text-green-500 dark:text-[#86EFAC]";
+    case "in-progress":
+    case "confirmed":
+      return "text-blue-500";
+    case "in-review":
+    case "todo":
+      return "text-violet-500 dark:text-violet-400";
+    case "backlog":
+    case "cancelled":
+      return "text-red-500";
+    case "tentative":
+      return "text-yellow-500";
+    default:
+      return "text-zinc-500";
+  }
+}
+
+export function StatusIcon({
+  status,
+  type = "task",
+  className
+}: {
+  status: AnyStatus;
+  type?: "task" | "event";
+  className?: string;
+}) {
+  if (type === "event") {
+    switch (status) {
+      case "confirmed":
+        return <Circle className={cn("text-blue-500 fill-blue-500/10", className)} />;
+      case "tentative":
+        return <CircleDashed className={cn("text-yellow-500", className)} />;
+      case "cancelled":
+        return <XCircle className={cn("text-red-500", className)} />;
+      case "completed":
+        return <CheckCircle2 className={cn("text-green-500 dark:text-[#86EFAC] fill-green-500/10", className)} />;
+      default:
+        return <Circle className={cn("text-zinc-500", className)} />;
+    }
+  }
+
+  // Task Statuses: backlog, todo, in-progress, done
+  switch (status) {
+    case "backlog":
+      return <CircleDashed className={cn("text-red-500 dark:text-red-400", className)} />;
+    case "todo":
+      return <Circle className={cn("text-violet-500 dark:text-violet-400", className)} />;
+    case "in-progress":
+      return <HalfCircleIcon className={cn("text-blue-500", className)} />;
+    case "done":
+    case "completed":
+      return <CheckCircle2 className={cn("text-green-500 dark:text-[#86EFAC] fill-green-500/10", className)} />;
+    default:
+      return <Circle className={cn("text-zinc-500", className)} />;
+  }
+}
+
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

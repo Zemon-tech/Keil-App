@@ -30,16 +30,12 @@ import {
 } from "@/lib/date-utils";
 import {
   Bell,
-  Calendar,
-  CalendarCheck,
   CalendarClock,
-  CheckSquare,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Flag,
   Focus,
-  Square,
   Timer,
   X,
 } from "lucide-react";
@@ -61,8 +57,8 @@ import {
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
-import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
-import type { CalendarBlock, CalendarBlockType } from "@/types/task";
+import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon } from "./task-detail-shared";
+import type { CalendarBlock, CalendarBlockType, AnyStatus } from "@/types/task";
 import { getThemeForTask } from "@/lib/calendarTheme";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
@@ -213,18 +209,13 @@ function renderEventContent(arg: EventContentArg) {
           className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5"
           style={{ color: arg.textColor || "inherit" }}
         >
-          {isScheduledTask &&
-            (taskType === "event" ? (
-              isDone ? (
-                <CalendarCheck className="size-3 shrink-0 opacity-70" />
-              ) : (
-                <Calendar className="size-3 shrink-0 opacity-70" />
-              )
-            ) : isDone ? (
-              <CheckSquare className="size-3 shrink-0 opacity-70" />
-            ) : (
-              <Square className="size-3 shrink-0 opacity-70" />
-            ))}
+          {isScheduledTask && (
+            <StatusIcon
+              status={arg.event.extendedProps.taskStatus}
+              type={taskType === "event" ? "event" : "task"}
+              className="size-3 shrink-0 opacity-70"
+            />
+          )}
           <span
             className={cn(
               "truncate",
@@ -251,17 +242,11 @@ function renderEventContent(arg: EventContentArg) {
           className="size-full p-2 overflow-hidden flex items-center gap-1.5"
           style={{ color: arg.textColor || "inherit" }}
         >
-          {taskType === "event" ? (
-            isDone ? (
-              <CalendarCheck className="size-3.5 shrink-0 opacity-70" />
-            ) : (
-              <Calendar className="size-3.5 shrink-0 opacity-70" />
-            )
-          ) : isDone ? (
-            <CheckSquare className="size-3.5 shrink-0 opacity-70" />
-          ) : (
-            <Square className="size-3.5 shrink-0 opacity-70" />
-          )}
+          <StatusIcon
+            status={arg.event.extendedProps.taskStatus}
+            type={taskType === "event" ? "event" : "task"}
+            className="size-3.5 shrink-0 opacity-70"
+          />
           <div
             className={cn(
               "text-[11px] font-bold leading-tight truncate flex-1",
@@ -1548,11 +1533,11 @@ export function TaskSchedulePane({
                       }}
                     >
                       <div className="flex items-center gap-1.5">
-                        {isDone ? (
-                          <CheckSquare className="size-3 shrink-0 opacity-70" />
-                        ) : (
-                          <Square className="size-3 shrink-0 opacity-70" />
-                        )}
+                        <StatusIcon
+                          status={evt.status as AnyStatus}
+                          type={evt.type === "event" ? "event" : "task"}
+                          className="size-3 shrink-0 opacity-70"
+                        />
                         <span className="truncate">{evt.title || "Untitled"}</span>
                       </div>
                     </button>
