@@ -301,4 +301,63 @@ describe("Org Task Routes Integration Tests", () => {
             expect(successRes.body.data.status).toBe("done");
         });
     });
+
+    // ── Task Comments RBAC Deletion ──────────────────────────────────────────
+    describe("Task Comments RBAC Deletion", () => {
+        it("should allow a member to delete their own comment, block deleting others, allow manager/admin to delete as permitted", async () => {
+            // 1. Create a task
+            const taskRes = await request(app)
+                .post(basePath)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ title: "Comment RBAC Task" })
+                .expect(201);
+            const taskId = taskRes.body.data.id;
+
+            // 2. Insert member's comment
+            const memberCommentId = "e1000000-0000-0000-0000-000000000001";
+            await pool.query(
+                `INSERT INTO public.comments (id, task_id, user_id, content) VALUES ($1, $2, $3, $4)`,
+                [memberCommentId, taskId, memberUserId, "Member comment"]
+            );
+
+            // 3. Member should be able to delete their own comment -> 200 OK
+            await request(app)
+                .delete(`${basePath}/${taskId}/comments/${memberCommentId}`)
+                .set("Authorization", `Bearer ${memberToken}`)
+                .expect(200);
+
+            // Verify deleted from DB
+            const check1 = await pool.query("SELECT 1 FROM public.comments WHERE id = $1", [memberCommentId]);
+            expect(check1.rowCount).toBe(0);
+
+            // 4. Insert other member's comment
+            const otherCommentId = "e1000000-0000-0000-0000-000000000002";
+            await pool.query(
+                `INSERT INTO public.comments (id, task_id, user_id, content) VALUES ($1, $2, $3, $4)`,
+                [otherCommentId, taskId, otherMemberUserId, "Other member comment"]
+            );
+
+            // 5. Member tries to delete other member's comment -> 403 Forbidden
+            await request(app)
+                .delete(`${basePath}/${taskId}/comments/${otherCommentId}`)
+                .set("Authorization", `Bearer ${memberToken}`)
+                .expect(403);
+
+            // 6. Manager tries to delete other member's comment -> 403 Forbidden
+            await request(app)
+                .delete(`${basePath}/${taskId}/comments/${otherCommentId}`)
+                .set("Authorization", `Bearer ${managerToken}`)
+                .expect(403);
+
+            // 7. Space Admin can delete any comment (even if not owner) -> 200 OK
+            await request(app)
+                .delete(`${basePath}/${taskId}/comments/${otherCommentId}`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .expect(200);
+
+            // Verify deleted from DB
+            const check2 = await pool.query("SELECT 1 FROM public.comments WHERE id = $1", [otherCommentId]);
+            expect(check2.rowCount).toBe(0);
+        });
+    });
 });
