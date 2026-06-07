@@ -58,6 +58,28 @@ describe("Meeting Routes Integration Tests", () => {
             expect(resPage2.body.data.recordings.length).toBe(1);
             expect(resPage2.body.data.pagination.hasMore).toBe(false);
         });
+
+        it("should only return meeting recordings belonging to the caller's user ID", async () => {
+            // Seed a recording for User A and User B
+            await pool.query(
+                `INSERT INTO public.meeting_recordings (id, user_id, audio_s3_key, transcription_status)
+                 VALUES 
+                 ('d1000000-0000-0000-0000-000000000101', $1, 'meetings/user_a_rec.webm', 'completed'),
+                 ('d1000000-0000-0000-0000-000000000102', $2, 'meetings/user_b_rec.webm', 'completed')`,
+                [userAId, userBId]
+            );
+
+            // Fetch history as User A -> should only receive User A's recording
+            const res = await request(app)
+                .get("/api/v1/meetings/history")
+                .set("Authorization", `Bearer ${userAToken}`)
+                .expect(200);
+
+            expect(res.body.success).toBe(true);
+            const recordingIds = res.body.data.recordings.map((r: any) => r.id);
+            expect(recordingIds).toContain("d1000000-0000-0000-0000-000000000101");
+            expect(recordingIds).not.toContain("d1000000-0000-0000-0000-000000000102");
+        });
     });
 
     // ── Transcript Search ────────────────────────────────────────────────────────
