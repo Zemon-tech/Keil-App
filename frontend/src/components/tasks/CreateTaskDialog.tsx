@@ -158,6 +158,7 @@ export function CreateTaskDialog({
   const [timeEstimate, setTimeEstimate] = useState<number | undefined>(undefined); // in minutes
   const [isAllDay, setIsAllDay] = useState(true);
   const [eventType, setEventType] = useState<string>("meeting");
+  const [createMeetLink, setCreateMeetLink] = useState(false);
 
   // Date range drag-to-select states
   const [isDragging, setIsDragging] = useState(false);
@@ -299,6 +300,7 @@ export function CreateTaskDialog({
       setShowCommandMenu(false);
       setIsAllDay(true);
       setEventType("meeting");
+      setCreateMeetLink(false);
     }
   }, [open, mode, initialValues]);
 
@@ -357,6 +359,7 @@ export function CreateTaskDialog({
       time_estimate: timeEstimate,
       is_all_day: isAllDay,
       event_type: type === 'event' ? eventType : undefined,
+      create_meet_link: type === 'event' ? createMeetLink : undefined,
     };
 
     const options = {
@@ -874,6 +877,23 @@ export function CreateTaskDialog({
                     className="bg-muted/30 border-border pl-9 text-sm h-9 focus-visible:ring-primary/20"
                   />
                 </div>
+                
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/10 px-3 py-2 animate-in fade-in duration-200">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="create-meet-link" className="text-xs font-semibold text-foreground cursor-pointer">
+                      Schedule Google Meet
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      Automatically generate a Google Meet video conference
+                    </p>
+                  </div>
+                  <Switch
+                    id="create-meet-link"
+                    checked={createMeetLink}
+                    onCheckedChange={setCreateMeetLink}
+                  />
+                </div>
+
                 <Collapsible open={showAgenda} onOpenChange={setShowAgenda}>
                   <CollapsibleTrigger asChild>
                     <button className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1">

@@ -750,7 +750,7 @@ export function MotionPage() {
                   {/* Section 7 — Footer Meta Info */}
                   <div className="py-2 px-3 flex flex-col gap-0.5 bg-muted/20">
                     <span className="text-[10px] text-muted-foreground/70">
-                      Word count: {pageEditor ? pageEditor.storage.characterCount.words() : 0} words
+                      Word count: {pageEditor?.storage?.characterCount?.words ? pageEditor.storage.characterCount.words() : 0} words
                     </span>
                     <span className="text-[10px] text-muted-foreground/70">
                       Last edited by {lastEditedMember?.name || lastEditedMember?.email || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.email || "User"}

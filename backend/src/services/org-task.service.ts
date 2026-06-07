@@ -9,7 +9,7 @@ import { Task, User } from "../types/entities";
 import { LogActionType, LogEntityType, TaskPriority, TaskStatus, SpaceRole } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
 import { ApiError } from "../utils/ApiError";
-import { syncTaskToCalendar, deleteCalendarEvent } from "./google-calendar.service";
+import { syncTaskToCalendar, deleteCalendarEvent, createGoogleMeetSpace } from "./google-calendar.service";
 import { createServiceLogger } from "../lib/logger";
 
 const log = createServiceLogger("gcal");
@@ -73,6 +73,7 @@ export interface CreateOrgTaskInput {
   story_points?: number | null;
   time_estimate?: number | null;
   meet_link?: string | null;
+  create_meet_link?: boolean;
 }
 
 export interface UpdateOrgTaskInput {
@@ -209,13 +210,23 @@ export const createTask = async (
   validateDateOrder(input.start_date ?? null, input.due_date ?? null);
 
   // Separate assignee_ids from the DB columns
-  const { assignee_ids, story_points, time_estimate, ...taskData } = input;
+  const { assignee_ids, story_points, time_estimate, create_meet_link, ...taskData } = input;
 
   // Auto assign the task to the creator who is creating it
   const creatorId = input.created_by;
   const finalAssigneeIds = assignee_ids ? [...assignee_ids] : [];
   if (creatorId && !finalAssigneeIds.includes(creatorId)) {
     finalAssigneeIds.push(creatorId);
+  }
+
+  // Auto-generate Google Meet space if requested
+  if (input.type === "event" && create_meet_link) {
+    try {
+      const meetLink = await createGoogleMeetSpace(input.created_by);
+      (taskData as any).meet_link = meetLink;
+    } catch (meetErr) {
+      log.error({ err: meetErr, userId: input.created_by }, "Failed to auto-create Google Meet space on task creation");
+    }
   }
 
   const task = await orgTaskRepository.executeInTransaction(async (client) => {

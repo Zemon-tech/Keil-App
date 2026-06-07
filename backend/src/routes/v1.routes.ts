@@ -6,6 +6,7 @@ import orgTaskRoutes from "./org-task.routes";
 import orgChatRoutes from "./org-chat.routes";
 import orgActivityRoutes from "./org-activity.routes";
 import integrationRoutes from "./integration.routes";
+import gmailRoutes from "./gmail.routes";
 import motionPageRoutes from "./motion-page.routes";
 import motionPublicRoutes from "./motion-public.routes";
 import taskLocatorRoutes from "./task-locator.routes";
@@ -37,6 +38,9 @@ router.use("/orgs/:orgId/spaces/:spaceId", orgActivityRoutes);
 
 // ── Cross-org task lookup (auth-only, no org/space scope) ─────────────────────
 router.use("/tasks", taskLocatorRoutes);
+
+// ── Gmail inbox integration ───────────────────────────────────────────────────
+router.use("/gmail", gmailRoutes);
 
 // ── Integrations ──────────────────────────────────────────────────────────────
 router.use("/integrations", integrationRoutes);

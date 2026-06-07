@@ -50,6 +50,8 @@ async function getUserDefaultOrgSpace(
 
 const PROVIDER = 'google_calendar';
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const MEET_SCOPE = 'https://www.googleapis.com/auth/meetings.space.created';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -158,7 +160,7 @@ export function getAuthUrl(userId: string): string {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent', // always request refresh token
-    scope: [CALENDAR_SCOPE],
+    scope: [CALENDAR_SCOPE, GMAIL_SCOPE, MEET_SCOPE],
     state,
   });
 }
@@ -175,19 +177,26 @@ export async function handleCallback(code: string, state: string): Promise<{ use
   const oauth2Client = createOAuth2Client();
   const { tokens } = await oauth2Client.getToken(code);
 
-  if (!tokens.refresh_token) {
-    // This can happen if the user has already granted access before and
-    // Google doesn't re-issue a refresh token. Force re-consent via getAuthUrl.
-    throw new Error(
-      'No refresh token returned. User may need to revoke access and reconnect.'
-    );
+  let refreshToken = tokens.refresh_token;
+
+  if (!refreshToken) {
+    // Fallback: check if we already have a refresh token in the database for this user
+    const existing = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
+    if (existing?.refresh_token) {
+      refreshToken = existing.refresh_token;
+      log.info({ userId }, 'No new refresh token returned, reusing existing stored refresh token');
+    } else {
+      throw new Error(
+        'No refresh token returned by Google and no existing integration found. Revoke access and reconnect.'
+      );
+    }
   }
 
   const expiry = tokens.expiry_date ? new Date(tokens.expiry_date) : null;
 
   await integrationRepository.upsert(userId, PROVIDER, {
     access_token: tokens.access_token ?? null,
-    refresh_token: tokens.refresh_token,
+    refresh_token: refreshToken,
     token_expiry: expiry,
   });
 
@@ -1176,4 +1185,30 @@ export async function doIncrementalSyncWithCooldown(
     log.error({ err, userId }, 'Incremental sync with cooldown failed');
   }
 }
+
+/**
+ * Create a new standalone Google Meet space using the Meet API.
+ * Returns the generated meetingUri.
+ */
+export async function createGoogleMeetSpace(userId: string): Promise<string> {
+  const authClient = await getAuthorizedClient(userId);
+  if (!authClient) {
+    throw new Error('Google account is not connected');
+  }
+
+  log.info({ userId }, 'Creating Google Meet space');
+  const response = await authClient.request<{ meetingUri: string }>({
+    url: 'https://meet.googleapis.com/v2/spaces',
+    method: 'POST',
+    data: {},
+  });
+
+  if (!response.data || !response.data.meetingUri) {
+    throw new Error('Failed to create Google Meet space: No meetingUri returned from Google Meet API');
+  }
+
+  log.info({ userId, meetingUri: response.data.meetingUri }, 'Google Meet space created successfully');
+  return response.data.meetingUri;
+}
+
 

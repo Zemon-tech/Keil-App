@@ -48,6 +48,7 @@ import {
   Mic,
   Search,
   Bell,
+  Mail,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -74,6 +75,7 @@ const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Motion", url: "/motion", icon: Image },
+  { title: "Inbox", url: "/inbox", icon: Mail },
   { title: "Notifications", action: "notifications", icon: Bell },
 ];
 

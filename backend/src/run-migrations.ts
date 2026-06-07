@@ -1,10 +1,10 @@
+import dotenv from "dotenv";
+// Load environment variables before any other imports so they are available to pg configuration
+dotenv.config();
+
 import fs from "fs";
 import path from "path";
 import pool from "./config/pg";
-import dotenv from "dotenv";
-
-// Load environment variables
-dotenv.config();
 
 const migrationsDir = path.join(__dirname, "migrations");
 

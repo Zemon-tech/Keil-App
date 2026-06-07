@@ -79,6 +79,7 @@ export interface CreateTaskInput {
   location?: string | null;
   is_all_day?: boolean;
   meet_link?: string | null;
+  create_meet_link?: boolean;
   description?: string;
   objective?: string;
   success_criteria?: string;
