@@ -548,3 +548,56 @@ body,
   }
 }
 
+/* ── Motion AI selection highlight ─────────────────────────────────────────── */
+.motion-ai-context-highlight {
+  background-color: rgba(139, 92, 246, 0.22) !important;
+  border-bottom: 2px dashed rgba(139, 92, 246, 0.75) !important;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3) !important;
+  animation: motion-ai-pulse 1.8s infinite ease-in-out !important;
+  border-radius: 2px;
+  padding: 1px 0;
+  transition: all 0.2s ease;
+}
+
+@keyframes motion-ai-pulse {
+  0% {
+    background-color: rgba(139, 92, 246, 0.18) !important;
+    box-shadow: 0 0 4px rgba(139, 92, 246, 0.2) !important;
+  }
+  50% {
+    background-color: rgba(139, 92, 246, 0.32) !important;
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.5) !important;
+  }
+  100% {
+    background-color: rgba(139, 92, 246, 0.18) !important;
+    box-shadow: 0 0 4px rgba(139, 92, 246, 0.2) !important;
+  }
+}
+
+/* ── AI Block Node ─────────────────────────────────────────── */
+.ai-block-wrapper {
+  margin: 4px 0;
+}
+
+/* Override the global .ProseMirror-selectednode style specifically for AI blocks.
+   Higher specificity than .tiptap.ProseMirror.simple-editor .ProseMirror-selectednode (4 classes → need ≥5) */
+.tiptap.ProseMirror.simple-editor .ai-block-wrapper.ProseMirror-selectednode {
+  outline: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+}
+
+.ai-block-pill {
+  /* Use subtle purple ring on focus — matches the AI/purple theme, not the generic grey --ring */
+  &:focus-within {
+    border-color: rgba(139, 92, 246, 0.4) !important;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1), var(--shadow-sm) !important;
+  }
+
+  input::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.7;
+  }
+}

@@ -27,6 +27,68 @@ import { BlockIdExtension } from "@/extensions/BlockIdExtension"
 import { EnforceFinalBlockExtension } from "@/extensions/EnforceFinalBlockExtension"
 import { SubpageExtension } from "@/extensions/SubpageExtension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
+import { useMotionAi } from "@/hooks/api/useMotionAi"
+import { AiCommandMenu } from "./AiCommandMenu"
+import { AiBubbleMenu, AiStreamToolbar } from "./AiBubbleMenu"
+import { AiBlock } from "@/components/tiptap-node/ai-block-node/ai-block-extension"
+import { useAppContext } from "@/contexts/AppContext"
+import { useParams } from "react-router-dom"
+import { Extension } from "@tiptap/core"
+import { markdownToHtml } from "@/utils/markdown-parser"
+import { Decoration, DecorationSet } from "@tiptap/pm/view"
+import { Plugin, PluginKey } from "@tiptap/pm/state"
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    aiHighlight: {
+      setAiHighlight: (range: { from: number; to: number }) => ReturnType
+      unsetAiHighlight: () => ReturnType
+    }
+  }
+}
+
+// --- ProseMirror AI Highlight Extension ---
+export const AiHighlightExtension = Extension.create({
+  name: "aiHighlight",
+  addStorage() {
+    return { range: null as { from: number; to: number } | null };
+  },
+  addCommands() {
+    return {
+      setAiHighlight: (range: { from: number; to: number }) => ({ editor }: any) => {
+        editor.storage.aiHighlight.range = range;
+        editor.view.dispatch(editor.state.tr);
+        return true;
+      },
+      unsetAiHighlight: () => ({ editor }: any) => {
+        editor.storage.aiHighlight.range = null;
+        editor.view.dispatch(editor.state.tr);
+        return true;
+      }
+    } as any;
+  },
+  addProseMirrorPlugins() {
+    const { storage } = this;
+    return [
+      new Plugin({
+        key: new PluginKey("aiHighlightPlugin"),
+        props: {
+          decorations(state) {
+            const { range } = storage;
+            if (!range) return DecorationSet.empty;
+            const docSize = state.doc.content.size;
+            const from = Math.max(0, Math.min(range.from, docSize));
+            const to = Math.max(from, Math.min(range.to, docSize));
+            if (from === to) return DecorationSet.empty;
+            return DecorationSet.create(state.doc, [
+              Decoration.inline(from, to, { class: "motion-ai-context-highlight" })
+            ]);
+          }
+        }
+      })
+    ];
+  }
+});
 
 import Paragraph from '@tiptap/extension-paragraph'
 import Heading from '@tiptap/extension-heading'
@@ -70,6 +132,91 @@ import { FontFamily } from "@tiptap/extension-font-family"
 import { CharacterCount } from "@tiptap/extension-character-count"
 import { Youtube } from "@tiptap/extension-youtube"
 import { Mention } from "@tiptap/extension-mention"
+import { toast } from "sonner"
+
+// Throttled toast function to avoid spamming the user on every keystroke
+let lastToastTime = 0
+const throttleToast = (message: string, type: 'error' | 'warning' = 'error') => {
+  const now = Date.now()
+  if (now - lastToastTime > 2000) {
+    if (type === 'error') {
+      toast.error(message)
+    } else {
+      toast.warning(message)
+    }
+    lastToastTime = now
+  }
+}
+
+const CustomCharacterCount = CharacterCount.extend({
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('characterCount'),
+        filterTransaction: (transaction, state) => {
+          const limit = this.options.limit
+
+          // Nothing has changed or no limit is defined. Ignore it.
+          if (!transaction.docChanged || limit === null || limit === undefined || limit === 0) {
+            return true
+          }
+
+          const oldSize = this.storage.characters?.({ node: state.doc }) || 0
+          const newSize = this.storage.characters?.({ node: transaction.doc }) || 0
+
+          // Everything is in the limit. Good.
+          if (newSize <= limit) {
+            return true
+          }
+
+          // The limit has already been exceeded but will be reduced.
+          if (oldSize > limit && newSize > limit && newSize <= oldSize) {
+            return true
+          }
+
+          // The limit has already been exceeded and will be increased further.
+          if (oldSize > limit && newSize > limit && newSize > oldSize) {
+            throttleToast(`Character limit of ${limit.toLocaleString()} reached!`)
+            return false
+          }
+
+          const isPaste = transaction.getMeta('paste')
+
+          // Block all exceeding transactions that were not pasted.
+          if (!isPaste) {
+            throttleToast(`Character limit of ${limit.toLocaleString()} reached!`)
+            return false
+          }
+
+          // For pasted content, we try to remove the exceeding content.
+          const pos = transaction.selection.$head.pos
+          const over = newSize - limit
+          const from = pos - over
+          const to = pos
+
+          // It’s probably a bad idea to mutate transactions within `filterTransaction`
+          // but for now this is working fine.
+          transaction.deleteRange(from, to)
+
+          // In some situations, the limit will continue to be exceeded after trimming.
+          // This happens e.g. when truncating within a complex node (e.g. table)
+          // and ProseMirror has to close this node again.
+          // If this is the case, we prevent the transaction completely.
+          const updatedSize = this.storage.characters?.({ node: transaction.doc }) || 0
+
+          if (updatedSize > limit) {
+            throttleToast(`Cannot paste: character limit of ${limit.toLocaleString()} would be exceeded.`)
+            return false
+          }
+
+          // The paste was successfully trimmed
+          throttleToast(`Pasted content was trimmed to fit the ${limit.toLocaleString()} character limit.`, 'warning')
+          return true
+        },
+      }),
+    ]
+  }
+})
 
 const CustomParagraph = Paragraph.extend({
   addAttributes() {
@@ -223,6 +370,24 @@ export function SimpleEditor({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const activeItemRef = useRef<HTMLDivElement>(null)
   const [slashOpen, setSlashOpen] = useState(false)
+  
+  // --- Motion AI Integration ---
+  const { pageId } = useParams<{ pageId: string }>();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { stream, isStreaming } = useMotionAi(activeOrgId, activeSpaceId, pageId ?? null);
+  
+  const [aiCommandOpen, setAiCommandOpen] = useState(false);
+  const [aiCommandPos, setAiCommandPos] = useState<any>(null);
+  const [aiCommandDeleteRange, setAiCommandDeleteRange] = useState<{ from: number; to: number } | null>(null);
+  
+  const [aiBubbleOpen, setAiBubbleOpen] = useState(false);
+  const [showAiToolbar, setShowAiToolbar] = useState(false);
+  
+  const originalRangeRef = useRef<{ from: number; to: number; text: string } | null>(null);
+  const streamRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const savedParamsRef = useRef<any>(null);
+
+
   const [slashQuery, setSlashQuery] = useState("")
   const [slashPos, setSlashPos] = useState<{
     left: number
@@ -274,6 +439,7 @@ export function SimpleEditor({
   const [editorEmojiSearch, setEditorEmojiSearch] = useState("")
 
   const extensions = useMemo(() => [
+    AiHighlightExtension,
     BlockIdExtension,
     EnforceFinalBlockExtension,
     StarterKit.configure({
@@ -330,6 +496,7 @@ export function SimpleEditor({
       upload: handleImageUpload,
       onError: (error) => console.error("Upload failed:", error),
     }),
+    AiBlock,
     Details.configure({
       HTMLAttributes: {
         class: "details",
@@ -341,8 +508,8 @@ export function SimpleEditor({
     TextStyle,
     Color,
     FontFamily,
-    CharacterCount.configure({
-      limit: 10000,
+    CustomCharacterCount.configure({
+      limit: 1000000,
     }),
     Youtube.configure({
       inline: false,
@@ -368,9 +535,15 @@ export function SimpleEditor({
     })
   }, [extensions])
 
+  // Ref so handleKeyDown (inside useEditor) can access the editor instance
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null)
+
   const editor = useEditor({
     immediatelyRender: false,
     editable: editable ?? true,
+    onCreate: ({ editor: e }) => {
+      editorRef.current = e as any
+    },
     editorProps: {
       attributes: {
         autocomplete: "off",
@@ -379,6 +552,77 @@ export function SimpleEditor({
         "aria-label": "Main content area, start typing to enter text.",
         class: "tiptap simple-editor",
       },
+      handleKeyDown: (_view, event) => {
+        if (event.key === " " && !event.shiftKey) {
+          const e = editorRef.current as any;
+          if (!e) return false;
+          const { selection } = e.state;
+          const $from = selection.$from;
+          const parent = $from.parent;
+          
+          if (parent.type.name === "paragraph" && parent.content.size === 0) {
+            event.preventDefault();
+            // Insert the inline AI block pill directly at the cursor position
+            e.chain().focus().setAiBlock().run();
+            return true;
+          }
+        }
+        return false;
+      },
+      transformPastedHTML: (html) => {
+        try {
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(html, "text/html")
+          const cells = doc.querySelectorAll("td, th")
+          
+          if (cells.length > 0) {
+            const allowedInlineTags = ["span", "strong", "em", "code", "a", "br", "img"]
+            
+            cells.forEach((cell) => {
+              const blockElements = cell.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, pre, blockquote")
+              if (blockElements.length > 0) {
+                const newContent = doc.createDocumentFragment()
+                
+                const extractInline = (node: Node) => {
+                  if (node.nodeType === Node.TEXT_NODE) {
+                    newContent.appendChild(node.cloneNode(true))
+                  } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    const el = node as HTMLElement
+                    const tagName = el.tagName.toLowerCase()
+                    
+                    if (allowedInlineTags.includes(tagName)) {
+                      const newEl = el.cloneNode(false)
+                      el.childNodes.forEach(child => {
+                        newEl.appendChild(child.cloneNode(true))
+                      })
+                      newContent.appendChild(newEl)
+                    } else {
+                      el.childNodes.forEach(child => {
+                        extractInline(child)
+                      })
+                      if (el.nextSibling) {
+                        newContent.appendChild(doc.createElement("br"))
+                      }
+                    }
+                  }
+                }
+                
+                cell.childNodes.forEach(child => {
+                  extractInline(child)
+                })
+                
+                cell.innerHTML = ""
+                cell.appendChild(newContent)
+              }
+            })
+            
+            return doc.body.innerHTML
+          }
+        } catch (e) {
+          console.error("Error transforming pasted table HTML:", e)
+        }
+        return html
+      }
     },
     extensions: uniqueExtensions,
     content,
@@ -411,6 +655,11 @@ export function SimpleEditor({
     },
   })
 
+  // Keep editorRef in sync
+  useEffect(() => {
+    if (editor) editorRef.current = editor as any
+  }, [editor])
+
   useEffect(() => {
     if (editor) {
       const initialIds = new Set<string>()
@@ -428,6 +677,130 @@ export function SimpleEditor({
       editor.setEditable(editable)
     }
   }, [editor, editable])
+
+  // --- Motion AI Helper Callbacks (Declared after editor initialization to resolve scope bindings) ---
+  const runStream = useCallback(async (params: any) => {
+    if (!editor) return;
+    setShowAiToolbar(true);
+    setAiCommandOpen(false);
+    setAiBubbleOpen(false);
+    let accumulatedText = "";
+    savedParamsRef.current = params;
+
+    if (originalRangeRef.current && originalRangeRef.current.from !== originalRangeRef.current.to) {
+      editor.commands.setAiHighlight(streamRangeRef.current!);
+    }
+
+    try {
+      await stream(
+        params,
+        (chunk) => {
+          const currentRange = streamRangeRef.current;
+          if (currentRange) {
+            accumulatedText += chunk;
+            const htmlContent = markdownToHtml(accumulatedText);
+
+            const docSizeBefore = editor.state.doc.content.size;
+            const deleteLength = currentRange.to - currentRange.from;
+
+            editor.chain()
+              .deleteRange({ from: currentRange.from, to: currentRange.to })
+              .insertContentAt(currentRange.from, htmlContent)
+              .run();
+
+            const docSizeAfter = editor.state.doc.content.size;
+            const insertedContentSize = (docSizeAfter - docSizeBefore) + deleteLength;
+
+            streamRangeRef.current = {
+              from: currentRange.from,
+              to: currentRange.from + insertedContentSize
+            };
+
+            if (originalRangeRef.current && originalRangeRef.current.from !== originalRangeRef.current.to) {
+              editor.commands.setAiHighlight(streamRangeRef.current!);
+            }
+          }
+        },
+        () => {
+          editor.commands.unsetAiHighlight();
+        }
+      );
+    } catch (e) {
+      console.error(e);
+      editor.commands.unsetAiHighlight();
+    }
+  }, [editor, stream]);
+
+  const cleanupAiState = useCallback(() => {
+    setShowAiToolbar(false);
+    originalRangeRef.current = null;
+    streamRangeRef.current = null;
+    savedParamsRef.current = null;
+    editor?.commands.unsetAiHighlight();
+  }, [editor]);
+
+  const handleAiCommandSubmit = useCallback((prompt: string, action?: string) => {
+    if (!editor) return;
+    if (aiCommandDeleteRange) {
+      editor.chain().deleteRange({ from: aiCommandDeleteRange.from, to: aiCommandDeleteRange.to }).run();
+    }
+    const currentPos = editor.state.selection.from;
+    originalRangeRef.current = { from: currentPos, to: currentPos, text: "" };
+    streamRangeRef.current = { from: currentPos, to: currentPos };
+    const fullText = editor.getText();
+
+    runStream({
+      action: action || "generate",
+      prompt,
+      context: fullText
+    });
+  }, [editor, aiCommandDeleteRange, runStream]);
+
+  const handleAiBubbleSubmit = useCallback((action: string, payload?: any) => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+    originalRangeRef.current = { from, to, text: selectedText };
+    streamRangeRef.current = { from, to };
+    const fullText = editor.getText();
+
+    runStream({
+      action,
+      text: selectedText,
+      context: fullText,
+      ...payload
+    });
+  }, [editor, runStream]);
+
+  const handleDiscard = useCallback(() => {
+    const orig = originalRangeRef.current;
+    const curr = streamRangeRef.current;
+    if (orig && curr && editor) {
+      editor.chain()
+        .focus()
+        .deleteRange({ from: curr.from, to: curr.to })
+        .insertContentAt(curr.from, orig.text)
+        .run();
+    }
+    cleanupAiState();
+  }, [editor, cleanupAiState]);
+
+  const handleKeep = useCallback(() => {
+    cleanupAiState();
+  }, [cleanupAiState]);
+
+  const handleTryAgain = useCallback(() => {
+    const orig = originalRangeRef.current;
+    const curr = streamRangeRef.current;
+    if (orig && curr && editor) {
+      editor.chain()
+        .deleteRange({ from: curr.from, to: curr.to })
+        .insertContentAt(curr.from, orig.text)
+        .run();
+      streamRangeRef.current = { from: curr.from, to: curr.from + orig.text.length };
+      runStream(savedParamsRef.current);
+    }
+  }, [editor, runStream]);
 
   const closeSlashMenu = useCallback(() => {
     virtualSlashStartRef.current = null
@@ -525,6 +898,28 @@ export function SimpleEditor({
   const slashItems = useMemo<SlashItem[]>(() => {
     if (!editor) return []
     return [
+      {
+        title: "Ask AI...",
+        subtitle: "Draft or edit with AI",
+        icon: <Sparkles className="size-4 text-purple-400 animate-pulse" />,
+        keywords: ["ai", "gpt", "assistant", "generate", "write", "draft"],
+        run: () => {
+          const { from } = editor.state.selection;
+          const coords = editor.view.coordsAtPos(from);
+          setAiCommandOpen(true);
+          setAiCommandDeleteRange(null);
+          setAiCommandPos(calculateSlashPosition(coords));
+        },
+      },
+      {
+        title: "AI block",
+        subtitle: "Add an inline AI block generator",
+        icon: <Sparkles className="size-4 text-indigo-400" />,
+        keywords: ["ai block", "custom block", "prompt block", "ai prompt"],
+        run: () => {
+          editor.chain().focus().setAiBlock().run()
+        },
+      },
       {
         title: "Sub-page",
         subtitle: "Embed a sub-page",
@@ -1025,14 +1420,25 @@ export function SimpleEditor({
               const { selection } = state
               const { empty } = selection
               
-              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("codeBlock")) {
+              if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("codeBlock") || showAiToolbar) {
                 return false
               }
               return true
             }}
 
           >
-            <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-0.5 p-1 rounded-lg border bg-popover shadow-xl">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 text-purple-400 hover:text-purple-300 hover:bg-purple-950/20 ${aiBubbleOpen ? 'bg-purple-950/30' : ''}`}
+                  onClick={() => setAiBubbleOpen(!aiBubbleOpen)}
+                  title="Ask AI"
+                >
+                  <Sparkles className="size-3.5 animate-pulse" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
               <Button
                 variant="ghost"
                 size="icon"
@@ -1162,6 +1568,16 @@ export function SimpleEditor({
                 <AlignRight className="size-3.5" />
               </Button>
             </div>
+            {aiBubbleOpen && (
+              <div className="z-[110] relative mt-1">
+                <AiBubbleMenu
+                  isOpen={aiBubbleOpen}
+                  onClose={() => setAiBubbleOpen(false)}
+                  onSubmit={handleAiBubbleSubmit}
+                />
+              </div>
+            )}
+          </div>
           </BubbleMenu>
         )}
 
@@ -1299,6 +1715,26 @@ export function SimpleEditor({
               </div>
             </div>
           </div>
+        )}
+
+        {aiCommandOpen && aiCommandPos && editor && (
+          <AiCommandMenu
+            isOpen={aiCommandOpen}
+            onClose={() => setAiCommandOpen(false)}
+            onSubmit={handleAiCommandSubmit}
+            position={aiCommandPos}
+            selectedText={editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)}
+          />
+        )}
+
+        {showAiToolbar && (
+          <AiStreamToolbar
+            isStreaming={isStreaming}
+            onKeep={handleKeep}
+            onTryAgain={handleTryAgain}
+            onDiscard={handleDiscard}
+            onClose={cleanupAiState}
+          />
         )}
       </EditorContext.Provider>
     </div>
