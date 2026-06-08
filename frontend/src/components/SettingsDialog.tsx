@@ -103,6 +103,9 @@ import {
 } from "@/hooks/api/useGitHub";
 import { toast } from "sonner";
 import { usePreferences, useUpdateSttProvider, type SttProvider } from "@/hooks/api/usePreferences";
+import { useOpenDM } from "@/hooks/api/useChat";
+import { useChatStore } from "@/store/useChatStore";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 // ─── Helper Functions ─────────────────────────────────────────────────
 const handleCopyToClipboard = async (text: string, label: string) => {
@@ -318,7 +321,7 @@ function OrgGeneralTab() {
 
 function OrgMembersTab() {
   const { user } = useAuth();
-  const { activeOrgId, organisations } = useAppContext();
+  const { activeOrgId, activeSpaceId, organisations } = useAppContext();
   const selectedOrg = organisations.find((org) => org.id === activeOrgId);
   const { data: members = [] } = useOrgMembers(activeOrgId || "");
   const createInvite = useCreateOrgInvite();
@@ -328,6 +331,9 @@ function OrgMembersTab() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const isAdmin =
     selectedOrg?.role === "owner" || selectedOrg?.role === "admin";
+
+  const openDM = useOpenDM(activeOrgId, activeSpaceId);
+  const { setActiveChannel, openChatDialog } = useChatStore();
 
   const handleCreateInvite = () => {
     if (!activeOrgId) return;
@@ -414,99 +420,201 @@ function OrgMembersTab() {
           const isSelf = member.user_id === user?.id;
           const isOwner = member.role === "owner";
           const canEdit = isAdmin && !isOwner && !isSelf;
+          const username = isSelf
+            ? (user?.user_metadata?.username || user?.email?.split("@")[0] || member.email.split("@")[0])
+            : member.email.split("@")[0];
 
           return (
             <div
               key={member.user_id}
               className="flex items-center justify-between p-3 rounded-2xl hover:bg-muted/40 transition-colors group"
             >
-              <div className="flex items-center gap-4">
-                <Avatar className="size-10 border-2 border-background shadow-sm">
+              {/* Left Section: Avatar + Details */}
+              <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
+                <Avatar className="size-10 border-2 border-background shadow-sm shrink-0">
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                     {(member.name || member.email).charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold">
+                    <p className="text-sm font-semibold truncate">
                       {member.name || "Unnamed User"}
                     </p>
                     {isSelf && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] h-4 px-1.5 font-normal border-primary/20 bg-primary/5 text-primary"
+                        className="text-[10px] h-4 px-1.5 font-normal border-primary/20 bg-primary/5 text-primary shrink-0"
                       >
                         You
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-                    <Mail className="size-3" />
-                    {member.email}
+                  <p className="text-xs font-medium text-muted-foreground/80 mt-0.5 truncate">
+                    @{username}
+                  </p>
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 mt-0.5 truncate">
+                    <Mail className="size-3 shrink-0" />
+                    <span className="truncate">{member.email}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* Middle Section: Workspace Column */}
+              <div className="w-[120px] shrink-0 flex justify-start">
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button
-                      disabled={!canEdit}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors",
-                        canEdit
-                          ? "hover:bg-muted border border-border/50"
-                          : "cursor-default",
-                      )}
+                    <Button
+                      variant="outline"
+                      className="h-5 px-1.5 text-[9px] text-muted-foreground border-border/40 hover:bg-muted/80 hover:text-foreground transition-colors font-normal flex items-center gap-1 rounded animate-in fade-in duration-200"
                     >
-                      <RoleBadge role={member.role} />
-                      {canEdit && (
-                        <ChevronRight className="size-3 text-muted-foreground rotate-90" />
-                      )}
-                    </button>
+                      <Layers className="size-2.5" />
+                      <span>Workspaces</span>
+                      <span className="font-semibold text-foreground/80">{member.workspaces?.length || 0}</span>
+                    </Button>
                   </PopoverTrigger>
-                  {canEdit && (
-                    <PopoverContent className="w-40 p-1 rounded-xl" align="end">
-                      <button
-                        onClick={() =>
-                          updateRole.mutate({
-                            userId: member.user_id,
-                            role: "member",
-                          })
-                        }
-                        className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg hover:bg-muted transition-colors",
-                          member.role === "member" &&
-                            "text-primary font-medium",
-                        )}
-                      >
-                        Member
-                        {member.role === "member" && (
-                          <Check className="size-3" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateRole.mutate({
-                            userId: member.user_id,
-                            role: "admin",
-                          })
-                        }
-                        className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg hover:bg-muted transition-colors",
-                          member.role === "admin" && "text-primary font-medium",
-                        )}
-                      >
-                        Admin
-                        {member.role === "admin" && (
-                          <Check className="size-3" />
-                        )}
-                      </button>
-                    </PopoverContent>
-                  )}
+                  <PopoverContent 
+                    className="w-56 p-1 rounded-xl shadow-lg border border-border/80 bg-popover" 
+                    align="start"
+                    onWheel={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border/40 mb-1">
+                      Workspaces ({member.workspaces?.length || 0})
+                    </div>
+                    <div 
+                      className="space-y-0.5 max-h-48 overflow-y-auto"
+                      onWheel={(e) => e.stopPropagation()}
+                    >
+                      {member.workspaces && member.workspaces.length > 0 ? (
+                        member.workspaces.map((ws) => (
+                          <div key={ws.id} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="size-6 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
+                                {ws.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-xs font-medium truncate text-foreground">{ws.name}</span>
+                            </div>
+                            {ws.role && (
+                              <Badge variant="secondary" className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-md">
+                                {ws.role}
+                              </Badge>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-2 text-center text-xs text-muted-foreground">
+                          No workspaces
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
                 </Popover>
+              </div>
 
-                {canEdit && (
+              {/* Right Section: Chat + Role + Actions */}
+              <div className="flex items-center gap-2 shrink-0 justify-end">
+                {/* Group: Chat + Role */}
+                <div className="flex items-center gap-2 shrink-0 justify-end w-[150px]">
+                  {!isSelf ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 rounded-lg text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors border-none"
+                            onClick={() => {
+                              openDM.mutate(member.user_id, {
+                                onSuccess: (channel: any) => {
+                                  setActiveChannel(channel.id);
+                                  openChatDialog();
+                                },
+                                onError: (err: any) => {
+                                  toast.error(err?.response?.data?.message || "Failed to start chat");
+                                }
+                              });
+                            }}
+                            disabled={openDM.isPending}
+                          >
+                            {openDM.isPending && openDM.variables === member.user_id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <MessageSquare className="size-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          Start Chat
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <div className="size-8 shrink-0" />
+                  )}
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        disabled={!canEdit}
+                        className={cn(
+                          "flex items-center px-3 py-1.5 rounded-lg transition-colors justify-between w-[110px]",
+                          canEdit
+                            ? "hover:bg-muted border border-border/50"
+                            : "cursor-default border border-transparent",
+                        )}
+                      >
+                        <RoleBadge role={member.role} />
+                        {canEdit ? (
+                          <ChevronRight className="size-3 text-muted-foreground rotate-90 shrink-0" />
+                        ) : (
+                          <div className="size-3 shrink-0" />
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    {canEdit && (
+                      <PopoverContent className="w-40 p-1 rounded-xl" align="end">
+                        <button
+                          onClick={() =>
+                            updateRole.mutate({
+                              userId: member.user_id,
+                              role: "member",
+                            })
+                          }
+                          className={cn(
+                            "w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg hover:bg-muted transition-colors",
+                            member.role === "member" &&
+                              "text-primary font-medium",
+                          )}
+                        >
+                          Member
+                          {member.role === "member" && (
+                            <Check className="size-3" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() =>
+                            updateRole.mutate({
+                              userId: member.user_id,
+                              role: "admin",
+                            })
+                          }
+                          className={cn(
+                            "w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg hover:bg-muted transition-colors",
+                            member.role === "admin" && "text-primary font-medium",
+                          )}
+                        >
+                          Admin
+                          {member.role === "admin" && (
+                            <Check className="size-3" />
+                          )}
+                        </button>
+                      </PopoverContent>
+                    )}
+                  </Popover>
+                </div>
+
+                {/* More Action Menu */}
+                {canEdit ? (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -527,6 +635,8 @@ function OrgMembersTab() {
                       </button>
                     </PopoverContent>
                   </Popover>
+                ) : (
+                  isAdmin && <div className="size-8 shrink-0" />
                 )}
               </div>
             </div>

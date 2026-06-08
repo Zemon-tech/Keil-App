@@ -19,6 +19,11 @@ export interface OrgMember {
   role: "owner" | "admin" | "member";
   name: string | null;
   email: string;
+  workspaces?: Array<{
+    id: string;
+    name: string;
+    role: "owner" | "admin" | "member";
+  }>;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────

@@ -17,6 +17,11 @@ export interface OrgMemberDTO {
   role: string;
   name: string | null;
   email: string;
+  workspaces?: Array<{
+    id: string;
+    name: string;
+    role: string;
+  }>;
 }
 
 const toDTO = (row: any): OrganisationDTO => ({
@@ -142,7 +147,29 @@ export const joinOrganisation = async (
  * Returns all members of an organisation.
  */
 export const getOrgMembers = async (orgId: string): Promise<OrgMemberDTO[]> => {
-  return organisationRepository.findMembers(orgId);
+  const members = await organisationRepository.findMembers(orgId);
+  if (members.length === 0) return [];
+
+  const userIds = members.map((m) => m.user_id);
+  const memberships = await organisationRepository.findSpaceMembershipsByOrgAndUsers(orgId, userIds);
+
+  // Group memberships by user_id
+  const membershipsByUserId: Record<string, Array<{ user_id: string; space_id: string; space_name: string; role: string }>> = {};
+  for (const ms of memberships) {
+    if (!membershipsByUserId[ms.user_id]) {
+      membershipsByUserId[ms.user_id] = [];
+    }
+    membershipsByUserId[ms.user_id].push(ms);
+  }
+
+  return members.map((m) => ({
+    ...m,
+    workspaces: (membershipsByUserId[m.user_id] || []).map((ms) => ({
+      id: ms.space_id,
+      name: ms.space_name,
+      role: ms.role,
+    })),
+  }));
 };
 
 export const renameOrganisation = async (
