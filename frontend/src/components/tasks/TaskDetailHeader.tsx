@@ -63,6 +63,7 @@ import {
   PRIORITY_OPTIONS,
   PRIORITY_CONFIG,
   formatDate,
+  formatDueDate,
 } from "./task-detail-shared";
 
 // ─── StatusBadge ──────────────────────────────────────────────────────────────
@@ -440,7 +441,7 @@ export function TaskDetailHeader({
         {(task.due_date || task.dueDateISO) && (
           <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[11px]">
             <Calendar className="size-3" />
-            {formatDate(task.due_date || task.dueDateISO!)}
+            {formatDueDate(task.due_date || task.dueDateISO!, task.is_all_day)}
           </Badge>
         )}
 

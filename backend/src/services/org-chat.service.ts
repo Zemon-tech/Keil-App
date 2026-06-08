@@ -330,7 +330,8 @@ export const saveMessage = async (channelId: string, senderId: string, content: 
               sender_name: senderName,
               channel_name: channel.name,
               channel_type: channel.type,
-              message_snippet: content.substring(0, 100)
+              message_snippet: content.substring(0, 100),
+              channel_id: channelId
             })
           ]
         );

@@ -472,8 +472,13 @@ export function AppSidebar({
   };
 
   // Subtitle shown under the user name in the sidebar button
-  const currentSpaceLabel =
-    activeSpace?.name ?? activeOrg?.name ?? "Organisation";
+  // Personal org → just show space name (e.g. "Private")
+  // Org workspace → show "OrgName:SpaceName" (e.g. "Zemon:General")
+  const currentSpaceLabel = activeOrg && activeSpace
+    ? activeOrg.is_personal
+      ? activeSpace.name
+      : `${activeOrg.name}:${activeSpace.name}`
+    : activeSpace?.name ?? activeOrg?.name ?? "Organisation";
 
   const visibleNavigationItems = navigationItems.filter((item) =>
     item.title.toLowerCase().includes(searchQuery.trim().toLowerCase())

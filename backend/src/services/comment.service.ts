@@ -177,7 +177,8 @@ export const createComment = async (
             recipient_ids: mentionedUserIds,
             task_title: taskTitle,
             sender_name: senderName,
-            comment_snippet: data.content.substring(0, 100)
+            comment_snippet: data.content.substring(0, 100),
+            task_id: data.task_id
           })
         ]
       );
@@ -202,7 +203,8 @@ export const createComment = async (
               recipient_ids: recipients,
               task_title: taskTitle,
               sender_name: senderName,
-              comment_snippet: data.content.substring(0, 100)
+              comment_snippet: data.content.substring(0, 100),
+              task_id: data.task_id
             })
           ]
         );

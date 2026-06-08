@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
     Hash, Search, Send, 
     Paperclip, Smile, CheckCheck,
-    Users, MessageCircle, Trash2
+    Users, MessageCircle, Trash2, Minimize2
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useRef, useEffect } from "react";
@@ -46,7 +46,7 @@ interface ChatDialogProps {
 }
 
 export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
-    const { activeChannelId, setActiveChannel, typingUsers } = useChatStore();
+    const { activeChannelId, setActiveChannel, typingUsers, closeChatDialog, openChat } = useChatStore();
     // Phase D will fully migrate this component; for now we pass org/space context
     // to the new hook signatures while keeping the legacy member list intact.
     const { activeOrgId, activeSpaceId } = useAppContext();
@@ -153,6 +153,15 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                 <VisuallyHidden.Root>
                     <DialogTitle>Chat</DialogTitle>
                 </VisuallyHidden.Root>
+
+                {/* Minimize button — collapses back to the side drawer */}
+                <button
+                    onClick={() => { closeChatDialog(); openChat(); }}
+                    className="absolute top-5 right-10 z-50 opacity-70 hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                    aria-label="Minimize chat to sidebar"
+                >
+                    <Minimize2 className="size-4" />
+                </button>
 
                 <div className="flex flex-row h-full w-full overflow-hidden min-h-0">
                     {/* ── Left Sidebar: Channels & Participants ── */}
