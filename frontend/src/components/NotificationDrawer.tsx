@@ -13,8 +13,9 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { useNotifications, type Notification } from "@/contexts/NotificationContext";
+import { useNotifications, getNotificationTitle, getNotificationSnippet, groupNotifications } from "@/contexts/NotificationContext";
 import { cn } from "@/lib/utils";
+import { useAppContext } from "@/contexts/AppContext";
 
 interface NotificationDrawerProps {
   open: boolean;
@@ -53,6 +54,11 @@ const notificationStyles = {
     icon: User,
     className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
   },
+  comment_created: {
+    label: "Comment",
+    icon: MessageCircle,
+    className: "bg-[var(--event-focus-bg)] text-[var(--event-focus-text)] ring-[var(--event-focus-border)]",
+  },
 } as const;
 
 const getNotificationMeta = (eventType: string) =>
@@ -62,59 +68,15 @@ const getNotificationMeta = (eventType: string) =>
     className: "bg-muted text-muted-foreground ring-border",
   };
 
-function getNotificationTitle(n: Notification): string {
-  const actor = n.payload.sender_name || "Someone";
-  switch (n.event_type) {
-    case "task_assigned":
-      return "Task Assigned";
-    case "someone_messaged":
-      return `New message from ${actor}`;
-    case "motion_shared":
-      return "Motion Shared";
-    case "task_status_changed":
-      return "Task Status Updated";
-    case "membership_updates":
-      return "Membership Update";
-    case "mention_in_comment":
-      return "Mentioned in Comment";
-    default:
-      return "New Notification";
-  }
-}
-
-function getNotificationSnippet(n: Notification): string {
-  const actor = n.payload.sender_name || "Someone";
-  switch (n.event_type) {
-    case "task_assigned":
-      return `${actor} assigned you to "${n.payload.task_title}"`;
-    case "someone_messaged":
-      return n.payload.message_snippet || "New message in channel";
-    case "motion_shared":
-      return `${actor} shared "${n.payload.page_title}" with space`;
-    case "task_status_changed":
-      return `"${n.payload.task_title}" moved to ${n.payload.status}`;
-    case "membership_updates": {
-      const action = n.payload.action === "added_space" || n.payload.action === "added_workspace"
-        ? "added you to"
-        : "updated your role in";
-      const place = n.payload.space_name || n.payload.workspace_name || "workspace";
-      return `${actor} ${action} ${place} as ${n.payload.role}`;
-    }
-    case "mention_in_comment":
-      return `${actor} mentioned you: "${n.payload.comment_snippet}"`;
-    default:
-      return "You have a new alert";
-  }
-}
-
 export function NotificationDrawer({
   open,
   onOpenChange,
   onOpenFullView,
 }: NotificationDrawerProps) {
   const width = 400;
+  const { organisations } = useAppContext();
   const [filter, setFilter] = useState<"All" | "Unread" | "Tasks" | "Mentions">("All");
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, clearAll, handleNotificationClick } = useNotifications();
 
   useEffect(() => {
     if (open) {
@@ -127,7 +89,7 @@ export function NotificationDrawer({
 
   const filteredNotifications = notifications.filter((n) => {
     if (filter === "Unread") return !n.read_at;
-    if (filter === "Tasks") return n.event_type === "task_assigned" || n.event_type === "task_status_changed";
+    if (filter === "Tasks") return n.event_type === "task_assigned" || n.event_type === "task_status_changed" || n.event_type === "comment_created";
     if (filter === "Mentions") return n.event_type === "mention_in_comment";
     return true;
   });
@@ -213,15 +175,19 @@ export function NotificationDrawer({
               </div>
             ) : (
               <div className="space-y-1">
-                {filteredNotifications.map((notification) => {
+                {groupNotifications(filteredNotifications).map((item) => {
+                  const notification = item.main;
                   const meta = getNotificationMeta(notification.event_type);
                   const Icon = meta.icon;
                   const isRead = !!notification.read_at;
 
                   return (
                     <article
-                      key={notification.id}
-                      onClick={() => !isRead && markAsRead(notification.id)}
+                      key={item.id}
+                      onClick={() => {
+                        handleNotificationClick(notification);
+                        onOpenChange(false);
+                      }}
                       className={cn(
                         "group relative cursor-pointer rounded-md px-3 py-2.5 transition-colors",
                         isRead ? "hover:bg-muted/40" : "bg-muted/30 hover:bg-muted/50",
@@ -245,7 +211,7 @@ export function NotificationDrawer({
                             {!isRead && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
                           </div>
                           <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                            {getNotificationSnippet(notification)}
+                            {getNotificationSnippet(notification, organisations)}
                           </p>
 
                           <div className="mt-2 flex items-center gap-2">

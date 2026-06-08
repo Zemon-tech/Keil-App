@@ -500,6 +500,11 @@ export const createShare = async (
         const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
         const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
 
+        const targetSpace = await spaceRepository.findById(input.target_space_id!, client);
+        const targetOrg = await organisationRepository.findById(input.target_org_id!, client);
+        const spaceName = targetSpace?.name ?? 'Unknown Space';
+        const orgName = targetOrg?.name ?? 'Unknown Organisation';
+
         await client.query(
           `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -513,7 +518,9 @@ export const createShare = async (
             JSON.stringify({
               recipient_ids: recipientIds,
               page_title: page.title,
-              sender_name: senderName
+              sender_name: senderName,
+              space_name: spaceName,
+              org_name: orgName
             })
           ]
         );

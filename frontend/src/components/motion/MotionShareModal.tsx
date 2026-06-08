@@ -607,7 +607,7 @@ export function MotionSharePanel({
   const generalAccessVal = isPublicEnabled ? "public" : isSpaceShared ? "space" : "invited";
 
   return (
-    <div className="w-[480px] h-[440px] bg-popover border border-border text-popover-foreground rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans transition-all duration-200">
+    <div className="w-[480px] h-auto max-h-[90vh] bg-popover border border-border text-popover-foreground rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans transition-all duration-200">
       {/* Dynamic Header */}
       <div className="px-4 py-3.5 flex items-center justify-between shrink-0 bg-popover border-b border-border/40 min-h-[50px]">
         {isSearching ? (
@@ -757,7 +757,7 @@ export function MotionSharePanel({
               </div>
 
               {/* Suggestions Container */}
-              <div className="flex-1 overflow-y-auto min-h-0 pr-0.5 custom-scrollbar space-y-4">
+              <div className="max-h-[220px] overflow-y-auto min-h-0 pr-0.5 custom-scrollbar space-y-4">
                 <div>
                   <div className="text-[10px] text-muted-foreground font-bold px-1.5 py-1 uppercase tracking-wider">
                     Suggested
@@ -865,7 +865,7 @@ export function MotionSharePanel({
               </div>
 
               {/* Shared List */}
-              <div className="space-y-3.5 overflow-y-auto pr-0.5 custom-scrollbar flex-1 min-h-0 mt-4">
+              <div className="space-y-3.5 overflow-y-auto pr-0.5 custom-scrollbar max-h-[145px] min-h-0 mt-4">
                 {/* Current User Owner Row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
