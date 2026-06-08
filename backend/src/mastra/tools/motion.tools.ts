@@ -1,7 +1,10 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { generateText } from "ai";
 import pool from "../../config/pg";
 import * as motionPageService from "../../services/motion-page.service";
+import { resolveModel } from "../models";
+
 
 // ─── Helper: verify space membership ─────────────────────────────────────────
 
@@ -18,17 +21,64 @@ async function isSpaceMember(
   return (result.rowCount ?? 0) > 0;
 }
 
+// Helper to perform smart semantic/fuzzy relevance matching of page titles using LLM
+async function findRelevantPages(
+  query: string,
+  pages: { id: string; title: string }[],
+  context: any
+): Promise<string[]> {
+  if (pages.length === 0) return [];
+
+  try {
+    const model = resolveModel(context?.requestContext);
+    if (!model) {
+      return pages
+        .filter(p => p.title.toLowerCase().includes(query.toLowerCase()))
+        .map(p => p.id);
+    }
+    const pagesList = pages.map(p => `- ID: ${p.id}, Title: "${p.title}"`).join("\n");
+
+    const prompt = `You are an AI assistant helping to match a user's search query or instruction to relevant note/page titles in their workspace.
+
+User Query: "${query}"
+
+Available Workspace Pages:
+${pagesList}
+
+Identify which pages from the list above are relevant to the user's query. Return a JSON array of matching page IDs (e.g., ["uuid1", "uuid2"]). Return only the most relevant pages. If none are relevant, return an empty array [].
+Respond ONLY with the raw JSON array. Do not include markdown formatting or backticks.`;
+
+    const response = await generateText({
+      model,
+      prompt,
+    });
+
+    const cleaned = response.text.replace(/```json|```/g, "").trim();
+    const matchedIds = JSON.parse(cleaned);
+    if (Array.isArray(matchedIds)) {
+      return matchedIds.filter(id => pages.some(p => p.id === id));
+    }
+  } catch (err) {
+    console.error("Error in smart page search:", err);
+  }
+
+  // Fallback to simple title inclusion if LLM fails
+  return pages
+    .filter(p => p.title.toLowerCase().includes(query.toLowerCase()))
+    .map(p => p.id);
+}
+
 // ─── Tool: search_motion_pages ────────────────────────────────────────────────
 
 export const searchMotionPagesTool = createTool({
   id: "search_motion_pages",
   description:
-    "Search for notes/pages in the current space by keyword in their title. Returns up to 10 matches.",
+    "Smartly search for notes/pages in the current space by matching the query context to page titles. Returns relevant pages.",
   inputSchema: z.object({
     query: z
       .string()
       .min(1)
-      .describe("Keyword to search for in page titles"),
+      .describe("The search prompt or keywords to look for"),
   }),
   execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
@@ -47,20 +97,25 @@ export const searchMotionPagesTool = createTool({
        FROM public.motion_pages
        WHERE org_id = $1
          AND space_id = $2
-         AND title ILIKE '%' || $3 || '%'
-         AND deleted_at IS NULL
-       ORDER BY updated_at DESC
-       LIMIT 10`,
-      [orgId, spaceId, inputData.query]
+         AND deleted_at IS NULL`
     );
 
-    const pages = result.rows.map((row: any) => ({
+    const allPages = result.rows.map((row: any) => ({
       id: row.id,
       title: row.title,
       updatedAt: row.updated_at,
     }));
 
+    const matchedIds = await findRelevantPages(inputData.query, allPages, context);
+    const pages = allPages.filter(p => matchedIds.includes(p.id));
+
     return {
+      activity: {
+        agent: "keilhq-motion-agent",
+        action: `Searching pages for "${inputData.query}"`,
+        details: `Smart matched ${pages.length} relevant page(s) out of ${allPages.length} total pages`,
+        tool: "search_motion_pages"
+      },
       pages,
       count: pages.length,
       query: inputData.query,
@@ -72,9 +127,11 @@ export const searchMotionPagesTool = createTool({
 
 export const listMotionPagesTool = createTool({
   id: "list_motion_pages",
-  description: "List all notes and document pages inside the current space. Returns only IDs and titles (lite payload). Useful when the user wants to browse their notes without fetching massive contents.",
-  inputSchema: z.object({}),
-  execute: async (_inputData, context) => {
+  description: "List all notes and document pages inside the current space, optionally matching a query smartly.",
+  inputSchema: z.object({
+    query: z.string().optional().describe("Optional search query to filter listed pages smartly"),
+  }),
+  execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
     const orgId = context?.requestContext?.get("orgId") as string;
     const spaceId = context?.requestContext?.get("spaceId") as string;
@@ -96,23 +153,54 @@ export const listMotionPagesTool = createTool({
       [orgId, spaceId]
     );
 
+    let pages = result.rows;
+    let detailsMessage = `Fetched ${pages.length} total pages`;
+
+    if (inputData.query) {
+      const matchedIds = await findRelevantPages(inputData.query, pages, context);
+      pages = pages.filter((p: any) => matchedIds.includes(p.id));
+      detailsMessage = `Smart-filtered to ${pages.length} relevant page(s) out of ${result.rows.length} total pages`;
+    }
+
     return {
-      pages: result.rows,
-      count: result.rows.length,
+      activity: {
+        agent: "keilhq-motion-agent",
+        action: inputData.query ? `Listing filtered pages for "${inputData.query}"` : "Listing all space pages",
+        details: detailsMessage,
+        tool: "list_motion_pages"
+      },
+      pages,
+      count: pages.length,
     };
   },
 });
 
 // Helper to recursively parse Tiptap JSON node structure into Markdown format
-function tiptapToMarkdown(node: any): string {
+function tiptapToMarkdown(node: any, parentType?: string, itemIndex = 0): string {
   if (!node) return "";
   
   if (node.type === "text") {
-    return node.text || "";
+    let text = node.text || "";
+    if (node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type === "bold") {
+          text = `**${text}**`;
+        } else if (mark.type === "italic") {
+          text = `*${text}*`;
+        } else if (mark.type === "code") {
+          text = `\`${text}\``;
+        } else if (mark.type === "strike") {
+          text = `~~${text}~~`;
+        } else if (mark.type === "link" && mark.attrs?.href) {
+          text = `[${text}](${mark.attrs.href})`;
+        }
+      }
+    }
+    return text;
   }
 
   const childrenText = (node.content || [])
-    .map((child: any) => tiptapToMarkdown(child))
+    .map((child: any, idx: number) => tiptapToMarkdown(child, node.type, idx))
     .join("");
 
   switch (node.type) {
@@ -127,6 +215,9 @@ function tiptapToMarkdown(node: any): string {
     case "orderedList":
       return `${childrenText}`;
     case "listItem":
+      if (parentType === "orderedList") {
+        return `${itemIndex + 1}. ${childrenText}\n`;
+      }
       return `- ${childrenText}\n`;
     case "taskList":
       return `${childrenText}`;
@@ -134,8 +225,13 @@ function tiptapToMarkdown(node: any): string {
       const checked = node.attrs?.checked ? "[x]" : "[ ]";
       return `- ${checked} ${childrenText}\n`;
     }
-    case "blockquote":
+    case "blockquote": {
+      const isCallout = node.attrs?.type === "callout";
+      if (isCallout) {
+        return `> [!NOTE]\n> ${childrenText.trim().replace(/\n/g, "\n> ")}\n\n`;
+      }
       return `> ${childrenText.trim().replace(/\n/g, "\n> ")}\n\n`;
+    }
     case "codeBlock":
       return `\`\`\`${node.attrs?.language || ""}\n${childrenText}\n\`\`\`\n\n`;
     case "hardBreak":
@@ -152,9 +248,10 @@ function tiptapToMarkdown(node: any): string {
 export const getMotionPageTool = createTool({
   id: "get_motion_page",
   description:
-    "Retrieve the content of a specific note/page by its ID in Markdown format. Supports character offset chunking for large documents.",
+    "Retrieve the content of a specific note/page by either its ID or by searching its title smartly.",
   inputSchema: z.object({
-    pageId: z.string().uuid().describe("The page's UUID"),
+    pageId: z.string().uuid().optional().describe("The page's UUID"),
+    title: z.string().optional().describe("Alternatively, match by title smartly if ID is unknown"),
     offset: z.number().int().min(0).optional().default(0).describe("Character offset for reading large documents in chunks (default 0)"),
   }),
   execute: async (inputData, context) => {
@@ -169,10 +266,30 @@ export const getMotionPageTool = createTool({
     if (!member)
       return { error: "You are not a member of this space." };
 
+    let resolvedId = inputData.pageId;
+
+    if (!resolvedId && inputData.title) {
+      const result = await pool.query(
+        `SELECT id, title
+         FROM public.motion_pages
+         WHERE org_id = $1
+           AND space_id = $2
+           AND deleted_at IS NULL`
+      );
+      const matchedIds = await findRelevantPages(inputData.title, result.rows, context);
+      if (matchedIds.length > 0) {
+        resolvedId = matchedIds[0];
+      }
+    }
+
+    if (!resolvedId) {
+      return { error: "Could not find a relevant page matching the provided identifier." };
+    }
+
     const page = await motionPageService.getPageById(
       orgId,
       spaceId,
-      inputData.pageId
+      resolvedId
     );
 
     if (!page)
@@ -190,6 +307,12 @@ export const getMotionPageTool = createTool({
     const hasMore = offset + limit < totalLength;
 
     return {
+      activity: {
+        agent: "keilhq-motion-agent",
+        action: `Reading page "${page.title}"`,
+        details: `Fetched chunk starting at offset ${offset} (${chunk.length} / ${totalLength} chars)`,
+        tool: "get_motion_page"
+      },
       page: {
         id: page.id,
         title: page.title,
@@ -208,3 +331,506 @@ export const getMotionPageTool = createTool({
     };
   },
 });
+
+// ─── Helper: get space role ──────────────────────────────────────────────────
+
+async function getSpaceRole(
+  userId: string,
+  orgId: string,
+  spaceId: string
+): Promise<string | null> {
+  const result = await pool.query(
+    `SELECT role FROM public.space_members
+     WHERE org_id = $1 AND space_id = $2 AND user_id = $3 LIMIT 1`,
+    [orgId, spaceId, userId]
+  );
+  return result.rows[0]?.role || null;
+}
+
+// ─── Helper: parse inline markdown marks (bold, italic, code, strike, link) ────
+
+interface TextToken {
+  text: string;
+  marks?: { type: string; attrs?: Record<string, any> }[];
+}
+
+function splitTokens(
+  tokens: TextToken[],
+  regex: RegExp,
+  createMatchToken: (match: RegExpExecArray) => TextToken
+): TextToken[] {
+  const result: TextToken[] = [];
+
+  for (const token of tokens) {
+    if (token.marks && token.marks.length > 0) {
+      result.push(token);
+      continue;
+    }
+
+    let remainingText = token.text;
+    regex.lastIndex = 0;
+
+    while (remainingText) {
+      const match = regex.exec(remainingText);
+      if (!match) {
+        result.push({ text: remainingText });
+        break;
+      }
+
+      const matchIndex = match.index;
+      const matchLength = match[0].length;
+
+      if (matchIndex > 0) {
+        result.push({ text: remainingText.substring(0, matchIndex) });
+      }
+
+      const matchToken = createMatchToken(match);
+      result.push(matchToken);
+
+      remainingText = remainingText.substring(matchIndex + matchLength);
+      regex.lastIndex = 0;
+    }
+  }
+
+  return result;
+}
+
+function parseInlineFormatting(text: string): TextToken[] {
+  if (!text) return [];
+
+  let tokens: TextToken[] = [{ text }];
+
+  // 1. Link: [text](url)
+  tokens = splitTokens(tokens, /\[([^\]]+)\]\(([^)]+)\)/, (match) => ({
+    text: match[1],
+    marks: [{ type: "link", attrs: { href: match[2], target: "_blank" } }],
+  }));
+
+  // 2. Bold: **text** or __text__
+  tokens = splitTokens(tokens, /\*\*([^*]+)\*\*|__([^_]+)__/, (match) => ({
+    text: match[1] || match[2],
+    marks: [{ type: "bold" }],
+  }));
+
+  // 3. Code: `code`
+  tokens = splitTokens(tokens, /`([^`]+)`/, (match) => ({
+    text: match[1],
+    marks: [{ type: "code" }],
+  }));
+
+  // 4. Italic: *text* or _text_
+  tokens = splitTokens(tokens, /\*([^*]+)\*|_([^_]+)_/, (match) => ({
+    text: match[1] || match[2],
+    marks: [{ type: "italic" }],
+  }));
+
+  // 5. Strikethrough: ~~text~~
+  tokens = splitTokens(tokens, /~~([^~]+)~~/, (match) => ({
+    text: match[1],
+    marks: [{ type: "strike" }],
+  }));
+
+  return tokens.map(t => ({
+    type: "text",
+    text: t.text,
+    ...(t.marks ? { marks: t.marks } : {})
+  })) as any[];
+}
+
+// ─── Helper: parse Markdown to Tiptap JSON ───────────────────────────────────
+
+function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<string, any> {
+  let cleanMarkdown = markdown.trim();
+  
+  // Strip duplicate header if it matches pageTitle
+  if (pageTitle) {
+    const trimmedTitle = pageTitle.trim().toLowerCase();
+    const escaped = trimmedTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const titleRegex = new RegExp(`^#{1,3}\\s+${escaped}\\s*\\r?\\n+`, "i");
+    cleanMarkdown = cleanMarkdown.replace(titleRegex, "").trim();
+  }
+
+  const lines = cleanMarkdown.split(/\r?\n/);
+  const contentNodes: any[] = [];
+
+  // Stack of active lists
+  const listStack: { indent: number; type: "bulletList" | "orderedList" | "taskList"; node: any; currentListItem: any }[] = [];
+
+  const flushAllLists = () => {
+    listStack.length = 0;
+  };
+
+  let inCodeBlock = false;
+  let codeLanguage = "";
+  let codeLines: string[] = [];
+
+  let inBlockquote = false;
+  let isCallout = false;
+  let blockquoteLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // --- Code Block Parsing ---
+    if (inCodeBlock) {
+      if (trimmed.startsWith("```")) {
+        contentNodes.push({
+          type: "codeBlock",
+          attrs: { language: codeLanguage || null },
+          content: [{ type: "text", text: codeLines.join("\n") }],
+        });
+        inCodeBlock = false;
+        codeLines = [];
+        codeLanguage = "";
+      } else {
+        codeLines.push(line);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("```")) {
+      flushAllLists();
+      inCodeBlock = true;
+      codeLanguage = trimmed.slice(3).trim();
+      codeLines = [];
+      continue;
+    }
+
+    // --- Blockquote / Callout Parsing ---
+    const quoteMatch = line.match(/^\s*>\s?(.*)$/);
+    if (quoteMatch) {
+      flushAllLists();
+      const content = quoteMatch[1];
+      if (!inBlockquote) {
+        inBlockquote = true;
+        isCallout = false;
+        blockquoteLines = [];
+        const calloutMarker = content.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+        if (calloutMarker) {
+          isCallout = true;
+          continue;
+        }
+      }
+      blockquoteLines.push(content);
+      continue;
+    } else if (inBlockquote) {
+      const textContent = blockquoteLines.join("\n").trim();
+      const blockquoteNode: any = {
+        type: "blockquote",
+        content: [{
+          type: "paragraph",
+          content: parseInlineFormatting(textContent),
+        }],
+      };
+      if (isCallout) {
+        blockquoteNode.attrs = { type: "callout" };
+      }
+      contentNodes.push(blockquoteNode);
+      inBlockquote = false;
+      blockquoteLines = [];
+    }
+
+    // --- Empty lines ---
+    if (!trimmed) {
+      flushAllLists();
+      continue;
+    }
+
+    // --- Horizontal Rule ---
+    if (trimmed === "---" || trimmed === "___" || trimmed === "***") {
+      flushAllLists();
+      contentNodes.push({
+        type: "horizontalRule",
+      });
+      continue;
+    }
+
+    // --- Headings ---
+    const headingMatch = line.match(/^\s*(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      flushAllLists();
+      const level = headingMatch[1].length;
+      const text = headingMatch[2];
+      contentNodes.push({
+        type: "heading",
+        attrs: { level },
+        content: parseInlineFormatting(text),
+      });
+      continue;
+    }
+
+    // --- List Parsing with Indentation Stack ---
+    const indent = line.match(/^\s*/)?.[0].length || 0;
+    
+    const taskMatch = line.match(/^\s*[-*]\s+\[([ xX])\]\s+(.*)$/);
+    const bulletMatch = line.match(/^\s*[-*]\s+(.*)$/);
+    const orderedMatch = line.match(/^\s*\d+\.\s+(.*)$/);
+
+    if (taskMatch || bulletMatch || orderedMatch) {
+      let listType: "bulletList" | "orderedList" | "taskList";
+      let text = "";
+      let checked = false;
+
+      if (taskMatch) {
+        listType = "taskList";
+        checked = taskMatch[1].toLowerCase() === "x";
+        text = taskMatch[2];
+      } else if (bulletMatch) {
+        listType = "bulletList";
+        text = bulletMatch[1];
+      } else {
+        listType = "orderedList";
+        text = orderedMatch![1];
+      }
+
+      while (listStack.length > 0 && listStack[listStack.length - 1].indent > indent) {
+        listStack.pop();
+      }
+
+      const top = listStack.length > 0 ? listStack[listStack.length - 1] : null;
+
+      if (top && top.indent === indent && top.type === listType) {
+        let itemNode: any;
+        if (listType === "taskList") {
+          itemNode = {
+            type: "taskItem",
+            attrs: { checked },
+            content: [{
+              type: "paragraph",
+              content: parseInlineFormatting(text),
+            }],
+          };
+        } else {
+          itemNode = {
+            type: "listItem",
+            content: [{
+              type: "paragraph",
+              content: parseInlineFormatting(text),
+            }],
+          };
+        }
+        top.node.content.push(itemNode);
+        top.currentListItem = itemNode;
+      } else {
+        if (top && top.indent === indent) {
+          listStack.pop();
+        }
+
+        const newListNode: any = {
+          type: listType,
+          content: [],
+        };
+
+        let itemNode: any;
+        if (listType === "taskList") {
+          itemNode = {
+            type: "taskItem",
+            attrs: { checked },
+            content: [{
+              type: "paragraph",
+              content: parseInlineFormatting(text),
+            }],
+          };
+        } else {
+          itemNode = {
+            type: "listItem",
+            content: [{
+              type: "paragraph",
+              content: parseInlineFormatting(text),
+            }],
+          };
+        }
+        newListNode.content.push(itemNode);
+
+        const parentTop = listStack.length > 0 ? listStack[listStack.length - 1] : null;
+        if (parentTop) {
+          if (!parentTop.currentListItem.content) {
+            parentTop.currentListItem.content = [];
+          }
+          parentTop.currentListItem.content.push(newListNode);
+        } else {
+          contentNodes.push(newListNode);
+        }
+
+        listStack.push({
+          indent,
+          type: listType,
+          node: newListNode,
+          currentListItem: itemNode,
+        });
+      }
+      continue;
+    }
+
+    // --- Fallback: Paragraph ---
+    flushAllLists();
+    contentNodes.push({
+      type: "paragraph",
+      content: parseInlineFormatting(line),
+    });
+  }
+
+  // Handle final open blockquote if any
+  if (inBlockquote) {
+    const textContent = blockquoteLines.join("\n").trim();
+    const blockquoteNode: any = {
+      type: "blockquote",
+      content: [{
+        type: "paragraph",
+        content: parseInlineFormatting(textContent),
+      }],
+    };
+    if (isCallout) {
+      blockquoteNode.attrs = { type: "callout" };
+    }
+    contentNodes.push(blockquoteNode);
+  }
+
+  if (contentNodes.length === 0) {
+    contentNodes.push({
+      type: "paragraph",
+    });
+  }
+
+  return {
+    type: "doc",
+    content: contentNodes,
+  };
+}
+
+// ─── Tool: create_motion_page ────────────────────────────────────────────────
+
+export const createMotionPageTool = createTool({
+  id: "create_motion_page",
+  description: "Create a new page/note in the current space with a title and optional markdown content. Returns the page details on success.",
+  inputSchema: z.object({
+    title: z.string().min(1).describe("The title of the page"),
+    content: z.string().optional().describe("Optional body content of the page in markdown or text format"),
+    parentId: z.string().uuid().optional().describe("Optional parent page ID if creating a subpage"),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    const orgId = context?.requestContext?.get("orgId") as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
+
+    if (!userId || !orgId || !spaceId)
+      return { error: "Missing org or space context." };
+
+    const role = await getSpaceRole(userId, orgId, spaceId);
+    if (!role)
+      return { error: "You are not a member of this space." };
+
+    if (role !== "admin" && role !== "manager") {
+      return { error: "You must be an admin or manager to create pages." };
+    }
+
+    try {
+      const page = await motionPageService.createPage(orgId, spaceId, userId, {
+        title: inputData.title,
+        parent_id: inputData.parentId || null,
+      });
+
+      if (inputData.content) {
+        const tiptapContent = parseMarkdownToTiptap(inputData.content, inputData.title);
+        const updatedPage = await motionPageService.updatePage(
+          orgId,
+          spaceId,
+          page.id,
+          userId,
+          { content: tiptapContent },
+          role
+        );
+        return {
+          activity: {
+            agent: "keilhq-motion-agent",
+            action: `Created page "${inputData.title}" with content`,
+            details: `Page ID: ${page.id}. Parsed content and updated editor structure.`,
+            tool: "create_motion_page"
+          },
+          success: true,
+          message: `Created page "${inputData.title}" with content.`,
+          page: updatedPage || page,
+        };
+      }
+
+      return {
+        activity: {
+          agent: "keilhq-motion-agent",
+          action: `Created page "${inputData.title}"`,
+          details: `Page ID: ${page.id}. Note created with empty body.`,
+          tool: "create_motion_page"
+        },
+        success: true,
+        message: `Created page "${inputData.title}".`,
+        page,
+      };
+    } catch (err: any) {
+      return { error: err?.message || "Failed to create page." };
+    }
+  },
+});
+
+// ─── Tool: update_motion_page ────────────────────────────────────────────────
+
+export const updateMotionPageTool = createTool({
+  id: "update_motion_page",
+  description: "Update the title and/or content of an existing page/note in the current space.",
+  inputSchema: z.object({
+    pageId: z.string().uuid().describe("The UUID of the page to update"),
+    title: z.string().optional().describe("New title for the page"),
+    content: z.string().optional().describe("New body content of the page in markdown or text format"),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    const orgId = context?.requestContext?.get("orgId") as string;
+    const spaceId = context?.requestContext?.get("spaceId") as string;
+
+    if (!userId || !orgId || !spaceId)
+      return { error: "Missing org or space context." };
+
+    const role = await getSpaceRole(userId, orgId, spaceId);
+    if (!role)
+      return { error: "You are not a member of this space." };
+
+    try {
+      const updates: any = {};
+      if (inputData.title !== undefined) {
+        updates.title = inputData.title;
+      }
+      if (inputData.content !== undefined) {
+        let resolvedTitle = inputData.title;
+        if (!resolvedTitle) {
+          const existingPage = await motionPageService.getPageById(orgId, spaceId, inputData.pageId);
+          resolvedTitle = existingPage?.title;
+        }
+        updates.content = parseMarkdownToTiptap(inputData.content, resolvedTitle);
+      }
+
+      const updatedPage = await motionPageService.updatePage(
+        orgId,
+        spaceId,
+        inputData.pageId,
+        userId,
+        updates,
+        role
+      );
+
+      return {
+        activity: {
+          agent: "keilhq-motion-agent",
+          action: `Updated page "${updatedPage?.title || inputData.pageId}"`,
+          details: `Saved updates for fields: ${Object.keys(updates).join(", ")}`,
+          tool: "update_motion_page"
+        },
+        success: true,
+        message: `Updated page successfully.`,
+        page: updatedPage,
+      };
+    } catch (err: any) {
+      return { error: err?.message || "Failed to update page." };
+    }
+  },
+});
+
+

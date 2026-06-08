@@ -6,6 +6,8 @@ interface HeroSectionProps {
   onSubmit?: (message: PromptInputMessage) => void;
   modelSelection?: string;
   onModelSelectionChange?: (value: string) => void;
+  status?: "submitted" | "streaming" | "ready" | "error";
+  onStop?: () => void;
 }
 
 export function HeroSection({
@@ -13,6 +15,8 @@ export function HeroSection({
   onSubmit,
   modelSelection,
   onModelSelectionChange,
+  status,
+  onStop,
 }: HeroSectionProps) {
   return (
     <HeroPromptInput
@@ -20,6 +24,8 @@ export function HeroSection({
       onSubmit={onSubmit}
       modelSelection={modelSelection}
       onModelSelectionChange={onModelSelectionChange}
+      status={status}
+      onStop={onStop}
     />
   );
 }
