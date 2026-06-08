@@ -19,7 +19,6 @@ import {
   Calendar,
 } from "lucide-react";
 import api from "@/lib/api";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,26 +137,15 @@ export function HistorySidebar({
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    /*
-     * We wrap with a *second* SidebarProvider (controlled) so this sidebar
-     * is independent from the main left-nav SidebarProvider in Layout.tsx.
-     * `style` overrides the CSS width variable to match our w-80 design.
-     */
     <SidebarProvider
       open={open}
       onOpenChange={onOpenChange}
       style={{ "--sidebar-width": "20rem" } as React.CSSProperties}
-      /* Prevent this wrapper from adding flex/min-h that breaks the
-         Dashboard's own layout — the Dashboard already handles its flex. */
       className="contents"
     >
       <Sidebar
         side="right"
         collapsible="offcanvas"
-        /* Match the background of the Dashboard (bg-background) so there's
-           no card/shadow contrast. The Sidebar primitive uses bg-sidebar which
-           is aliased to var(--background) in index.css, so this is automatic.
-           We suppress the default border and any shadow. */
         className="border-l border-border/60 shadow-none bg-background z-10"
       >
         {/* ── Header ────────────────────────────────────────────────────── */}
@@ -188,7 +176,8 @@ export function HistorySidebar({
 
         {/* ── Thread list ───────────────────────────────────────────────── */}
         <SidebarContent className="overflow-hidden">
-          <ScrollArea className="h-full">
+          {/* Replaced ScrollArea with a plain div to fix horizontal overflow/shift bug */}
+          <div className="h-full w-full overflow-y-auto overflow-x-hidden">
             <div className="p-2 space-y-0.5">
               {filteredThreads.length === 0 ? (
                 <div className="text-center py-10 text-xs text-muted-foreground/70">
@@ -207,7 +196,7 @@ export function HistorySidebar({
                       key={t.id}
                       onClick={() => !isEditing && handleSelectThread(t.id)}
                       className={cn(
-                        "flex flex-col gap-0.5 px-3 py-2.5 rounded-xl cursor-pointer group border border-transparent transition-all",
+                        "flex flex-col gap-0.5 px-3 py-2.5 rounded-xl cursor-pointer group border border-transparent transition-all w-full min-w-0",
                         isActive
                           ? "bg-primary/5 border-primary/10 text-primary"
                           : "hover:bg-sidebar-accent text-sidebar-foreground"
@@ -215,7 +204,7 @@ export function HistorySidebar({
                     >
                       {isEditing ? (
                         <div
-                          className="flex items-center gap-1.5 py-0.5"
+                          className="flex items-center gap-1.5 py-0.5 w-full"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <input
@@ -227,7 +216,7 @@ export function HistorySidebar({
                               if (e.key === "Escape") setEditingThreadId(null);
                             }}
                             autoFocus
-                            className="flex-1 bg-background border border-border/80 rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/10"
+                            className="flex-1 bg-background border border-border/80 rounded px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/10 min-w-0"
                           />
                           <button
                             onClick={() => handleSaveRename(t.id)}
@@ -243,9 +232,9 @@ export function HistorySidebar({
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-2 w-full min-w-0">
                           <div className="flex-1 min-w-0">
-                            <span className="text-[13px] font-medium block truncate">
+                            <span className="text-[13px] font-medium block truncate w-full">
                               {t.title || "Untitled conversation"}
                             </span>
                             <span className="text-[10px] text-muted-foreground/80 flex items-center gap-1 mt-0.5">
@@ -280,7 +269,7 @@ export function HistorySidebar({
                 })
               )}
             </div>
-          </ScrollArea>
+          </div>
         </SidebarContent>
 
         {/* ── Footer ────────────────────────────────────────────────────── */}

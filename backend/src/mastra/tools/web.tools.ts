@@ -82,6 +82,12 @@ export const webSearchExaTool = createTool({
       }));
 
       return {
+        activity: {
+          agent: "keilhq-ai",
+          action: `Searching the web for "${query}"`,
+          details: `Found ${results?.length || 0} search results via Exa`,
+          tool: "web_search_exa"
+        },
         results: results || [],
       };
     } catch (err: any) {
@@ -91,3 +97,4 @@ export const webSearchExaTool = createTool({
     }
   },
 });
+

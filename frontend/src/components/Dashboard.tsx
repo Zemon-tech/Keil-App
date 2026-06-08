@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { HeroSection } from "./dashboard/HeroSection";
@@ -33,6 +33,11 @@ import {
   DislikeAction,
   CopyAction,
 } from "@/components/ai-elements/message";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import {
@@ -88,7 +93,10 @@ const getToolIcon = (toolName: string) => {
   return Sparkles;
 };
 
-const getToolLabel = (toolName: string, args: any) => {
+const getToolLabel = (toolName: string, args: any, result?: any) => {
+  if (result?.activity?.action) {
+    return result.activity.action;
+  }
   const safeArgs = args || {};
   switch (toolName) {
     case "keilhq-task-agent":
@@ -142,6 +150,9 @@ const getToolLabel = (toolName: string, args: any) => {
 };
 
 const getToolDescription = (toolName: string, _args: any, result: any) => {
+  if (result?.activity?.details) {
+    return result.activity.details;
+  }
   if (!result) return "";
 
   if (result.success === false || result.error) {
@@ -280,7 +291,6 @@ const formatToolResult = (toolName: string, result: any) => {
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── Dashboard Data ─────────────────────────────────────────
   const { activeOrgId, activeSpaceId } = useAppContext();
@@ -296,7 +306,22 @@ export function Dashboard() {
     return localStorage.getItem("ai_model_selection") || "gemini";
   });
 
-  const { messages, sendMessage, setMessages, status } = useChat({
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem("ai_model_selection");
+      if (saved) {
+        setModelSelection(saved);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("ai_model_selection_changed", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("ai_model_selection_changed", handleStorageChange);
+    };
+  }, []);
+
+  const { messages, sendMessage, setMessages, status, stop } = useChat({
     transport: new DefaultChatTransport({
       api: `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}/chat`,
       headers: async (): Promise<Record<string, string>> => {
@@ -613,15 +638,6 @@ export function Dashboard() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "end",
-      });
-    }
-  }, [messages, isAssistantThinking]);
-
   if (!mounted) return null;
 
   return (
@@ -704,8 +720,8 @@ export function Dashboard() {
           </div>
         ) : (
           <div className="flex size-full flex-col items-center">
-            <section className="w-full flex-1 overflow-y-auto pb-48 pt-10 lg:pt-14">
-              <div className="w-full max-w-[54rem] mx-auto flex flex-col gap-6 px-4 sm:px-6">
+            <Conversation className="w-full flex-1">
+              <ConversationContent className="w-full max-w-[54rem] mx-auto flex flex-col gap-6 px-4 sm:px-6 pt-10 lg:pt-14 pb-48">
                 {messages.map((message: any) => {
                   const isAssistant = message.role === "assistant";
                   const text =
@@ -716,7 +732,7 @@ export function Dashboard() {
                     message.content ||
                     "";
 
-                  // Extract reasoning parts
+                  // Extract reasoning parts — consolidate all reasoning parts into one block
                   const reasoningParts = message.parts
                     ?.filter((p: any) => p.type === "reasoning")
                     ?.map((p: any) => p.text)
@@ -728,11 +744,15 @@ export function Dashboard() {
                   const toolInvocations = (message as any).toolInvocations || [];
                   const hasToolInvocations = toolInvocations.length > 0;
 
-                  const isMessageStreaming = isLoading && messages[messages.length - 1]?.id === message.id;
+                  const isLastMessage = messages[messages.length - 1]?.id === message.id;
+                  const lastPart = message.parts?.at(-1);
+                  // Reasoning is streaming only when the last part on the last message is still a reasoning part
+                  const isReasoningStreaming =
+                    isLoading && isLastMessage && lastPart?.type === "reasoning";
 
                   // Show shimmer if assistant is active but we have no content at all yet
                   const showShimmer =
-                    isAssistant && isMessageStreaming && !hasReasoning && !hasToolInvocations && text.trim() === "";
+                    isAssistant && isLoading && isLastMessage && !hasReasoning && !hasToolInvocations && text.trim() === "";
 
                   return (
                     <Message
@@ -756,7 +776,7 @@ export function Dashboard() {
                           <div className="space-y-4">
                             {/* 1. Reasoning Component */}
                             {hasReasoning && (
-                              <Reasoning isStreaming={isMessageStreaming}>
+                              <Reasoning isStreaming={isReasoningStreaming}>
                                 <ReasoningTrigger />
                                 <ReasoningContent>{reasoningText}</ReasoningContent>
                               </Reasoning>
@@ -772,16 +792,41 @@ export function Dashboard() {
                                   {toolInvocations.map((inv: any) => {
                                     const status = inv.state === "result" ? "complete" : "active";
                                     const Icon = getToolIcon(inv.toolName);
-                                    const label = getToolLabel(inv.toolName, inv.args);
+                                    const label = getToolLabel(inv.toolName, inv.args, inv.result);
                                     const description = getToolDescription(inv.toolName, inv.args, inv.result);
+
+                                    // Resolve agent name
+                                    let agentName = inv.result?.activity?.agent;
+                                    if (!agentName) {
+                                      if (inv.toolName.includes("task") || inv.toolName.includes("org")) {
+                                        agentName = "Task Agent";
+                                      } else if (inv.toolName.includes("chat") || inv.toolName.includes("message") || inv.toolName.includes("channel")) {
+                                        agentName = "Chat Agent";
+                                      } else if (inv.toolName.includes("motion") || inv.toolName.includes("page") || inv.toolName.includes("note")) {
+                                        agentName = "Motion Agent";
+                                      } else if (inv.toolName.includes("schedule") || inv.toolName.includes("calendar")) {
+                                        agentName = "Scheduler Agent";
+                                      } else {
+                                        agentName = "AI Agent";
+                                      }
+                                    }
+                                    if (agentName === "keilhq-task-agent") agentName = "Task Agent";
+                                    if (agentName === "keilhq-chat-agent") agentName = "Chat Agent";
+                                    if (agentName === "keilhq-motion-agent") agentName = "Motion Agent";
+                                    if (agentName === "keilhq-scheduler-agent") agentName = "Scheduler Agent";
+                                    if (agentName === "keilhq-ai") agentName = "KeilHQ AI";
 
                                     return (
                                       <ChainOfThoughtStep
                                         key={inv.toolCallId}
                                         icon={Icon}
                                         label={
-                                          <span className="font-medium text-foreground text-[13px]">
-                                            {label}
+                                          <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[10px] text-muted-foreground/80 uppercase font-bold tracking-wider">
+                                              {agentName}
+                                            </span>
+                                            <span className="text-muted-foreground/40 text-[10px]">•</span>
+                                            <span>{label}</span>
                                           </span>
                                         }
                                         description={
@@ -844,10 +889,9 @@ export function Dashboard() {
                     </MessageContent>
                   </Message>
                 )}
-
-                <div ref={messagesEndRef} />
-              </div>
-            </section>
+              </ConversationContent>
+              <ConversationScrollButton />
+            </Conversation>
 
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-background via-background/95 to-transparent px-4 pb-3 pt-16 sm:px-6">
               <div className="pointer-events-auto w-full max-w-[54rem]">
@@ -856,6 +900,8 @@ export function Dashboard() {
                   onSubmit={handlePromptSubmit}
                   modelSelection={modelSelection}
                   onModelSelectionChange={setModelSelection}
+                  status={status}
+                  onStop={stop}
                 />
                 <p className="px-4 pb-1 text-center text-[11px] text-muted-foreground/70">
                   Keil AI can make mistakes. Check important details.

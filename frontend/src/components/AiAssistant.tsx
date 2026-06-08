@@ -9,6 +9,7 @@ import { useMe } from "@/hooks/api/useMe";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
     Send,
     X,
@@ -31,7 +32,7 @@ import {
 // ─── Types ─────────────────────────────────────────────────────────
 type AiMode = "hidden" | "floating" | "sidebar" | "fullscreen";
 
-type ModelSelection = "gemini" | "github" | "openrouter" | "local";
+type ModelSelection = "gemini" | "github" | "github-models" | "openrouter" | "local";
 
 interface ThreadItem {
     id: string;
@@ -93,6 +94,136 @@ async function getAuthToken(): Promise<string | null> {
     return session?.access_token ?? null;
 }
 
+// ─── Helpers for tool activity and rendering ───────────────────────
+function getToolActivity(
+    toolName: string,
+    state: "call" | "result",
+    result?: any,
+    args?: any
+): { action: string; details?: string; agent?: string } {
+    if (state === "result" && result?.activity) {
+        return result.activity;
+    }
+
+    let agent = "AI Agent";
+    if (toolName.includes("task") || toolName.includes("org")) {
+        agent = "Task Agent";
+    } else if (toolName.includes("chat") || toolName.includes("message") || toolName.includes("channel")) {
+        agent = "Chat Agent";
+    } else if (toolName.includes("motion") || toolName.includes("page") || toolName.includes("note")) {
+        agent = "Motion Agent";
+    } else if (toolName.includes("schedule") || toolName.includes("calendar")) {
+        agent = "Scheduler Agent";
+    }
+
+    let action = `Executing ${toolName}`;
+    let details = "";
+
+    switch (toolName) {
+        case "get_current_time":
+            action = "Reading system clock";
+            break;
+        case "web_search_exa":
+            action = args?.query ? `Searching the web for "${args.query}"` : "Searching the web";
+            break;
+        case "search_motion_pages":
+            action = args?.query ? `Searching notes for "${args.query}"` : "Searching notes";
+            break;
+        case "list_motion_pages":
+            action = "Listing notes and pages";
+            break;
+        case "get_motion_page":
+            action = args?.title ? `Reading note "${args.title}"` : "Reading note content";
+            break;
+        case "create_motion_page":
+            action = args?.title ? `Creating note "${args.title}"` : "Creating new note";
+            break;
+        case "update_motion_page":
+            action = "Updating note content";
+            break;
+        case "search_tasks":
+            action = args?.query ? `Searching tasks for "${args.query}"` : "Searching tasks";
+            break;
+        case "get_personal_tasks":
+            action = "Fetching personal tasks";
+            break;
+        case "create_personal_task":
+            action = args?.title ? `Creating personal task "${args.title}"` : "Creating personal task";
+            break;
+        case "update_personal_task":
+            action = "Updating personal task";
+            break;
+        case "delete_personal_task":
+            action = "Deleting personal task";
+            break;
+        case "auto_schedule_tasks":
+            action = "Auto-scheduling tasks into calendar";
+            break;
+        case "get_unscheduled_tasks":
+            action = "Listing unscheduled tasks";
+            break;
+        case "get_calendar_events":
+            action = "Fetching calendar events";
+            break;
+    }
+
+    if (state === "result") {
+        if (result?.count !== undefined) {
+            details = `Fetched ${result.count} item(s)`;
+        } else if (result?.success) {
+            details = "Action completed successfully";
+        }
+    }
+
+    return { agent, action, details };
+}
+
+const renderToolInvocations = (msg: any) => {
+    if (!msg.toolInvocations || msg.toolInvocations.length === 0) return null;
+    
+    return (
+        <div className="mt-2 space-y-1.5 border-t border-border/40 pt-2 shrink-0">
+            {msg.toolInvocations.map((tool: any) => {
+                const activity = getToolActivity(tool.toolName, tool.state, tool.result, tool.args);
+                
+                if (tool.state === "call") {
+                    return (
+                        <div key={tool.toolCallId} className="flex items-center gap-2 py-1 px-2 rounded-md bg-muted/30 border border-border/30">
+                            <span className="size-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                            <Shimmer className="text-[10px] font-medium text-foreground" duration={1.5}>
+                                {`${activity.agent}: ${activity.action}...`}
+                            </Shimmer>
+                        </div>
+                    );
+                }
+                
+                if (tool.state === "result") {
+                    return (
+                        <div key={tool.toolCallId} className="flex flex-col gap-0.5 py-1 px-2 rounded-md bg-muted/30 border border-border/30">
+                            <div className="flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">
+                                    {activity.agent}
+                                </span>
+                            </div>
+                            <span className="text-[10px] font-medium text-foreground/90 mt-0.5">
+                                {activity.action}
+                            </span>
+                            {activity.details && (
+                                <span className="text-[9px] text-muted-foreground ml-3">
+                                    {activity.details}
+                                </span>
+                            )}
+                        </div>
+                    );
+                }
+                
+                return null;
+            })}
+        </div>
+    );
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // ─── MAIN COMPONENT ────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
@@ -102,7 +233,24 @@ export function AiAssistant() {
     const [threadId, setThreadId] = useState<string>(crypto.randomUUID());
     const [threads, setThreads] = useState<ThreadItem[]>([]);
     const [showThreadList, setShowThreadList] = useState(false);
-    const [modelSelection, setModelSelection] = useState<ModelSelection>("gemini");
+    const [modelSelection, setModelSelection] = useState<ModelSelection>(() => {
+        return (localStorage.getItem("ai_model_selection") as ModelSelection) || "gemini";
+    });
+
+    useEffect(() => {
+        const handleStorageChange = () => {
+            const saved = localStorage.getItem("ai_model_selection");
+            if (saved) {
+                setModelSelection(saved as ModelSelection);
+            }
+        };
+        window.addEventListener("storage", handleStorageChange);
+        window.addEventListener("ai_model_selection_changed", handleStorageChange);
+        return () => {
+            window.removeEventListener("storage", handleStorageChange);
+            window.removeEventListener("ai_model_selection_changed", handleStorageChange);
+        };
+    }, []);
     const [fabHovered, setFabHovered] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -123,6 +271,10 @@ export function AiAssistant() {
                 messages: [msgs[msgs.length - 1]],
                 memory: { thread: threadId, resource: userId },
                 modelSelection,
+                ...(modelSelection === "local" && {
+                    localAiBaseUrl: localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1",
+                    localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
+                }),
                 ...(activeOrgId && { orgId: activeOrgId }),
                 ...(activeSpaceId && { spaceId: activeSpaceId }),
             },
@@ -227,9 +379,13 @@ export function AiAssistant() {
 
     const cycleModel = useCallback(() => {
         setModelSelection((prev) => {
-            const order: ModelSelection[] = ["gemini", "github", "openrouter", "local"];
-            const idx = order.indexOf(prev);
-            return order[(idx + 1) % order.length];
+            const order: ModelSelection[] = ["gemini", "github-models", "openrouter", "local"];
+            const current = (prev === "github" ? "github-models" : prev) as ModelSelection;
+            const idx = order.indexOf(current);
+            const next = order[(idx + 1) % order.length];
+            localStorage.setItem("ai_model_selection", next);
+            window.dispatchEvent(new Event("ai_model_selection_changed"));
+            return next;
         });
     }, []);
 
@@ -342,7 +498,7 @@ export function AiAssistant() {
                         className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md select-none capitalize hover:bg-muted/80 hover:text-foreground transition-colors cursor-pointer"
                         title="Click to switch model"
                     >
-                        {modelSelection}
+                        {modelSelection === "github" || modelSelection === "github-models" ? "GitHub" : modelSelection}
                     </button>
                     <button
                         onClick={handleSend}
@@ -404,6 +560,7 @@ export function AiAssistant() {
                                     }
                                     return null;
                                 })}
+                                {renderToolInvocations(msg)}
                             </div>
                         </div>
                     ))
@@ -472,6 +629,7 @@ export function AiAssistant() {
                                     }
                                     return null;
                                 })}
+                                {renderToolInvocations(msg)}
                             </div>
                         </div>
                     ))}
@@ -603,7 +761,7 @@ export function AiAssistant() {
                                         className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md select-none capitalize hover:bg-muted/80 hover:text-foreground transition-colors cursor-pointer"
                                         title="Click to switch model"
                                     >
-                                        {modelSelection}
+                                        {modelSelection === "github" || modelSelection === "github-models" ? "GitHub" : modelSelection}
                                     </button>
                                     <button
                                         onClick={handleSend}

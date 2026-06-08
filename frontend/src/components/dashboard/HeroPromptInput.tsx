@@ -2,7 +2,6 @@
 
 import { useState, type ChangeEvent, type ElementType } from "react";
 import {
-  ArrowUp,
   ArrowRight,
   FileText,
   GlobeIcon,
@@ -144,9 +143,11 @@ interface HeroPromptSurfaceProps {
   isChatStarted: boolean;
   model: string;
   onSuggestionClick: (suggestion: (typeof suggestions)[number]) => void;
+  onStop?: () => void;
   setModel: (value: string) => void;
   setUseWebSearch: (value: boolean | ((prev: boolean) => boolean)) => void;
   showCommandMenu: boolean;
+  status?: "submitted" | "streaming" | "ready" | "error";
   text: string;
   useWebSearch: boolean;
   valueChanged: (event: ChangeEvent<HTMLTextAreaElement>) => void;
@@ -156,9 +157,11 @@ function HeroPromptSurface({
   isChatStarted,
   model,
   onSuggestionClick,
+  onStop,
   setModel,
   setUseWebSearch,
   showCommandMenu,
+  status,
   text,
   useWebSearch,
   valueChanged,
@@ -166,6 +169,7 @@ function HeroPromptSurface({
   const attachments = usePromptInputAttachments();
   const hasAttachments = attachments.files.length > 0;
   const canSubmit = Boolean(text.trim()) || hasAttachments || useWebSearch;
+  const isActive = status === "submitted" || status === "streaming";
 
   return (
     <>
@@ -274,7 +278,7 @@ function HeroPromptSurface({
             <PromptInputSelectContent>
               {[
                 { id: "gemini", name: "Gemini 3.5 Flash (Default)" },
-                { id: "github", name: "GitHub Models" },
+                { id: "github-models", name: "GitHub Models" },
                 { id: "openrouter", name: "OpenRouter AI" },
                 {
                   id: "local",
@@ -301,13 +305,20 @@ function HeroPromptSurface({
             <Mic className="size-4" />
           </PromptInputButton>
 
-          {canSubmit ? (
+          {isActive ? (
             <PromptInputSubmit
               className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
+              status={status}
+              onClick={onStop}
+              type="button"
               variant="ghost"
-            >
-              <ArrowUp className="size-4" />
-            </PromptInputSubmit>
+            />
+          ) : canSubmit ? (
+            <PromptInputSubmit
+              className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
+              status={status}
+              variant="ghost"
+            />
           ) : (
             <PromptInputButton
               className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
@@ -328,6 +339,8 @@ interface HeroPromptInputProps {
   onSubmit?: (message: PromptInputMessage) => void;
   modelSelection?: string;
   onModelSelectionChange?: (value: string) => void;
+  status?: "submitted" | "streaming" | "ready" | "error";
+  onStop?: () => void;
 }
 
 export function HeroPromptInput({
@@ -335,6 +348,8 @@ export function HeroPromptInput({
   onSubmit,
   modelSelection,
   onModelSelectionChange,
+  status,
+  onStop,
 }: HeroPromptInputProps) {
   const { user } = useAuth();
   const [text, setText] = useState("");
@@ -352,6 +367,7 @@ export function HeroPromptInput({
       setInternalModel(value);
     }
     localStorage.setItem("ai_model_selection", value);
+    window.dispatchEvent(new Event("ai_model_selection_changed"));
   };
   const [useWebSearch, setUseWebSearch] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
@@ -424,9 +440,11 @@ export function HeroPromptInput({
             isChatStarted={isChatStarted}
             model={model}
             onSuggestionClick={handleSuggestionClick}
+            onStop={onStop}
             setModel={setModel}
             setUseWebSearch={setUseWebSearch}
             showCommandMenu={showCommandMenu}
+            status={status}
             text={text}
             useWebSearch={useWebSearch}
             valueChanged={handleTextChange}
