@@ -1,5 +1,5 @@
 import { FileText, Box, Github, Link2, Circle, CircleDashed, CheckCircle2, XCircle, type LucideProps } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, subDays, startOfDay } from "date-fns";
 import type { TaskPriority, TaskStatus, EventStatus, AnyStatus } from "@/types/task";
 import { cn } from "@/lib/utils";
 
