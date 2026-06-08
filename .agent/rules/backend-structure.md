@@ -1,5 +1,5 @@
 ---
-trigger: model_decision
+trigger: manual
 description: when working with backend folder and making changes in it
 ---
 
