@@ -1,18 +1,15 @@
 import type { EventContentArg } from "@fullcalendar/core";
 import {
   Bell,
-  Calendar,
-  CalendarCheck,
   CalendarClock,
-  CheckSquare,
   Flag,
   Focus,
-  Square,
   Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getThemeForTask } from "@/lib/calendarTheme";
 import type { CalendarBlockType } from "@/types/task";
+import { StatusIcon } from "./task-detail-shared";
 
 export const typeMeta: Record<
   CalendarBlockType,
@@ -84,18 +81,13 @@ export function renderEventContent(arg: EventContentArg) {
           className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5"
           style={{ color: arg.textColor || "inherit" }}
         >
-          {isScheduledTask &&
-            (taskType === "event" ? (
-              isDone ? (
-                <CalendarCheck className="size-3 shrink-0 opacity-70" />
-              ) : (
-                <Calendar className="size-3 shrink-0 opacity-70" />
-              )
-            ) : isDone ? (
-              <CheckSquare className="size-3 shrink-0 opacity-70" />
-            ) : (
-              <Square className="size-3 shrink-0 opacity-70" />
-            ))}
+          {isScheduledTask && (
+            <StatusIcon
+              status={arg.event.extendedProps.taskStatus}
+              type={taskType === "event" ? "event" : "task"}
+              className="size-3 shrink-0 opacity-70"
+            />
+          )}
           <span
             className={cn(
               "truncate",
@@ -122,17 +114,11 @@ export function renderEventContent(arg: EventContentArg) {
           className="size-full p-2 overflow-hidden flex items-center gap-1.5"
           style={{ color: arg.textColor || "inherit" }}
         >
-          {taskType === "event" ? (
-            isDone ? (
-              <CalendarCheck className="size-3.5 shrink-0 opacity-70" />
-            ) : (
-              <Calendar className="size-3.5 shrink-0 opacity-70" />
-            )
-          ) : isDone ? (
-            <CheckSquare className="size-3.5 shrink-0 opacity-70" />
-          ) : (
-            <Square className="size-3.5 shrink-0 opacity-70" />
-          )}
+          <StatusIcon
+            status={arg.event.extendedProps.taskStatus}
+            type={taskType === "event" ? "event" : "task"}
+            className="size-3.5 shrink-0 opacity-70"
+          />
           <div
             className={cn(
               "text-[11px] font-bold leading-tight truncate flex-1",

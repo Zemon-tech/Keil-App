@@ -79,4 +79,8 @@ router.get('/:pageId/viewers', requireSpaceRole("admin", "manager", "member"), g
 router.get('/:pageId/updates', requireSpaceRole("admin", "manager", "member"), getUpdates);
 router.get('/:pageId/editors', requireSpaceRole("admin", "manager", "member"), getEditors);
 
+// ── Motion AI ─────────────────────────────────────────────────────────────────
+import { handleMotionAi } from '../controllers/motion-ai.controller';
+router.post('/:pageId/ai', requireSpaceRole("admin", "manager", "member"), handleMotionAi);
+
 export default router;

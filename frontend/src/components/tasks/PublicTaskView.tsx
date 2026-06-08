@@ -4,8 +4,6 @@ import { format, subDays, startOfDay } from "date-fns";
 import {
   AlertCircle,
   Calendar,
-  CheckCircle2,
-  Circle,
   Clock,
   ExternalLink,
   FileText,
@@ -22,6 +20,8 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 
 import type { PublicTaskDTO } from "@/hooks/api/usePublicTask";
+import type { AnyStatus } from "@/types/task";
+import { StatusIcon } from "./task-detail-shared";
 
 // ─── Shared styling maps (mirrors task-detail-shared.tsx values) ──────────────
 
@@ -47,19 +47,6 @@ const STATUS_DOT: Record<string, string> = {
   tentative: "bg-yellow-500",
   cancelled: "bg-red-500",
   completed: "bg-emerald-500",
-};
-
-// Static text-color map for subtask status icons
-const STATUS_TEXT_COLOR: Record<string, string> = {
-  done: "text-emerald-500",
-  "in-progress": "text-blue-500",
-  "in-review": "text-violet-500",
-  backlog: "text-red-500",
-  todo: "text-violet-500",
-  confirmed: "text-blue-500",
-  tentative: "text-yellow-500",
-  cancelled: "text-red-500",
-  completed: "text-emerald-500",
 };
 
 const PRIORITY_CONFIG: Record<string, { color: string; dot: string; label: string }> = {
@@ -357,11 +344,11 @@ export function PublicTaskView({ isLoading, isNotFound, task }: PublicTaskViewPr
                         key={sub.id}
                         className="flex items-center gap-2.5 rounded-md px-2.5 py-2"
                       >
-                        {isDone ? (
-                          <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
-                        ) : (
-                          <Circle className={`size-4 shrink-0 ${STATUS_TEXT_COLOR[sub.status] ?? "text-zinc-500"}`} />
-                        )}
+                        <StatusIcon
+                          status={sub.status as AnyStatus}
+                          type="task"
+                          className="size-4 shrink-0"
+                        />
                         <span
                           className={`flex-1 text-sm font-medium truncate ${
                             isDone ? "line-through text-muted-foreground" : ""
