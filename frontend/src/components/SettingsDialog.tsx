@@ -462,53 +462,55 @@ function OrgMembersTab() {
 
               {/* Middle Section: Workspace Column */}
               <div className="w-[120px] shrink-0 flex justify-start">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="h-5 px-1.5 text-[9px] text-muted-foreground border-border/40 hover:bg-muted/80 hover:text-foreground transition-colors font-normal flex items-center gap-1 rounded animate-in fade-in duration-200"
-                    >
-                      <Layers className="size-2.5" />
-                      <span>Workspaces</span>
-                      <span className="font-semibold text-foreground/80">{member.workspaces?.length || 0}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent 
-                    className="w-56 p-1 rounded-xl shadow-lg border border-border/80 bg-popover" 
-                    align="start"
-                    onWheel={(e) => e.stopPropagation()}
-                  >
-                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border/40 mb-1">
-                      Workspaces ({member.workspaces?.length || 0})
-                    </div>
-                    <div 
-                      className="space-y-0.5 max-h-48 overflow-y-auto"
+                {isAdmin && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="h-5 px-1.5 text-[9px] text-muted-foreground border-border/40 hover:bg-muted/80 hover:text-foreground transition-colors font-normal flex items-center gap-1 rounded animate-in fade-in duration-200"
+                      >
+                        <Layers className="size-2.5" />
+                        <span>Workspaces</span>
+                        <span className="font-semibold text-foreground/80">{member.workspaces?.length || 0}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      className="w-56 p-1 rounded-xl shadow-lg border border-border/80 bg-popover" 
+                      align="start"
                       onWheel={(e) => e.stopPropagation()}
                     >
-                      {member.workspaces && member.workspaces.length > 0 ? (
-                        member.workspaces.map((ws) => (
-                          <div key={ws.id} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/50 transition-colors">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="size-6 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
-                                {ws.name.charAt(0).toUpperCase()}
+                      <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border/40 mb-1">
+                        Workspaces ({member.workspaces?.length || 0})
+                      </div>
+                      <div 
+                        className="space-y-0.5 max-h-48 overflow-y-auto"
+                        onWheel={(e) => e.stopPropagation()}
+                      >
+                        {member.workspaces && member.workspaces.length > 0 ? (
+                          member.workspaces.map((ws) => (
+                            <div key={ws.id} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-muted/50 transition-colors">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="size-6 rounded-md bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
+                                  {ws.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="text-xs font-medium truncate text-foreground">{ws.name}</span>
                               </div>
-                              <span className="text-xs font-medium truncate text-foreground">{ws.name}</span>
+                              {ws.role && (
+                                <Badge variant="secondary" className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-md">
+                                  {ws.role}
+                                </Badge>
+                              )}
                             </div>
-                            {ws.role && (
-                              <Badge variant="secondary" className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-md">
-                                {ws.role}
-                              </Badge>
-                            )}
+                          ))
+                        ) : (
+                          <div className="p-2 text-center text-xs text-muted-foreground">
+                            No workspaces
                           </div>
-                        ))
-                      ) : (
-                        <div className="p-2 text-center text-xs text-muted-foreground">
-                          No workspaces
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
 
               {/* Right Section: Chat + Role + Actions */}

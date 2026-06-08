@@ -146,9 +146,16 @@ export const joinOrganisation = async (
 /**
  * Returns all members of an organisation.
  */
-export const getOrgMembers = async (orgId: string): Promise<OrgMemberDTO[]> => {
+export const getOrgMembers = async (orgId: string, showWorkspaces: boolean = true): Promise<OrgMemberDTO[]> => {
   const members = await organisationRepository.findMembers(orgId);
   if (members.length === 0) return [];
+
+  if (!showWorkspaces) {
+    return members.map((m) => ({
+      ...m,
+      workspaces: undefined,
+    }));
+  }
 
   const userIds = members.map((m) => m.user_id);
   const memberships = await organisationRepository.findSpaceMembershipsByOrgAndUsers(orgId, userIds);

@@ -59,7 +59,9 @@ export const joinOrg = catchAsync(async (req: Request, res: Response) => {
 
 export const getOrgMembers = catchAsync(async (req: Request, res: Response) => {
   const orgId = asString(req.params.orgId);
-  const members = await organisationService.getOrgMembers(orgId);
+  const requesterRole = (req as any).org?.membership_role;
+  const showWorkspaces = requesterRole === "owner" || requesterRole === "admin";
+  const members = await organisationService.getOrgMembers(orgId, showWorkspaces);
 
   res
     .status(200)
