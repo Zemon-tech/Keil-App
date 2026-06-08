@@ -1,5 +1,5 @@
 ---
-trigger: model_decision
+trigger: manual
 description: when working on API routes, backend services, or modifying the database schema.
 ---
 

@@ -17,7 +17,6 @@ import { useMeetingStore } from "@/store/useMeetingStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
-import { StitchUpdateDialog } from "./StitchUpdateDialog";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useCachedPageById } from "@/hooks/api/useMotionPages";
 import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
@@ -169,75 +168,67 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <div className="flex-1 h-full min-w-0 flex flex-col relative transition-all duration-300 ease-in-out">
         <SidebarProvider>
-      {sidebar || (
-        <AppSidebar
-          notificationDrawerOpen={notificationDrawerOpen}
-          notificationDialogOpen={notificationDialogOpen}
-          onNotificationDrawerOpenChange={setNotificationDrawerOpen}
-        />
-      )}
-      <SidebarInset className="bg-background">
-        {/* Global Search / Command Palette */}
-        <GlobalSearchDialog
-          open={isCommandOpen}
-          onOpenChange={setIsCommandOpen}
-        />
-        <main
-          className={cn(
-            "flex-1 transition-all duration-300",
-            (isChatOpen || notificationDrawerOpen) && "pr-[400px]",
-            className
+          {sidebar || (
+            <AppSidebar
+              notificationDrawerOpen={notificationDrawerOpen}
+              notificationDialogOpen={notificationDialogOpen}
+              onNotificationDrawerOpenChange={setNotificationDrawerOpen}
+            />
           )}
-        >
-          {children || <Outlet />}
-        </main>
-      </SidebarInset>
+          <SidebarInset className="bg-background">
+            {/* Global Search / Command Palette */}
+            <GlobalSearchDialog
+              open={isCommandOpen}
+              onOpenChange={setIsCommandOpen}
+            />
+            <main
+              className={cn(
+                "flex-1 transition-all duration-300",
+                (isChatOpen || notificationDrawerOpen) && "pr-[400px]",
+                className
+              )}
+            >
+              {children || <Outlet />}
+            </main>
+          </SidebarInset>
 
-      {/* AI Assistant - Available on all pages except dashboard and motion */}
-      {location.pathname !== "/" &&
-      location.pathname !== "/dashboard" &&
-      location.pathname !== "/motion" ? (
-        <AiAssistant />
-      ) : null}
+          {/* AI Assistant - Available on all pages except dashboard and motion */}
+          {location.pathname !== "/" &&
+            location.pathname !== "/dashboard" &&
+            location.pathname !== "/motion" ? (
+            <AiAssistant />
+          ) : null}
 
-      {/* Global Chat Drawer */}
-      <ChatDrawer />
+          {/* Global Chat Drawer */}
+          <ChatDrawer />
 
-      {/* Global Notification Drawer */}
-      <NotificationDrawer
-        open={notificationDrawerOpen}
-        onOpenChange={setNotificationDrawerOpen}
-        onOpenFullView={() => {
-          setNotificationDrawerOpen(false);
-          setNotificationDialogOpen(true);
-        }}
-      />
+          {/* Global Notification Drawer */}
+          <NotificationDrawer
+            open={notificationDrawerOpen}
+            onOpenChange={setNotificationDrawerOpen}
+            onOpenFullView={() => {
+              setNotificationDrawerOpen(false);
+              setNotificationDialogOpen(true);
+            }}
+          />
 
-      {/* Global Chat Dialog */}
-      <ChatDialog
-        open={isChatDialogOpen}
-        onOpenChange={(open) => !open && closeChatDialog()}
-      />
+          {/* Global Chat Dialog */}
+          <ChatDialog
+            open={isChatDialogOpen}
+            onOpenChange={(open) => !open && closeChatDialog()}
+          />
 
-      <NotificationDialog
-        open={notificationDialogOpen}
-        onOpenChange={setNotificationDialogOpen}
-      />
+          <NotificationDialog
+            open={notificationDialogOpen}
+            onOpenChange={setNotificationDialogOpen}
+          />
 
-      {/* Global Meeting Studio */}
-      <MeetingDialog />
+          {/* Global Meeting Studio */}
+          <MeetingDialog />
 
-      {/* Global Socket Manager for Chat */}
-      <ChatSocketManager />
-      <Toaster />
-      {/* Stitch AI feature announcement — shows once per session */}
-      <StitchUpdateDialog />
-
-      {/* Global Quick Create Task Dialog (Ctrl+Shift+W) */}
-      <CreateTaskDialog
-        open={createTaskOpen}
-        onOpenChange={setCreateTaskOpen}
-      />
+          {/* Global Socket Manager for Chat */}
+          <ChatSocketManager />
+          <Toaster />
         </SidebarProvider>
       </div>
 
