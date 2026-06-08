@@ -18,6 +18,12 @@ export const getCurrentTimeTool = createTool({
     ];
     
     return {
+      activity: {
+        agent: "keilhq-ai",
+        action: "Reading system clock",
+        details: `Current date is ${now.toISOString().split("T")[0]}, ${days[now.getDay()]}`,
+        tool: "get_current_time"
+      },
       isoString: now.toISOString(),
       localTime: now.toString(),
       dateOnly: now.toISOString().split("T")[0],
@@ -27,3 +33,4 @@ export const getCurrentTimeTool = createTool({
     };
   },
 });
+

@@ -37,7 +37,16 @@ export const getUserChannelsTool = createTool({
       orgId,
       spaceId
     );
-    return { channels, count: channels.length };
+    return {
+      activity: {
+        agent: "keilhq-chat-agent",
+        action: "Listing your channels",
+        details: `Found ${channels.length} channel(s) in this space`,
+        tool: "get_user_channels"
+      },
+      channels,
+      count: channels.length
+    };
   },
 });
 
@@ -70,7 +79,16 @@ export const getChannelMessagesTool = createTool({
       inputData.channelId,
       inputData.limit
     );
-    return { messages, count: messages.length };
+    return {
+      activity: {
+        agent: "keilhq-chat-agent",
+        action: `Reading channel messages`,
+        details: `Fetched ${messages.length} recent messages`,
+        tool: "get_channel_messages"
+      },
+      messages,
+      count: messages.length
+    };
   },
 });
 
@@ -101,6 +119,12 @@ export const checkUnreadMessagesTool = createTool({
     );
 
     return {
+      activity: {
+        agent: "keilhq-chat-agent",
+        action: "Checking for unread messages",
+        details: `Found ${totalUnread} unread messages in ${unreadChannels.length} channel(s)`,
+        tool: "check_unread_messages"
+      },
       hasUnread: unreadChannels.length > 0,
       totalUnreadCount: totalUnread,
       unreadChannels: unreadChannels.map((c: any) => ({
@@ -113,3 +137,4 @@ export const checkUnreadMessagesTool = createTool({
     };
   },
 });
+

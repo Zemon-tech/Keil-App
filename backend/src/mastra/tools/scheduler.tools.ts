@@ -60,7 +60,16 @@ export const getUnscheduledTasksTool = createTool({
       [userId, personal.orgId, personal.spaceId, inputData.limit ?? 20]
     );
 
-    return { tasks: result.rows, count: result.rows.length };
+    return {
+      activity: {
+        agent: "keilhq-scheduler-agent",
+        action: "Listing unscheduled tasks",
+        details: `Found ${result.rows.length} unscheduled task(s) in the backlog`,
+        tool: "get_unscheduled_tasks"
+      },
+      tasks: result.rows,
+      count: result.rows.length
+    };
   },
 });
 
@@ -286,12 +295,19 @@ export const autoScheduleTasksTool = createTool({
     }
 
     const unscheduledTasks = tasksToSchedule.slice(currentTaskIndex);
+    const scheduledCount = results.filter(r => !r.error).length;
 
     return {
-      scheduledCount: results.filter(r => !r.error).length,
+      activity: {
+        agent: "keilhq-scheduler-agent",
+        action: "Auto-scheduling tasks",
+        details: `Successfully scheduled ${scheduledCount} task(s). ${unscheduledTasks.length} task(s) remain in backlog.`,
+        tool: "auto_schedule_tasks"
+      },
+      scheduledCount,
       scheduledTasks: results,
       unscheduledTasks: unscheduledTasks.map(t => ({ id: t.id, title: t.title, priority: t.priority })),
-      message: `Successfully scheduled ${results.filter(r => !r.error).length} tasks. ${unscheduledTasks.length} tasks remain unscheduled due to full calendar space.`,
+      message: `Successfully scheduled ${scheduledCount} tasks. ${unscheduledTasks.length} tasks remain unscheduled due to full calendar space.`,
     };
   },
 });

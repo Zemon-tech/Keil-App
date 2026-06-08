@@ -112,11 +112,16 @@ export const searchTasksTool = createTool({
       space_id: t.space_id,
     }));
 
-    if (summaryTasks.length === 0) {
-      return { tasks: [], count: 0, message: `No tasks found matching "${inputData.query}".` };
-    }
-
-    return { tasks: summaryTasks, count: summaryTasks.length };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Searching tasks for "${inputData.query}"`,
+        details: `Found ${summaryTasks.length} matching task(s)`,
+        tool: "search_tasks"
+      },
+      tasks: summaryTasks,
+      count: summaryTasks.length
+    };
   },
 });
 
@@ -157,7 +162,16 @@ export const getPersonalTasksTool = createTool({
       space_id: t.space_id,
     }));
 
-    return { tasks: summaryTasks, count: summaryTasks.length };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: "Listing personal tasks",
+        details: `Fetched ${summaryTasks.length} task(s) from personal backlog/todo`,
+        tool: "get_personal_tasks"
+      },
+      tasks: summaryTasks,
+      count: summaryTasks.length
+    };
   },
 });
 
@@ -183,7 +197,15 @@ export const getPersonalTaskTool = createTool({
       return { error: "Task not found or you do not own it." };
     }
 
-    return { task };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Reading personal task "${task.title}"`,
+        details: `Fetched full details for personal task`,
+        tool: "get_personal_task"
+      },
+      task
+    };
   },
 });
 
@@ -233,7 +255,16 @@ export const createPersonalTaskTool = createTool({
       }
     );
 
-    return { task, message: `Personal task/event "${task.title}" created.` };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Creating personal task/event "${inputData.title}"`,
+        details: `Task ID: ${task.id}. Status: ${task.status}`,
+        tool: "create_personal_task"
+      },
+      task,
+      message: `Personal task/event "${task.title}" created.`
+    };
   },
 });
 
@@ -294,7 +325,17 @@ export const updatePersonalTaskTool = createTool({
     );
 
     if (!updated) return { error: "Task not found." };
-    return { task: updated, message: `Task/event "${updated.title}" updated.` };
+    const changedFields = Object.keys(rest).filter(k => (rest as any)[k] !== undefined);
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Updating personal task "${updated.title}"`,
+        details: `Updated fields: ${changedFields.join(", ")}`,
+        tool: "update_personal_task"
+      },
+      task: updated,
+      message: `Task/event "${updated.title}" updated.`
+    };
   },
 });
 
@@ -320,7 +361,15 @@ export const deletePersonalTaskTool = createTool({
     }
 
     await orgTaskService.deleteTask({ orgId: personal.orgId, spaceId: personal.spaceId }, inputData.taskId, userId);
-    return { message: "Personal task deleted successfully." };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Deleting personal task "${existing.title}"`,
+        details: `Successfully deleted task ID: ${inputData.taskId}`,
+        tool: "delete_personal_task"
+      },
+      message: "Personal task deleted successfully."
+    };
   },
 });
 
@@ -343,7 +392,16 @@ export const getMyOrganisationsTool = createTool({
       [userId]
     );
 
-    return { organisations: result.rows, count: result.rows.length };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: "Listing your organisations",
+        details: `Found ${result.rows.length} organisation(s)`,
+        tool: "get_my_organisations"
+      },
+      organisations: result.rows,
+      count: result.rows.length
+    };
   },
 });
 
@@ -368,7 +426,16 @@ export const getMySpacesTool = createTool({
       [userId, inputData.orgId]
     );
 
-    return { spaces: result.rows, count: result.rows.length };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: "Listing spaces in organisation",
+        details: `Found ${result.rows.length} space(s)`,
+        tool: "get_my_spaces"
+      },
+      spaces: result.rows,
+      count: result.rows.length
+    };
   },
 });
 
@@ -428,7 +495,16 @@ export const getMyAssignedTasksTool = createTool({
       space_id: t.space_id,
     }));
 
-    return { tasks: summaryTasks, count: summaryTasks.length };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: "Listing your assigned tasks",
+        details: `Fetched ${summaryTasks.length} task(s) assigned to you across organisations`,
+        tool: "get_my_assigned_tasks"
+      },
+      tasks: summaryTasks,
+      count: summaryTasks.length
+    };
   },
 });
 
@@ -474,7 +550,16 @@ export const getOrgTasksTool = createTool({
       space_id: t.space_id,
     }));
 
-    return { tasks: summaryTasks, count: summaryTasks.length };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: "Listing organisation tasks",
+        details: `Fetched ${summaryTasks.length} task(s) in this space`,
+        tool: "get_org_tasks"
+      },
+      tasks: summaryTasks,
+      count: summaryTasks.length
+    };
   },
 });
 
@@ -499,7 +584,15 @@ export const getOrgTaskTool = createTool({
     const task = await orgTaskService.getTaskById(inputData.taskId);
     if (!task) return { error: "Task not found." };
 
-    return { task };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Reading task "${task.title}"`,
+        details: `Fetched full details including assignees and dependencies`,
+        tool: "get_org_task"
+      },
+      task
+    };
   },
 });
 
@@ -558,7 +651,16 @@ export const createOrgTaskTool = createTool({
       }
     );
 
-    return { task, message: `Org task/event "${task.title}" created.` };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Creating organisation task/event "${inputData.title}"`,
+        details: `Task ID: ${task.id}. Priority: ${task.priority}`,
+        tool: "create_org_task"
+      },
+      task,
+      message: `Org task/event "${task.title}" created.`
+    };
   },
 });
 
@@ -621,7 +723,17 @@ export const updateOrgTaskTool = createTool({
     );
 
     if (!updated) return { error: "Task not found." };
-    return { task: updated, message: `Task/event "${updated.title}" updated.` };
+    const changedFields = Object.keys(rest).filter(k => (rest as any)[k] !== undefined);
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Updating organisation task "${updated.title}"`,
+        details: `Updated fields: ${changedFields.join(", ")}`,
+        tool: "update_org_task"
+      },
+      task: updated,
+      message: `Task/event "${updated.title}" updated.`
+    };
   },
 });
 
@@ -643,13 +755,24 @@ export const deleteOrgTaskTool = createTool({
     const role = await getSpaceRole(userId, orgId, spaceId);
     if (!role) return { error: "You are not a member of this space." };
 
+    const existing = await orgTaskService.getTaskById(inputData.taskId);
+    if (!existing) return { error: "Task not found." };
+
     if (role === "member") {
       const assigned = await isAssignedToTask(inputData.taskId, userId);
       if (!assigned) return { error: "You can only delete tasks assigned to you." };
     }
 
     await orgTaskService.deleteTask({ orgId, spaceId }, inputData.taskId, userId);
-    return { message: "Org task deleted successfully." };
+    return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: `Deleting organisation task "${existing.title}"`,
+        details: `Successfully deleted task ID: ${inputData.taskId}`,
+        tool: "delete_org_task"
+      },
+      message: "Org task deleted successfully."
+    };
   },
 });
 
@@ -695,6 +818,12 @@ export const getCalendarEventsTool = createTool({
     );
 
     return {
+      activity: {
+        agent: "keilhq-task-agent",
+        action: "Reading calendar events",
+        details: `Found ${result.rows.length} scheduled event(s) in range`,
+        tool: "get_calendar_events"
+      },
       events: result.rows,
       count: result.rows.length,
       range: { start: inputData.startDate, end: inputData.endDate }
