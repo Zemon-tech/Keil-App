@@ -1,33 +1,44 @@
 import { Menu, Clock, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { MotionSidebar } from "./MotionSidebar";
+import { MotionSidebar, PageIcon } from "./MotionSidebar";
 import { useMotionStore } from "@/store/useMotionStore";
 import { useAppContext } from "@/contexts/AppContext";
 import { useNavigate } from "react-router-dom";
 import { useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { useMotionPages, useCreateMotionPage } from "@/hooks/api/useMotionPages";
+import { useMotionPages, useCreateMotionPage, useSharedToSpace, type MotionPageDTO } from "@/hooks/api/useMotionPages";
 
 export function MotionHome() {
   const navigate = useNavigate();
   const { activeOrgId, activeSpaceId } = useAppContext();
   const { sidebarOpen, setSidebarOpen } = useMotionStore();
 
-  const { data: pages = [], isLoading } = useMotionPages(activeOrgId, activeSpaceId);
+  const { data: pages = [], isLoading: isPagesLoading } = useMotionPages(activeOrgId, activeSpaceId);
+  const { data: sharedPages = [], isLoading: isSharedLoading } = useSharedToSpace(activeOrgId, activeSpaceId);
   const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
 
-  const recentPages = useMemo(
-    () =>
-      [...pages]
-        .filter((p) => !p.deleted_at)
-        .sort(
-          (a, b) =>
-            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        )
-        .slice(0, 6),
-    [pages]
-  );
+  const recentlyOpenedPages = useMotionStore((s) => s.recentlyOpenedPages);
+  const key = `${activeOrgId}:${activeSpaceId}`;
+  const openedIds = recentlyOpenedPages[key] || [];
+
+  const recentPages = useMemo(() => {
+    const allPages = [...pages, ...sharedPages].filter((p) => !p.deleted_at);
+    if (openedIds.length > 0) {
+      return openedIds
+        .map((id) => allPages.find((p) => p.id === id))
+        .filter((p): p is MotionPageDTO => !!p)
+        .slice(0, 6);
+    }
+    return allPages
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      )
+      .slice(0, 6);
+  }, [pages, sharedPages, openedIds]);
+
+  const isLoading = isPagesLoading || isSharedLoading;
 
   const handleCreatePage = async () => {
     const newPage = await createPage.mutateAsync({});
@@ -136,9 +147,10 @@ export function MotionHome() {
                         <div className="px-2.5 pt-1 pb-2">
                           {/* Icon overlapping cover */}
                           <div className="text-xl -mt-4 mb-1 size-7 flex items-center justify-center leading-none">
-                            <span className="group-hover:scale-110 transition-transform duration-200 drop-shadow-sm">
-                              {item.icon || "📄"}
-                            </span>
+                            <PageIcon
+                              icon={item.icon}
+                              className="size-5 text-xl text-foreground/80 group-hover:scale-110 transition-transform duration-200 drop-shadow-sm"
+                            />
                           </div>
                           <h3 className="text-xs font-semibold truncate leading-tight text-foreground/90">
                             {item.title}

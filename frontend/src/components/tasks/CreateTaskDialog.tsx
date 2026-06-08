@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { format, addDays, nextMonday, startOfToday, parseISO } from "date-fns";
+import { format, addDays, subDays, nextMonday, startOfToday, startOfDay, parseISO } from "date-fns";
 import {
   CalendarIcon,
   Flag,
@@ -271,8 +271,14 @@ export function CreateTaskDialog({
 
       const start = (initialValues as any).start_date;
       const end = (initialValues as any).due_date;
+      const loadedIsAllDay = initialValues.is_all_day ?? true;
       if (start) setDate(parseISO(start));
-      if (end) setEndDate(parseISO(end));
+      if (end) {
+        const parsedEnd = parseISO(end);
+        // All-day due_date is stored as exclusive end (next day midnight) for FullCalendar.
+        // Subtract 1 day to show the correct inclusive end date in the picker.
+        setEndDate(loadedIsAllDay ? subDays(startOfDay(parsedEnd), 1) : parsedEnd);
+      }
 
       // Auto-expand if content exists
       if (initialValues.description) setShowDetails(true);
@@ -342,6 +348,18 @@ export function CreateTaskDialog({
       }
     }
 
+    // For all-day tasks/events with a date range, store due_date as exclusive end
+    // (i.e. start of the day AFTER the last selected day). FullCalendar requires
+    // exclusive end dates for all-day events to render correctly across all days.
+    const computedDueDate = (() => {
+      if (isAllDay && endDate) {
+        // endDate is the inclusive last day the user picked (e.g. Jun 10).
+        // Add 1 day so FullCalendar's exclusive end covers Jun 10 fully.
+        return startOfDay(addDays(endDate, 1)).toISOString();
+      }
+      return endDate?.toISOString() || (type === 'task' ? date?.toISOString() : undefined);
+    })();
+
     const input: CreateTaskInput = {
       title: title.trim(),
       type,
@@ -350,8 +368,8 @@ export function CreateTaskDialog({
       objective: objective.trim() || undefined,
       success_criteria: successCriteria.trim() || undefined,
       location: location.trim() || undefined,
-      start_date: date?.toISOString(),
-      due_date: endDate?.toISOString() || (type === 'task' ? date?.toISOString() : undefined),
+      start_date: isAllDay && date ? startOfDay(date).toISOString() : date?.toISOString(),
+      due_date: computedDueDate,
       assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
       status: (type === 'task' ? 'todo' : 'confirmed') as any,
       parent_task_id: parentTaskId,

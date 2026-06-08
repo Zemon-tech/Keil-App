@@ -33,7 +33,7 @@ import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 
-import { formatDate } from "./task-detail-shared";
+import { formatDate, formatDueDate } from "./task-detail-shared";
 import { BulletListEditor } from "./BulletListEditor";
 import { TaskContextSection } from "./TaskContextSection";
 
@@ -457,7 +457,7 @@ export const OverviewTab = ({
                 {(task.due_date || task.dueDateISO) && (
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Deadline</span>
-                    <span className="font-medium">{formatDate((task.due_date || task.dueDateISO)!)}</span>
+                    <span className="font-medium">{formatDueDate((task.due_date || task.dueDateISO)!, task.is_all_day)}</span>
                   </div>
                 )}
               </div>

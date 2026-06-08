@@ -58,7 +58,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
@@ -98,7 +98,7 @@ const mainTabs = [
 
 // ─── PageIcon ─────────────────────────────────────────────────────────────────
 
-function PageIcon({ icon, className }: { icon: string | null; className?: string }) {
+export function PageIcon({ icon, className }: { icon: string | null; className?: string }) {
   if (!icon) {
     return <FileText className={cn("size-4 shrink-0 text-muted-foreground", className)} />;
   }
@@ -378,7 +378,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const navigate = useNavigate();
   const { pageId } = useParams();
 
-  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { activeOrgId, activeSpaceId, activeOrg, activeSpace } = useAppContext();
   const queryClient = useQueryClient();
 
   // ── API data ────────────────────────────────────────────────────────────────
@@ -432,14 +432,26 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   }, [queryClient]);
 
   // ── Derived data ────────────────────────────────────────────────────────────
+  const recentlyOpenedPages = useMotionStore((s) => s.recentlyOpenedPages);
+  const key = `${activeOrgId}:${activeSpaceId}`;
+  const openedIds = recentlyOpenedPages[key] || [];
+
   const rootPages = useRootPages(activeOrgId, activeSpaceId);
-  const recentPages = [...apiPages]
-    .filter((p) => !p.deleted_at)
-    .sort(
-      (a, b) =>
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-    )
-    .slice(0, 8);
+  const recentPages = useMemo(() => {
+    const allPages = [...apiPages, ...sharedPages].filter((p) => !p.deleted_at);
+    if (openedIds.length > 0) {
+      return openedIds
+        .map((id) => allPages.find((p) => p.id === id))
+        .filter((p): p is MotionPageDTO => !!p)
+        .slice(0, 8);
+    }
+    return allPages
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      )
+      .slice(0, 8);
+  }, [apiPages, sharedPages, openedIds]);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [recentsOpen, setRecentsOpen] = useState(true);
@@ -859,7 +871,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                   >
                     <ChevronDown className="size-3" />
                   </div>
-                  Pages
+                  {activeOrg?.is_personal || activeSpace?.is_private ? "Private Pages" : "Pages"}
                 </button>
                 {canCreatePage && (
                   <Button

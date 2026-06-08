@@ -116,6 +116,7 @@ export function MotionPage() {
     shareOpen,
     setShareOpen,
     setLastOpenedPageId,
+    addRecentlyOpenedPageId,
   } = useMotionStore();
 
   const handleToggleDrawer = (tab: "updates" | "analytics") => {
@@ -139,8 +140,9 @@ export function MotionPage() {
   useEffect(() => {
     if (pageId && activeOrgId && activeSpaceId) {
       setLastOpenedPageId(activeOrgId, activeSpaceId, pageId);
+      addRecentlyOpenedPageId(activeOrgId, activeSpaceId, pageId);
     }
-  }, [pageId, activeOrgId, activeSpaceId, setLastOpenedPageId]);
+  }, [pageId, activeOrgId, activeSpaceId, setLastOpenedPageId, addRecentlyOpenedPageId]);
   // Stable ref so upsertPages is never a useEffect dependency
   const queryClient = useQueryClient();
 
@@ -669,26 +671,16 @@ export function MotionPage() {
                   )}
 
                   {/* Section 4 — Page Settings */}
-                  {(matchesSearch("Customize page") || matchesSearch("Lock page")) && (
+                  {matchesSearch("Lock page") && !isPageReadOnly && (
                     <>
                       <div className="py-1">
-                        {matchesSearch("Customize page") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <SlidersHorizontal className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Customize page</span>
-                            </div>
+                        <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={() => setIsLocked(!isLocked)}>
+                          <div className="flex items-center gap-2.5">
+                            <Lock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                            <span className="text-xs font-medium">Lock page</span>
                           </div>
-                        )}
-                        {matchesSearch("Lock page") && !isPageReadOnly && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={() => setIsLocked(!isLocked)}>
-                            <div className="flex items-center gap-2.5">
-                              <Lock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Lock page</span>
-                            </div>
-                            <Switch size="sm" checked={isLocked} onCheckedChange={setIsLocked} />
-                          </div>
-                        )}
+                          <Switch size="sm" checked={isLocked} onCheckedChange={setIsLocked} />
+                        </div>
                       </div>
                       <div className="h-px bg-border/50 w-full" />
                     </>
@@ -720,28 +712,18 @@ export function MotionPage() {
                   )}
 
                   {/* Section 6 — Advanced */}
-                  {(matchesSearch("Updates & analytics") || matchesSearch("Version history")) && (
+                  {matchesSearch("Updates & analytics") && (
                     <>
                       <div className="py-1">
-                        {matchesSearch("Updates & analytics") && (
-                          <div
-                            className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
-                            onClick={() => handleToggleDrawer("updates")}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <Clock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Updates & analytics</span>
-                            </div>
+                        <div
+                          className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                          onClick={() => handleToggleDrawer("updates")}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Clock className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                            <span className="text-xs font-medium">Updates & analytics</span>
                           </div>
-                        )}
-                        {matchesSearch("Version history") && (
-                          <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                              <History className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Version history</span>
-                            </div>
-                          </div>
-                        )}
+                        </div>
                       </div>
                       <div className="h-px bg-border/50 w-full" />
                     </>

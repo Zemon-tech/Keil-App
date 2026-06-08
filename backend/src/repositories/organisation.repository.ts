@@ -136,4 +136,30 @@ export class OrganisationRepository extends BaseRepository<Organisation> {
       [orgId, userId],
     );
   }
+
+  async findSpaceMembershipsByOrgAndUsers(
+    orgId: string,
+    userIds: string[],
+    client?: PoolClient,
+  ): Promise<Array<{ user_id: string; space_id: string; space_name: string; role: string }>> {
+    if (userIds.length === 0) return [];
+    const query = `
+      SELECT
+        sm.user_id,
+        sm.space_id,
+        s.name AS space_name,
+        sm.role
+      FROM public.space_members sm
+      INNER JOIN public.spaces s
+        ON s.id = sm.space_id
+      WHERE sm.org_id = $1
+        AND sm.user_id = ANY($2)
+        AND s.is_private = FALSE
+        AND s.deleted_at IS NULL
+      ORDER BY s.name ASC
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [orgId, userIds]);
+    return result.rows;
+  }
 }

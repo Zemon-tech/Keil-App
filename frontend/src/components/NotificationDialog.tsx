@@ -24,9 +24,10 @@ interface NotificationDialogProps {
     onOpenChange: (open: boolean) => void;
 }
 
-import { useNotifications, type Notification } from "@/contexts/NotificationContext";
+import { useNotifications, getNotificationTitle, getNotificationSnippet, groupNotifications } from "@/contexts/NotificationContext";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
+import { useAppContext } from "@/contexts/AppContext";
 
 
 
@@ -61,6 +62,11 @@ const notificationStyles = {
         icon: User,
         className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
     },
+    comment_created: {
+        label: "Comment",
+        icon: MessageCircle,
+        className: "bg-[var(--event-focus-bg)] text-[var(--event-focus-text)] ring-[var(--event-focus-border)]",
+    },
 } as const;
 
 const getNotificationMeta = (eventType: string) =>
@@ -70,50 +76,9 @@ const getNotificationMeta = (eventType: string) =>
         className: "bg-muted text-muted-foreground ring-border",
     };
 
-function getNotificationTitle(n: Notification): string {
-  const actor = n.payload.sender_name || "Someone";
-  switch (n.event_type) {
-    case "task_assigned":
-      return `Task Assigned`;
-    case "someone_messaged":
-      return `New message from ${actor}`;
-    case "motion_shared":
-      return `Motion Shared`;
-    case "task_status_changed":
-      return `Task Status Updated`;
-    case "membership_updates":
-      return `Membership Update`;
-    case "mention_in_comment":
-      return `Mentioned in Comment`;
-    default:
-      return `New Notification`;
-  }
-}
-
-function getNotificationSnippet(n: Notification): string {
-  const actor = n.payload.sender_name || "Someone";
-  switch (n.event_type) {
-    case "task_assigned":
-      return `${actor} assigned you to "${n.payload.task_title}"`;
-    case "someone_messaged":
-      return n.payload.message_snippet || `New message in channel`;
-    case "motion_shared":
-      return `${actor} shared "${n.payload.page_title}" with space`;
-    case "task_status_changed":
-      return `"${n.payload.task_title}" moved to ${n.payload.status}`;
-    case "membership_updates":
-      const action = n.payload.action === 'added_space' || n.payload.action === 'added_workspace' ? 'added you to' : 'updated your role in';
-      const place = n.payload.space_name || n.payload.workspace_name || 'workspace';
-      return `${actor} ${action} ${place} as ${n.payload.role}`;
-    case "mention_in_comment":
-      return `${actor} mentioned you: "${n.payload.comment_snippet}"`;
-    default:
-      return `You have a new alert`;
-  }
-}
-
 export function NotificationDialog({ open, onOpenChange }: NotificationDialogProps) {
-    const { notifications, unreadCount, markAllAsRead, clearAll } = useNotifications();
+    const { notifications, unreadCount, markAllAsRead, clearAll, handleNotificationClick } = useNotifications();
+    const { organisations } = useAppContext();
     const [filter, setFilter] = useState<"All" | "Tasks" | "Mentions" | "Chat" | "System">("All");
 
     // Mark all as read when dialog is opened
@@ -125,14 +90,14 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
 
     const categories = [
         { id: "All" as const, label: "All", icon: Bell, count: notifications.length },
-        { id: "Tasks" as const, label: "Tasks", icon: CheckSquare, count: notifications.filter((n) => n.event_type === "task_assigned" || n.event_type === "task_status_changed").length },
+        { id: "Tasks" as const, label: "Tasks", icon: CheckSquare, count: notifications.filter((n) => n.event_type === "task_assigned" || n.event_type === "task_status_changed" || n.event_type === "comment_created").length },
         { id: "Mentions" as const, label: "Mentions", icon: User, count: notifications.filter((n) => n.event_type === "mention_in_comment").length },
         { id: "Chat" as const, label: "Chat", icon: MessageCircle, count: notifications.filter((n) => n.event_type === "someone_messaged").length },
         { id: "System" as const, label: "System", icon: Settings, count: notifications.filter((n) => n.event_type === "membership_updates").length },
     ];
 
     const filteredNotifications = notifications.filter((n) => {
-        if (filter === "Tasks") return n.event_type === "task_assigned" || n.event_type === "task_status_changed";
+        if (filter === "Tasks") return n.event_type === "task_assigned" || n.event_type === "task_status_changed" || n.event_type === "comment_created";
         if (filter === "Mentions") return n.event_type === "mention_in_comment";
         if (filter === "Chat") return n.event_type === "someone_messaged";
         if (filter === "System") return n.event_type === "membership_updates";
@@ -273,14 +238,19 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                 </div>
                             ) : (
                                 <div className="mx-auto max-w-3xl space-y-1">
-                                    {filteredNotifications.map((notification) => {
+                                    {groupNotifications(filteredNotifications).map((item) => {
+                                        const notification = item.main;
                                         const meta = getNotificationMeta(notification.event_type);
                                         const Icon = meta.icon;
                                         const isRead = !!notification.read_at;
 
                                         return (
                                             <article
-                                                key={notification.id}
+                                                key={item.id}
+                                                onClick={() => {
+                                                    handleNotificationClick(notification);
+                                                    onOpenChange(false);
+                                                }}
                                                 className={cn(
                                                     "group relative overflow-hidden rounded-xl p-4 transition-all duration-200 cursor-pointer",
                                                     isRead
@@ -308,7 +278,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                                                 </Badge>
                                                             </div>
                                                             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                                                                {getNotificationSnippet(notification)}
+                                                                {getNotificationSnippet(notification, organisations)}
                                                             </p>
 
                                                             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

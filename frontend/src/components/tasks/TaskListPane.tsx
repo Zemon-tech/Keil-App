@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { format, isSameDay, isSameMonth, isSameYear } from "date-fns";
+import { format, isSameDay, isSameMonth, isSameYear, subDays, startOfDay } from "date-fns";
 import { Draggable } from "@fullcalendar/interaction";
 import {
   Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User,
@@ -79,12 +79,14 @@ type Props = {
   onSpaceFilterChange?: (value: string) => void;
 };
 
-function formatTaskDateRange(start?: string, end?: string) {
+function formatTaskDateRange(start?: string, end?: string, isAllDay?: boolean) {
   if (!end) return start ? format(new Date(start), "MMM d") : "\u2014";
   if (!start) return format(new Date(end), "MMM d");
 
   const startDate = new Date(start);
-  const endDate = new Date(end);
+  // All-day due_date is stored as exclusive end (next day midnight).
+  // Subtract 1 day to get the inclusive last day for display.
+  const endDate = isAllDay ? subDays(startOfDay(new Date(end)), 1) : new Date(end);
   
   if (isSameDay(startDate, endDate)) {
     return format(startDate, "MMM d");
@@ -232,7 +234,7 @@ function SubtaskList({
               )}
               {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
               <span className="tabular-nums text-right leading-tight">
-                {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined)}
+                {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined, (sub as any).is_all_day)}
               </span>
             </div>
           </div>
@@ -977,7 +979,7 @@ export function TaskListPane({
                         "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight",
                         isDone && "opacity-40"
                       )}>
-                        {formatTaskDateRange(t.start_date, t.due_date)}
+                        {formatTaskDateRange(t.start_date, t.due_date, t.is_all_day)}
                       </span>
                       
                       <div className="absolute right-0 opacity-0 group-hover/item:opacity-100 transition-opacity">

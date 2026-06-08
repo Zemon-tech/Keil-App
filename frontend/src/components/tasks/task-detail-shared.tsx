@@ -110,6 +110,18 @@ export const PRIORITY_CONFIG: Record<TaskPriority, { color: string; dot: string 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export const formatDate = (dateStr: string) => format(new Date(dateStr), "d MMM");
+
+/**
+ * Formats a due_date for display, accounting for all-day exclusive end storage.
+ * All-day due_date is stored as the exclusive end (day after last included day)
+ * for FullCalendar compatibility. Subtract 1 day to show the correct last day.
+ */
+export const formatDueDate = (dateStr: string, isAllDay?: boolean) => {
+  const d = new Date(dateStr);
+  const displayDate = isAllDay ? subDays(startOfDay(d), 1) : d;
+  return format(displayDate, "d MMM");
+};
+
 export const formatRelTime = (dateStr: string) =>
   formatDistanceToNow(new Date(dateStr), { addSuffix: true });
 

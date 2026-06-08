@@ -51,6 +51,11 @@ interface MotionStore {
 
   /** Records the last visited page id for the active org/space and persists it to localStorage. */
   setLastOpenedPageId: (orgId: string, spaceId: string, pageId: string | null) => void;
+
+  /** Scoped list tracking recently opened page ids per workspace. */
+  recentlyOpenedPages: Record<string, string[]>;
+  /** Appends a page id to the list of recently opened pages for the active org/space. */
+  addRecentlyOpenedPageId: (orgId: string, spaceId: string, pageId: string) => void;
 }
 
 export const useMotionStore = create<MotionStore>()((set, get) => ({
@@ -62,6 +67,12 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
   lastOpenedPages: (() => {
     try {
       const saved = localStorage.getItem("motion:lastOpenedPages");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  })(),
+  recentlyOpenedPages: (() => {
+    try {
+      const saved = localStorage.getItem("motion:recentlyOpenedPages");
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   })(),
@@ -103,6 +114,22 @@ export const useMotionStore = create<MotionStore>()((set, get) => ({
         localStorage.setItem("motion:lastOpenedPages", JSON.stringify(updated));
       } catch { /* ignore */ }
       return { lastOpenedPages: updated };
+    });
+  },
+
+  addRecentlyOpenedPageId: (orgId, spaceId, pageId) => {
+    if (!orgId || !spaceId || !pageId) return;
+    const key = `${orgId}:${spaceId}`;
+    set((state) => {
+      const updated = { ...state.recentlyOpenedPages };
+      const list = updated[key] ? [...updated[key]] : [];
+      const filtered = list.filter((id) => id !== pageId);
+      filtered.unshift(pageId);
+      updated[key] = filtered.slice(0, 20); // Keep last 20
+      try {
+        localStorage.setItem("motion:recentlyOpenedPages", JSON.stringify(updated));
+      } catch { /* ignore */ }
+      return { recentlyOpenedPages: updated };
     });
   },
 }));
