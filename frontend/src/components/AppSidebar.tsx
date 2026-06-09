@@ -32,6 +32,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMe } from "@/hooks/api/useMe";
 import { useAppContext } from "@/contexts/AppContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { useSpaces } from "@/hooks/api/useSpaces";
 import {
   LayoutDashboard,
@@ -737,7 +738,7 @@ export function AppSidebar({
                     className="mt-2 h-11 rounded-xl px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <Avatar className="size-8 rounded-full ring-1 ring-border/60">
-                      <AvatarImage src={avatarUrl} alt={userDisplayName} className="rounded-full" />
+                      <AvatarImage src={getOptimizedImageUrl(avatarUrl, { width: 96, height: 96 })} alt={userDisplayName} className="rounded-full" />
                       <AvatarFallback className="rounded-full bg-primary text-xs text-primary-foreground">
                         {userInitials}
                       </AvatarFallback>
@@ -765,7 +766,7 @@ export function AppSidebar({
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <Avatar className="size-7 rounded-md">
-                        <AvatarImage src={avatarUrl} alt={userDisplayName} className="rounded-md" />
+                        <AvatarImage src={getOptimizedImageUrl(avatarUrl, { width: 84, height: 84 })} alt={userDisplayName} className="rounded-md" />
                         <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-xs">
                           {userInitials}
                         </AvatarFallback>
