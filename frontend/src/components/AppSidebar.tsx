@@ -67,7 +67,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useCreateOrganisation, useJoinOrganisation } from "@/hooks/api/useOrganisations";
+import { useCreateOrganisation, useJoinOrganisation, orgKeys } from "@/hooks/api/useOrganisations";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ─── Navigation items ─────────────────────────────────────────────────────────
 
@@ -127,11 +128,21 @@ function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManag
     const trimmed = token.trim();
     if (!trimmed) return;
     joinOrg.mutate(trimmed, {
-      onSuccess: ({ orgId, spaceId }) => {
-        setActiveOrganisation(orgId, spaceId);
+      onSuccess: ({ org, space }) => {
+        toast.success(`Joined ${org.name} successfully!`);
+        setActiveOrganisation(org.id, space.id);
+
+        const socket = getSocket();
+        if (socket) {
+          socket.emit("join_org_rooms", { orgId: org.id });
+        }
+
         if (/^\/(tasks|events)\/[^/]+/.test(location.pathname)) navigate("/tasks");
         handleClose();
       },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.message || "Failed to join organisation");
+      }
     });
   };
 
@@ -317,6 +328,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<
     "account" | "org-general"
@@ -380,6 +392,43 @@ export function AppSidebar({
       socket.off("meeting_update", handleMeetingUpdate);
     };
   }, [openDialog]);
+
+  // Global WebSocket listener for real-time organisation member join events
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleMemberJoined = (payload: {
+      orgId: string;
+      orgName: string;
+      inviterId?: string;
+      joinedUser: {
+        id: string;
+        name: string;
+        email: string;
+      };
+    }) => {
+      console.log("[AppSidebar] WebSocket member_joined event received:", payload);
+      
+      // 1. Invalidate members query cache to trigger immediate settings/spaces list refresh
+      queryClient.invalidateQueries({
+        queryKey: orgKeys.members(payload.orgId),
+      });
+
+      // 2. Trigger real-time toast depending on who generated the invite
+      const isInviter = payload.inviterId === user?.id;
+      if (isInviter) {
+        toast.success(`${payload.joinedUser.name} joined ${payload.orgName} via your invite link!`);
+      } else {
+        toast.info(`${payload.joinedUser.name} has joined ${payload.orgName}.`);
+      }
+    };
+
+    socket.on("member_joined", handleMemberJoined);
+    return () => {
+      socket.off("member_joined", handleMemberJoined);
+    };
+  }, [queryClient, user?.id]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);

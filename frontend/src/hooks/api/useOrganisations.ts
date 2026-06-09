@@ -76,6 +76,7 @@ export function useOrgMembers(orgId: string | null) {
       return res.data.data.members ?? [];
     },
     enabled: !!orgId,
+    staleTime: 0, // Always load fresh membership data when settings or spaces lists open
     retry: (failureCount, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;
@@ -224,22 +225,33 @@ export function useRemoveOrgMember(orgId: string | null) {
  * The caller is responsible for switching context on success:
  *   const join = useJoinOrganisation();
  *   join.mutate(token, {
- *     onSuccess: ({ orgId, spaceId }) => setActiveOrganisation(orgId, spaceId),
+ *     onSuccess: ({ org, space }) => setActiveOrganisation(org.id, space.id),
  *   });
  */
 export function useJoinOrganisation() {
   const queryClient = useQueryClient();
 
-  return useMutation<{ orgId: string; spaceId: string }, Error, string>({
+  return useMutation<
+    { org: Organisation; space: { id: string; name: string; org_id: string; created_at: string } },
+    Error,
+    string
+  >({
     mutationFn: async (token) => {
-      const res = await api.post<{ data: { orgId: string; spaceId: string } }>(
-        "v1/orgs/join",
-        { token }
-      );
+      const res = await api.post<{
+        data: {
+          org: Organisation;
+          space: { id: string; name: string; org_id: string; created_at: string };
+        };
+      }>("v1/orgs/join", { token });
       return res.data.data;
     },
-    onSuccess: () => {
-      // Invalidate org list so the joined org appears in the sidebar
+    onSuccess: (data) => {
+      // Synchronously inject the new organisation into the cached organisations list
+      queryClient.setQueryData<Organisation[]>(orgKeys.list(), (old = []) => {
+        if (old.some((o) => o.id === data.org.id)) return old;
+        return [...old, data.org];
+      });
+      // Invalidate org list so a background refresh keeps it perfectly in sync
       queryClient.invalidateQueries({ queryKey: orgKeys.list() });
     },
   });

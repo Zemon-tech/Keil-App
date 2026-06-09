@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { organisationRepository, spaceRepository } from "../repositories";
 import { ApiError } from "../utils/ApiError";
+import { io } from "../socket";
 
 export interface OrganisationDTO {
   id: string;
@@ -86,7 +87,7 @@ export const generateInviteToken = async (
   }
 
   const secret = process.env.JWT_SECRET || "fallback_secret";
-  const token = jwt.sign({ orgId, type: "org_invite" }, secret, { expiresIn: "7d" });
+  const token = jwt.sign({ orgId, inviterId: userId, type: "org_invite" }, secret, { expiresIn: "7d" });
   const frontendUrl = process.env.FRONTEND_URL || "";
   const inviteLink = `${frontendUrl}/invite/${token}`;
 
@@ -101,12 +102,15 @@ export const generateInviteToken = async (
 export const joinOrganisation = async (
   token: string,
   userId: string,
-): Promise<{ orgId: string; spaceId: string }> => {
+): Promise<{
+  org: OrganisationDTO;
+  space: { id: string; name: string; org_id: string; created_at: string };
+}> => {
   const secret = process.env.JWT_SECRET || "fallback_secret";
 
-  let payload: { orgId: string; type: string };
+  let payload: { orgId: string; inviterId?: string; type: string };
   try {
-    payload = jwt.verify(token, secret) as { orgId: string; type: string };
+    payload = jwt.verify(token, secret) as { orgId: string; inviterId?: string; type: string };
   } catch {
     throw new ApiError(400, "Invalid or expired invite token");
   }
@@ -115,7 +119,7 @@ export const joinOrganisation = async (
     throw new ApiError(400, "Invalid invite token");
   }
 
-  const { orgId } = payload;
+  const { orgId, inviterId } = payload;
 
   const org = await organisationRepository.findById(orgId);
   if (!org) {
@@ -136,11 +140,75 @@ export const joinOrganisation = async (
   }
 
   await organisationRepository.executeInTransaction(async (client) => {
+    // 1. Join user to organisation and default space
     await organisationRepository.addMember(orgId, userId, "member", client);
     await spaceRepository.addMember(orgId, defaultSpace!.id, userId, "member", client);
+
+    // 2. Fetch joining user's name/email
+    const userResult = await client.query(
+      `SELECT name, email FROM public.users WHERE id = $1`,
+      [userId]
+    );
+    const joinedUserName = userResult.rows[0]?.name || userResult.rows[0]?.email?.split("@")[0] || 'Someone';
+    const joinedUserEmail = userResult.rows[0]?.email || '';
+
+    // 3. Fetch admins/owner to notify
+    const adminsResult = await client.query(
+      `SELECT user_id FROM public.organisation_members WHERE org_id = $1 AND role IN ('owner', 'admin')`,
+      [orgId]
+    );
+    const adminsAndOwnersIds = adminsResult.rows.map(row => row.user_id).filter(id => id !== userId);
+
+    // 4. Queue system notification in notification_outbox
+    await client.query(
+      `INSERT INTO public.notification_outbox (org_id, space_id, sender_id, event_type, entity_type, entity_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        orgId,
+        defaultSpace!.id,
+        userId,
+        'membership_updates',
+        'organisation_member',
+        userId,
+        JSON.stringify({
+          recipient_ids: adminsAndOwnersIds,
+          org_name: org.name,
+          member_name: joinedUserName,
+          action: 'member_joined'
+        })
+      ]
+    );
+
+    // 5. Emit real-time WebSockets update
+    const notifyTargets = Array.from(new Set([...adminsAndOwnersIds, inviterId])).filter(
+      (id): id is string => Boolean(id) && id !== userId
+    );
+
+    if (io) {
+      notifyTargets.forEach(targetId => {
+        io.to(`user:${targetId}`).emit("member_joined", {
+          orgId,
+          orgName: org.name,
+          inviterId,
+          joinedUser: {
+            id: userId,
+            name: joinedUserName,
+            email: joinedUserEmail
+          }
+        });
+      });
+    }
   });
 
-  return { orgId, spaceId: defaultSpace.id };
+  return {
+    org: toDTO({ ...org, membership_role: "member" }),
+    space: {
+      id: defaultSpace.id,
+      name: defaultSpace.name,
+      org_id: defaultSpace.org_id!,
+      created_at: new Date(defaultSpace.created_at).toISOString(),
+    }
+  };
 };
 
 /**

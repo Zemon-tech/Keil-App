@@ -1,4 +1,3 @@
-import pool from "../config/pg";
 import { spaceRepository, organisationRepository } from "../repositories";
 import { ApiError } from "../utils/ApiError";
 
@@ -67,43 +66,6 @@ export const getSpaceMembers = async (
   spaceId: string,
   userId?: string,
 ): Promise<SpaceMemberDTO[]> => {
-  const orgCheck = await pool.query(
-    `SELECT is_personal FROM public.organisations WHERE id = $1 LIMIT 1`,
-    [orgId],
-  );
-  const isPersonal = orgCheck.rows[0]?.is_personal === true;
-
-  if (isPersonal && userId) {
-    const result = await pool.query(
-      `
-        SELECT
-          om.user_id,
-          'member'::text as role,
-          u.name,
-          u.email
-        FROM public.organisation_members om
-        INNER JOIN public.users u ON u.id = om.user_id
-        INNER JOIN public.organisations o ON o.id = om.org_id
-        WHERE o.is_personal = FALSE
-          AND om.org_id IN (
-            SELECT org_id
-            FROM public.organisation_members
-            WHERE user_id = $1
-          )
-          AND om.user_id != $1
-        GROUP BY om.user_id, u.name, u.email
-        ORDER BY COALESCE(u.name, u.email) ASC
-      `,
-      [userId],
-    );
-    return result.rows.map((row) => ({
-      user_id: row.user_id,
-      role: row.role,
-      name: row.name,
-      email: row.email,
-    }));
-  }
-
   return spaceRepository.findMembers(orgId, spaceId);
 };
 
