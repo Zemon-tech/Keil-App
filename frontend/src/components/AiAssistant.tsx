@@ -29,11 +29,6 @@ import {
     RotateCcw,
     History,
     Trash2,
-    ListTodo,
-    MessageSquareCode,
-    Bot,
-    Calendar,
-    Github,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -100,17 +95,6 @@ async function getAuthToken(): Promise<string | null> {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token ?? null;
 }
-
-const getAgentIcon = (agentName: string) => {
-    switch (agentName) {
-        case "Task Manager": return ListTodo;
-        case "Chat": return MessageSquareCode;
-        case "Notes": return FileText;
-        case "Scheduler": return Calendar;
-        case "GitHub": return Github;
-        default: return Bot;
-    }
-};
 
 // ─── Helpers for tool activity and rendering ───────────────────────
 const renderToolInvocations = (msg: any) => {
