@@ -360,6 +360,11 @@ export function Dashboard() {
 
   const { threadId } = useParams<{ threadId?: string }>();
   const navigate = useNavigate();
+  // Set when the user submits from the home page. Cleared once the message is sent.
+  const pendingInitialMessageRef = useRef<string | null>(null);
+  // Set to true when we navigate to a brand-new thread from the home page.
+  // Tells loadChat to skip the API call (there's no history yet).
+  const isNewThreadRef = useRef(false);
   const currentWorkspaceRef = useRef<string>("");
 
   // ── Dashboard Data ─────────────────────────────────────────
@@ -404,6 +409,8 @@ export function Dashboard() {
         return {};
       },
       prepareSendMessagesRequest: ({ messages: msgs }) => {
+        // threadId is always set here: either from the URL param (existing thread)
+        // or because sendInitialMessage only fires after threadId is available.
         const tid = threadId || crypto.randomUUID();
 
         return {
@@ -544,37 +551,78 @@ export function Dashboard() {
     const content =
       text || `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
 
-    await sendMessage({
-      text: content,
-    });
+    if (!threadId) {
+      // Home page: queue the message and navigate to a new thread.
+      // The sendInitialMessage effect below will send it once threadId is set.
+      const newThreadId = crypto.randomUUID();
+      pendingInitialMessageRef.current = content;
+      isNewThreadRef.current = true;
+      navigate(`/c/${newThreadId}`);
+      // Do NOT call sendMessage here — the new Dashboard instance will handle it.
+      return;
+    }
+
+    await sendMessage({ text: content });
   };
 
   const handleNewChat = useCallback(() => {
-    const newThreadId = crypto.randomUUID();
-    navigate(`/c/${newThreadId}`);
+    navigate("/");
   }, [navigate]);
 
   const mapMastraMessageToFrontend = useCallback((msg: any) => {
     let text = "";
-    if (msg.content && typeof msg.content === "object") {
-      if (msg.content.content && typeof msg.content.content === "string") {
-        text = msg.content.content;
-      } else if (Array.isArray(msg.content.parts)) {
-        text = msg.content.parts
-          .filter((p: any) => p.type === "text" && p.text)
-          .map((p: any) => p.text)
-          .join("\n");
+    let parts = msg.parts || [];
+    let toolInvocations = msg.toolInvocations || [];
+
+    // Safely parse content if it's a JSON string
+    let parsedContent = msg.content;
+    if (typeof parsedContent === "string" && parsedContent.trim().startsWith("{")) {
+      try {
+        parsedContent = JSON.parse(parsedContent);
+      } catch (e) {
+        // Not valid JSON, leave as string
       }
-    } else if (typeof msg.content === "string") {
-      text = msg.content;
+    }
+
+    if (Array.isArray(parsedContent)) {
+      text = parsedContent
+        .filter((p: any) => p.type === "text" && p.text)
+        .map((p: any) => p.text)
+        .join("\n");
+      if (parts.length === 0) parts = parsedContent;
+    } else if (parsedContent && typeof parsedContent === "object") {
+      if (parsedContent.content && typeof parsedContent.content === "string") {
+        text = parsedContent.content;
+      }
+      if (Array.isArray(parsedContent.parts)) {
+        if (parts.length === 0) parts = parsedContent.parts;
+        if (!text) {
+          text = parsedContent.parts
+            .filter((p: any) => p.type === "text" && p.text)
+            .map((p: any) => p.text)
+            .join("\n");
+        }
+      }
+      if (Array.isArray(parsedContent.toolInvocations)) {
+        if (toolInvocations.length === 0) toolInvocations = parsedContent.toolInvocations;
+      }
+      // Extract tool invocations from parts of type 'tool-invocation' if toolInvocations array is empty
+      if ((!Array.isArray(toolInvocations) || toolInvocations.length === 0) && Array.isArray(parsedContent.parts)) {
+        toolInvocations = parsedContent.parts
+          .filter((p: any) => p.type === "tool-invocation" && p.toolInvocation)
+          .map((p: any) => p.toolInvocation);
+      }
+    } else if (typeof parsedContent === "string") {
+      text = parsedContent;
     }
 
     return {
+      ...msg,
       id: msg.id || crypto.randomUUID(),
       role: msg.role === "signal" ? "system" : msg.role,
       content: text,
-      parts: msg.parts || (msg.content && typeof msg.content === "object" ? msg.content.parts : undefined),
-      toolInvocations: msg.toolInvocations,
+      parts: Array.isArray(parts) ? parts : [],
+      toolInvocations: Array.isArray(toolInvocations) ? toolInvocations : [],
       createdAt: msg.createdAt ? new Date(msg.createdAt) : undefined,
     };
   }, []);
@@ -587,34 +635,48 @@ export function Dashboard() {
     setIsHistoryOpen((prev) => !prev);
   }, []);
 
+  // Track workspace changes so we can reset the thread when the user switches
+  // org/space — but only when a thread is already open (not on the home page).
   useEffect(() => {
     const workspaceKey = `${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-    const key = `chat_thread_id_${workspaceKey}`;
 
-    if (!threadId) {
-      let savedThreadId = localStorage.getItem(key);
-      if (!savedThreadId) {
-        savedThreadId = crypto.randomUUID();
-        localStorage.setItem(key, savedThreadId);
-      }
-      currentWorkspaceRef.current = workspaceKey;
-      navigate(`/c/${savedThreadId}`, { replace: true });
-    } else if (currentWorkspaceRef.current && currentWorkspaceRef.current !== workspaceKey) {
-      let savedThreadId = localStorage.getItem(key);
-      if (!savedThreadId) {
-        savedThreadId = crypto.randomUUID();
-        localStorage.setItem(key, savedThreadId);
-      }
-      currentWorkspaceRef.current = workspaceKey;
-      navigate(`/c/${savedThreadId}`);
-    } else {
-      currentWorkspaceRef.current = workspaceKey;
+    if (
+      threadId &&
+      currentWorkspaceRef.current &&
+      currentWorkspaceRef.current !== workspaceKey
+    ) {
+      // Workspace switched while a thread was open → go back to home.
+      navigate("/", { replace: true });
     }
+
+    currentWorkspaceRef.current = workspaceKey;
   }, [threadId, activeOrgId, activeSpaceId, navigate]);
 
+  // ── Send initial message for new threads (MUST be declared before loadChat) ──
+  // When the user submits on the home page, handlePromptSubmit only navigates.
+  // This effect fires once threadId is available and sends the queued message,
+  // preventing the hero-flash that would occur if we sent before navigation.
+  useEffect(() => {
+    if (!threadId || !pendingInitialMessageRef.current) return;
+    const msg = pendingInitialMessageRef.current;
+    pendingInitialMessageRef.current = null;
+    sendMessage({ text: msg });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]); // intentionally omit sendMessage — it's stable and we only want this to fire on threadId change
+
+  // ── Load chat history for existing threads ────────────────────────────────
   useEffect(() => {
     const loadChat = async () => {
       if (!threadId) return;
+
+      // Skip the API call for brand-new threads: there's no history and calling
+      // setMessages([]) would clear the optimistic user message, causing a flash.
+      if (isNewThreadRef.current) {
+        isNewThreadRef.current = false; // reset so subsequent threadId changes load normally
+        const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
+        localStorage.setItem(key, threadId);
+        return;
+      }
 
       const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
       localStorage.setItem(key, threadId);
@@ -730,23 +792,34 @@ export function Dashboard() {
               <ConversationContent className="w-full max-w-[54rem] mx-auto flex flex-col gap-6 px-4 sm:px-6 pt-10 lg:pt-14 pb-48">
                 {messages.map((message: any) => {
                   const isAssistant = message.role === "assistant";
+                  const messageParts = Array.isArray(message.parts) ? message.parts : [];
                   const text =
-                    message.parts
-                      ?.filter((p: any) => p.type === "text")
-                      ?.map((p: any) => p.text)
-                      ?.join("\n") ||
+                    messageParts
+                      .filter((p: any) => p.type === "text")
+                      .map((p: any) => p.text)
+                      .join("\n") ||
                     message.content ||
                     "";
 
-                  // Extract reasoning parts — consolidate all reasoning parts into one block
-                  console.log("DASHBOARD MSG", message); const reasoningParts = message.parts
-                    ?.filter((p: any) => p.type === "reasoning")
-                    ?.map((p: any) => p.text)
-                    ?.join("") || "";
+                  // Extract reasoning parts
+                  const reasoningParts = messageParts
+                    .filter((p: any) => p.type === "reasoning")
+                    .map((p: any) => {
+                      if (p.text) return p.text;
+                      if (p.reasoning) return p.reasoning;
+                      if (Array.isArray(p.details)) {
+                        return p.details
+                          .filter((d: any) => d.type === "text" && d.text)
+                          .map((d: any) => d.text)
+                          .join("");
+                      }
+                      return "";
+                    })
+                    .join("") || "";
                   const reasoningText = reasoningParts || (message as any).reasoning || "";
                   const hasReasoning = reasoningText.length > 0;
 
-                  // Extract tool invocations and live streaming activities
+                  // Extract tool invocations
                   const toolInvocations = extractToolInvocations(message);
                   const hasToolInvocations = toolInvocations.length > 0;
                   const streamingActivities = extractStreamingActivities(message);
