@@ -75,6 +75,10 @@ function App() {
             path="/"
             element={<Dashboard />}
           />
+          <Route
+            path="/c/:threadId"
+            element={<Dashboard />}
+          />
           {/* /tasks and /events without an ID → task list + calendar */}
           <Route
             path="/tasks"

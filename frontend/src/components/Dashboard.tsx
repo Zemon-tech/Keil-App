@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { HeroSection } from "./dashboard/HeroSection";
@@ -357,6 +358,10 @@ export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
 
+  const { threadId } = useParams<{ threadId?: string }>();
+  const navigate = useNavigate();
+  const currentWorkspaceRef = useRef<string>("");
+
   // ── Dashboard Data ─────────────────────────────────────────
   const { activeOrgId, activeSpaceId } = useAppContext();
 
@@ -387,6 +392,7 @@ export function Dashboard() {
   }, []);
 
   const { messages, sendMessage, setMessages, status, stop } = useChat({
+    id: threadId,
     transport: new DefaultChatTransport({
       api: `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}/chat`,
       headers: async (): Promise<Record<string, string>> => {
@@ -398,12 +404,7 @@ export function Dashboard() {
         return {};
       },
       prepareSendMessagesRequest: ({ messages: msgs }) => {
-        const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-        let tid = localStorage.getItem(key);
-        if (!tid) {
-          tid = crypto.randomUUID();
-          localStorage.setItem(key, tid);
-        }
+        const tid = threadId || crypto.randomUUID();
 
         return {
           body: {
@@ -549,11 +550,9 @@ export function Dashboard() {
   };
 
   const handleNewChat = useCallback(() => {
-    const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
     const newThreadId = crypto.randomUUID();
-    localStorage.setItem(key, newThreadId);
-    setMessages([]);
-  }, [activeOrgId, activeSpaceId, setMessages]);
+    navigate(`/c/${newThreadId}`);
+  }, [navigate]);
 
   const mapMastraMessageToFrontend = useCallback((msg: any) => {
     let text = "";
@@ -580,54 +579,68 @@ export function Dashboard() {
     };
   }, []);
 
-  const handleSelectThread = useCallback(async (id: string) => {
-    const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-    localStorage.setItem(key, id);
-    setIsLoadingHistory(true);
-    try {
-      const res = await api.get(`v1/ai/threads/${id}/messages`);
-      const rawMessages = res.data.data.messages || [];
-      const mapped = rawMessages
-        .filter((m: any) => m.role === "user" || m.role === "assistant")
-        .map(mapMastraMessageToFrontend);
-      setMessages(mapped);
-    } catch (error) {
-      console.error("Failed to load selected thread:", error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [activeOrgId, activeSpaceId, setMessages, mapMastraMessageToFrontend]);
+  const handleSelectThread = useCallback((id: string) => {
+    navigate(`/c/${id}`);
+  }, [navigate]);
 
   const toggleHistory = useCallback(() => {
     setIsHistoryOpen((prev) => !prev);
   }, []);
 
   useEffect(() => {
-    const loadLastChat = async () => {
+    const workspaceKey = `${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
+    const key = `chat_thread_id_${workspaceKey}`;
+
+    if (!threadId) {
+      let savedThreadId = localStorage.getItem(key);
+      if (!savedThreadId) {
+        savedThreadId = crypto.randomUUID();
+        localStorage.setItem(key, savedThreadId);
+      }
+      currentWorkspaceRef.current = workspaceKey;
+      navigate(`/c/${savedThreadId}`, { replace: true });
+    } else if (currentWorkspaceRef.current && currentWorkspaceRef.current !== workspaceKey) {
+      let savedThreadId = localStorage.getItem(key);
+      if (!savedThreadId) {
+        savedThreadId = crypto.randomUUID();
+        localStorage.setItem(key, savedThreadId);
+      }
+      currentWorkspaceRef.current = workspaceKey;
+      navigate(`/c/${savedThreadId}`);
+    } else {
+      currentWorkspaceRef.current = workspaceKey;
+    }
+  }, [threadId, activeOrgId, activeSpaceId, navigate]);
+
+  useEffect(() => {
+    const loadChat = async () => {
+      if (!threadId) return;
+
       const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-      const savedThreadId = localStorage.getItem(key);
-      if (savedThreadId) {
-        setIsLoadingHistory(true);
-        try {
-          const res = await api.get(`v1/ai/threads/${savedThreadId}/messages`);
-          const rawMessages = res.data.data.messages || [];
-          const mapped = rawMessages
-            .filter((m: any) => m.role === "user" || m.role === "assistant")
-            .map(mapMastraMessageToFrontend);
-          setMessages(mapped);
-        } catch (error) {
-          console.error("Failed to load last chat history:", error);
-          localStorage.removeItem(key);
-        } finally {
-          setIsLoadingHistory(false);
+      localStorage.setItem(key, threadId);
+
+      setIsLoadingHistory(true);
+      try {
+        const res = await api.get(`v1/ai/threads/${threadId}/messages`);
+        const rawMessages = res.data.data.messages || [];
+        const mapped = rawMessages
+          .filter((m: any) => m.role === "user" || m.role === "assistant")
+          .map(mapMastraMessageToFrontend);
+        setMessages(mapped);
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          setMessages([]);
+        } else {
+          console.error("Failed to load chat history:", error);
+          setMessages([]);
         }
-      } else {
-        setMessages([]);
+      } finally {
+        setIsLoadingHistory(false);
       }
     };
 
-    loadLastChat();
-  }, [activeOrgId, activeSpaceId, setMessages, mapMastraMessageToFrontend]);
+    loadChat();
+  }, [threadId, activeOrgId, activeSpaceId, setMessages, mapMastraMessageToFrontend]);
 
   useEffect(() => {
     setMounted(true);
@@ -780,8 +793,8 @@ export function Dashboard() {
                             {(hasToolInvocations || streamingActivities.length > 0) && (
                               <ChainOfThought defaultOpen={true}>
                                 <ChainOfThoughtHeader className="text-xs uppercase tracking-wider font-semibold py-1">
-                                  {hasToolInvocations 
-                                    ? `${toolInvocations.length} ${toolInvocations.length === 1 ? "action" : "actions"} taken` 
+                                  {hasToolInvocations
+                                    ? `${toolInvocations.length} ${toolInvocations.length === 1 ? "action" : "actions"} taken`
                                     : `${streamingActivities.length} ${streamingActivities.length === 1 ? "step" : "steps"} in progress`}
                                 </ChainOfThoughtHeader>
                                 <ChainOfThoughtContent className="border-l border-border/60 pl-3 ml-2 space-y-3">
@@ -938,6 +951,7 @@ export function Dashboard() {
         onOpenChange={setIsHistoryOpen}
         activeOrgId={activeOrgId}
         activeSpaceId={activeSpaceId}
+        currentThreadId={threadId}
         onSelectThread={handleSelectThread}
         onNewChat={handleNewChat}
       />
