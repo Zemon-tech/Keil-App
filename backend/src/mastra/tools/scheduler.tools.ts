@@ -3,6 +3,9 @@ import { z } from "zod";
 import pool from "../../config/pg";
 import * as orgTaskService from "../../services/org-task.service";
 import { TaskStatus } from "../../types/enums";
+import { ActivityEvent } from "../types/activity";
+import { emitActivity } from "../lib/activity-stream";
+
 
 // ─── Personal org/space resolver ──────────────────────────────────────────────
 
@@ -19,6 +22,43 @@ async function getPersonalOrgSpace(userId: string): Promise<{ orgId: string; spa
   return { orgId: result.rows[0].org_id, spaceId: result.rows[0].space_id };
 }
 
+async function resolveOrgSpace(
+  userId: string,
+  orgId?: string | null,
+  spaceId?: string | null
+): Promise<{ orgId: string; spaceId: string } | null> {
+  if (orgId && spaceId) {
+    return { orgId, spaceId };
+  }
+  if (orgId) {
+    const spaceRes = await pool.query(
+      `SELECT id FROM public.spaces WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`,
+      [orgId]
+    );
+    if (spaceRes.rows.length > 0) {
+      return { orgId, spaceId: spaceRes.rows[0].id };
+    }
+  }
+  const personal = await getPersonalOrgSpace(userId);
+  if (personal) {
+    return personal;
+  }
+  const fallbackRes = await pool.query(
+    `SELECT sm.org_id, sm.space_id
+     FROM public.space_members sm
+     INNER JOIN public.spaces s ON s.id = sm.space_id AND s.deleted_at IS NULL
+     INNER JOIN public.organisations o ON o.id = sm.org_id AND o.deleted_at IS NULL
+     WHERE sm.user_id = $1
+     ORDER BY sm.created_at ASC
+     LIMIT 1`,
+    [userId]
+  );
+  if (fallbackRes.rows.length > 0) {
+    return { orgId: fallbackRes.rows[0].org_id, spaceId: fallbackRes.rows[0].space_id };
+  }
+  return null;
+}
+
 // ─── Tool: get_unscheduled_tasks ──────────────────────────────────────────────
 
 export const getUnscheduledTasksTool = createTool({
@@ -31,8 +71,17 @@ export const getUnscheduledTasksTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const personal = await getPersonalOrgSpace(userId);
-    if (!personal) return { error: "Personal organisation not found." };
+    await emitActivity(context, {
+      agentLabel: "Scheduler",
+      action: "Fetching your unscheduled tasks",
+      status: "running",
+    });
+
+    const contextOrgId   = context?.requestContext?.get("orgId")   as string;
+    const contextSpaceId = context?.requestContext?.get("spaceId") as string;
+    const resolved = await resolveOrgSpace(userId, contextOrgId, contextSpaceId);
+    if (!resolved) return { error: "Personal organisation or workspace not found." };
+    const { orgId, spaceId } = resolved;
 
     const result = await pool.query(
       `SELECT DISTINCT t.id, t.title, t.status, t.priority, t.type, t.org_id, t.space_id,
@@ -57,18 +106,30 @@ export const getUnscheduledTasksTool = createTool({
          END ASC,
          t.created_at ASC
        LIMIT $4`,
-      [userId, personal.orgId, personal.spaceId, inputData.limit ?? 20]
+      [userId, orgId, spaceId, inputData.limit ?? 20]
     );
+
+    const tasks = result.rows;
+
+    await emitActivity(context, {
+      agentLabel: "Scheduler",
+      action: "Fetching your unscheduled tasks",
+      status: "complete",
+    });
 
     return {
       activity: {
-        agent: "keilhq-scheduler-agent",
-        action: "Listing unscheduled tasks",
-        details: `Found ${result.rows.length} unscheduled task(s) in the backlog`,
-        tool: "get_unscheduled_tasks"
+        agent: 'keilhq-scheduler-agent',
+        agentLabel: 'Scheduler',
+        tool: 'get_unscheduled_tasks',
+        icon: 'inbox',
+        action: 'Fetching your unscheduled tasks',
+        details: `Found ${tasks.length} task(s) without a scheduled time`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
       },
-      tasks: result.rows,
-      count: result.rows.length
+      tasks,
+      count: tasks.length
     };
   },
 });
@@ -77,22 +138,27 @@ export const getUnscheduledTasksTool = createTool({
 
 export const autoScheduleTasksTool = createTool({
   id: "auto_schedule_tasks",
-  description: "Automatically schedules a list of unscheduled tasks (or all unscheduled tasks if taskIds is omitted) in free slots on the calendar within a specified date range. Scheduled from 9 AM to 10 PM, back-to-back.",
+  description: "Automatically schedules a list of unscheduled tasks in free slots on the calendar within a specified date range. Scheduled from 9 AM to 10 PM, back-to-back.",
   inputSchema: z.object({
-    startDate: z.string().describe("ISO 8601 date string for start of scheduling window (e.g. '2026-06-01' or '2026-06-01T00:00:00Z')"),
-    endDate: z.string().describe("ISO 8601 date string for end of scheduling window (e.g. '2026-06-30' or '2026-06-30T23:59:59Z')"),
-    workingHoursStart: z.number().int().min(0).max(23).optional().default(9).describe("Start hour of day to schedule (0-23)"),
-    workingHoursEnd: z.number().int().min(0).max(23).optional().default(22).describe("End hour of day to schedule (0-23)"),
-    excludeWeekends: z.boolean().optional().default(true).describe("Exclude Saturday and Sunday from scheduling"),
-    taskDurationMinutes: z.number().int().min(15).max(480).optional().default(60).describe("Default duration for each task in minutes"),
-    taskIds: z.array(z.string().uuid()).optional().describe("Optional list of specific task UUIDs to schedule. If omitted, schedules all pending unscheduled tasks."),
+    taskIds: z.array(z.string().uuid()).min(1).describe(
+      'UUIDs of the tasks to schedule. Always pass the IDs returned from get_unscheduled_tasks.'
+    ),
+    startDate: z.string().describe('ISO 8601 start of the scheduling window'),
+    endDate: z.string().describe('ISO 8601 end of the scheduling window'),
+    workingHoursStart: z.number().int().min(0).max(23).optional().default(9),
+    workingHoursEnd: z.number().int().min(0).max(23).optional().default(22),
+    excludeWeekends: z.boolean().optional().default(true),
+    taskDurationMinutes: z.number().int().min(15).max(480).optional().default(60),
   }),
   execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
-    const personal = await getPersonalOrgSpace(userId);
-    if (!personal) return { error: "Personal organisation not found." };
+    const contextOrgId   = context?.requestContext?.get("orgId")   as string;
+    const contextSpaceId = context?.requestContext?.get("spaceId") as string;
+    const resolved = await resolveOrgSpace(userId, contextOrgId, contextSpaceId);
+    if (!resolved) return { error: "Personal organisation or workspace not found." };
+    const { orgId, spaceId } = resolved;
 
     const startWindow = new Date(inputData.startDate);
     const endWindow = new Date(inputData.endDate);
@@ -101,7 +167,15 @@ export const autoScheduleTasksTool = createTool({
       return { error: "Invalid date format for startDate or endDate." };
     }
 
+    await emitActivity(context, {
+      agentLabel: "Scheduler",
+      action: "Loading calendar events",
+      status: "running",
+    });
+
     // 1. Fetch existing scheduled tasks/events in range to check for conflicts
+    const queryParams: any[] = [userId, startWindow, endWindow, inputData.taskIds];
+
     const conflictResult = await pool.query(
       `SELECT DISTINCT t.id, t.title, t.start_date, t.due_date, t.is_all_day
        FROM public.tasks t
@@ -117,8 +191,9 @@ export const autoScheduleTasksTool = createTool({
            t.created_by = $1
            OR t.id IN (SELECT task_id FROM public.task_assignees WHERE user_id = $1)
            OR t.space_id IN (SELECT space_id FROM public.space_members WHERE user_id = $1)
-         )`,
-      [userId, startWindow, endWindow]
+         )
+         AND NOT (t.id = ANY($4::uuid[]))`,
+      queryParams
     );
 
     const busyIntervals = conflictResult.rows.map((row: any) => {
@@ -131,53 +206,40 @@ export const autoScheduleTasksTool = createTool({
       return { start, end, title: row.title };
     });
 
+    await emitActivity(context, {
+      agentLabel: "Scheduler",
+      action: "Loading tasks backlog",
+      status: "running",
+    });
+
     // 2. Fetch tasks to schedule
-    let tasksToSchedule: any[] = [];
-    if (inputData.taskIds && inputData.taskIds.length > 0) {
-      const tasksResult = await pool.query(
-        `SELECT t.id, t.title, t.priority, t.status, t.org_id, t.space_id
-         FROM public.tasks t
-         WHERE t.deleted_at IS NULL
-           AND t.id = ANY($2::uuid[])
-           AND (
-             t.created_by = $1
-             OR t.id IN (SELECT task_id FROM public.task_assignees WHERE user_id = $1)
-             OR t.space_id IN (SELECT space_id FROM public.space_members WHERE user_id = $1)
-           )`,
-        [userId, inputData.taskIds]
-      );
-      // Retain the requested taskIds sorting
-      tasksToSchedule = inputData.taskIds
-        .map((id: string) => tasksResult.rows.find((t: any) => t.id === id))
-        .filter(Boolean);
-    } else {
-      const tasksResult = await pool.query(
-        `SELECT DISTINCT t.id, t.title, t.priority, t.status, t.org_id, t.space_id
-         FROM public.tasks t
-         WHERE t.deleted_at IS NULL
-           AND t.start_date IS NULL
-           AND t.status IN ('backlog', 'todo')
-           AND (
-             (t.org_id = $2 AND t.space_id = $3)
-             OR t.id IN (SELECT task_id FROM public.task_assignees WHERE user_id = $1)
-           )
-         ORDER BY 
-           CASE t.priority
-             WHEN 'urgent' THEN 1
-             WHEN 'high' THEN 2
-             WHEN 'medium' THEN 3
-             WHEN 'low' THEN 4
-             ELSE 5
-           END ASC,
-           t.created_at ASC`,
-        [userId, personal.orgId, personal.spaceId]
-      );
-      tasksToSchedule = tasksResult.rows;
-    }
+    const tasksResult = await pool.query(
+      `SELECT t.id, t.title, t.priority, t.status, t.org_id, t.space_id
+       FROM public.tasks t
+       WHERE t.deleted_at IS NULL
+         AND t.id = ANY($2::uuid[])
+         AND (
+           t.created_by = $1
+           OR t.id IN (SELECT task_id FROM public.task_assignees WHERE user_id = $1)
+           OR t.space_id IN (SELECT space_id FROM public.space_members WHERE user_id = $1)
+         )`,
+      [userId, inputData.taskIds]
+    );
+
+    // Retain the requested taskIds sorting
+    const tasksToSchedule = inputData.taskIds
+      .map((id: string) => tasksResult.rows.find((t: any) => t.id === id))
+      .filter(Boolean);
 
     if (tasksToSchedule.length === 0) {
       return { scheduledCount: 0, scheduledTasks: [], message: "No tasks found that require scheduling." };
     }
+
+    await emitActivity(context, {
+      agentLabel: "Scheduler",
+      action: "Finding free slots on calendar",
+      status: "running",
+    });
 
     // 3. Perform slot finding algorithm
     const scheduledTasks: any[] = [];
@@ -260,14 +322,20 @@ export const autoScheduleTasksTool = createTool({
     }
 
     // 4. Update the database for all successfully scheduled tasks
+    await emitActivity(context, {
+      agentLabel: "Scheduler",
+      action: "Saving scheduled tasks",
+      status: "running",
+    });
+
     const results = [];
     for (const item of scheduledTasks) {
       try {
-        const orgId = item.task.org_id || personal.orgId;
-        const spaceId = item.task.space_id || personal.spaceId;
+        const itemOrgId = item.task.org_id || orgId;
+        const itemSpaceId = item.task.space_id || spaceId;
 
         const updated = await orgTaskService.updateTask(
-          { orgId, spaceId },
+          { orgId: itemOrgId, spaceId: itemSpaceId },
           item.task.id,
           userId,
           {
@@ -294,20 +362,30 @@ export const autoScheduleTasksTool = createTool({
       }
     }
 
-    const unscheduledTasks = tasksToSchedule.slice(currentTaskIndex);
     const scheduledCount = results.filter(r => !r.error).length;
+    const unscheduledCount = tasksToSchedule.length - scheduledCount;
+
+    await emitActivity(context, {
+      agentLabel: "Scheduler",
+      action: "Scheduling tasks into free time slots",
+      status: "complete",
+    });
 
     return {
       activity: {
-        agent: "keilhq-scheduler-agent",
-        action: "Auto-scheduling tasks",
-        details: `Successfully scheduled ${scheduledCount} task(s). ${unscheduledTasks.length} task(s) remain in backlog.`,
-        tool: "auto_schedule_tasks"
+        agent: 'keilhq-scheduler-agent',
+        agentLabel: 'Scheduler',
+        tool: 'auto_schedule_tasks',
+        icon: 'clock',
+        action: 'Scheduling tasks into free time slots',
+        details: `Scheduled ${scheduledCount} task(s). ${unscheduledCount} could not be placed.`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
       },
       scheduledCount,
       scheduledTasks: results,
-      unscheduledTasks: unscheduledTasks.map(t => ({ id: t.id, title: t.title, priority: t.priority })),
-      message: `Successfully scheduled ${scheduledCount} tasks. ${unscheduledTasks.length} tasks remain unscheduled due to full calendar space.`,
+      unscheduledTasks: tasksToSchedule.slice(scheduledCount).map((t: any) => ({ id: t.id, title: t.title, priority: t.priority })),
+      message: `Successfully scheduled ${scheduledCount} tasks. ${unscheduledCount} tasks remain unscheduled due to full calendar space.`,
     };
   },
 });

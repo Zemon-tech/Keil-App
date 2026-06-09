@@ -9,6 +9,8 @@ import { useMe } from "@/hooks/api/useMe";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
+import { extractStreamingActivities } from "@/lib/activity-stream";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
     Send,
@@ -27,6 +29,11 @@ import {
     RotateCcw,
     History,
     Trash2,
+    ListTodo,
+    MessageSquareCode,
+    Bot,
+    Calendar,
+    Github,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -94,99 +101,65 @@ async function getAuthToken(): Promise<string | null> {
     return session?.access_token ?? null;
 }
 
+const getAgentIcon = (agentName: string) => {
+    switch (agentName) {
+        case "Task Manager": return ListTodo;
+        case "Chat": return MessageSquareCode;
+        case "Notes": return FileText;
+        case "Scheduler": return Calendar;
+        case "GitHub": return Github;
+        default: return Bot;
+    }
+};
+
 // ─── Helpers for tool activity and rendering ───────────────────────
-function getToolActivity(
-    toolName: string,
-    state: "call" | "result",
-    result?: any,
-    args?: any
-): { action: string; details?: string; agent?: string } {
-    if (state === "result" && result?.activity) {
-        return result.activity;
-    }
-
-    let agent = "AI Agent";
-    if (toolName.includes("task") || toolName.includes("org")) {
-        agent = "Task Agent";
-    } else if (toolName.includes("chat") || toolName.includes("message") || toolName.includes("channel")) {
-        agent = "Chat Agent";
-    } else if (toolName.includes("motion") || toolName.includes("page") || toolName.includes("note")) {
-        agent = "Motion Agent";
-    } else if (toolName.includes("schedule") || toolName.includes("calendar")) {
-        agent = "Scheduler Agent";
-    }
-
-    let action = `Executing ${toolName}`;
-    let details = "";
-
-    switch (toolName) {
-        case "get_current_time":
-            action = "Reading system clock";
-            break;
-        case "web_search_exa":
-            action = args?.query ? `Searching the web for "${args.query}"` : "Searching the web";
-            break;
-        case "search_motion_pages":
-            action = args?.query ? `Searching notes for "${args.query}"` : "Searching notes";
-            break;
-        case "list_motion_pages":
-            action = "Listing notes and pages";
-            break;
-        case "get_motion_page":
-            action = args?.title ? `Reading note "${args.title}"` : "Reading note content";
-            break;
-        case "create_motion_page":
-            action = args?.title ? `Creating note "${args.title}"` : "Creating new note";
-            break;
-        case "update_motion_page":
-            action = "Updating note content";
-            break;
-        case "search_tasks":
-            action = args?.query ? `Searching tasks for "${args.query}"` : "Searching tasks";
-            break;
-        case "get_personal_tasks":
-            action = "Fetching personal tasks";
-            break;
-        case "create_personal_task":
-            action = args?.title ? `Creating personal task "${args.title}"` : "Creating personal task";
-            break;
-        case "update_personal_task":
-            action = "Updating personal task";
-            break;
-        case "delete_personal_task":
-            action = "Deleting personal task";
-            break;
-        case "auto_schedule_tasks":
-            action = "Auto-scheduling tasks into calendar";
-            break;
-        case "get_unscheduled_tasks":
-            action = "Listing unscheduled tasks";
-            break;
-        case "get_calendar_events":
-            action = "Fetching calendar events";
-            break;
-    }
-
-    if (state === "result") {
-        if (result?.count !== undefined) {
-            details = `Fetched ${result.count} item(s)`;
-        } else if (result?.success) {
-            details = "Action completed successfully";
-        }
-    }
-
-    return { agent, action, details };
-}
-
 const renderToolInvocations = (msg: any) => {
-    if (!msg.toolInvocations || msg.toolInvocations.length === 0) return null;
+    const invocations = extractToolInvocations(msg);
+    const streamingActivities = extractStreamingActivities(msg);
+    
+    if (invocations.length === 0 && streamingActivities.length === 0) return null;
     
     return (
         <div className="mt-2 space-y-1.5 border-t border-border/40 pt-2 shrink-0">
-            {msg.toolInvocations.map((tool: any) => {
+            {/* 1. Render Live Streaming Activities */}
+            {streamingActivities.map((act: any, idx: number) => {
+                if (act.status === "running") {
+                    return (
+                        <div key={`stream-${idx}-${act.agent}-${act.action}`} className="flex items-center gap-2 py-1 px-2 rounded-md bg-muted/30 border border-border/30 animate-pulse">
+                            <span className="size-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                            <Shimmer className="text-[10px] font-medium text-foreground" duration={1.5}>
+                                {`${act.agent}: ${act.action}...`}
+                            </Shimmer>
+                        </div>
+                    );
+                }
+                
+                if (act.status === "complete") {
+                    return (
+                        <div key={`stream-${idx}-${act.agent}-${act.action}`} className="flex flex-col gap-0.5 py-1 px-2 rounded-md bg-muted/30 border border-border/30">
+                            <div className="flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">
+                                    {act.agent}
+                                </span>
+                            </div>
+                            <span className="text-[10px] font-medium text-foreground/90 mt-0.5">
+                                {act.action}
+                            </span>
+                        </div>
+                    );
+                }
+                
+                return null;
+            })}
+
+            {/* 2. Render Tool Invocations */}
+            {invocations.map((tool: any) => {
                 const activity = getToolActivity(tool.toolName, tool.state, tool.result, tool.args);
                 
                 if (tool.state === "call") {
+                    // Only show default tool shimmer if we don't have streaming activities showing progress
+                    if (streamingActivities.length > 0) return null;
                     return (
                         <div key={tool.toolCallId} className="flex items-center gap-2 py-1 px-2 rounded-md bg-muted/30 border border-border/30">
                             <span className="size-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
@@ -302,11 +275,45 @@ export function AiAssistant() {
         setShowThreadList(false);
     }, [setMessages]);
 
-    const handleSelectThread = useCallback((id: string) => {
+    const mapMastraMessageToFrontend = useCallback((msg: any) => {
+        let text = "";
+        if (msg.content && typeof msg.content === "object") {
+            if (msg.content.content && typeof msg.content.content === "string") {
+                text = msg.content.content;
+            } else if (Array.isArray(msg.content.parts)) {
+                text = msg.content.parts
+                    .filter((p: any) => p.type === "text" && p.text)
+                    .map((p: any) => p.text)
+                    .join("\n");
+            }
+        } else if (typeof msg.content === "string") {
+            text = msg.content;
+        }
+
+        return {
+            id: msg.id || crypto.randomUUID(),
+            role: msg.role === "signal" ? "system" : msg.role,
+            content: text,
+            parts: msg.parts || (msg.content && typeof msg.content === "object" ? msg.content.parts : undefined),
+            toolInvocations: msg.toolInvocations,
+            createdAt: msg.createdAt ? new Date(msg.createdAt) : undefined,
+        };
+    }, []);
+
+    const handleSelectThread = useCallback(async (id: string) => {
         setThreadId(id);
-        setMessages([]); // messages will be loaded from memory by the backend
         setShowThreadList(false);
-    }, [setMessages]);
+        try {
+            const res = await api.get(`v1/ai/threads/${id}/messages`);
+            const rawMessages = res.data.data.messages || [];
+            const mapped = rawMessages
+                .filter((m: any) => m.role === "user" || m.role === "assistant")
+                .map(mapMastraMessageToFrontend);
+            setMessages(mapped);
+        } catch (error) {
+            console.error("Failed to load selected thread:", error);
+        }
+    }, [setMessages, mapMastraMessageToFrontend]);
 
     const handleDeleteThread = useCallback(async (id: string) => {
         try {
@@ -546,7 +553,7 @@ export function AiAssistant() {
                                     ? "bg-primary text-primary-foreground rounded-br-md"
                                     : "bg-card border border-border text-foreground rounded-bl-md"
                             )}>
-                                {msg.parts.map((part, i) => {
+                                {(msg.parts || []).map((part, i) => {
                                     if (part.type === "text") {
                                         return part.text.split("\n").map((line, j) => (
                                             <p key={`${i}-${j}`} className={cn(line === "" ? "h-2" : "")}>
@@ -615,7 +622,7 @@ export function AiAssistant() {
                                 "max-w-[75%] rounded-2xl px-4 py-3 text-[13.5px] leading-relaxed",
                                 msg.role === "user" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-card border border-border text-foreground rounded-bl-md shadow-sm"
                             )}>
-                                {msg.parts.map((part, i) => {
+                                {(msg.parts || []).map((part, i) => {
                                     if (part.type === "text") {
                                         return part.text.split("\n").map((line, j) => (
                                             <p key={`${i}-${j}`} className={cn(line === "" ? "h-2" : "")}>

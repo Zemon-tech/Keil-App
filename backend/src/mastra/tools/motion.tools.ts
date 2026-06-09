@@ -1,9 +1,11 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { generateText } from "ai";
 import pool from "../../config/pg";
+import { Pool } from "pg";
 import * as motionPageService from "../../services/motion-page.service";
-import { resolveModel } from "../models";
+import { ActivityEvent } from "../types/activity";
+import { emitActivity } from "../lib/activity-stream";
+
 
 
 // ─── Helper: verify space membership ─────────────────────────────────────────
@@ -21,51 +23,28 @@ async function isSpaceMember(
   return (result.rowCount ?? 0) > 0;
 }
 
-// Helper to perform smart semantic/fuzzy relevance matching of page titles using LLM
-async function findRelevantPages(
+async function searchPagesByTitle(
   query: string,
-  pages: { id: string; title: string }[],
-  context: any
-): Promise<string[]> {
-  if (pages.length === 0) return [];
-
-  try {
-    const model = resolveModel(context?.requestContext);
-    if (!model) {
-      return pages
-        .filter(p => p.title.toLowerCase().includes(query.toLowerCase()))
-        .map(p => p.id);
-    }
-    const pagesList = pages.map(p => `- ID: ${p.id}, Title: "${p.title}"`).join("\n");
-
-    const prompt = `You are an AI assistant helping to match a user's search query or instruction to relevant note/page titles in their workspace.
-
-User Query: "${query}"
-
-Available Workspace Pages:
-${pagesList}
-
-Identify which pages from the list above are relevant to the user's query. Return a JSON array of matching page IDs (e.g., ["uuid1", "uuid2"]). Return only the most relevant pages. If none are relevant, return an empty array [].
-Respond ONLY with the raw JSON array. Do not include markdown formatting or backticks.`;
-
-    const response = await generateText({
-      model,
-      prompt,
-    });
-
-    const cleaned = response.text.replace(/```json|```/g, "").trim();
-    const matchedIds = JSON.parse(cleaned);
-    if (Array.isArray(matchedIds)) {
-      return matchedIds.filter(id => pages.some(p => p.id === id));
-    }
-  } catch (err) {
-    console.error("Error in smart page search:", err);
-  }
-
-  // Fallback to simple title inclusion if LLM fails
-  return pages
-    .filter(p => p.title.toLowerCase().includes(query.toLowerCase()))
-    .map(p => p.id);
+  orgId: string,
+  spaceId: string,
+  db: Pool
+): Promise<Array<{ id: string; title: string; updated_at: string }>> {
+  const result = await db.query(
+    `SELECT id, title, updated_at,
+            ts_rank(title_search, websearch_to_tsquery('english', $3)) AS rank
+     FROM public.motion_pages
+     WHERE org_id = $1
+       AND space_id = $2
+       AND deleted_at IS NULL
+       AND (
+         title_search @@ websearch_to_tsquery('english', $3)
+         OR title ILIKE $4
+       )
+     ORDER BY rank DESC, updated_at DESC
+     LIMIT 10`,
+    [orgId, spaceId, query, `%${query}%`]
+  );
+  return result.rows;
 }
 
 // ─── Tool: search_motion_pages ────────────────────────────────────────────────
@@ -88,33 +67,34 @@ export const searchMotionPagesTool = createTool({
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
 
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: "Searching notes",
+      status: "running",
+    });
+
     const member = await isSpaceMember(userId, orgId, spaceId);
     if (!member)
       return { error: "You are not a member of this space." };
 
-    const result = await pool.query(
-      `SELECT id, title, updated_at
-       FROM public.motion_pages
-       WHERE org_id = $1
-         AND space_id = $2
-         AND deleted_at IS NULL`
-    );
+    const pages = await searchPagesByTitle(inputData.query, orgId, spaceId, pool);
 
-    const allPages = result.rows.map((row: any) => ({
-      id: row.id,
-      title: row.title,
-      updatedAt: row.updated_at,
-    }));
-
-    const matchedIds = await findRelevantPages(inputData.query, allPages, context);
-    const pages = allPages.filter(p => matchedIds.includes(p.id));
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: `Searching notes for "${inputData.query}"`,
+      status: "complete",
+    });
 
     return {
       activity: {
-        agent: "keilhq-motion-agent",
-        action: `Searching pages for "${inputData.query}"`,
-        details: `Smart matched ${pages.length} relevant page(s) out of ${allPages.length} total pages`,
-        tool: "search_motion_pages"
+        agent: 'keilhq-motion-agent',
+        agentLabel: 'Notes',
+        tool: 'search_motion_pages',
+        icon: 'search',
+        action: `Searching notes for "${inputData.query}"`,
+        details: `Found ${pages.length} matching page(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
       },
       pages,
       count: pages.length,
@@ -139,35 +119,48 @@ export const listMotionPagesTool = createTool({
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
 
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: "Listing pages",
+      status: "running",
+    });
+
     const member = await isSpaceMember(userId, orgId, spaceId);
     if (!member)
       return { error: "You are not a member of this space." };
 
-    const result = await pool.query(
-      `SELECT id, title, parent_id, updated_at
-       FROM public.motion_pages
-       WHERE org_id = $1
-         AND space_id = $2
-         AND deleted_at IS NULL
-       ORDER BY parent_id NULLS FIRST, position ASC, created_at ASC`,
-      [orgId, spaceId]
-    );
-
-    let pages = result.rows;
-    let detailsMessage = `Fetched ${pages.length} total pages`;
-
+    let pages: any[] = [];
     if (inputData.query) {
-      const matchedIds = await findRelevantPages(inputData.query, pages, context);
-      pages = pages.filter((p: any) => matchedIds.includes(p.id));
-      detailsMessage = `Smart-filtered to ${pages.length} relevant page(s) out of ${result.rows.length} total pages`;
+      pages = await searchPagesByTitle(inputData.query, orgId, spaceId, pool);
+    } else {
+      const result = await pool.query(
+        `SELECT id, title, parent_id, updated_at
+         FROM public.motion_pages
+         WHERE org_id = $1
+           AND space_id = $2
+           AND deleted_at IS NULL
+         ORDER BY parent_id NULLS FIRST, position ASC, created_at ASC`,
+        [orgId, spaceId]
+      );
+      pages = result.rows;
     }
+
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: inputData.query ? `Browsing notes matching "${inputData.query}"` : 'Listing all notes',
+      status: "complete",
+    });
 
     return {
       activity: {
-        agent: "keilhq-motion-agent",
-        action: inputData.query ? `Listing filtered pages for "${inputData.query}"` : "Listing all space pages",
-        details: detailsMessage,
-        tool: "list_motion_pages"
+        agent: 'keilhq-motion-agent',
+        agentLabel: 'Notes',
+        tool: 'list_motion_pages',
+        icon: 'layout',
+        action: inputData.query ? `Browsing notes matching "${inputData.query}"` : 'Listing all notes',
+        details: `Found ${pages.length} page(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
       },
       pages,
       count: pages.length,
@@ -262,6 +255,12 @@ export const getMotionPageTool = createTool({
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
 
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: "Reading page content",
+      status: "running",
+    });
+
     const member = await isSpaceMember(userId, orgId, spaceId);
     if (!member)
       return { error: "You are not a member of this space." };
@@ -269,16 +268,9 @@ export const getMotionPageTool = createTool({
     let resolvedId = inputData.pageId;
 
     if (!resolvedId && inputData.title) {
-      const result = await pool.query(
-        `SELECT id, title
-         FROM public.motion_pages
-         WHERE org_id = $1
-           AND space_id = $2
-           AND deleted_at IS NULL`
-      );
-      const matchedIds = await findRelevantPages(inputData.title, result.rows, context);
-      if (matchedIds.length > 0) {
-        resolvedId = matchedIds[0];
+      const matchedPages = await searchPagesByTitle(inputData.title, orgId, spaceId, pool);
+      if (matchedPages.length > 0) {
+        resolvedId = matchedPages[0].id;
       }
     }
 
@@ -306,12 +298,22 @@ export const getMotionPageTool = createTool({
     const chunk = markdown.substring(offset, offset + limit);
     const hasMore = offset + limit < totalLength;
 
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: `Reading "${page.title}"`,
+      status: "complete",
+    });
+
     return {
       activity: {
-        agent: "keilhq-motion-agent",
-        action: `Reading page "${page.title}"`,
-        details: `Fetched chunk starting at offset ${offset} (${chunk.length} / ${totalLength} chars)`,
-        tool: "get_motion_page"
+        agent: 'keilhq-motion-agent',
+        agentLabel: 'Notes',
+        tool: 'get_motion_page',
+        icon: 'file',
+        action: `Reading "${page.title}"`,
+        details: `Fetched ${chunk.length} of ${totalLength} characters (offset ${offset})`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
       },
       page: {
         id: page.id,
@@ -717,6 +719,12 @@ export const createMotionPageTool = createTool({
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
 
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: `Creating page "${inputData.title}"`,
+      status: "running",
+    });
+
     const role = await getSpaceRole(userId, orgId, spaceId);
     if (!role)
       return { error: "You are not a member of this space." };
@@ -741,12 +749,21 @@ export const createMotionPageTool = createTool({
           { content: tiptapContent },
           role
         );
+        await emitActivity(context, {
+          agentLabel: "Notes",
+          action: `Creating page "${inputData.title}"`,
+          status: "complete",
+        });
         return {
           activity: {
-            agent: "keilhq-motion-agent",
-            action: `Created page "${inputData.title}" with content`,
-            details: `Page ID: ${page.id}. Parsed content and updated editor structure.`,
-            tool: "create_motion_page"
+            agent: 'keilhq-motion-agent',
+            agentLabel: 'Notes',
+            tool: 'create_motion_page',
+            icon: 'file-plus',
+            action: `Creating page "${inputData.title}"`,
+            details: `Page "${updatedPage?.title || page.title}" created successfully`,
+            status: 'complete',
+            timestamp: new Date().toISOString(),
           },
           success: true,
           message: `Created page "${inputData.title}" with content.`,
@@ -754,12 +771,22 @@ export const createMotionPageTool = createTool({
         };
       }
 
+      await emitActivity(context, {
+        agentLabel: "Notes",
+        action: `Creating page "${inputData.title}"`,
+        status: "complete",
+      });
+
       return {
         activity: {
-          agent: "keilhq-motion-agent",
-          action: `Created page "${inputData.title}"`,
-          details: `Page ID: ${page.id}. Note created with empty body.`,
-          tool: "create_motion_page"
+          agent: 'keilhq-motion-agent',
+          agentLabel: 'Notes',
+          tool: 'create_motion_page',
+          icon: 'file-plus',
+          action: `Creating page "${inputData.title}"`,
+          details: `Page "${page.title}" created successfully`,
+          status: 'complete',
+          timestamp: new Date().toISOString(),
         },
         success: true,
         message: `Created page "${inputData.title}".`,
@@ -789,6 +816,12 @@ export const updateMotionPageTool = createTool({
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
 
+    await emitActivity(context, {
+      agentLabel: "Notes",
+      action: "Updating page content",
+      status: "running",
+    });
+
     const role = await getSpaceRole(userId, orgId, spaceId);
     if (!role)
       return { error: "You are not a member of this space." };
@@ -816,12 +849,24 @@ export const updateMotionPageTool = createTool({
         role
       );
 
+      const updatedFields = Object.keys(updates).join(", ");
+
+      await emitActivity(context, {
+        agentLabel: "Notes",
+        action: "Updating page",
+        status: "complete",
+      });
+
       return {
         activity: {
-          agent: "keilhq-motion-agent",
-          action: `Updated page "${updatedPage?.title || inputData.pageId}"`,
-          details: `Saved updates for fields: ${Object.keys(updates).join(", ")}`,
-          tool: "update_motion_page"
+          agent: 'keilhq-motion-agent',
+          agentLabel: 'Notes',
+          tool: 'update_motion_page',
+          icon: 'file-edit',
+          action: `Updating page`,
+          details: `Updated "${updatedPage?.title || inputData.pageId}" — changed: ${updatedFields}`,
+          status: 'complete',
+          timestamp: new Date().toISOString(),
         },
         success: true,
         message: `Updated page successfully.`,
