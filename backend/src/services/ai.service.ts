@@ -22,6 +22,7 @@ export const generateAiStream = async (
     messages: AiChatMessage[],
     options?: {
         modelSelection?: "openrouter" | "local";
+        openRouterModel?: string;
         localAiBaseUrl?: string;
         localAiModel?: string;
     }
@@ -35,7 +36,7 @@ export const generateAiStream = async (
 
     const modelName = useLocal
         ? (options?.localAiModel || "local-model")
-        : config.openRouterModel;
+        : (options?.openRouterModel || config.openRouterModel);
 
     const isLocalOrCustom = baseURL && !baseURL.includes("openrouter.ai");
     const apiKey = useLocal ? "local-key" : (config.openRouterApiKey || (isLocalOrCustom ? "local-key" : ""));

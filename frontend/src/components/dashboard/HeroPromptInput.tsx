@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type ElementType } from "react";
+import { useState, useEffect, type ChangeEvent, type ElementType } from "react";
 import {
   ArrowRight,
   FileText,
@@ -9,6 +9,7 @@ import {
   Plus,
   SearchIcon,
   Mic,
+  Brain,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,14 +38,10 @@ import {
   PromptInputFooter,
   PromptInputHeader,
   type PromptInputMessage,
-  PromptInputSelect,
-  PromptInputSelectContent,
-  PromptInputSelectItem,
-  PromptInputSelectTrigger,
-  PromptInputSelectValue,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
+  PromptInputActionMenuItem,
 } from "@/components/ai-elements/prompt-input";
 import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input-context";
 import type { AttachmentData } from "@/components/ai-elements/attachments-utils";
@@ -141,29 +138,29 @@ const PromptInputAttachmentsDisplay = () => {
 
 interface HeroPromptSurfaceProps {
   isChatStarted: boolean;
-  model: string;
   onSuggestionClick: (suggestion: (typeof suggestions)[number]) => void;
   onStop?: () => void;
-  setModel: (value: string) => void;
   setUseWebSearch: (value: boolean | ((prev: boolean) => boolean)) => void;
+  setUseThinking: (value: boolean | ((prev: boolean) => boolean)) => void;
   showCommandMenu: boolean;
   status?: "submitted" | "streaming" | "ready" | "error";
   text: string;
   useWebSearch: boolean;
+  useThinking: boolean;
   valueChanged: (event: ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
 function HeroPromptSurface({
   isChatStarted,
-  model,
   onSuggestionClick,
   onStop,
-  setModel,
   setUseWebSearch,
+  setUseThinking,
   showCommandMenu,
   status,
   text,
   useWebSearch,
+  useThinking,
   valueChanged,
 }: HeroPromptSurfaceProps) {
   const attachments = usePromptInputAttachments();
@@ -253,44 +250,16 @@ function HeroPromptSurface({
             </PromptInputActionMenuTrigger>
             <PromptInputActionMenuContent>
               <PromptInputActionAddAttachments label="Add photos or files" />
+              <PromptInputActionMenuItem onSelect={(e) => { e.preventDefault(); setUseThinking(!useThinking); }}>
+                <Brain className="mr-2 size-4" />
+                {useThinking ? "Disable Thinking" : "Enable Thinking"}
+              </PromptInputActionMenuItem>
+              <PromptInputActionMenuItem onSelect={(e) => { e.preventDefault(); setUseWebSearch(!useWebSearch); }}>
+                <GlobeIcon className="mr-2 size-4" />
+                {useWebSearch ? "Disable Web Search" : "Enable Web Search"}
+              </PromptInputActionMenuItem>
             </PromptInputActionMenuContent>
           </PromptInputActionMenu>
-
-          <PromptInputButton
-            className={cn(
-              "rounded-full border px-3 text-[13px] shadow-none transition-all",
-              useWebSearch
-                ? "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15"
-                : "border-border/60 bg-background/60 text-muted-foreground hover:bg-background hover:text-foreground",
-            )}
-            onClick={() => setUseWebSearch((value) => !value)}
-            tooltip={{ content: "Search the web", shortcut: "⌘K" }}
-            variant="ghost"
-          >
-            <GlobeIcon className="size-4" />
-            <span className="hidden sm:inline">Web</span>
-          </PromptInputButton>
-
-          <PromptInputSelect onValueChange={setModel} value={model}>
-            <PromptInputSelectTrigger className="rounded-full border border-border/60 bg-background/60 px-3 text-[13px] font-medium text-muted-foreground shadow-none transition-colors hover:bg-background hover:text-foreground focus-visible:ring-0">
-              <PromptInputSelectValue />
-            </PromptInputSelectTrigger>
-            <PromptInputSelectContent>
-              {[
-                { id: "gemini", name: "Gemini 3.5 Flash (Default)" },
-                { id: "github-models", name: "GitHub Models" },
-                { id: "openrouter", name: "OpenRouter AI" },
-                {
-                  id: "local",
-                  name: `Local LLM (${(typeof window !== "undefined" ? localStorage.getItem("local_ai_model") : null) || "gemma-4"})`,
-                },
-              ].map((item) => (
-                <PromptInputSelectItem key={item.id} value={item.id}>
-                  {item.name}
-                </PromptInputSelectItem>
-              ))}
-            </PromptInputSelectContent>
-          </PromptInputSelect>
         </PromptInputTools>
 
         <div className="ml-auto flex items-center gap-2">
@@ -337,8 +306,6 @@ function HeroPromptSurface({
 interface HeroPromptInputProps {
   isChatStarted?: boolean;
   onSubmit?: (message: PromptInputMessage) => void;
-  modelSelection?: string;
-  onModelSelectionChange?: (value: string) => void;
   status?: "submitted" | "streaming" | "ready" | "error";
   onStop?: () => void;
 }
@@ -346,34 +313,40 @@ interface HeroPromptInputProps {
 export function HeroPromptInput({
   isChatStarted = false,
   onSubmit,
-  modelSelection,
-  onModelSelectionChange,
   status,
   onStop,
 }: HeroPromptInputProps) {
   const { user } = useAuth();
   const [text, setText] = useState("");
-
-  const [internalModel, setInternalModel] = useState(() => {
-    return localStorage.getItem("ai_model_selection") || "gemini";
-  });
-
-  const model = modelSelection !== undefined ? modelSelection : internalModel;
-
-  const setModel = (value: string) => {
-    if (onModelSelectionChange) {
-      onModelSelectionChange(value);
-    } else {
-      setInternalModel(value);
-    }
-    localStorage.setItem("ai_model_selection", value);
-    window.dispatchEvent(new Event("ai_model_selection_changed"));
-  };
   const [useWebSearch, setUseWebSearch] = useState(false);
+  const [useThinking, setUseThinking] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
 
   const userName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
+
+  const getDynamicGreeting = () => {
+    const hour = new Date().getHours();
+    const greetings = [];
+    if (hour < 12) greetings.push("Good morning", "Rise and shine", "Ready for the day");
+    else if (hour < 18) greetings.push("Good afternoon", "Hope your day is going well");
+    else greetings.push("Good evening", "Winding down", "Still at it");
+
+    // We can add more context like day of the week
+    const day = new Date().getDay();
+    if (day === 1 && hour < 12) greetings.push("Happy Monday", "Let's conquer this week");
+    if (day === 5 && hour > 14) greetings.push("Happy Friday", "Almost the weekend");
+
+    // Pick a random greeting
+    const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    return `${greeting}, ${userName.split(" ")[0]}`;
+  };
+
+  const [greeting, setGreeting] = useState("");
+
+  useEffect(() => {
+    setGreeting(getDynamicGreeting());
+  }, [userName]);
 
   const handleSubmit = (message: PromptInputMessage) => {
     const hasText = Boolean(message.text?.trim());
@@ -408,8 +381,8 @@ export function HeroPromptInput({
     >
       {!isChatStarted && (
         <div className="flex items-center gap-5 text-center">
-          <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl">
-            Hey, {userName}
+          <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {greeting || `Hey, ${userName.split(" ")[0]}`}
           </h1>
         </div>
       )}
@@ -438,15 +411,15 @@ export function HeroPromptInput({
         >
           <HeroPromptSurface
             isChatStarted={isChatStarted}
-            model={model}
             onSuggestionClick={handleSuggestionClick}
             onStop={onStop}
-            setModel={setModel}
             setUseWebSearch={setUseWebSearch}
+            setUseThinking={setUseThinking}
             showCommandMenu={showCommandMenu}
             status={status}
             text={text}
             useWebSearch={useWebSearch}
+            useThinking={useThinking}
             valueChanged={handleTextChange}
           />
         </PromptInput>

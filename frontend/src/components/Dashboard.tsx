@@ -409,12 +409,17 @@ export function Dashboard() {
           body: {
             messages: [msgs[msgs.length - 1]],
             modelSelection:
-              localStorage.getItem("ai_model_selection") || "gemini",
-            ...(localStorage.getItem("ai_model_selection") === "local" && {
+              modelSelection || "gemini",
+            ...(modelSelection === "local" && {
               localAiBaseUrl:
                 localStorage.getItem("local_ai_base_url") ||
                 "http://localhost:8080/v1",
               localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
+            }),
+            ...(modelSelection === "openrouter" && {
+              openRouterModel:
+                localStorage.getItem("openrouter_model") ||
+                "openai/gpt-4o-mini",
             }),
             ...(activeOrgId && { orgId: activeOrgId }),
             ...(activeSpaceId && { spaceId: activeSpaceId }),
@@ -693,8 +698,6 @@ export function Dashboard() {
               {/* Hero: greeting + input area */}
               <HeroSection
                 onSubmit={handlePromptSubmit}
-                modelSelection={modelSelection}
-                onModelSelectionChange={setModelSelection}
               />
 
               {isError && (
@@ -917,8 +920,6 @@ export function Dashboard() {
                 <HeroSection
                   isChatStarted
                   onSubmit={handlePromptSubmit}
-                  modelSelection={modelSelection}
-                  onModelSelectionChange={setModelSelection}
                   status={status}
                   onStop={stop}
                 />

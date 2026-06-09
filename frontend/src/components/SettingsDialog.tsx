@@ -7,6 +7,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   Popover,
@@ -67,6 +74,7 @@ import {
   EyeOff,
   MessageSquare,
   PanelRight,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
@@ -1564,6 +1572,20 @@ function PreferencesTab() {
     toast.success(`Default chat view set to ${view === "sidebar" ? "Sidebar" : "Dialog"}`);
   };
 
+  const [timeFormat, setTimeFormat] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("time_format") || "12h";
+    }
+    return "12h";
+  });
+
+  const handleTimeFormatChange = (format: "12h" | "24h") => {
+    setTimeFormat(format);
+    localStorage.setItem("time_format", format);
+    toast.success(`Time format set to ${format === "12h" ? "12-hour" : "24-hour"}`);
+    window.dispatchEvent(new Event("time_format_changed"));
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -1681,6 +1703,59 @@ function PreferencesTab() {
             </div>
             <span className="text-[11px] text-muted-foreground leading-tight mt-1">
               Opens the chat in a larger, centered dialog modal for a more focused conversation.
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Time Format */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Clock className="size-4 text-muted-foreground" />
+          Time Format
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Choose between 12-hour or 24-hour time format for the dashboard.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleTimeFormatChange("12h")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              timeFormat === "12h"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-sm font-semibold text-foreground">12-hour (AM/PM)</span>
+              {timeFormat === "12h" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Example: 2:30 PM
+            </span>
+          </button>
+          <button
+            onClick={() => handleTimeFormatChange("24h")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              timeFormat === "24h"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-sm font-semibold text-foreground">24-hour</span>
+              {timeFormat === "24h" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Example: 14:30
             </span>
           </button>
         </div>
@@ -1848,6 +1923,31 @@ function PersonalizationTab() {
     localStorage.setItem("local_ai_model", val);
   };
 
+  const [openRouterModel, setOpenRouterModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini";
+    }
+    return "openai/gpt-4o-mini";
+  });
+
+  const handleOpenRouterModelChange = (val: string) => {
+    setOpenRouterModel(val);
+    localStorage.setItem("openrouter_model", val);
+  };
+
+  const [modelSelection, setModelSelection] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("ai_model_selection") || "gemini";
+    }
+    return "gemini";
+  });
+
+  const handleGlobalModelChange = (val: string) => {
+    setModelSelection(val);
+    localStorage.setItem("ai_model_selection", val);
+    window.dispatchEvent(new Event("ai_model_selection_changed"));
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -1884,6 +1984,70 @@ function PersonalizationTab() {
           placeholder="e.g., Engineering, Design"
           className="mt-2 rounded-lg"
         />
+      </div>
+
+      <Separator />
+
+      {/* Model Selection section */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Bot className="size-4 text-muted-foreground" />
+          Default AI Model
+        </h3>
+        
+        <div className="space-y-3 pt-1">
+          <div>
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Model Selection
+            </Label>
+            <Select value={modelSelection} onValueChange={handleGlobalModelChange}>
+              <SelectTrigger className="w-full mt-2 rounded-lg">
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gemini">Gemini 3.5 Flash (Default)</SelectItem>
+                <SelectItem value="github-models">GitHub Models</SelectItem>
+                <SelectItem value="openrouter">OpenRouter AI</SelectItem>
+                <SelectItem value="local">Local LLM</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Choose the default model to use for AI responses.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* OpenRouter AI Configuration Section */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Globe className="size-4 text-muted-foreground" />
+          OpenRouter Model Configuration
+        </h3>
+        
+        <div className="space-y-3 pt-1">
+          <div>
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              OpenRouter Model
+            </Label>
+            <Select value={openRouterModel} onValueChange={handleOpenRouterModelChange}>
+              <SelectTrigger className="w-full mt-2 rounded-lg">
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
+                <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
+                <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
+                <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Select which OpenRouter model to query when OpenRouter AI is selected.
+            </p>
+          </div>
+        </div>
       </div>
 
       <Separator />

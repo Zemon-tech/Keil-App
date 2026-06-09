@@ -7,32 +7,60 @@ import api from "@/lib/api";
 import { useAppContext } from "@/contexts/AppContext";
 import { useMe } from "@/hooks/api/useMe";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
 import { extractStreamingActivities } from "@/lib/activity-stream";
-import { Shimmer } from "@/components/ai-elements/shimmer";
+
 import {
-    Send,
+    Message,
+    MessageContent,
+    MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+    PromptInput,
+    PromptInputBody,
+    PromptInputTextarea,
+    PromptInputProvider,
+    PromptInputFooter,
+    PromptInputTools,
+    PromptInputButton,
+    PromptInputSubmit,
+    PromptInputActionMenu,
+    PromptInputActionMenuTrigger,
+    PromptInputActionMenuContent,
+    PromptInputActionAddAttachments,
+    type PromptInputMessage,
+} from "@/components/ai-elements/prompt-input";
+import {
+    ChainOfThought,
+    ChainOfThoughtHeader,
+    ChainOfThoughtContent,
+    ChainOfThoughtStep,
+} from "@/components/ai-elements/chain-of-thought";
+import {
     X,
-    Maximize2,
-    Minimize2,
     PanelRight,
     Sparkles,
     FileText,
     Languages,
     Search,
     ListChecks,
-    BarChart3,
     Minus,
     MessageSquare,
     RotateCcw,
     History,
     Trash2,
+    Calendar,
+    Github,
+    Bot,
+    Globe,
+    Camera,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────
-type AiMode = "hidden" | "floating" | "sidebar" | "fullscreen";
+type AiMode = "hidden" | "floating" | "sidebar";
 
 type ModelSelection = "gemini" | "github" | "github-models" | "openrouter" | "local";
 
@@ -59,14 +87,6 @@ const QUICK_SUGGESTIONS: SuggestionCard[] = [
     { icon: Search, label: "Analyze for insights", prompt: "Analyze the current data and provide key insights." },
     { icon: ListChecks, label: "Create a task tracker", prompt: "Create a task tracker from the current context." },
 ];
-
-const FULLSCREEN_SUGGESTIONS: SuggestionCard[] = [
-    { icon: Sparkles, label: "What's new in KeilHQ", description: "Latest updates and features", prompt: "What are the latest updates in KeilHQ?" },
-    { icon: FileText, label: "Write meeting agenda", description: "Generate structured meeting notes", prompt: "Help me write a meeting agenda." },
-    { icon: BarChart3, label: "Analyze PDFs or images", description: "Extract data from documents", prompt: "I want to analyze a document." },
-    { icon: ListChecks, label: "Create a task tracker", description: "Organize your work items", prompt: "Help me create a task tracker for my projects." },
-];
-
 // ─── Mascot SVG ────────────────────────────────────────────────────
 const KeilMascot = ({ size = 48, className }: { size?: number; className?: string }) => (
     <svg width={size} height={size} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -96,95 +116,30 @@ async function getAuthToken(): Promise<string | null> {
     return session?.access_token ?? null;
 }
 
-// ─── Helpers for tool activity and rendering ───────────────────────
-const renderToolInvocations = (msg: any) => {
-    const invocations = extractToolInvocations(msg);
-    const streamingActivities = extractStreamingActivities(msg);
-    
-    if (invocations.length === 0 && streamingActivities.length === 0) return null;
-    
-    return (
-        <div className="mt-2 space-y-1.5 border-t border-border/40 pt-2 shrink-0">
-            {/* 1. Render Live Streaming Activities */}
-            {streamingActivities.map((act: any, idx: number) => {
-                if (act.status === "running") {
-                    return (
-                        <div key={`stream-${idx}-${act.agent}-${act.action}`} className="flex items-center gap-2 py-1 px-2 rounded-md bg-muted/30 border border-border/30 animate-pulse">
-                            <span className="size-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                            <Shimmer className="text-[10px] font-medium text-foreground" duration={1.5}>
-                                {`${act.agent}: ${act.action}...`}
-                            </Shimmer>
-                        </div>
-                    );
-                }
-                
-                if (act.status === "complete") {
-                    return (
-                        <div key={`stream-${idx}-${act.agent}-${act.action}`} className="flex flex-col gap-0.5 py-1 px-2 rounded-md bg-muted/30 border border-border/30">
-                            <div className="flex items-center gap-1.5">
-                                <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">
-                                    {act.agent}
-                                </span>
-                            </div>
-                            <span className="text-[10px] font-medium text-foreground/90 mt-0.5">
-                                {act.action}
-                            </span>
-                        </div>
-                    );
-                }
-                
-                return null;
-            })}
-
-            {/* 2. Render Tool Invocations */}
-            {invocations.map((tool: any) => {
-                const activity = getToolActivity(tool.toolName, tool.state, tool.result, tool.args);
-                
-                if (tool.state === "call") {
-                    // Only show default tool shimmer if we don't have streaming activities showing progress
-                    if (streamingActivities.length > 0) return null;
-                    return (
-                        <div key={tool.toolCallId} className="flex items-center gap-2 py-1 px-2 rounded-md bg-muted/30 border border-border/30">
-                            <span className="size-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                            <Shimmer className="text-[10px] font-medium text-foreground" duration={1.5}>
-                                {`${activity.agent}: ${activity.action}...`}
-                            </Shimmer>
-                        </div>
-                    );
-                }
-                
-                if (tool.state === "result") {
-                    return (
-                        <div key={tool.toolCallId} className="flex flex-col gap-0.5 py-1 px-2 rounded-md bg-muted/30 border border-border/30">
-                            <div className="flex items-center gap-1.5">
-                                <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">
-                                    {activity.agent}
-                                </span>
-                            </div>
-                            <span className="text-[10px] font-medium text-foreground/90 mt-0.5">
-                                {activity.action}
-                            </span>
-                            {activity.details && (
-                                <span className="text-[9px] text-muted-foreground ml-3">
-                                    {activity.details}
-                                </span>
-                            )}
-                        </div>
-                    );
-                }
-                
-                return null;
-            })}
-        </div>
-    );
+// ─── Helper: get icon for agent ────────────────────────────────────
+const getAgentIcon = (agentName: string) => {
+    switch (agentName) {
+        case "Task Manager": return ListChecks;
+        case "Chat": return MessageSquare;
+        case "Notes": return FileText;
+        case "Scheduler": return Calendar;
+        case "GitHub": return Github;
+        default: return Bot;
+    }
 };
 
-// ═══════════════════════════════════════════════════════════════════
-// ─── MAIN COMPONENT ────────────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════════════
+// ─── Helper: get icon for tool ─────────────────────────────────────
+const getToolIcon = (toolName: string) => {
+    if (toolName.includes("search")) return Search;
+    if (toolName.includes("translate")) return Languages;
+    if (toolName.includes("task") || toolName.includes("list")) return ListChecks;
+    if (toolName.includes("file") || toolName.includes("page") || toolName.includes("document")) return FileText;
+    if (toolName.includes("calendar") || toolName.includes("schedule")) return Calendar;
+    if (toolName.includes("github")) return Github;
+    return Sparkles;
+};
 
+// ─── Main Component ────────────────────────────────────────────────
 export function AiAssistant() {
     const [mode, setMode] = useState<AiMode>("hidden");
     const [threadId, setThreadId] = useState<string>(crypto.randomUUID());
@@ -208,6 +163,7 @@ export function AiAssistant() {
             window.removeEventListener("ai_model_selection_changed", handleStorageChange);
         };
     }, []);
+
     const [fabHovered, setFabHovered] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -232,6 +188,9 @@ export function AiAssistant() {
                     localAiBaseUrl: localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1",
                     localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
                 }),
+                ...(modelSelection === "openrouter" && {
+                    openRouterModel: localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini",
+                }),
                 ...(activeOrgId && { orgId: activeOrgId }),
                 ...(activeSpaceId && { spaceId: activeSpaceId }),
             },
@@ -241,7 +200,6 @@ export function AiAssistant() {
     const { messages, sendMessage, status, setMessages } = useChat({ transport });
 
     const isStreaming = status === "streaming";
-    const isReady = status === "ready";
 
     // ─── Thread management ─────────────────────────────────────────────
     const fetchThreads = useCallback(async () => {
@@ -249,7 +207,7 @@ export function AiAssistant() {
             const res = await api.get<{ data: { threads: ThreadItem[] } }>("v1/ai/threads");
             setThreads(res.data.data.threads ?? []);
         } catch {
-            // silently fail — threads list is non-critical
+            // silently fail
         }
     }, []);
 
@@ -347,40 +305,89 @@ export function AiAssistant() {
     }, [mode]);
 
     // ─── Handlers ──────────────────────────────────────────────────────
-    const [inputValue, setInputValue] = useState("");
-
-    const handleSend = useCallback(() => {
-        const text = inputValue.trim();
+    const handlePromptSubmit = useCallback((message: PromptInputMessage) => {
+        const text = message.text.trim();
         if (!text || isStreaming) return;
         sendMessage({ text });
-        setInputValue("");
-    }, [inputValue, isStreaming, sendMessage]);
+    }, [isStreaming, sendMessage]);
 
     const handleSuggestionClick = useCallback((prompt: string) => {
         if (isStreaming) return;
         sendMessage({ text: prompt });
     }, [isStreaming, sendMessage]);
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    };
-
-    const cycleModel = useCallback(() => {
-        setModelSelection((prev) => {
-            const order: ModelSelection[] = ["gemini", "github-models", "openrouter", "local"];
-            const current = (prev === "github" ? "github-models" : prev) as ModelSelection;
-            const idx = order.indexOf(current);
-            const next = order[(idx + 1) % order.length];
-            localStorage.setItem("ai_model_selection", next);
-            window.dispatchEvent(new Event("ai_model_selection_changed"));
-            return next;
-        });
-    }, []);
-
     const switchMode = (newMode: AiMode) => setMode(newMode);
+
+    // ─── Render: Chain of Thought Display ──────────────────────────────
+    const renderToolInvocations = (msg: any) => {
+        const invocations = extractToolInvocations(msg);
+        const streamingActivities = extractStreamingActivities(msg);
+
+        if (invocations.length === 0 && streamingActivities.length === 0) return null;
+
+        return (
+            <ChainOfThought defaultOpen={true} className="mt-2 border-t border-border/40 pt-2 shrink-0">
+                <ChainOfThoughtHeader className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider py-1 hover:text-foreground">
+                    {invocations.length + streamingActivities.length} agent steps
+                </ChainOfThoughtHeader>
+                <ChainOfThoughtContent className="border-l border-border/60 pl-3 ml-2 mt-1.5 space-y-2.5">
+                    {/* Live Activities */}
+                    {streamingActivities.map((act: any, idx: number) => {
+                        const Icon = getAgentIcon(act.agent);
+                        const stepStatus = act.status === "running" ? "active" : "complete";
+                        return (
+                            <ChainOfThoughtStep
+                                key={`stream-${idx}-${act.agent}-${act.action}`}
+                                icon={Icon}
+                                status={stepStatus as any}
+                                label={
+                                    <span className="text-[10px] font-semibold text-foreground/90 uppercase tracking-wider">
+                                        {act.agent}
+                                    </span>
+                                }
+                                description={
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {act.action}
+                                    </span>
+                                }
+                            />
+                        );
+                    })}
+
+                    {/* Resolved Invocations */}
+                    {invocations.map((tool: any) => {
+                        const activity = getToolActivity(tool.toolName, tool.state, tool.result, tool.args);
+                        const stepStatus = tool.state === "call" ? "active" : "complete";
+                        const Icon = getToolIcon(tool.toolName);
+
+                        return (
+                            <ChainOfThoughtStep
+                                key={tool.toolCallId}
+                                icon={Icon}
+                                status={stepStatus as any}
+                                label={
+                                    <span className="text-[10px] font-semibold text-foreground/90 uppercase tracking-wider">
+                                        {activity.agent}
+                                    </span>
+                                }
+                                description={
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {activity.action}
+                                    </span>
+                                }
+                            >
+                                {activity.details && (
+                                    <span className="text-[9px] text-muted-foreground/85 block ml-0.5">
+                                        {activity.details}
+                                    </span>
+                                )}
+                            </ChainOfThoughtStep>
+                        );
+                    })}
+                </ChainOfThoughtContent>
+            </ChainOfThought>
+        );
+    };
 
     // ─── Render: Thread List ───────────────────────────────────────────
     const renderThreadList = () => (
@@ -443,9 +450,6 @@ export function AiAssistant() {
             <Button variant="ghost" size="icon" className={cn("size-7 rounded-lg hover:bg-muted/60", mode === "sidebar" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground")} title="Sidebar" onClick={() => switchMode("sidebar")}>
                 <PanelRight className="size-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className={cn("size-7 rounded-lg hover:bg-muted/60", mode === "fullscreen" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground")} title="Full screen" onClick={() => switchMode("fullscreen")}>
-                <Maximize2 className="size-3.5" />
-            </Button>
             <div className="w-px h-4 bg-border/60 mx-1" />
             <Button variant="ghost" size="icon" className="size-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60" title="Minimize" onClick={() => switchMode("hidden")}>
                 <Minus className="size-3.5" />
@@ -470,43 +474,55 @@ export function AiAssistant() {
     );
 
     // ─── Render: Input ─────────────────────────────────────────────────
-    const renderInput = () => (
-        <div className="p-3 border-t border-border/60 bg-card shrink-0">
-            <div className="relative flex items-end gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-2 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-                <textarea
-                    ref={inputRef}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Do anything with AI..."
-                    rows={1}
-                    className="flex-1 resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none py-0.5 max-h-[120px] min-h-[20px]"
-                    style={{ overflow: inputValue.split("\n").length > 3 ? "auto" : "hidden" }}
-                />
-                <div className="flex items-center gap-2 shrink-0 pb-0.5">
-                    <button
-                        onClick={cycleModel}
-                        className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md select-none capitalize hover:bg-muted/80 hover:text-foreground transition-colors cursor-pointer"
-                        title="Click to switch model"
-                    >
-                        {modelSelection === "github" || modelSelection === "github-models" ? "GitHub" : modelSelection}
-                    </button>
-                    <button
-                        onClick={handleSend}
-                        disabled={!inputValue.trim() || isStreaming}
+    const renderInput = () => {
+        return (
+            <div className="p-3 border-t border-border/60 bg-card shrink-0">
+                <PromptInputProvider>
+                    <PromptInput
+                        globalDrop
+                        multiple
+                        onSubmit={handlePromptSubmit}
                         className={cn(
-                            "size-7 rounded-full flex items-center justify-center transition-all",
-                            inputValue.trim() && !isStreaming
-                                ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/30"
-                                : "bg-muted text-muted-foreground cursor-not-allowed"
+                            "w-full bg-transparent overflow-visible",
+                            "[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:overflow-visible",
+                            "[&_[data-slot=input-group]]:rounded-2xl",
+                            "[&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/60",
+                            "[&_[data-slot=input-group]]:bg-muted/30",
+                            "[&_[data-slot=input-group]]:p-3",
+                            "[&_[data-slot=input-group]]:flex [&_[data-slot=input-group]]:flex-col [&_[data-slot=input-group]]:items-stretch [&_[data-slot=input-group]]:gap-3",
+                            "[&_[data-slot=input-group]]:focus-within:border-primary/50 [&_[data-slot=input-group]]:focus-within:ring-2 [&_[data-slot=input-group]]:focus-within:ring-primary/10",
+                            "transition-all"
                         )}
                     >
-                        <Send className="size-3.5" />
-                    </button>
-                </div>
+                        <PromptInputBody>
+                            <PromptInputTextarea
+                                placeholder="What would you like to know?"
+                                className="w-full resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-0 p-0 border-none min-h-[44px] max-h-[120px]"
+                            />
+                        </PromptInputBody>
+                        <PromptInputFooter>
+                            <PromptInputTools>
+                                <PromptInputActionMenu>
+                                    <PromptInputActionMenuTrigger />
+                                    <PromptInputActionMenuContent>
+                                        <PromptInputActionAddAttachments />
+                                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); alert("Screenshot feature is coming soon!"); }}>
+                                            <Camera className="mr-2 size-4" /> Add screenshot
+                                        </DropdownMenuItem>
+                                    </PromptInputActionMenuContent>
+                                </PromptInputActionMenu>
+                                <PromptInputButton>
+                                    <Globe size={16} />
+                                    <span>Search</span>
+                                </PromptInputButton>
+                            </PromptInputTools>
+                            <PromptInputSubmit status={isStreaming ? "streaming" : "ready"} />
+                        </PromptInputFooter>
+                    </PromptInput>
+                </PromptInputProvider>
             </div>
-        </div>
-    );
+        );
+    };
 
     // ─── Render: Messages ──────────────────────────────────────────────
     const renderMessages = () => (
@@ -526,39 +542,39 @@ export function AiAssistant() {
                         </div>
                     </div>
                 ) : (
-                    messages.map((msg) => (
-                        <div key={msg.id} className={cn("flex gap-2.5 ai-message-appear", msg.role === "user" ? "justify-end" : "justify-start")}>
-                            {msg.role === "assistant" && (
-                                <div className="shrink-0 mt-0.5"><KeilMascot size={28} /></div>
-                            )}
-                            <div className={cn(
-                                "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed",
-                                msg.role === "user"
-                                    ? "bg-primary text-primary-foreground rounded-br-md"
-                                    : "bg-card border border-border text-foreground rounded-bl-md"
-                            )}>
-                                {(msg.parts || []).map((part, i) => {
-                                    if (part.type === "text") {
-                                        return part.text.split("\n").map((line, j) => (
-                                            <p key={`${i}-${j}`} className={cn(line === "" ? "h-2" : "")}>
-                                                {line.split(/(\*\*.*?\*\*)/).map((seg, k) =>
-                                                    seg.startsWith("**") && seg.endsWith("**")
-                                                        ? <strong key={k} className="font-bold">{seg.slice(2, -2)}</strong>
-                                                        : <span key={k}>{seg}</span>
-                                                )}
-                                            </p>
-                                        ));
-                                    }
-                                    return null;
-                                })}
-                                {renderToolInvocations(msg)}
+                    messages.map((msg: any) => {
+                        const text =
+                            msg.parts
+                                ?.filter((p: any) => p.type === "text")
+                                ?.map((p: any) => p.text)
+                                ?.join("\n") ||
+                            msg.content ||
+                            "";
+
+                        return (
+                            <div key={msg.id} className={cn("flex gap-2.5 items-start ai-message-appear", msg.role === "user" ? "justify-end" : "justify-start")}>
+                                {msg.role === "assistant" && (
+                                    <div className="shrink-0 mt-0.5"><KeilMascot size={28} /></div>
+                                )}
+                                <Message from={msg.role} className="max-w-[85%]">
+                                    <MessageContent className={cn(
+                                        "text-[12.5px] leading-relaxed",
+                                        msg.role === "user"
+                                            ? "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground group-[.is-user]:rounded-2xl group-[.is-user]:px-3.5 group-[.is-user]:py-2.5 group-[.is-user]:rounded-br-md"
+                                            : "group-[.is-assistant]:bg-card group-[.is-assistant]:border group-[.is-assistant]:border-border group-[.is-assistant]:rounded-2xl group-[.is-assistant]:px-3.5 group-[.is-assistant]:py-2.5 group-[.is-assistant]:rounded-bl-md"
+                                    )}>
+                                        {text.trim() !== "" && (
+                                            <MessageResponse>{text}</MessageResponse>
+                                        )}
+                                        {renderToolInvocations(msg)}
+                                    </MessageContent>
+                                </Message>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
                 {isStreaming && messages[messages.length - 1]?.role !== "assistant" && (
                     <div className="flex gap-2.5 items-start ai-message-appear">
-                        <div className="shrink-0 mt-0.5"><KeilMascot size={28} /></div>
                         <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3">
                             <div className="flex gap-1.5">
                                 <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "0ms" }} />
@@ -573,79 +589,9 @@ export function AiAssistant() {
         </ScrollArea>
     );
 
-    // ─── Render: Fullscreen Content ────────────────────────────────────
-    const renderFullscreenContent = () => (
-        <div className="flex-1 flex flex-col items-center overflow-y-auto">
-            {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center flex-1 w-full max-w-2xl mx-auto px-6">
-                    <KeilMascot size={80} className="mb-5 ai-mascot-bounce" />
-                    <h2 className="text-2xl font-bold text-foreground mb-8">On call and ready, how can I help?</h2>
-                    <div className="w-full max-w-lg">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Get started</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {FULLSCREEN_SUGGESTIONS.map((s) => (
-                                <button key={s.label} onClick={() => handleSuggestionClick(s.prompt)} className="flex items-start gap-3 p-4 rounded-2xl text-left bg-card border border-border hover:border-border/80 hover:shadow-md transition-all group">
-                                    <s.icon className="size-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-0.5" />
-                                    <div>
-                                        <span className="text-[13px] font-bold text-foreground group-hover:text-primary transition-colors block">{s.label}</span>
-                                        {s.description && <span className="text-[11px] text-muted-foreground mt-0.5 block">{s.description}</span>}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="w-full max-w-2xl mx-auto px-6 py-6 space-y-4 flex-1">
-                    {messages.map((msg) => (
-                        <div key={msg.id} className={cn("flex gap-3 ai-message-appear", msg.role === "user" ? "justify-end" : "justify-start")}>
-                            {msg.role === "assistant" && <div className="shrink-0 mt-0.5"><KeilMascot size={32} /></div>}
-                            <div className={cn(
-                                "max-w-[75%] rounded-2xl px-4 py-3 text-[13.5px] leading-relaxed",
-                                msg.role === "user" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-card border border-border text-foreground rounded-bl-md shadow-sm"
-                            )}>
-                                {(msg.parts || []).map((part, i) => {
-                                    if (part.type === "text") {
-                                        return part.text.split("\n").map((line, j) => (
-                                            <p key={`${i}-${j}`} className={cn(line === "" ? "h-2" : "")}>
-                                                {line.split(/(\*\*.*?\*\*)/).map((seg, k) =>
-                                                    seg.startsWith("**") && seg.endsWith("**")
-                                                        ? <strong key={k} className="font-bold">{seg.slice(2, -2)}</strong>
-                                                        : <span key={k}>{seg}</span>
-                                                )}
-                                            </p>
-                                        ));
-                                    }
-                                    return null;
-                                })}
-                                {renderToolInvocations(msg)}
-                            </div>
-                        </div>
-                    ))}
-                    {isStreaming && messages[messages.length - 1]?.role !== "assistant" && (
-                        <div className="flex gap-3 items-start ai-message-appear">
-                            <div className="shrink-0 mt-0.5"><KeilMascot size={32} /></div>
-                            <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
-                                <div className="flex gap-1.5">
-                                    <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "0ms" }} />
-                                    <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "150ms" }} />
-                                    <span className="size-2 rounded-full bg-muted-foreground/60 ai-typing-dot" style={{ animationDelay: "300ms" }} />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    <div ref={chatEndRef} />
-                </div>
-            )}
-        </div>
-    );
-
     // ═══════════════════════════════════════════════════════════════════
     // ─── RENDER ──────────────────────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════════
-
     return (
         <>
             {/* ─── FLOATING FAB ──────────────────────────────────────── */}
@@ -692,84 +638,6 @@ export function AiAssistant() {
                     {renderHeader()}
                     {renderMessages()}
                     {renderInput()}
-                </div>
-            )}
-
-            {/* ─── FULLSCREEN ────────────────────────────────────────── */}
-            {mode === "fullscreen" && (
-                <div className="fixed inset-0 z-50 bg-background flex flex-col ai-fullscreen-appear">
-                    <div className="flex items-center justify-between px-6 py-3 border-b border-border/60 bg-card/90 backdrop-blur-sm shrink-0">
-                        <div className="flex items-center gap-3">
-                            <Button variant="ghost" size="icon" className="size-7" title="History" onClick={() => setShowThreadList(!showThreadList)}>
-                                <History className="size-4 text-muted-foreground" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="size-7" title="New chat" onClick={handleNewChat}>
-                                <RotateCcw className="size-4 text-muted-foreground" />
-                            </Button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Sparkles className="size-3.5 text-amber-400" />
-                            <span className="text-[13px] font-bold text-foreground">KeilHQ AI</span>
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border-none text-[9px] font-bold px-1.5 py-0 hover:bg-emerald-500/20">
-                                {isStreaming ? "Thinking" : "Online"}
-                            </Badge>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" className="size-7" title="Sidebar mode" onClick={() => switchMode("sidebar")}>
-                                <PanelRight className="size-3.5 text-muted-foreground" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="size-7" title="Minimize" onClick={() => switchMode("floating")}>
-                                <Minimize2 className="size-3.5 text-muted-foreground" />
-                            </Button>
-                            <div className="w-px h-4 bg-border/60 mx-1" />
-                            <Button variant="ghost" size="icon" className="size-7" title="Close" onClick={() => switchMode("hidden")}>
-                                <X className="size-3.5 text-muted-foreground" />
-                            </Button>
-                        </div>
-                    </div>
-                    {showThreadList && (
-                        <div className="absolute top-14 left-0 bottom-0 w-[280px] z-10 bg-card border-r border-border shadow-lg">
-                            {renderThreadList()}
-                        </div>
-                    )}
-                    {renderFullscreenContent()}
-                    <div className="shrink-0 flex justify-center pb-8 pt-2 px-6">
-                        <div className="w-full max-w-2xl">
-                            <div className="relative flex items-end gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-                                <textarea
-                                    ref={inputRef}
-                                    value={inputValue}
-                                    onChange={(e) => setInputValue(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder="Do anything with AI..."
-                                    rows={1}
-                                    className="flex-1 resize-none bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none py-0.5 max-h-[120px] min-h-[20px]"
-                                    style={{ overflow: inputValue.split("\n").length > 3 ? "auto" : "hidden" }}
-                                />
-                                <div className="flex items-center gap-2 shrink-0 pb-0.5">
-                                    <button
-                                        onClick={cycleModel}
-                                        className="text-[10px] font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md select-none capitalize hover:bg-muted/80 hover:text-foreground transition-colors cursor-pointer"
-                                        title="Click to switch model"
-                                    >
-                                        {modelSelection === "github" || modelSelection === "github-models" ? "GitHub" : modelSelection}
-                                    </button>
-                                    <button
-                                        onClick={handleSend}
-                                        disabled={!inputValue.trim() || isStreaming}
-                                        className={cn(
-                                            "size-8 rounded-full flex items-center justify-center transition-all",
-                                            inputValue.trim() && isReady
-                                                ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/30"
-                                                : "bg-muted text-muted-foreground cursor-not-allowed"
-                                        )}
-                                    >
-                                        <Send className="size-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             )}
         </>
