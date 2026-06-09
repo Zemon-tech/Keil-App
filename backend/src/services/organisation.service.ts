@@ -18,6 +18,7 @@ export interface OrgMemberDTO {
   role: string;
   name: string | null;
   email: string;
+  avatar_url?: string | null;
   workspaces?: Array<{
     id: string;
     name: string;
