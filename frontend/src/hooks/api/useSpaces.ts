@@ -59,6 +59,7 @@ export function useSpaces(orgId: string | null) {
       return res.data.data.spaces ?? [];
     },
     enabled: !!orgId,
+    staleTime: 0, // Load fresh space lists on navigation/mount
     retry: (failureCount, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;
@@ -109,6 +110,7 @@ export function useSpaceMembers(orgId: string | null, spaceId: string | null) {
       return res.data.data.members ?? [];
     },
     enabled: !!orgId && !!spaceId,
+    staleTime: 0, // Load fresh space members lists on navigate/open
     retry: (failureCount, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;

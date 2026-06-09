@@ -13,6 +13,8 @@ import { Loader2 } from "lucide-react";
 import { useJoinOrganisation } from "@/hooks/api/useOrganisations";
 import { useAppContext } from "@/contexts/AppContext";
 import { useLocation, useNavigate } from "react-router-dom";
+import { getSocket } from "@/lib/socket";
+import { toast } from "sonner";
 
 interface JoinOrganisationDialogProps {
   open: boolean;
@@ -34,9 +36,15 @@ export function JoinOrganisationDialog({
     if (!trimmed) return;
 
     joinOrg.mutate(trimmed, {
-      onSuccess: ({ orgId, spaceId }) => {
+      onSuccess: ({ org, space }) => {
+        toast.success(`Joined ${org.name} successfully!`);
         // Switch the app to the joined org + its default space
-        setActiveOrganisation(orgId, spaceId);
+        setActiveOrganisation(org.id, space.id);
+
+        const socket = getSocket();
+        if (socket) {
+          socket.emit("join_org_rooms", { orgId: org.id });
+        }
 
         // If on a detail page, reset to the new workspace's tasks list
         if (/^\/(tasks|events)\/[^\/]+/.test(location.pathname)) {
@@ -46,6 +54,9 @@ export function JoinOrganisationDialog({
         onOpenChange(false);
         setToken("");
       },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.message || "Failed to join organisation");
+      }
     });
   };
 
