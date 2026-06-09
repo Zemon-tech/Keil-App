@@ -33,6 +33,7 @@ interface HistorySidebarProps {
   onOpenChange: (open: boolean) => void;
   activeOrgId: string | null | undefined;
   activeSpaceId: string | null | undefined;
+  currentThreadId: string | undefined;
   onSelectThread: (id: string) => void;
   onNewChat: () => void;
 }
@@ -44,6 +45,7 @@ export function HistorySidebar({
   onOpenChange,
   activeOrgId,
   activeSpaceId,
+  currentThreadId,
   onSelectThread,
   onNewChat,
 }: HistorySidebarProps) {
@@ -187,8 +189,7 @@ export function HistorySidebar({
                 </div>
               ) : (
                 filteredThreads.map((t) => {
-                  const storageKey = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-                  const isActive = localStorage.getItem(storageKey) === t.id;
+                  const isActive = currentThreadId === t.id;
                   const isEditing = editingThreadId === t.id;
 
                   return (
