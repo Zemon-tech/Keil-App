@@ -1,6 +1,5 @@
 import { Agent } from "@mastra/core/agent";
 import { resolveModel } from "../models";
-import { getCurrentTimeTool } from "../tools/clock.tools";
 import {
   listGitHubIssuesTool,
   getGitHubIssueTool,
@@ -9,10 +8,9 @@ import {
   createGitHubIssueFromTaskTool,
 } from "../tools/github.tools";
 import {
-  createOrgTaskTool,
-  createPersonalTaskTool,
-  getMyOrganisationsTool,
-  getMySpacesTool,
+  listTasksTool,
+  createTaskTool,
+  resolveWorkspaceTool,
   searchTasksTool,
 } from "../tools/task.tools";
 
@@ -30,8 +28,8 @@ IMPORTANT RULES:
     1. First call get_github_issue to fetch the full details of that issue.
     2. Extract the title, description, URL, and issue number.
     3. Determine if this should be a personal task or an organisation task.
-       - If it's an organisation task, ensure you have the orgId and spaceId. If not in request context, use get_my_organisations and get_my_spaces to locate or ask the user.
-    4. Call create_org_task or create_personal_task with:
+       - If it's an organisation task, ensure you have the orgId and spaceId. If not in request context, use resolve_workspace to locate or ask the user.
+    4. Call create_task with:
        - title: "GH-\${issueNumber}: \${issueTitle}" (or similar clean format)
        - description: A concise summary of the issue description, followed by a markdown link back to the GitHub issue.
        - priority: Map from issue labels if possible (e.g. "high priority" -> HIGH, "urgent" -> URGENT, otherwise default to MEDIUM).
@@ -46,20 +44,17 @@ IMPORTANT RULES:
     2. Determine if it is a personal task or an organisation task.
     3. Call create_github_issue_from_task with the repo, taskId, and isPersonal boolean.
     4. Confirm the generated issue link and number back to the user.
-- TEMPORAL GROUNDING: Always call get_current_time first if the user mentions relative dates like "today", "tomorrow", etc.
+- The current date and time is provided in your context at the start of every request. Use it directly for all date calculations.
 - PARALLEL EXECUTION: Execute tool calls in parallel when possible to keep responses fast.`,
   model: ({ requestContext }) => resolveModel(requestContext),
   tools: {
-    get_current_time: getCurrentTimeTool,
     list_github_issues: listGitHubIssuesTool,
     get_github_issue: getGitHubIssueTool,
     list_github_prs: listGitHubPRsTool,
     list_github_contributors: listGitHubContributorsTool,
     create_github_issue_from_task: createGitHubIssueFromTaskTool,
-    get_my_organisations: getMyOrganisationsTool,
-    get_my_spaces: getMySpacesTool,
+    resolve_workspace: resolveWorkspaceTool,
     search_tasks: searchTasksTool,
-    create_org_task: createOrgTaskTool,
-    create_personal_task: createPersonalTaskTool,
+    create_task: createTaskTool,
   },
 });

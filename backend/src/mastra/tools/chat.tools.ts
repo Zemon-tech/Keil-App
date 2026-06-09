@@ -2,6 +2,9 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import pool from "../../config/pg";
 import * as orgChatService from "../../services/org-chat.service";
+import { ActivityEvent } from "../types/activity";
+import { emitActivity } from "../lib/activity-stream";
+
 
 // ─── Helper: verify channel membership ───────────────────────────────────────
 
@@ -32,20 +35,49 @@ export const getUserChannelsTool = createTool({
     if (!userId || !orgId || !spaceId)
       return { error: "Missing org or space context." };
 
+    await emitActivity(context, {
+      agentLabel: "Chat",
+      action: "Checking your channels",
+      status: "running",
+    });
+
     const channels = await orgChatService.getUserChannels(
       userId,
       orgId,
       spaceId
     );
+    const totalUnread = channels.reduce((sum: number, c: any) => sum + (c.unread_count ?? 0), 0);
+    const unreadChannels = channels.filter((c: any) => (c.unread_count ?? 0) > 0);
+
+    const activity: ActivityEvent = {
+      agent: 'keilhq-chat-agent',
+      agentLabel: 'Chat',
+      tool: 'get_user_channels',
+      icon: 'message-square',
+      action: 'Checking your channels',
+      details: `Found ${channels.length} channel(s) — ${totalUnread} unread message(s)`,
+      status: 'complete',
+      timestamp: new Date().toISOString(),
+    };
+
+    await emitActivity(context, {
+      agentLabel: "Chat",
+      action: "Checking your channels",
+      status: "complete",
+    });
+
     return {
-      activity: {
-        agent: "keilhq-chat-agent",
-        action: "Listing your channels",
-        details: `Found ${channels.length} channel(s) in this space`,
-        tool: "get_user_channels"
-      },
+      activity,
       channels,
-      count: channels.length
+      count: channels.length,
+      totalUnreadCount: totalUnread,
+      unreadChannels: unreadChannels.map((c: any) => ({
+        channelId: c.id,
+        channelName: c.name,
+        type: c.type,
+        unreadCount: c.unread_count,
+        members: c.members,
+      })),
     };
   },
 });
@@ -71,6 +103,12 @@ export const getChannelMessagesTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
+    await emitActivity(context, {
+      agentLabel: "Chat",
+      action: "Reading channel messages",
+      status: "running",
+    });
+
     const member = await isChannelMember(inputData.channelId, userId);
     if (!member)
       return { error: "You are not a member of this channel." };
@@ -79,62 +117,28 @@ export const getChannelMessagesTool = createTool({
       inputData.channelId,
       inputData.limit
     );
+
+    const activity: ActivityEvent = {
+      agent: 'keilhq-chat-agent',
+      agentLabel: 'Chat',
+      tool: 'get_channel_messages',
+      icon: 'message-circle',
+      action: 'Reading channel messages',
+      details: `Fetched ${messages.length} recent message(s)`,
+      status: 'complete',
+      timestamp: new Date().toISOString(),
+    };
+
+    await emitActivity(context, {
+      agentLabel: "Chat",
+      action: "Reading channel messages",
+      status: "complete",
+    });
+
     return {
-      activity: {
-        agent: "keilhq-chat-agent",
-        action: `Reading channel messages`,
-        details: `Fetched ${messages.length} recent messages`,
-        tool: "get_channel_messages"
-      },
+      activity,
       messages,
       count: messages.length
     };
   },
 });
-
-// ─── Tool: check_unread_messages ──────────────────────────────────────────────
-
-export const checkUnreadMessagesTool = createTool({
-  id: "check_unread_messages",
-  description:
-    "Check whether the current user has any unread messages across all their channels in this space.",
-  inputSchema: z.object({}),
-  execute: async (_inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    const orgId = context?.requestContext?.get("orgId") as string;
-    const spaceId = context?.requestContext?.get("spaceId") as string;
-
-    if (!userId || !orgId || !spaceId)
-      return { error: "Missing org or space context." };
-
-    const channels = await orgChatService.getUserChannels(
-      userId,
-      orgId,
-      spaceId
-    );
-    const unreadChannels = channels.filter((c: any) => c.unread_count > 0);
-    const totalUnread = unreadChannels.reduce(
-      (sum: number, c: any) => sum + c.unread_count,
-      0
-    );
-
-    return {
-      activity: {
-        agent: "keilhq-chat-agent",
-        action: "Checking for unread messages",
-        details: `Found ${totalUnread} unread messages in ${unreadChannels.length} channel(s)`,
-        tool: "check_unread_messages"
-      },
-      hasUnread: unreadChannels.length > 0,
-      totalUnreadCount: totalUnread,
-      unreadChannels: unreadChannels.map((c: any) => ({
-        channelId: c.id,
-        channelName: c.name,
-        type: c.type,
-        unreadCount: c.unread_count,
-        members: c.members,
-      })),
-    };
-  },
-});
-

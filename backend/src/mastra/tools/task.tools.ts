@@ -3,6 +3,9 @@ import { z } from "zod";
 import pool from "../../config/pg";
 import * as orgTaskService from "../../services/org-task.service";
 import { TaskStatus, TaskPriority } from "../../types/enums";
+import { ActivityEvent } from "../types/activity";
+import { emitActivity } from "../lib/activity-stream";
+
 
 // ─── RBAC helpers ─────────────────────────────────────────────────────────────
 
@@ -27,19 +30,6 @@ async function isAssignedToTask(taskId: string, userId: string): Promise<boolean
   return (result.rowCount ?? 0) > 0;
 }
 
-// ─── Shared zod helpers ───────────────────────────────────────────────────────
-
-const statusEnum = z
-  .enum([TaskStatus.BACKLOG, TaskStatus.TODO, TaskStatus.IN_PROGRESS,
-         TaskStatus.DONE, TaskStatus.CANCELLED, TaskStatus.COMPLETED])
-  .optional()
-  .describe("Optional filter: only include tasks with this status. Omit to return tasks of ALL statuses.");
-
-const priorityEnum = z
-  .enum([TaskPriority.LOW, TaskPriority.MEDIUM, TaskPriority.HIGH, TaskPriority.URGENT])
-  .optional()
-  .describe("Optional filter: only include tasks with this priority. Omit to return tasks of ALL priorities.");
-
 // ─── Personal org/space resolver ──────────────────────────────────────────────
 
 async function getPersonalOrgSpace(userId: string): Promise<{ orgId: string; spaceId: string } | null> {
@@ -55,6 +45,543 @@ async function getPersonalOrgSpace(userId: string): Promise<{ orgId: string; spa
   return { orgId: result.rows[0].org_id, spaceId: result.rows[0].space_id };
 }
 
+async function resolveOrgSpace(
+  userId: string,
+  orgId?: string | null,
+  spaceId?: string | null
+): Promise<{ orgId: string; spaceId: string } | null> {
+  if (orgId && spaceId) {
+    return { orgId, spaceId };
+  }
+  if (orgId) {
+    const spaceRes = await pool.query(
+      `SELECT id FROM public.spaces WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1`,
+      [orgId]
+    );
+    if (spaceRes.rows.length > 0) {
+      return { orgId, spaceId: spaceRes.rows[0].id };
+    }
+  }
+  const personal = await getPersonalOrgSpace(userId);
+  if (personal) {
+    return personal;
+  }
+  const fallbackRes = await pool.query(
+    `SELECT sm.org_id, sm.space_id
+     FROM public.space_members sm
+     INNER JOIN public.spaces s ON s.id = sm.space_id AND s.deleted_at IS NULL
+     INNER JOIN public.organisations o ON o.id = sm.org_id AND o.deleted_at IS NULL
+     WHERE sm.user_id = $1
+     ORDER BY sm.created_at ASC
+     LIMIT 1`,
+    [userId]
+  );
+  if (fallbackRes.rows.length > 0) {
+    return { orgId: fallbackRes.rows[0].org_id, spaceId: fallbackRes.rows[0].space_id };
+  }
+  return null;
+}
+
+// ─── Tool: list_tasks ─────────────────────────────────────────────────────────
+
+export const listTasksTool = createTool({
+  id: 'list_tasks',
+  description: "List tasks by scope. Use 'personal' for the user's private tasks, 'assigned' for tasks assigned to them across all orgs, and 'space' for tasks in the current org space.",
+  inputSchema: z.object({
+    scope: z.enum(['personal', 'assigned', 'space']),
+    status: z.enum(['backlog', 'todo', 'in_progress', 'done', 'cancelled']).optional(),
+    priority: z.enum(['urgent', 'high', 'medium', 'low']).optional(),
+    limit: z.number().int().min(1).max(50).optional().default(20),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Listing tasks",
+      status: "running",
+    });
+
+    let tasks: any[] = [];
+
+    if (inputData.scope === 'personal') {
+      const personal = await getPersonalOrgSpace(userId);
+      if (!personal) return { error: "Personal organisation not found." };
+      tasks = await orgTaskService.getTasksBySpace(personal.orgId, personal.spaceId, {
+        filters: {
+          status: inputData.status as TaskStatus | undefined,
+          priority: inputData.priority as TaskPriority | undefined,
+        },
+        pagination: { limit: inputData.limit ?? 20, offset: 0 },
+      });
+    } else if (inputData.scope === 'assigned') {
+      const params: any[] = [userId];
+      let query = `
+        SELECT t.id, t.title, t.status, t.priority,
+               t.start_date, t.due_date, t.created_at, t.type,
+               o.name as org_name, s.name as space_name,
+               t.org_id, t.space_id
+        FROM public.tasks t
+        INNER JOIN public.task_assignees ta ON ta.task_id = t.id AND ta.user_id = $1
+        LEFT JOIN public.organisations o ON o.id = t.org_id
+        LEFT JOIN public.spaces s ON s.id = t.space_id
+        WHERE t.deleted_at IS NULL
+      `;
+
+      if (inputData.status) {
+        params.push(inputData.status);
+        query += ` AND t.status = $${params.length}`;
+      }
+      if (inputData.priority) {
+        params.push(inputData.priority);
+        query += ` AND t.priority = $${params.length}`;
+      }
+
+      query += ` ORDER BY t.due_date ASC NULLS LAST, t.priority DESC`;
+      params.push(inputData.limit ?? 20);
+      query += ` LIMIT $${params.length}`;
+
+      const result = await pool.query(query, params);
+      tasks = result.rows;
+    } else if (inputData.scope === 'space') {
+      await emitActivity(context, {
+        agentLabel: "Task Manager",
+        action: "Resolving workspace context",
+        status: "running",
+      });
+      const contextOrgId   = context?.requestContext?.get("orgId")   as string;
+      const contextSpaceId = context?.requestContext?.get("spaceId") as string;
+      const resolved = await resolveOrgSpace(userId, contextOrgId, contextSpaceId);
+      if (!resolved) return { error: "Missing org or space context." };
+      const { orgId, spaceId } = resolved;
+
+      const role = await getSpaceRole(userId, orgId, spaceId);
+      if (!role) return { error: "You are not a member of this space." };
+
+      tasks = await orgTaskService.getTasksBySpace(orgId, spaceId, {
+        filters: {
+          status: inputData.status as TaskStatus | undefined,
+          priority: inputData.priority as TaskPriority | undefined,
+        },
+        pagination: { limit: inputData.limit ?? 20, offset: 0 },
+      });
+    }
+
+    const summaryTasks = tasks.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      start_date: t.start_date,
+      due_date: t.due_date,
+      type: t.type,
+      org_id: t.org_id,
+      space_id: t.space_id,
+      org_name: t.org_name,
+      space_name: t.space_name,
+    }));
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Listing your ${inputData.scope} tasks`,
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'list_tasks',
+        icon: 'list',
+        action: `Listing your ${inputData.scope} tasks`,
+        details: `Fetched ${summaryTasks.length} task(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      tasks: summaryTasks,
+      count: summaryTasks.length,
+      scope: inputData.scope,
+    };
+  }
+});
+
+// ─── Tool: get_task ──────────────────────────────────────────────────────────
+
+export const getTaskTool = createTool({
+  id: 'get_task',
+  description: 'Fetch full details of a single task by UUID including description, objectives, success criteria, and assignees.',
+  inputSchema: z.object({
+    taskId: z.string().uuid(),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Reading task details",
+      status: "running",
+    });
+
+    const task = await orgTaskService.getTaskById(inputData.taskId);
+    if (!task) return { error: "Task not found." };
+
+    const personal = await getPersonalOrgSpace(userId);
+    const isPersonalTask = personal && task.org_id === personal.orgId && task.space_id === personal.spaceId;
+
+    if (!isPersonalTask) {
+      const role = await getSpaceRole(userId, task.org_id as string, task.space_id as string);
+      if (!role) return { error: "You do not have access to this task." };
+    }
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Reading task details",
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'get_task',
+        icon: 'file-text',
+        action: 'Reading task details',
+        details: `Fetched full details for "${task.title}"`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      task,
+    };
+  }
+});
+
+// ─── Tool: create_task ────────────────────────────────────────────────────────
+
+export const createTaskTool = createTool({
+  id: 'create_task',
+  description: 'Create a new task or calendar event. Automatically creates in the org space if orgId and spaceId are in context, otherwise creates as a personal task.',
+  inputSchema: z.object({
+    title: z.string().min(1),
+    description: z.string().optional(),
+    priority: z.enum(['urgent', 'high', 'medium', 'low']).optional().default('medium'),
+    status: z.enum(['backlog', 'todo', 'in_progress']).optional().default('todo'),
+    type: z.enum(['task', 'event']).optional().default('task'),
+    start_date: z.string().optional(),
+    due_date: z.string().optional(),
+    assignee_ids: z.array(z.string().uuid()).optional(),
+    event_type: z.string().optional(),
+    location: z.string().optional(),
+    is_all_day: z.boolean().optional(),
+    meet_link: z.string().optional(),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Creating task "${inputData.title}"`,
+      status: "running",
+    });
+
+    const contextOrgId = context?.requestContext?.get("orgId") as string;
+    const contextSpaceId = context?.requestContext?.get("spaceId") as string;
+    const personal = await getPersonalOrgSpace(userId);
+
+    let targetOrgId = personal?.orgId;
+    let targetSpaceId = personal?.spaceId;
+    let isPersonal = true;
+
+    if (contextOrgId && contextSpaceId && personal && (contextOrgId !== personal.orgId || contextSpaceId !== personal.spaceId)) {
+      targetOrgId = contextOrgId;
+      targetSpaceId = contextSpaceId;
+      isPersonal = false;
+    }
+
+    if (!targetOrgId || !targetSpaceId) {
+      return { error: "Workspace space not resolved." };
+    }
+
+    if (!isPersonal) {
+      const role = await getSpaceRole(userId, targetOrgId, targetSpaceId);
+      if (!role) return { error: "You are not a member of this space." };
+      if (role === "member" && inputData.assignee_ids?.length) {
+        const onlySelf = inputData.assignee_ids.length === 1 && inputData.assignee_ids[0] === userId;
+        if (!onlySelf) return { error: "Members can only assign tasks to themselves." };
+      }
+    }
+
+    const payload = {
+      org_id: targetOrgId,
+      space_id: targetSpaceId,
+      title: inputData.title,
+      description: inputData.description ?? null,
+      priority: inputData.priority as TaskPriority | undefined,
+      status: inputData.status as TaskStatus | undefined,
+      type: inputData.type as "task" | "event" | undefined,
+      event_type: inputData.event_type,
+      location: inputData.location ?? null,
+      is_all_day: inputData.is_all_day ?? false,
+      meet_link: inputData.meet_link ?? null,
+      start_date: inputData.start_date ? new Date(inputData.start_date) : null,
+      due_date: inputData.due_date ? new Date(inputData.due_date) : null,
+      assignee_ids: isPersonal ? [userId] : inputData.assignee_ids,
+      created_by: userId,
+    };
+
+    const task = await orgTaskService.createTask({ orgId: targetOrgId, spaceId: targetSpaceId }, payload);
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Creating task "${inputData.title}"`,
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'create_task',
+        icon: 'plus-circle',
+        action: `Creating ${inputData.type === 'event' ? 'event' : 'task'} "${inputData.title}"`,
+        details: `Created "${task.title}" — ${task.status}, ${task.priority} priority`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      task,
+    };
+  }
+});
+
+// ─── Tool: update_task ────────────────────────────────────────────────────────
+
+export const updateTaskTool = createTool({
+  id: 'update_task',
+  description: 'Update any fields on an existing task or event by its UUID.',
+  inputSchema: z.object({
+    taskId: z.string().uuid(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    priority: z.enum(['urgent', 'high', 'medium', 'low']).optional(),
+    status: z.enum(['backlog', 'todo', 'in_progress', 'done', 'cancelled']).optional(),
+    start_date: z.string().optional(),
+    due_date: z.string().optional(),
+    assignee_ids: z.array(z.string().uuid()).optional(),
+    location: z.string().optional(),
+    meet_link: z.string().optional(),
+    is_all_day: z.boolean().optional(),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Updating task details",
+      status: "running",
+    });
+
+    const task = await orgTaskService.getTaskById(inputData.taskId);
+    if (!task) return { error: "Task not found." };
+
+    const personal = await getPersonalOrgSpace(userId);
+    const isPersonalTask = personal && task.org_id === personal.orgId && task.space_id === personal.spaceId;
+
+    if (!isPersonalTask) {
+      const role = await getSpaceRole(userId, task.org_id as string, task.space_id as string);
+      if (!role) return { error: "You are not a member of this space." };
+      if (role === "member") {
+        const assigned = await isAssignedToTask(inputData.taskId, userId);
+        if (!assigned) return { error: "You can only update tasks assigned to you." };
+      }
+    }
+
+    const { taskId, ...rest } = inputData;
+    const payload: any = {
+      title: rest.title,
+      description: rest.description,
+      priority: rest.priority as TaskPriority | undefined,
+      status: rest.status as TaskStatus | undefined,
+      location: rest.location,
+      is_all_day: rest.is_all_day,
+      meet_link: rest.meet_link,
+      assignee_ids: rest.assignee_ids,
+      start_date: rest.start_date !== undefined
+        ? rest.start_date ? new Date(rest.start_date) : null
+        : undefined,
+      due_date: rest.due_date !== undefined
+        ? rest.due_date ? new Date(rest.due_date) : null
+        : undefined,
+    };
+
+    const updated = await orgTaskService.updateTask(
+      { orgId: task.org_id as string, spaceId: task.space_id as string },
+      taskId,
+      userId,
+      payload
+    );
+
+    if (!updated) return { error: "Task not found." };
+
+    const updatedFields = Object.keys(rest)
+      .filter(k => (rest as any)[k] !== undefined)
+      .join(', ');
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Updating task "${task.title}"`,
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'update_task',
+        icon: 'edit',
+        action: `Updating task "${task.title}"`,
+        details: `Updated: ${updatedFields}`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      task: updated,
+    };
+  }
+});
+
+// ─── Tool: delete_task ────────────────────────────────────────────────────────
+
+export const deleteTaskTool = createTool({
+  id: 'delete_task',
+  description: 'Soft-delete a task or event by UUID.',
+  inputSchema: z.object({
+    taskId: z.string().uuid(),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Deleting task",
+      status: "running",
+    });
+
+    const task = await orgTaskService.getTaskById(inputData.taskId);
+    if (!task) return { error: "Task not found." };
+
+    const personal = await getPersonalOrgSpace(userId);
+    const isPersonalTask = personal && task.org_id === personal.orgId && task.space_id === personal.spaceId;
+
+    if (!isPersonalTask) {
+      const role = await getSpaceRole(userId, task.org_id as string, task.space_id as string);
+      if (!role) return { error: "You are not a member of this space." };
+      if (role === "member") {
+        const assigned = await isAssignedToTask(inputData.taskId, userId);
+        if (!assigned) return { error: "You can only delete tasks assigned to you." };
+      }
+    }
+
+    await orgTaskService.deleteTask({ orgId: task.org_id as string, spaceId: task.space_id as string }, inputData.taskId, userId);
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Deleting task",
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'delete_task',
+        icon: 'trash',
+        action: 'Deleting task',
+        details: `Deleted task "${task.title}"`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      message: `Deleted task "${task.title}" successfully.`,
+    };
+  }
+});
+
+// ─── Tool: resolve_workspace ──────────────────────────────────────────────────
+
+export const resolveWorkspaceTool = createTool({
+  id: 'resolve_workspace',
+  description: "Find the user's organisations and their spaces in a single call. Use this only when orgId or spaceId is missing from context and cannot be inferred.",
+  inputSchema: z.object({
+    orgNameHint: z.string().optional().describe('Optional partial org name to filter results'),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Looking up your workspace",
+      status: "running",
+    });
+
+    const orgsResult = await pool.query(
+      `SELECT o.id, o.name, o.slug, om.role
+       FROM public.organisations o
+       INNER JOIN public.organisation_members om ON om.org_id = o.id
+       WHERE om.user_id = $1 AND o.deleted_at IS NULL
+       ORDER BY o.name`,
+      [userId]
+    );
+
+    const workspaces = [];
+    for (const org of orgsResult.rows) {
+      if (inputData.orgNameHint && !org.name.toLowerCase().includes(inputData.orgNameHint.toLowerCase())) {
+        continue;
+      }
+      const spacesResult = await pool.query(
+        `SELECT s.id, s.name, s.slug, sm.role
+         FROM public.spaces s
+         INNER JOIN public.space_members sm ON sm.space_id = s.id
+         WHERE sm.user_id = $1 AND s.org_id = $2 AND s.deleted_at IS NULL
+         ORDER BY s.name`,
+        [userId, org.id]
+      );
+      workspaces.push({
+        orgId: org.id,
+        orgName: org.name,
+        role: org.role,
+        spaces: spacesResult.rows.map((s: any) => ({
+          spaceId: s.id,
+          spaceName: s.name,
+          role: s.role,
+        })),
+      });
+    }
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Looking up your workspace",
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'resolve_workspace',
+        icon: 'building',
+        action: 'Looking up your workspace',
+        details: `Found ${workspaces.length} organisation(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      workspaces,
+    };
+  }
+});
+
 // ─── Tool: search_tasks ───────────────────────────────────────────────────────
 
 export const searchTasksTool = createTool({
@@ -67,6 +594,12 @@ export const searchTasksTool = createTool({
   execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Searching tasks for "${inputData.query}"`,
+      status: "running",
+    });
 
     const searchPattern = `%${inputData.query.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
 
@@ -112,666 +645,25 @@ export const searchTasksTool = createTool({
       space_id: t.space_id,
     }));
 
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Searching tasks for "${inputData.query}"`,
+      status: "complete",
+    });
+
     return {
       activity: {
-        agent: "keilhq-task-agent",
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'search_tasks',
+        icon: 'search',
         action: `Searching tasks for "${inputData.query}"`,
         details: `Found ${summaryTasks.length} matching task(s)`,
-        tool: "search_tasks"
+        status: 'complete',
+        timestamp: new Date().toISOString(),
       },
       tasks: summaryTasks,
       count: summaryTasks.length
-    };
-  },
-});
-
-// ─── Tool: get_personal_tasks ─────────────────────────────────────────────────
-
-export const getPersonalTasksTool = createTool({
-  id: "get_personal_tasks",
-  description: "List the current user's personal tasks (tasks in their personal org's private space). Returns summarized payloads. Only pass status or priority if the user explicitly asks to filter.",
-  inputSchema: z.object({
-    status: statusEnum,
-    priority: priorityEnum,
-    limit: z.number().int().min(1).max(50).optional().default(10),
-  }),
-  execute: async (inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const personal = await getPersonalOrgSpace(userId);
-    if (!personal) return { error: "Personal organisation not found." };
-
-    const tasks = await orgTaskService.getTasksBySpace(personal.orgId, personal.spaceId, {
-      filters: {
-        status: inputData.status as TaskStatus | undefined,
-        priority: inputData.priority as TaskPriority | undefined,
-      },
-      pagination: { limit: inputData.limit ?? 10, offset: 0 },
-    });
-
-    const summaryTasks = tasks.map((t: any) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      priority: t.priority,
-      start_date: t.start_date,
-      due_date: t.due_date,
-      type: t.type,
-      org_id: t.org_id,
-      space_id: t.space_id,
-    }));
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: "Listing personal tasks",
-        details: `Fetched ${summaryTasks.length} task(s) from personal backlog/todo`,
-        tool: "get_personal_tasks"
-      },
-      tasks: summaryTasks,
-      count: summaryTasks.length
-    };
-  },
-});
-
-// ─── Tool: get_personal_task ──────────────────────────────────────────────────
-
-export const getPersonalTaskTool = createTool({
-  id: "get_personal_task",
-  description: "Get a single personal task by its ID.",
-  inputSchema: z.object({
-    taskId: z.string().uuid().describe("The task's UUID"),
-  }),
-  execute: async (inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const personal = await getPersonalOrgSpace(userId);
-    if (!personal) return { error: "Personal organisation not found." };
-
-    const task = await orgTaskService.getTaskById(inputData.taskId);
-    if (!task) return { error: "Task not found." };
-    // Verify it belongs to the user's personal space
-    if (task.org_id !== personal.orgId || task.space_id !== personal.spaceId) {
-      return { error: "Task not found or you do not own it." };
-    }
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Reading personal task "${task.title}"`,
-        details: `Fetched full details for personal task`,
-        tool: "get_personal_task"
-      },
-      task
-    };
-  },
-});
-
-// ─── Tool: create_personal_task ───────────────────────────────────────────────
-
-export const createPersonalTaskTool = createTool({
-  id: "create_personal_task",
-  description: "Create a new personal task or event for the current user.",
-  inputSchema: z.object({
-    title: z.string().min(1).describe("Task title"),
-    description: z.string().optional(),
-    priority: priorityEnum,
-    status: statusEnum,
-    type: z.enum(["task", "event"]).optional().default("task"),
-    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
-    location: z.string().optional(),
-    is_all_day: z.boolean().optional(),
-    meet_link: z.string().optional(),
-    start_date: z.string().optional().describe("ISO 8601 date, e.g. 2025-06-01"),
-    due_date: z.string().optional().describe("ISO 8601 date, e.g. 2025-06-15"),
-  }),
-  execute: async (inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const personal = await getPersonalOrgSpace(userId);
-    if (!personal) return { error: "Personal organisation not found." };
-
-    const task = await orgTaskService.createTask(
-      { orgId: personal.orgId, spaceId: personal.spaceId },
-      {
-        org_id: personal.orgId,
-        space_id: personal.spaceId,
-        title: inputData.title,
-        description: inputData.description ?? null,
-        priority: inputData.priority as TaskPriority | undefined,
-        status: inputData.status as TaskStatus | undefined,
-        type: inputData.type as "task" | "event" | undefined,
-        event_type: inputData.event_type,
-        location: inputData.location ?? null,
-        is_all_day: inputData.is_all_day ?? false,
-        meet_link: inputData.meet_link ?? null,
-        start_date: inputData.start_date ? new Date(inputData.start_date) : null,
-        due_date: inputData.due_date ? new Date(inputData.due_date) : null,
-        assignee_ids: [userId],
-        created_by: userId,
-      }
-    );
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Creating personal task/event "${inputData.title}"`,
-        details: `Task ID: ${task.id}. Status: ${task.status}`,
-        tool: "create_personal_task"
-      },
-      task,
-      message: `Personal task/event "${task.title}" created.`
-    };
-  },
-});
-
-// ─── Tool: update_personal_task ───────────────────────────────────────────────
-
-export const updatePersonalTaskTool = createTool({
-  id: "update_personal_task",
-  description: "Update an existing personal task or event.",
-  inputSchema: z.object({
-    taskId: z.string().uuid(),
-    title: z.string().optional(),
-    description: z.string().nullable().optional(),
-    priority: priorityEnum,
-    status: statusEnum,
-    type: z.enum(["task", "event"]).optional(),
-    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
-    location: z.string().nullable().optional(),
-    is_all_day: z.boolean().optional(),
-    meet_link: z.string().nullable().optional(),
-    start_date: z.string().nullable().optional(),
-    due_date: z.string().nullable().optional(),
-  }),
-  execute: async (inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const personal = await getPersonalOrgSpace(userId);
-    if (!personal) return { error: "Personal organisation not found." };
-
-    // Verify the task belongs to the personal space
-    const existing = await orgTaskService.getTaskById(inputData.taskId);
-    if (!existing || existing.org_id !== personal.orgId || existing.space_id !== personal.spaceId) {
-      return { error: "Task not found or you do not own it." };
-    }
-
-    const { taskId, ...rest } = inputData;
-    const updated = await orgTaskService.updateTask(
-      { orgId: personal.orgId, spaceId: personal.spaceId },
-      taskId,
-      userId,
-      {
-        title: rest.title,
-        description: rest.description,
-        priority: rest.priority as TaskPriority | undefined,
-        status: rest.status as TaskStatus | undefined,
-        type: rest.type as "task" | "event" | undefined,
-        event_type: rest.event_type,
-        location: rest.location,
-        is_all_day: rest.is_all_day,
-        meet_link: rest.meet_link,
-        start_date: rest.start_date !== undefined
-          ? rest.start_date ? new Date(rest.start_date) : null
-          : undefined,
-        due_date: rest.due_date !== undefined
-          ? rest.due_date ? new Date(rest.due_date) : null
-          : undefined,
-      }
-    );
-
-    if (!updated) return { error: "Task not found." };
-    const changedFields = Object.keys(rest).filter(k => (rest as any)[k] !== undefined);
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Updating personal task "${updated.title}"`,
-        details: `Updated fields: ${changedFields.join(", ")}`,
-        tool: "update_personal_task"
-      },
-      task: updated,
-      message: `Task/event "${updated.title}" updated.`
-    };
-  },
-});
-
-// ─── Tool: delete_personal_task ───────────────────────────────────────────────
-
-export const deletePersonalTaskTool = createTool({
-  id: "delete_personal_task",
-  description: "Delete a personal task.",
-  inputSchema: z.object({
-    taskId: z.string().uuid(),
-  }),
-  execute: async (inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const personal = await getPersonalOrgSpace(userId);
-    if (!personal) return { error: "Personal organisation not found." };
-
-    // Verify the task belongs to the personal space
-    const existing = await orgTaskService.getTaskById(inputData.taskId);
-    if (!existing || existing.org_id !== personal.orgId || existing.space_id !== personal.spaceId) {
-      return { error: "Task not found or you do not own it." };
-    }
-
-    await orgTaskService.deleteTask({ orgId: personal.orgId, spaceId: personal.spaceId }, inputData.taskId, userId);
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Deleting personal task "${existing.title}"`,
-        details: `Successfully deleted task ID: ${inputData.taskId}`,
-        tool: "delete_personal_task"
-      },
-      message: "Personal task deleted successfully."
-    };
-  },
-});
-
-// ─── Tool: get_my_organisations ───────────────────────────────────────────────
-
-export const getMyOrganisationsTool = createTool({
-  id: "get_my_organisations",
-  description: "List all organisations the current user is a member of, including their role in each.",
-  inputSchema: z.object({}),
-  execute: async (_inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const result = await pool.query(
-      `SELECT o.id, o.name, o.slug, om.role
-       FROM public.organisations o
-       INNER JOIN public.organisation_members om ON om.org_id = o.id
-       WHERE om.user_id = $1 AND o.deleted_at IS NULL
-       ORDER BY o.name`,
-      [userId]
-    );
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: "Listing your organisations",
-        details: `Found ${result.rows.length} organisation(s)`,
-        tool: "get_my_organisations"
-      },
-      organisations: result.rows,
-      count: result.rows.length
-    };
-  },
-});
-
-// ─── Tool: get_my_spaces ──────────────────────────────────────────────────────
-
-export const getMySpacesTool = createTool({
-  id: "get_my_spaces",
-  description: "List all spaces the current user belongs to within a given organisation.",
-  inputSchema: z.object({
-    orgId: z.string().uuid().describe("The organisation ID to list spaces for"),
-  }),
-  execute: async (inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const result = await pool.query(
-      `SELECT s.id, s.name, s.slug, sm.role
-       FROM public.spaces s
-       INNER JOIN public.space_members sm ON sm.space_id = s.id
-       WHERE sm.user_id = $1 AND s.org_id = $2 AND s.deleted_at IS NULL
-       ORDER BY s.name`,
-      [userId, inputData.orgId]
-    );
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: "Listing spaces in organisation",
-        details: `Found ${result.rows.length} space(s)`,
-        tool: "get_my_spaces"
-      },
-      spaces: result.rows,
-      count: result.rows.length
-    };
-  },
-});
-
-// ─── Tool: get_my_assigned_tasks ──────────────────────────────────────────────
-
-export const getMyAssignedTasksTool = createTool({
-  id: "get_my_assigned_tasks",
-  description: "List all org tasks assigned to the current user across ALL organisations and spaces. Returns summarized payloads.",
-  inputSchema: z.object({
-    status: statusEnum,
-    priority: priorityEnum,
-    limit: z.number().int().min(1).max(100).optional().default(30),
-  }),
-  execute: async (inputData, context) => {
-    const userId = context?.requestContext?.get("userId") as string;
-    if (!userId) return { error: "Not authenticated." };
-
-    const params: any[] = [userId];
-    let query = `
-      SELECT t.id, t.title, t.status, t.priority,
-             t.start_date, t.due_date, t.created_at, t.type,
-             o.name as org_name, s.name as space_name,
-             t.org_id, t.space_id
-      FROM public.tasks t
-      INNER JOIN public.task_assignees ta ON ta.task_id = t.id AND ta.user_id = $1
-      LEFT JOIN public.organisations o ON o.id = t.org_id
-      LEFT JOIN public.spaces s ON s.id = t.space_id
-      WHERE t.deleted_at IS NULL
-    `;
-
-    if (inputData.status) {
-      params.push(inputData.status);
-      query += ` AND t.status = $${params.length}`;
-    }
-    if (inputData.priority) {
-      params.push(inputData.priority);
-      query += ` AND t.priority = $${params.length}`;
-    }
-
-    query += ` ORDER BY t.due_date ASC NULLS LAST, t.priority DESC`;
-    params.push(inputData.limit ?? 30);
-    query += ` LIMIT $${params.length}`;
-
-    const result = await pool.query(query, params);
-
-    const summaryTasks = result.rows.map((t: any) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      priority: t.priority,
-      start_date: t.start_date,
-      due_date: t.due_date,
-      type: t.type,
-      org_name: t.org_name,
-      space_name: t.space_name,
-      org_id: t.org_id,
-      space_id: t.space_id,
-    }));
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: "Listing your assigned tasks",
-        details: `Fetched ${summaryTasks.length} task(s) assigned to you across organisations`,
-        tool: "get_my_assigned_tasks"
-      },
-      tasks: summaryTasks,
-      count: summaryTasks.length
-    };
-  },
-});
-
-// ─── Tool: get_org_tasks ──────────────────────────────────────────────────────
-
-export const getOrgTasksTool = createTool({
-  id: "get_org_tasks",
-  description: "List tasks in the current organisation space. Optionally filter by status, priority, or assignee. Returns summarized payloads.",
-  inputSchema: z.object({
-    status: statusEnum,
-    priority: priorityEnum,
-    assigneeId: z.string().uuid().optional().describe("Filter by assignee user ID"),
-    limit: z.number().int().min(1).max(50).optional().default(20),
-  }),
-  execute: async (inputData, context) => {
-    const userId  = context?.requestContext?.get("userId")  as string;
-    const orgId   = context?.requestContext?.get("orgId")   as string;
-    const spaceId = context?.requestContext?.get("spaceId") as string;
-
-    if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
-
-    const role = await getSpaceRole(userId, orgId, spaceId);
-    if (!role) return { error: "You are not a member of this space." };
-
-    const tasks = await orgTaskService.getTasksBySpace(orgId, spaceId, {
-      filters: {
-        status: inputData.status as TaskStatus | undefined,
-        priority: inputData.priority as TaskPriority | undefined,
-        assigneeId: inputData.assigneeId,
-      },
-      pagination: { limit: inputData.limit ?? 20, offset: 0 },
-    });
-
-    const summaryTasks = tasks.map((t: any) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      priority: t.priority,
-      start_date: t.start_date,
-      due_date: t.due_date,
-      type: t.type,
-      org_id: t.org_id,
-      space_id: t.space_id,
-    }));
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: "Listing organisation tasks",
-        details: `Fetched ${summaryTasks.length} task(s) in this space`,
-        tool: "get_org_tasks"
-      },
-      tasks: summaryTasks,
-      count: summaryTasks.length
-    };
-  },
-});
-
-// ─── Tool: get_org_task ───────────────────────────────────────────────────────
-
-export const getOrgTaskTool = createTool({
-  id: "get_org_task",
-  description: "Get a single org task by ID, including assignees and dependencies.",
-  inputSchema: z.object({
-    taskId: z.string().uuid(),
-  }),
-  execute: async (inputData, context) => {
-    const userId  = context?.requestContext?.get("userId")  as string;
-    const orgId   = context?.requestContext?.get("orgId")   as string;
-    const spaceId = context?.requestContext?.get("spaceId") as string;
-
-    if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
-
-    const role = await getSpaceRole(userId, orgId, spaceId);
-    if (!role) return { error: "You are not a member of this space." };
-
-    const task = await orgTaskService.getTaskById(inputData.taskId);
-    if (!task) return { error: "Task not found." };
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Reading task "${task.title}"`,
-        details: `Fetched full details including assignees and dependencies`,
-        tool: "get_org_task"
-      },
-      task
-    };
-  },
-});
-
-// ─── Tool: create_org_task ────────────────────────────────────────────────────
-
-export const createOrgTaskTool = createTool({
-  id: "create_org_task",
-  description: "Create a new task or event in the current organisation space.",
-  inputSchema: z.object({
-    title: z.string().min(1),
-    description: z.string().optional(),
-    priority: priorityEnum,
-    status: statusEnum,
-    type: z.enum(["task", "event"]).optional().default("task"),
-    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
-    location: z.string().optional(),
-    is_all_day: z.boolean().optional(),
-    meet_link: z.string().optional(),
-    start_date: z.string().optional(),
-    due_date: z.string().optional(),
-    assignee_ids: z.array(z.string().uuid()).optional(),
-  }),
-  execute: async (inputData, context) => {
-    const userId  = context?.requestContext?.get("userId")  as string;
-    const orgId   = context?.requestContext?.get("orgId")   as string;
-    const spaceId = context?.requestContext?.get("spaceId") as string;
-
-    if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
-
-    const role = await getSpaceRole(userId, orgId, spaceId);
-    if (!role) return { error: "You are not a member of this space." };
-
-    if (role === "member" && inputData.assignee_ids?.length) {
-      const onlySelf = inputData.assignee_ids.length === 1 && inputData.assignee_ids[0] === userId;
-      if (!onlySelf) return { error: "Members can only assign tasks to themselves." };
-    }
-
-    const task = await orgTaskService.createTask(
-      { orgId, spaceId },
-      {
-        org_id: orgId,
-        space_id: spaceId,
-        title: inputData.title,
-        description: inputData.description ?? null,
-        priority: inputData.priority as TaskPriority | undefined,
-        status: inputData.status as TaskStatus | undefined,
-        type: inputData.type as "task" | "event" | undefined,
-        event_type: inputData.event_type,
-        location: inputData.location ?? null,
-        is_all_day: inputData.is_all_day ?? false,
-        meet_link: inputData.meet_link ?? null,
-        start_date: inputData.start_date ? new Date(inputData.start_date) : null,
-        due_date: inputData.due_date ? new Date(inputData.due_date) : null,
-        assignee_ids: inputData.assignee_ids,
-        created_by: userId,
-      }
-    );
-
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Creating organisation task/event "${inputData.title}"`,
-        details: `Task ID: ${task.id}. Priority: ${task.priority}`,
-        tool: "create_org_task"
-      },
-      task,
-      message: `Org task/event "${task.title}" created.`
-    };
-  },
-});
-
-// ─── Tool: update_org_task ────────────────────────────────────────────────────
-
-export const updateOrgTaskTool = createTool({
-  id: "update_org_task",
-  description: "Update an existing task or event in the current organisation space.",
-  inputSchema: z.object({
-    taskId: z.string().uuid(),
-    title: z.string().optional(),
-    description: z.string().nullable().optional(),
-    priority: priorityEnum,
-    status: statusEnum,
-    type: z.enum(["task", "event"]).optional(),
-    event_type: z.enum(["meeting", "call", "personal", "reminder", "other"]).optional(),
-    location: z.string().nullable().optional(),
-    is_all_day: z.boolean().optional(),
-    meet_link: z.string().nullable().optional(),
-    start_date: z.string().nullable().optional(),
-    due_date: z.string().nullable().optional(),
-  }),
-  execute: async (inputData, context) => {
-    const userId  = context?.requestContext?.get("userId")  as string;
-    const orgId   = context?.requestContext?.get("orgId")   as string;
-    const spaceId = context?.requestContext?.get("spaceId") as string;
-
-    if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
-
-    const role = await getSpaceRole(userId, orgId, spaceId);
-    if (!role) return { error: "You are not a member of this space." };
-
-    if (role === "member") {
-      const assigned = await isAssignedToTask(inputData.taskId, userId);
-      if (!assigned) return { error: "You can only update tasks assigned to you." };
-    }
-
-    const { taskId, ...rest } = inputData;
-    const updated = await orgTaskService.updateTask(
-      { orgId, spaceId },
-      taskId,
-      userId,
-      {
-        title: rest.title,
-        description: rest.description,
-        priority: rest.priority as TaskPriority | undefined,
-        status: rest.status as TaskStatus | undefined,
-        type: rest.type as "task" | "event" | undefined,
-        event_type: rest.event_type,
-        location: rest.location,
-        is_all_day: rest.is_all_day,
-        meet_link: rest.meet_link,
-        start_date: rest.start_date !== undefined
-          ? rest.start_date ? new Date(rest.start_date) : null
-          : undefined,
-        due_date: rest.due_date !== undefined
-          ? rest.due_date ? new Date(rest.due_date) : null
-          : undefined,
-      }
-    );
-
-    if (!updated) return { error: "Task not found." };
-    const changedFields = Object.keys(rest).filter(k => (rest as any)[k] !== undefined);
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Updating organisation task "${updated.title}"`,
-        details: `Updated fields: ${changedFields.join(", ")}`,
-        tool: "update_org_task"
-      },
-      task: updated,
-      message: `Task/event "${updated.title}" updated.`
-    };
-  },
-});
-
-// ─── Tool: delete_org_task ────────────────────────────────────────────────────
-
-export const deleteOrgTaskTool = createTool({
-  id: "delete_org_task",
-  description: "Delete a task from the current organisation space.",
-  inputSchema: z.object({
-    taskId: z.string().uuid(),
-  }),
-  execute: async (inputData, context) => {
-    const userId  = context?.requestContext?.get("userId")  as string;
-    const orgId   = context?.requestContext?.get("orgId")   as string;
-    const spaceId = context?.requestContext?.get("spaceId") as string;
-
-    if (!userId || !orgId || !spaceId) return { error: "Missing org or space context." };
-
-    const role = await getSpaceRole(userId, orgId, spaceId);
-    if (!role) return { error: "You are not a member of this space." };
-
-    const existing = await orgTaskService.getTaskById(inputData.taskId);
-    if (!existing) return { error: "Task not found." };
-
-    if (role === "member") {
-      const assigned = await isAssignedToTask(inputData.taskId, userId);
-      if (!assigned) return { error: "You can only delete tasks assigned to you." };
-    }
-
-    await orgTaskService.deleteTask({ orgId, spaceId }, inputData.taskId, userId);
-    return {
-      activity: {
-        agent: "keilhq-task-agent",
-        action: `Deleting organisation task "${existing.title}"`,
-        details: `Successfully deleted task ID: ${inputData.taskId}`,
-        tool: "delete_org_task"
-      },
-      message: "Org task deleted successfully."
     };
   },
 });
@@ -789,6 +681,12 @@ export const getCalendarEventsTool = createTool({
   execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Reading your calendar",
+      status: "running",
+    });
 
     const start = new Date(inputData.startDate);
     const end = new Date(inputData.endDate);
@@ -817,12 +715,22 @@ export const getCalendarEventsTool = createTool({
       [userId, start, end, inputData.limit ?? 50]
     );
 
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Reading your calendar",
+      status: "complete",
+    });
+
     return {
       activity: {
-        agent: "keilhq-task-agent",
-        action: "Reading calendar events",
-        details: `Found ${result.rows.length} scheduled event(s) in range`,
-        tool: "get_calendar_events"
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'get_calendar_events',
+        icon: 'calendar',
+        action: 'Reading your calendar',
+        details: `Found ${result.rows.length} event(s) in the requested range`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
       },
       events: result.rows,
       count: result.rows.length,

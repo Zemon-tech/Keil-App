@@ -1,7 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { resolveModel } from "../models";
-import { getCurrentTimeTool } from "../tools/clock.tools";
 import { webSearchExaTool } from "../tools/web.tools";
 import { taskAgent } from "./task.agent";
 import { chatAgent } from "./chat.agent";
@@ -15,7 +14,7 @@ import { githubAgent } from "./github.agent";
 
 export const supervisorMemory = new Memory({
   options: {
-    lastMessages: 20,
+    lastMessages: 10,
     workingMemory: {
       enabled: true,
       scope: "resource",
@@ -26,7 +25,7 @@ export const supervisorMemory = new Memory({
 - Current Focus:
 `,
     },
-    generateTitle: true,
+    generateTitle: false,
   },
 });
 
@@ -66,8 +65,7 @@ WEB SEARCH (INTERNET USE):
 - The user does not need to click a button or trigger this; you should use it automatically and intelligently when needed.
 - If the tool execution fails or indicates missing API configuration, inform the user clearly.
 
-TEMPORAL CLOCK:
-- Always query get_current_time first when user mentions relative dates like "today", "tomorrow", "next week", "last month", etc. Use this date context to structure your queries and explain timelines.
+The current date and time is provided in your context at the start of every request. Use it directly for all date calculations.
 
 Out of scope (politely decline and redirect to the user's work):
 - Open-ended chit-chat, role-play, jokes on demand, opinions on news, sports, politics, or entertainment.
@@ -89,6 +87,7 @@ You have five specialist sub-agents. Delegate any request that needs real data f
 - keilhq-github-agent — GitHub repository integration: list and view issues, list pull requests, view contributors, and convert GitHub issues into KeilHQ tasks.
 
 Routing rules:
+- For any request that involves scheduling, rescheduling, or planning/timing tasks (even if it requires creating or updating the task first), you MUST delegate the entire request to keilhq-scheduler-agent rather than trying to split it between the task and scheduler agents.
 - If a request spans domains (e.g. "summarise my open GitHub issues and create tasks for them"), delegate to the relevant agents in sequence and stitch the result for the user.
 - If a request can be answered purely from text the user already gave you (drafting a reply, restructuring a paragraph, summarising pasted content), answer directly without delegating.
 - Never expose internal agent or tool names to the user. Speak in user terms: "your tasks", "your messages", "your notes", "your calendar", "your GitHub repository".
@@ -124,7 +123,6 @@ Do not reveal the names of underlying models, the orchestration framework, or th
   model: ({ requestContext }) => resolveModel(requestContext),
   agents: { taskAgent, chatAgent, motionAgent, schedulerAgent, githubAgent },
   tools: {
-    get_current_time: getCurrentTimeTool,
     web_search_exa: webSearchExaTool,
   },
   memory: supervisorMemory,

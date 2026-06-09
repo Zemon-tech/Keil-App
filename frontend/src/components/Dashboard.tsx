@@ -22,6 +22,19 @@ import {
   Trash2,
   Search,
   Calendar,
+  List,
+  Inbox,
+  Layout,
+  File,
+  FilePlus,
+  MessageSquare,
+  MessageCircle,
+  Building,
+  Globe,
+  Github,
+  GitPullRequest,
+  Users,
+  GitBranch,
 } from "lucide-react";
 import api from "@/lib/api";
 import {
@@ -51,6 +64,8 @@ import {
   ChainOfThoughtContent,
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
+import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
+import { extractStreamingActivities } from "@/lib/activity-stream";
 import { useChat } from "@ai-sdk/react";
 import { supabase } from "@/lib/supabase";
 import { DefaultChatTransport } from "ai";
@@ -63,11 +78,38 @@ import {
 
 // ─── AI Tool Helper Mapping Functions ──────────────────────────────────────────
 
-const getToolIcon = (toolName: string) => {
+const getToolIcon = (toolName: string, result?: any) => {
+  const iconHint = result?.activity?.icon;
+  if (iconHint) {
+    switch (iconHint) {
+      case "search": return Search;
+      case "list": return List;
+      case "file-text": return FileText;
+      case "plus-circle": return PlusCircle;
+      case "edit": return FilePenLine;
+      case "trash": return Trash2;
+      case "calendar": return Calendar;
+      case "inbox": return Inbox;
+      case "clock": return Clock;
+      case "layout": return Layout;
+      case "file": return File;
+      case "file-plus": return FilePlus;
+      case "file-edit": return FilePenLine;
+      case "message-square": return MessageSquare;
+      case "message-circle": return MessageCircle;
+      case "building": return Building;
+      case "globe": return Globe;
+      case "github": return Github;
+      case "git-pull-request": return GitPullRequest;
+      case "users": return Users;
+      case "git-branch": return GitBranch;
+    }
+  }
+
   if (toolName.includes("schedule")) {
     return Calendar;
   }
-  if (toolName.includes("task") || toolName.includes("org")) {
+  if (toolName.includes("task") || toolName.includes("org") || toolName.includes("workspace")) {
     if (toolName.includes("create")) return PlusCircle;
     if (toolName.includes("update")) return FilePenLine;
     if (toolName.includes("delete")) return Trash2;
@@ -93,6 +135,17 @@ const getToolIcon = (toolName: string) => {
   return Sparkles;
 };
 
+const getAgentIcon = (agentName: string) => {
+  switch (agentName) {
+    case "Task Manager": return ListTodo;
+    case "Chat": return MessageSquareCode;
+    case "Notes": return FileText;
+    case "Scheduler": return Calendar;
+    case "GitHub": return Github;
+    default: return Bot;
+  }
+};
+
 const getToolLabel = (toolName: string, args: any, result?: any) => {
   if (result?.activity?.action) {
     return result.activity.action;
@@ -107,43 +160,52 @@ const getToolLabel = (toolName: string, args: any, result?: any) => {
       return "Delegated to Motion Agent";
     case "keilhq-scheduler-agent":
       return "Delegated to Scheduler Agent";
+    case "list_tasks":
+      return safeArgs.scope ? `Listing your ${safeArgs.scope} tasks` : "Listing tasks";
+    case "get_task":
+      return "Reading task details";
+    case "create_task":
+      return safeArgs.title ? `Creating task "${safeArgs.title}"` : "Creating task";
+    case "update_task":
+      return "Updating task details";
+    case "delete_task":
+      return "Deleting task";
+    case "resolve_workspace":
+      return "Looking up workspace";
+    case "search_tasks":
+      return `Searching tasks for "${safeArgs.query || ""}"`;
+    case "get_calendar_events":
+      return `Reading calendar schedule`;
     case "get_unscheduled_tasks":
       return "Retrieving unscheduled tasks";
     case "auto_schedule_tasks":
       return "Auto-scheduling tasks into calendar free slots";
-    case "get_current_time":
-      return "Checking current date and time context";
-    case "get_calendar_events":
-      return `Checking calendar events (${safeArgs.startDate || ""} to ${safeArgs.endDate || ""})`;
-    case "get_personal_tasks":
-      return "Retrieving personal tasks list";
-    case "get_org_tasks":
-      return "Retrieving organization tasks list";
-    case "get_my_assigned_tasks":
-      return "Retrieving tasks assigned to me";
-    case "search_tasks":
-      return `Searching tasks for "${safeArgs.query || ""}"`;
-    case "create_org_task":
-    case "create_personal_task":
-      return `Creating task: "${safeArgs.title || ""}"`;
-    case "update_org_task":
-    case "update_personal_task":
-      return `Updating task: "${safeArgs.title || safeArgs.id || ""}"`;
-    case "delete_org_task":
-    case "delete_personal_task":
-      return `Deleting task ID: ${safeArgs.taskId || safeArgs.id || ""}`;
     case "get_user_channels":
-      return "Retrieving chat channels";
+      return "Checking message channels";
     case "get_channel_messages":
       return "Reading messages in channel";
-    case "check_unread_messages":
-      return "Checking for unread messages";
     case "list_motion_pages":
       return "Retrieving list of Motion pages";
     case "search_motion_pages":
       return `Searching notes for "${safeArgs.query || ""}"`;
     case "get_motion_page":
-      return `Reading note page context`;
+      return `Reading note page content`;
+    case "create_motion_page":
+      return safeArgs.title ? `Creating note "${safeArgs.title}"` : "Creating note page";
+    case "update_motion_page":
+      return "Updating note page";
+    case "web_search_exa":
+      return safeArgs.query ? `Searching the web for "${safeArgs.query}"` : "Searching the web";
+    case "list_github_issues":
+      return safeArgs.repo ? `Listing issues in ${safeArgs.repo}` : "Listing GitHub issues";
+    case "get_github_issue":
+      return safeArgs.issueNumber && safeArgs.repo ? `Reading issue #${safeArgs.issueNumber} in ${safeArgs.repo}` : "Reading GitHub issue";
+    case "list_github_prs":
+      return safeArgs.repo ? `Listing pull requests in ${safeArgs.repo}` : "Listing GitHub pull requests";
+    case "list_github_contributors":
+      return safeArgs.repo ? `Looking up contributors in ${safeArgs.repo}` : "Looking up GitHub contributors";
+    case "create_github_issue_from_task":
+      return "Creating GitHub issue from task";
     default:
       return `Running tool: ${toolName}`;
   }
@@ -160,45 +222,48 @@ const getToolDescription = (toolName: string, _args: any, result: any) => {
   }
 
   switch (toolName) {
+    case "list_tasks":
+      return `Found ${result.tasks?.length || 0} tasks`;
+    case "get_task":
+      return result.task ? `Fetched details for "${result.task.title}"` : "Read task details";
+    case "create_task":
+      return result.task ? `Created task successfully (ID: ${result.task.id})` : "Created task successfully";
+    case "update_task":
+      return "Updated task successfully";
+    case "delete_task":
+      return "Deleted task successfully";
+    case "resolve_workspace":
+      return `Found ${result.workspaces?.length || 0} workspace(s)`;
     case "get_unscheduled_tasks":
       return `Found ${result.tasks?.length || 0} unscheduled tasks`;
     case "auto_schedule_tasks":
       return `Successfully scheduled ${result.scheduledCount || 0} tasks`;
-    case "get_current_time":
-      return `Context: ${result.localTime || result.iso || ""}`;
     case "get_calendar_events":
       return `Found ${result.events?.length || 0} events`;
-    case "get_personal_tasks":
-    case "get_org_tasks":
-    case "get_my_assigned_tasks":
-      return `Found ${result.tasks?.length || 0} tasks`;
     case "search_tasks":
       return `Found ${result.tasks?.length || 0} matches`;
-    case "create_org_task":
-    case "create_personal_task":
-      return `Created task successfully (ID: ${result.task?.id || ""})`;
-    case "update_org_task":
-    case "update_personal_task":
-      return `Updated task successfully`;
-    case "delete_org_task":
-    case "delete_personal_task":
-      return `Deleted task successfully`;
     case "get_user_channels":
       return `Retrieved ${result.channels?.length || 0} channels`;
     case "get_channel_messages":
       return `Read ${result.messages?.length || 0} messages`;
-    case "check_unread_messages":
-      return result.unreadCount !== undefined
-        ? `Found ${result.unreadCount} unread messages`
-        : "Checked unread messages";
     case "list_motion_pages":
       return `Found ${result.pages?.length || 0} pages`;
     case "search_motion_pages":
       return `Found ${result.pages?.length || 0} matching pages`;
     case "get_motion_page":
       return `Fetched page content (length: ${result.markdown?.length || result.content?.length || 0} characters)`;
-    default:
-      return "Completed successfully";
+    case "web_search_exa":
+      return `Found ${result.results?.length || 0} search results`;
+    case "list_github_issues":
+      return `Found ${result.issues?.length || 0} open issue(s)`;
+    case "get_github_issue":
+      return result.issue ? `Fetched issue details: "${result.issue.title}"` : "Read issue details";
+    case "list_github_prs":
+      return `Found ${result.prs?.length || 0} PR(s)`;
+    case "list_github_contributors":
+      return `Found ${result.contributors?.length || 0} contributor(s)`;
+    case "create_github_issue_from_task":
+      return `Created issue successfully`;
   }
 };
 
@@ -414,12 +479,6 @@ export function Dashboard() {
 
   const isCollapsed = state === "collapsed";
   const hasChatStarted = messages.length > 0 || isAssistantThinking;
-  const assistantLoadingText = [
-    "Fetching the output",
-    "Be ready",
-    "Forging a response",
-  ][messages.length % 3];
-
   const getActiveAgentAndStatus = useCallback(() => {
     if (!isLoading) return null;
 
@@ -429,7 +488,16 @@ export function Dashboard() {
     }
 
     const lastAssistantMsg = assistantMessages[assistantMessages.length - 1];
-    const invocations = (lastAssistantMsg as any).toolInvocations || [];
+
+    // First check live activity stream
+    const streamingActivities = extractStreamingActivities(lastAssistantMsg);
+    const runningActivity = streamingActivities.find(act => act.status === "running");
+    if (runningActivity) {
+      return { agent: runningActivity.agent, status: `${runningActivity.action}...` };
+    }
+
+    // Fallback to traditional tool invocations
+    const invocations = extractToolInvocations(lastAssistantMsg);
     if (invocations.length === 0) {
       return { agent: "KeilHQ AI", status: "Thinking..." };
     }
@@ -443,96 +511,16 @@ export function Dashboard() {
     }
 
     const { toolName, args } = activeInvocation;
-    let agent = "KeilHQ AI";
-    let status = "Running...";
+    const activity = getToolActivity(toolName, activeInvocation.state, activeInvocation.result, args);
 
-    if (toolName === "keilhq-task-agent") {
-      agent = "Task Agent";
-      status = "Delegating to task specialist...";
-    } else if (toolName === "keilhq-chat-agent") {
-      agent = "Chat Agent";
-      status = "Delegating to chat specialist...";
-    } else if (toolName === "keilhq-motion-agent") {
-      agent = "Motion Agent";
-      status = "Delegating to notes specialist...";
-    } else if (toolName === "keilhq-scheduler-agent") {
-      agent = "Scheduler Agent";
-      status = "Delegating to calendar specialist...";
-    } else {
-      if (toolName.includes("schedule")) {
-        agent = "Scheduler Agent";
-      } else if (toolName.includes("task") || toolName.includes("org")) {
-        agent = "Task Agent";
-      } else if (
-        toolName.includes("chat") ||
-        toolName.includes("channel") ||
-        toolName.includes("message")
-      ) {
-        agent = "Chat Agent";
-      } else if (toolName.includes("motion") || toolName.includes("page")) {
-        agent = "Motion Agent";
-      }
-
-      switch (toolName) {
-        case "get_unscheduled_tasks":
-          status = "Finding unscheduled tasks...";
-          break;
-        case "auto_schedule_tasks":
-          status = "Calculating free calendar slots and scheduling...";
-          break;
-        case "get_org_tasks":
-        case "get_personal_tasks":
-          status = "Fetching tasks list...";
-          break;
-        case "get_my_assigned_tasks":
-          status = "Retrieving tasks assigned to you...";
-          break;
-        case "search_tasks":
-          status = `Searching for task query "${args.query || ""}"...`;
-          break;
-        case "create_org_task":
-        case "create_personal_task":
-          status = `Creating task "${args.title || ""}"...`;
-          break;
-        case "update_org_task":
-        case "update_personal_task":
-          status = "Updating task details...";
-          break;
-        case "delete_org_task":
-        case "delete_personal_task":
-          status = "Deleting task...";
-          break;
-        case "get_user_channels":
-          status = "Retrieving message channels...";
-          break;
-        case "get_channel_messages":
-          status = "Reading recent channel messages...";
-          break;
-        case "check_unread_messages":
-          status = "Checking for unread messages...";
-          break;
-        case "list_motion_pages":
-          status = "Browsing notes list...";
-          break;
-        case "search_motion_pages":
-          status = `Searching notes for "${args.query || ""}"...`;
-          break;
-        case "get_motion_page":
-          status = "Reading note content...";
-          break;
-        case "get_calendar_events":
-          status = "Reading calendar schedule...";
-          break;
-        case "get_current_time":
-          status = "Getting current date/time context...";
-          break;
-        default:
-          status = `Running tool ${toolName}...`;
-      }
-    }
-
-    return { agent, status };
+    return { agent: activity.agent, status: `${activity.action}...` };
   }, [messages, isLoading]);
+
+  const assistantLoadingText = [
+    "Fetching the output",
+    "Be ready",
+    "Forging a response",
+  ][messages.length % 3];
 
   const activeStatus = getActiveAgentAndStatus();
   const loadingText = activeStatus
@@ -581,6 +569,8 @@ export function Dashboard() {
       id: msg.id || crypto.randomUUID(),
       role: msg.role === "signal" ? "system" : msg.role,
       content: text,
+      parts: msg.parts || (msg.content && typeof msg.content === "object" ? msg.content.parts : undefined),
+      toolInvocations: msg.toolInvocations,
       createdAt: msg.createdAt ? new Date(msg.createdAt) : undefined,
     };
   }, []);
@@ -733,16 +723,17 @@ export function Dashboard() {
                     "";
 
                   // Extract reasoning parts — consolidate all reasoning parts into one block
-                  const reasoningParts = message.parts
+                  console.log("DASHBOARD MSG", message); const reasoningParts = message.parts
                     ?.filter((p: any) => p.type === "reasoning")
                     ?.map((p: any) => p.text)
                     ?.join("") || "";
                   const reasoningText = reasoningParts || (message as any).reasoning || "";
                   const hasReasoning = reasoningText.length > 0;
 
-                  // Extract tool invocations
-                  const toolInvocations = (message as any).toolInvocations || [];
+                  // Extract tool invocations and live streaming activities
+                  const toolInvocations = extractToolInvocations(message);
                   const hasToolInvocations = toolInvocations.length > 0;
+                  const streamingActivities = extractStreamingActivities(message);
 
                   const isLastMessage = messages[messages.length - 1]?.id === message.id;
                   const lastPart = message.parts?.at(-1);
@@ -750,9 +741,9 @@ export function Dashboard() {
                   const isReasoningStreaming =
                     isLoading && isLastMessage && lastPart?.type === "reasoning";
 
-                  // Show shimmer if assistant is active but we have no content at all yet
+                  // Show shimmer if assistant is active but we have no content or activities at all yet
                   const showShimmer =
-                    isAssistant && isLoading && isLastMessage && !hasReasoning && !hasToolInvocations && text.trim() === "";
+                    isAssistant && isLoading && isLastMessage && !hasReasoning && !hasToolInvocations && streamingActivities.length === 0 && text.trim() === "";
 
                   return (
                     <Message
@@ -783,37 +774,65 @@ export function Dashboard() {
                             )}
 
                             {/* 2. Chain of Thought Component */}
-                            {hasToolInvocations && (
+                            {(hasToolInvocations || streamingActivities.length > 0) && (
                               <ChainOfThought defaultOpen={true}>
                                 <ChainOfThoughtHeader className="text-xs uppercase tracking-wider font-semibold py-1">
-                                  {toolInvocations.length} {toolInvocations.length === 1 ? "action" : "actions"} taken
+                                  {hasToolInvocations 
+                                    ? `${toolInvocations.length} ${toolInvocations.length === 1 ? "action" : "actions"} taken` 
+                                    : `${streamingActivities.length} ${streamingActivities.length === 1 ? "step" : "steps"} in progress`}
                                 </ChainOfThoughtHeader>
                                 <ChainOfThoughtContent className="border-l border-border/60 pl-3 ml-2 space-y-3">
+                                  {/* Render live streaming activities */}
+                                  {streamingActivities.map((act: any, idx: number) => {
+                                    const Icon = getAgentIcon(act.agent);
+                                    const status = act.status === "running" ? "active" : "complete";
+                                    return (
+                                      <ChainOfThoughtStep
+                                        key={`stream-${idx}-${act.agent}-${act.action}`}
+                                        icon={Icon}
+                                        label={
+                                          <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[10px] text-muted-foreground/80 uppercase font-bold tracking-wider">
+                                              {act.agent}
+                                            </span>
+                                            <span className="text-muted-foreground/40 text-[10px]">•</span>
+                                            <span>{act.action}</span>
+                                          </span>
+                                        }
+                                        status={status}
+                                      />
+                                    );
+                                  })}
+
+                                  {/* Render tool invocations */}
                                   {toolInvocations.map((inv: any) => {
                                     const status = inv.state === "result" ? "complete" : "active";
-                                    const Icon = getToolIcon(inv.toolName);
+                                    const Icon = getToolIcon(inv.toolName, inv.result);
                                     const label = getToolLabel(inv.toolName, inv.args, inv.result);
                                     const description = getToolDescription(inv.toolName, inv.args, inv.result);
 
                                     // Resolve agent name
-                                    let agentName = inv.result?.activity?.agent;
+                                    let agentName = inv.result?.activity?.agentLabel || inv.result?.activity?.agent;
                                     if (!agentName) {
-                                      if (inv.toolName.includes("task") || inv.toolName.includes("org")) {
-                                        agentName = "Task Agent";
+                                      if (inv.toolName.includes("task") || inv.toolName.includes("org") || inv.toolName.includes("workspace")) {
+                                        agentName = "Task Manager";
                                       } else if (inv.toolName.includes("chat") || inv.toolName.includes("message") || inv.toolName.includes("channel")) {
-                                        agentName = "Chat Agent";
+                                        agentName = "Chat";
                                       } else if (inv.toolName.includes("motion") || inv.toolName.includes("page") || inv.toolName.includes("note")) {
-                                        agentName = "Motion Agent";
+                                        agentName = "Notes";
                                       } else if (inv.toolName.includes("schedule") || inv.toolName.includes("calendar")) {
-                                        agentName = "Scheduler Agent";
+                                        agentName = "Scheduler";
+                                      } else if (inv.toolName.includes("github")) {
+                                        agentName = "GitHub";
                                       } else {
-                                        agentName = "AI Agent";
+                                        agentName = "KeilHQ AI";
                                       }
                                     }
-                                    if (agentName === "keilhq-task-agent") agentName = "Task Agent";
-                                    if (agentName === "keilhq-chat-agent") agentName = "Chat Agent";
-                                    if (agentName === "keilhq-motion-agent") agentName = "Motion Agent";
-                                    if (agentName === "keilhq-scheduler-agent") agentName = "Scheduler Agent";
+                                    if (agentName === "keilhq-task-agent") agentName = "Task Manager";
+                                    if (agentName === "keilhq-chat-agent") agentName = "Chat";
+                                    if (agentName === "keilhq-motion-agent") agentName = "Notes";
+                                    if (agentName === "keilhq-scheduler-agent") agentName = "Scheduler";
+                                    if (agentName === "keilhq-github-agent") agentName = "GitHub";
                                     if (agentName === "keilhq-ai") agentName = "KeilHQ AI";
 
                                     return (
