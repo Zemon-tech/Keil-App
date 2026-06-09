@@ -23,6 +23,7 @@ import { VisuallyHidden } from "radix-ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMe } from "@/hooks/api/useMe";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -434,7 +435,7 @@ function OrgMembersTab() {
               {/* Left Section: Avatar + Details */}
               <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
                 <Avatar className="size-10 border-2 border-background shadow-sm shrink-0">
-                  <AvatarImage src={member.avatar_url || undefined} alt={member.name || member.email} />
+                  <AvatarImage src={getOptimizedImageUrl(member.avatar_url, { width: 120, height: 120 })} alt={member.name || member.email} />
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                     {(member.name || member.email).charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -1017,6 +1018,7 @@ function AccountTab() {
 
   // Avatar states
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { data: me } = useMe();
 
@@ -1234,15 +1236,36 @@ function AccountTab() {
       {/* Profile Section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Avatar className="size-14 rounded-full ring-2 ring-background shadow-sm">
+          <Avatar 
+            className={cn(
+              "size-14 rounded-full ring-2 ring-background shadow-sm",
+              avatarUrl && "cursor-pointer hover:opacity-90 transition-opacity"
+            )}
+            onClick={() => avatarUrl && setIsPreviewOpen(true)}
+          >
             {avatarUrl ? (
-              <img src={avatarUrl} alt={userDisplayName} className="size-full object-cover rounded-full" />
+              <img src={getOptimizedImageUrl(avatarUrl, { width: 192, height: 192 })} alt={userDisplayName} className="size-full object-cover rounded-full" />
             ) : (
               <AvatarFallback className="rounded-full bg-emerald-600 text-white text-lg font-semibold">
                 {userInitials}
               </AvatarFallback>
             )}
           </Avatar>
+
+          {avatarUrl && (
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+              <DialogContent className="max-w-md p-1 bg-transparent border-none shadow-none flex items-center justify-center">
+                <VisuallyHidden.Root>
+                  <DialogTitle>Avatar Preview</DialogTitle>
+                </VisuallyHidden.Root>
+                <img
+                  src={avatarUrl}
+                  alt={userDisplayName}
+                  className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border-4 border-background bg-card"
+                />
+              </DialogContent>
+            </Dialog>
+          )}
           <div>
             <p className="text-sm font-semibold text-foreground">
               {userDisplayName}
