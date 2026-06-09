@@ -3,7 +3,6 @@ import { resolveModel } from "../models";
 import {
   getUserChannelsTool,
   getChannelMessagesTool,
-  checkUnreadMessagesTool,
 } from "../tools/chat.tools";
 
 export const chatAgent = new Agent({
@@ -15,11 +14,13 @@ export const chatAgent = new Agent({
 
 When reporting unread messages, be concise: show channel name (or member names for DMs), sender, and the unread count.
 You cannot send messages on behalf of the user — only read and check status.
-If a user asks to "send" or "reply", let them know that is not supported and they should use the chat interface directly.`,
+If a user asks to "send" or "reply", let them know that is not supported and they should use the chat interface directly.
+
+Use get_user_channels to list channels and check unread counts. The response includes
+totalUnreadCount and unreadChannels — use these directly. There is no separate unread tool.`,
   model: ({ requestContext }) => resolveModel(requestContext),
   tools: {
     get_user_channels: getUserChannelsTool,
     get_channel_messages: getChannelMessagesTool,
-    check_unread_messages: checkUnreadMessagesTool,
   },
 });

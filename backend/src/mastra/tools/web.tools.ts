@@ -1,6 +1,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { config } from "../../config";
+import { ActivityEvent } from "../types/activity";
+import { emitActivity } from "../lib/activity-stream";
+
 
 export const webSearchExaTool = createTool({
   id: "web_search_exa",
@@ -23,8 +26,14 @@ export const webSearchExaTool = createTool({
       .default("auto")
       .describe("Exa search mode. 'auto' selects the best mode. Use 'deep' for higher-quality web search and extraction."),
   }),
-  execute: async (inputData) => {
+  execute: async (inputData, context) => {
     const { query, numResults, type } = inputData;
+
+    await emitActivity(context, {
+      agentLabel: "KeilHQ AI",
+      action: "Searching the web",
+      status: "running",
+    });
     const apiKey = config.exaApiKey || process.env.EXA_API_KEY;
 
     if (!apiKey) {
@@ -81,13 +90,25 @@ export const webSearchExaTool = createTool({
         highlights: item.highlights,
       }));
 
+      const activity: ActivityEvent = {
+        agent: 'keilhq-ai',
+        agentLabel: 'KeilHQ AI',
+        tool: 'web_search_exa',
+        icon: 'globe',
+        action: `Searching the web for "${query}"`,
+        details: `Found ${results?.length || 0} result(s) via Exa`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      };
+
+      await emitActivity(context, {
+        agentLabel: "KeilHQ AI",
+        action: `Searching the web for "${query}"`,
+        status: "complete",
+      });
+
       return {
-        activity: {
-          agent: "keilhq-ai",
-          action: `Searching the web for "${query}"`,
-          details: `Found ${results?.length || 0} search results via Exa`,
-          tool: "web_search_exa"
-        },
+        activity,
         results: results || [],
       };
     } catch (err: any) {
@@ -97,4 +118,3 @@ export const webSearchExaTool = createTool({
     }
   },
 });
-

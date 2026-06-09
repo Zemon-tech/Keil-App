@@ -112,8 +112,26 @@ export const mastra = new Mastra({
           const agent = c.get("mastra").getAgent("keilhq-ai");
           const messages = body.messages as UIMessage[];
 
+          function buildTemporalContext(): string {
+            const now = new Date();
+            return [
+              `<temporal_context>`,
+              `Today is ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.`,
+              `Current time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}.`,
+              `ISO: ${now.toISOString()}.`,
+              `UTC offset: ${(-now.getTimezoneOffset() / 60).toFixed(1)} hours.`,
+              `Use this for all relative date calculations. Do not call any tool for the current time.`,
+              `</temporal_context>`,
+            ].join('\n');
+          }
+
+          const baseInstructions = await agent.getInstructions({ requestContext });
+          const temporalContext = buildTemporalContext();
+          const instructionsOverride = `${temporalContext}\n\n${baseInstructions}`;
+
           const agentStream = await agent.stream(messages, {
             requestContext,
+            instructions: instructionsOverride,
             memory: {
               ...body.memory,
               resource: authResult.userId,
@@ -129,7 +147,47 @@ export const mastra = new Mastra({
           const uiStream = createUIMessageStream({
             originalMessages: messages,
             execute: async ({ writer }) => {
-              for await (const part of toAISdkStream(agentStream, {
+              // Wrap agentStream.fullStream to intercept custom data-agent-activity events
+              const originalFullStream = agentStream.fullStream;
+              const reader = originalFullStream.getReader();
+              const wrappedFullStream = new ReadableStream({
+                async pull(controller) {
+                  const { done, value } = await reader.read();
+                  if (done) {
+                    controller.close();
+                    return;
+                  }
+                  // Intercept data-agent-activity custom chunks
+                  const val = value as any;
+                  if (val && val.type === "custom" && val.payload?.type === "data-agent-activity") {
+                    if (process.env.NODE_ENV === "development") {
+                      console.log(
+                        `[Debug] Activity received: [${val.payload.data?.agent}] ${val.payload.data?.action} (${val.payload.data?.status})`
+                      );
+                    }
+                    // Write directly to Hono's writer as an AI SDK message part
+                    writer.write({
+                      type: "data-agent-activity",
+                      ...val.payload.data,
+                    } as any);
+                  }
+                  controller.enqueue(value);
+                },
+                cancel() {
+                  reader.releaseLock();
+                },
+              });
+
+              // Replace fullStream on agentStream with our wrapped stream using Object.defineProperty to override the read-only getter
+              const interceptedAgentStream = Object.create(agentStream);
+              Object.defineProperty(interceptedAgentStream, "fullStream", {
+                value: wrappedFullStream,
+                writable: true,
+                configurable: true,
+                enumerable: true,
+              });
+
+              for await (const part of toAISdkStream(interceptedAgentStream, {
                 from: "agent",
                 version: "v6",
                 sendReasoning: true,

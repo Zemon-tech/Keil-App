@@ -4,6 +4,9 @@ import * as githubService from "../../services/github.service";
 import * as orgTaskService from "../../services/org-task.service";
 import * as personalTaskService from "../../services/personal-task.service";
 import { config } from "../../config";
+import { ActivityEvent } from "../types/activity";
+import { emitActivity } from "../lib/activity-stream";
+
 
 // Tool helper: parse repo from input, ensuring it's valid format
 const repoSchema = z.string().describe("The GitHub repository in the format 'owner/repo' (e.g. 'facebook/react')");
@@ -19,6 +22,12 @@ export const listGitHubIssuesTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
+    await emitActivity(context, {
+      agentLabel: "GitHub",
+      action: "Listing issues",
+      status: "running",
+    });
+
     try {
       const issues = await githubService.listIssues(userId, inputData.repo, inputData.state);
       const summary = issues.map(issue => ({
@@ -31,7 +40,25 @@ export const listGitHubIssuesTool = createTool({
         created_at: issue.created_at,
         body_preview: issue.body ? (issue.body.slice(0, 150) + (issue.body.length > 150 ? "..." : "")) : "",
       }));
-      return { issues: summary, count: summary.length };
+
+      const activity: ActivityEvent = {
+        agent: 'keilhq-github-agent',
+        agentLabel: 'GitHub',
+        tool: 'list_github_issues',
+        icon: 'github',
+        action: `Listing issues in ${inputData.repo}`,
+        details: `Found ${summary.length} open issue(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      };
+
+      await emitActivity(context, {
+        agentLabel: "GitHub",
+        action: `Listing issues in ${inputData.repo}`,
+        status: "complete",
+      });
+
+      return { activity, issues: summary, count: summary.length };
     } catch (err: any) {
       return { error: err.message || "Failed to list GitHub issues" };
     }
@@ -49,9 +76,34 @@ export const getGitHubIssueTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
+    await emitActivity(context, {
+      agentLabel: "GitHub",
+      action: "Fetching issue",
+      status: "running",
+    });
+
     try {
       const issue = await githubService.getIssue(userId, inputData.repo, inputData.issueNumber);
+
+      const activity: ActivityEvent = {
+        agent: 'keilhq-github-agent',
+        agentLabel: 'GitHub',
+        tool: 'get_github_issue',
+        icon: 'github',
+        action: `Reading issue #${inputData.issueNumber} in ${inputData.repo}`,
+        details: `Fetched issue: "${issue.title}"`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      };
+
+      await emitActivity(context, {
+        agentLabel: "GitHub",
+        action: `Reading issue #${inputData.issueNumber} in ${inputData.repo}`,
+        status: "complete",
+      });
+
       return {
+        activity,
         issue: {
           number: issue.number,
           title: issue.title,
@@ -81,6 +133,12 @@ export const listGitHubPRsTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
+    await emitActivity(context, {
+      agentLabel: "GitHub",
+      action: "Listing pull requests",
+      status: "running",
+    });
+
     try {
       const prs = await githubService.listPullRequests(userId, inputData.repo, inputData.state);
       const summary = prs.map(pr => ({
@@ -92,7 +150,25 @@ export const listGitHubPRsTool = createTool({
         created_at: pr.created_at,
         body_preview: pr.body ? (pr.body.slice(0, 150) + (pr.body.length > 150 ? "..." : "")) : "",
       }));
-      return { prs: summary, count: summary.length };
+
+      const activity: ActivityEvent = {
+        agent: 'keilhq-github-agent',
+        agentLabel: 'GitHub',
+        tool: 'list_github_prs',
+        icon: 'git-pull-request',
+        action: `Listing pull requests in ${inputData.repo}`,
+        details: `Found ${summary.length} PR(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      };
+
+      await emitActivity(context, {
+        agentLabel: "GitHub",
+        action: `Listing pull requests in ${inputData.repo}`,
+        status: "complete",
+      });
+
+      return { activity, prs: summary, count: summary.length };
     } catch (err: any) {
       return { error: err.message || "Failed to list GitHub pull requests" };
     }
@@ -109,9 +185,33 @@ export const listGitHubContributorsTool = createTool({
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
 
+    await emitActivity(context, {
+      agentLabel: "GitHub",
+      action: "Looking up contributors",
+      status: "running",
+    });
+
     try {
       const contributors = await githubService.listContributors(userId, inputData.repo);
-      return { contributors, count: contributors.length };
+
+      const activity: ActivityEvent = {
+        agent: 'keilhq-github-agent',
+        agentLabel: 'GitHub',
+        tool: 'list_github_contributors',
+        icon: 'users',
+        action: `Looking up contributors in ${inputData.repo}`,
+        details: `Found ${contributors.length} contributor(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      };
+
+      await emitActivity(context, {
+        agentLabel: "GitHub",
+        action: `Looking up contributors in ${inputData.repo}`,
+        status: "complete",
+      });
+
+      return { activity, contributors, count: contributors.length };
     } catch (err: any) {
       return { error: err.message || "Failed to list GitHub contributors" };
     }
@@ -129,6 +229,12 @@ export const createGitHubIssueFromTaskTool = createTool({
   execute: async (inputData, context) => {
     const userId = context?.requestContext?.get("userId") as string;
     if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "GitHub",
+      action: "Fetching task details",
+      status: "running",
+    });
 
     try {
       // 1. Fetch the task details (automatically detecting if personal or org task)
@@ -173,6 +279,12 @@ export const createGitHubIssueFromTaskTool = createTool({
       body += `\n---\n*Created from KeilHQ Task: [${taskTitle}](${config.frontendUrl}/tasks/${inputData.taskId})*`;
 
       // 3. Create the issue on GitHub
+      await emitActivity(context, {
+        agentLabel: "GitHub",
+        action: "Creating issue on GitHub",
+        status: "running",
+      });
+
       const result = await githubService.createIssue(userId, inputData.repo, taskTitle, body);
 
       // 4. Link the task to the GitHub issue
@@ -184,7 +296,25 @@ export const createGitHubIssueFromTaskTool = createTool({
         inputData.repo
       );
 
+      const activity: ActivityEvent = {
+        agent: 'keilhq-github-agent',
+        agentLabel: 'GitHub',
+        tool: 'create_github_issue_from_task',
+        icon: 'git-branch',
+        action: 'Creating GitHub issue from task',
+        details: `Created issue #${result.number} in ${inputData.repo}`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      };
+
+      await emitActivity(context, {
+        agentLabel: "GitHub",
+        action: "Creating GitHub issue from task",
+        status: "complete",
+      });
+
       return {
+        activity,
         success: true,
         issueNumber: result.number,
         issueUrl: result.html_url,
@@ -195,4 +325,3 @@ export const createGitHubIssueFromTaskTool = createTool({
     }
   },
 });
-
