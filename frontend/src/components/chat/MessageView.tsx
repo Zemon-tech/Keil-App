@@ -10,6 +10,7 @@ import { useMe } from "@/hooks/api/useMe";
 import api from "@/lib/api";
 import { GroupSettingsDialog } from "./GroupSettingsDialog";
 import { motion, AnimatePresence } from "motion/react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -183,9 +184,11 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
     }
   };
 
-  const channelName = currentChannel?.type === "direct"
-    ? currentChannel.members.find((m) => m.id !== me?.id)?.name ?? "Unknown"
-    : currentChannel?.name ?? "Group Chat";
+  const otherMember = currentChannel?.type === "direct"
+    ? currentChannel.members.find((m) => m.id !== me?.id) || currentChannel.members[0]
+    : undefined;
+
+  const channelName = otherMember?.name ?? currentChannel?.name ?? "Group Chat";
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden min-h-0">
@@ -201,9 +204,18 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             </button>
             
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
-                {currentChannel?.type === "group" ? <Users className="size-4" /> : channelName.charAt(0).toUpperCase()}
-              </div>
+              {currentChannel?.type === "group" ? (
+                <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
+                  <Users className="size-4" />
+                </div>
+              ) : (
+                <Avatar className="size-8">
+                  <AvatarImage src={otherMember?.avatar_url || undefined} alt={channelName} />
+                  <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                    {channelName.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-foreground leading-none">{channelName}</span>
                 <span className="text-[10px] text-muted-foreground mt-1">

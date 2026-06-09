@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import {
   Dialog,
@@ -20,7 +21,8 @@ import {
 } from "@/components/ui/sheet";
 import { VisuallyHidden } from "radix-ui";
 import { useAuth } from "@/contexts/AuthContext";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useMe } from "@/hooks/api/useMe";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -432,6 +434,7 @@ function OrgMembersTab() {
               {/* Left Section: Avatar + Details */}
               <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
                 <Avatar className="size-10 border-2 border-background shadow-sm shrink-0">
+                  <AvatarImage src={member.avatar_url || undefined} alt={member.name || member.email} />
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                     {(member.name || member.email).charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -989,6 +992,7 @@ function SpaceMembersPanel({
 
 function AccountTab() {
   const { user, signOut } = useAuth();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -1014,12 +1018,14 @@ function AccountTab() {
   // Avatar states
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { data: me } = useMe();
+
   const userDisplayName =
-    user?.user_metadata?.full_name || user?.email || "User";
+    me?.name || user?.user_metadata?.full_name || user?.email || "User";
   const userEmail = user?.email || "";
   const username =
     user?.user_metadata?.username || user?.email?.split("@")[0] || "";
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const avatarUrl = me?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
   // Determine if user logged in with Google
   const isGoogleUser = user?.app_metadata?.provider === "google" || 
@@ -1111,44 +1117,51 @@ function AccountTab() {
     setLoading(true);
     setError(null);
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      // Get S3 presigned upload URL
+      const res = await api.post("v1/s3-upload/profile/avatar", {
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream"
+      });
 
-      // Upload to 'avatars' bucket
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file);
+      const { uploadUrl, publicUrl } = res.data.data;
 
-      if (uploadError) {
-        // If bucket doesn't exist, we might get an error.
-        // For "dummy features working", we'll simulate success if it's a "bucket not found" error
-        // but tell the user it's a dummy for now if it fails.
-        if (uploadError.message.includes("not found")) {
-           // Fallback: just update metadata with a blob URL for local preview or just dummy success
-           const { error: metaError } = await supabase.auth.updateUser({
-             data: { avatar_url: URL.createObjectURL(file) }
-           });
-           if (metaError) throw metaError;
-           setSuccess("Avatar updated (locally)");
-        } else {
-          throw uploadError;
-        }
-      } else {
-        const { data: { publicUrl } } = supabase.storage
-          .from("avatars")
-          .getPublicUrl(filePath);
+      // Perform direct S3 upload via XMLHttpRequest
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl, true);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
 
-        const { error: metaError } = await supabase.auth.updateUser({
-          data: { avatar_url: publicUrl },
-        });
-        if (metaError) throw metaError;
-        setSuccess("Avatar updated successfully");
-      }
+      const uploadPromise = new Promise<void>((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            resolve();
+          } else {
+            reject(new Error(`S3 upload failed with status ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("S3 upload network error"));
+        xhr.send(file);
+      });
+
+      await uploadPromise;
+
+      // Update Supabase auth metadata with new avatar public URL
+      const { error: metaError } = await supabase.auth.updateUser({
+        data: { avatar_url: publicUrl },
+      });
+      if (metaError) throw metaError;
+
+      // Invalidate queries to reload updated profile info
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      await queryClient.invalidateQueries({ queryKey: ["organisations"] });
+      await queryClient.invalidateQueries({ queryKey: ["chat"] });
+
+      setSuccess("Avatar updated successfully");
     } catch (err: any) {
+      console.error("Failed to update avatar:", err);
       setError(err.message || "Failed to update avatar");
     } finally {
       setLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 

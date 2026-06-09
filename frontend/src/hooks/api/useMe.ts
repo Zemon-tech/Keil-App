@@ -8,6 +8,7 @@ export interface MeResponse {
   email: string;
   name: string | null;
   created_at: string;
+  avatar_url?: string | null;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────

@@ -142,7 +142,7 @@ export const getUserChannels = async (
       ) AS unread_count,
       COALESCE(
         json_agg(
-          json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
+          json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role, 'avatar_url', u.avatar_url)
         ) FILTER (WHERE u.id IS NOT NULL),
         '[]'
       ) AS members
@@ -195,7 +195,7 @@ export const getChannelById = async (channelId: string, userId: string): Promise
         0 AS unread_count,
         COALESCE(
           json_agg(
-            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role)
+            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role, 'avatar_url', u.avatar_url)
           ) FILTER (WHERE u.id IS NOT NULL),
           '[]'
         ) AS members
@@ -256,7 +256,7 @@ export const getChannelMessages = async (channelId: string, limit = 50, beforeId
       m.created_at,
       m.reply_to,
       m.attachments,
-      json_build_object('id', u.id, 'name', COALESCE(u.name, u.email)) AS sender
+      json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'avatar_url', u.avatar_url) AS sender
     FROM public.messages m
     JOIN public.users u ON m.sender_id = u.id
     WHERE m.channel_id = $1
@@ -312,7 +312,7 @@ export const saveMessage = async (channelId: string, senderId: string, content: 
     );
 
     const senderResult = await client.query(
-      `SELECT id, name, email FROM public.users WHERE id = $1`,
+      `SELECT id, name, email, avatar_url FROM public.users WHERE id = $1`,
       [senderId],
     );
     const sender = senderResult.rows[0];

@@ -27,8 +27,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMe } from "@/hooks/api/useMe";
 import { useAppContext } from "@/contexts/AppContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useSpaces } from "@/hooks/api/useSpaces";
@@ -445,10 +446,12 @@ export function AppSidebar({
   const isDark = resolvedTheme === "dark";
   const logoSrc = isDark ? "/keilhq-white.svg" : "/keilhq.svg";
 
+  const { data: me } = useMe();
+
   const userDisplayName =
-    user?.user_metadata?.full_name || user?.email || "User";
+    me?.name || user?.user_metadata?.full_name || user?.email || "User";
   const userInitials =
-    user?.user_metadata?.full_name
+    (me?.name || user?.user_metadata?.full_name)
       ?.split(" ")
       .map((n: string) => n?.[0])
       .filter(Boolean)
@@ -456,6 +459,7 @@ export function AppSidebar({
       .toUpperCase() ||
     user?.email?.[0]?.toUpperCase() ||
     "U";
+  const avatarUrl = me?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || undefined;
 
   const { state } = useSidebar();
   const { setOpen } = useSidebar();
@@ -733,6 +737,7 @@ export function AppSidebar({
                     className="mt-2 h-11 rounded-xl px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <Avatar className="size-8 rounded-full ring-1 ring-border/60">
+                      <AvatarImage src={avatarUrl} alt={userDisplayName} className="rounded-full" />
                       <AvatarFallback className="rounded-full bg-primary text-xs text-primary-foreground">
                         {userInitials}
                       </AvatarFallback>
@@ -760,6 +765,7 @@ export function AppSidebar({
                   <DropdownMenuLabel className="font-normal px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <Avatar className="size-7 rounded-md">
+                        <AvatarImage src={avatarUrl} alt={userDisplayName} className="rounded-md" />
                         <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-xs">
                           {userInitials}
                         </AvatarFallback>

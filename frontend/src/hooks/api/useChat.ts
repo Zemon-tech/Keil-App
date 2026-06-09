@@ -19,6 +19,7 @@ export interface ChatMember {
   id: string;
   name: string;
   role?: "admin" | "member";
+  avatar_url?: string | null;
 }
 
 export interface Channel {

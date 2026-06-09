@@ -19,6 +19,7 @@ export interface OrgMember {
   role: "owner" | "admin" | "member";
   name: string | null;
   email: string;
+  avatar_url?: string | null;
   workspaces?: Array<{
     id: string;
     name: string;
