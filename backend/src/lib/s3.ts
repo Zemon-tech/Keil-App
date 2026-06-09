@@ -7,7 +7,7 @@ const log = createServiceLogger("s3");
 const s3Configured =
     !!config.awsS3AccessKeyId &&
     !!config.awsS3SecretAccessKey &&
-    !!config.awsS3BucketName;
+    (!!config.awsS3BucketName || !!config.awsS3PublicBucketName);
 
 let _s3: S3Client | null = null;
 

@@ -38,6 +38,8 @@ export const config = {
     awsS3AccessKeyId: process.env.AWS_S3_ACCESS_KEY_ID || "",
     awsS3SecretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY || "",
     awsS3BucketName: process.env.AWS_S3_BUCKET_NAME || "",
+    awsS3PublicBucketName: process.env.AWS_S3_PUBLIC_BUCKET_NAME || "",
+    awsS3PublicCdnUrl: process.env.AWS_S3_PUBLIC_CDN_URL || "",
     // ── Google Generative AI (Gemini via @ai-sdk/google) ─────────────────────
     // Get your API key from https://aistudio.google.com/app/apikey
     googleGenAiApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
