@@ -98,6 +98,21 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
     />,
   ];
 
+  const [timeFormat, setTimeFormat] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("time_format") || "12h";
+    }
+    return "12h";
+  });
+
+  useEffect(() => {
+    const handleTimeFormatChange = () => {
+      setTimeFormat(localStorage.getItem("time_format") || "12h");
+    };
+    window.addEventListener("time_format_changed", handleTimeFormatChange);
+    return () => window.removeEventListener("time_format_changed", handleTimeFormatChange);
+  }, []);
+
   const urgentCount = data?.immediate?.length ?? 0;
   const queuedCount = data?.today?.length ?? 0;
   const dayLabel = new Intl.DateTimeFormat(undefined, {
@@ -108,6 +123,7 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
   const timeLabel = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
+    hour12: timeFormat === "12h",
   }).format(now);
 
   const stats = [

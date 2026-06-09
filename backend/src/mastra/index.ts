@@ -103,6 +103,8 @@ export const mastra = new Mastra({
             requestContext.set("localAiBaseUrl", body.localAiBaseUrl);
           if (body?.localAiModel)
             requestContext.set("localAiModel", body.localAiModel);
+          if (body?.openRouterModel)
+            requestContext.set("openRouterModel", body.openRouterModel);
 
           console.log(
             `[Chat] model=${body?.modelSelection || "gemini"} | user=${authResult.userId} | bodyParsed in ${Date.now() - startTime}ms`,

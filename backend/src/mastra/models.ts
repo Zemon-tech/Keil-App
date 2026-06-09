@@ -20,23 +20,20 @@ function getGeminiModel() {
   return _geminiModel;
 }
 
-// ─── OpenRouter ───────────────────────────────────────────────────────────────
+let _openRouterModelProvider: ReturnType<typeof createOpenAICompatible> | null = null;
 
-let _openRouterModel: ReturnType<ReturnType<typeof createOpenAICompatible>> | null = null;
-
-function getOpenRouterModel() {
-  if (!_openRouterModel) {
-    if (!config.openRouterApiKey) {
-      throw new Error("OPENROUTER_API_KEY is not configured");
-    }
-    const openrouter = createOpenAICompatible({
+function getOpenRouterModel(modelName?: string) {
+  if (!config.openRouterApiKey) {
+    throw new Error("OPENROUTER_API_KEY is not configured");
+  }
+  if (!_openRouterModelProvider) {
+    _openRouterModelProvider = createOpenAICompatible({
       name: "openrouter",
       baseURL: config.openRouterBaseUrl,
       apiKey: config.openRouterApiKey,
     });
-    _openRouterModel = openrouter(config.openRouterModel);
   }
-  return _openRouterModel;
+  return _openRouterModelProvider(modelName || config.openRouterModel);
 }
 
 // ─── Local LLM ────────────────────────────────────────────────────────────────
@@ -79,8 +76,10 @@ export function resolveModel(requestContext?: RequestContext) {
   const modelSelection = requestContext?.get("modelSelection") as string | undefined;
 
   switch (modelSelection) {
-    case "openrouter":
-      return getOpenRouterModel();
+    case "openrouter": {
+      const openRouterModel = requestContext?.get("openRouterModel") as string | undefined;
+      return getOpenRouterModel(openRouterModel);
+    }
 
     case "github":
       return getGithubModel();
