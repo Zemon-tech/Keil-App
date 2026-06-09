@@ -11,6 +11,7 @@ import api from "@/lib/api";
 import { GroupSettingsDialog } from "./GroupSettingsDialog";
 import { motion, AnimatePresence } from "motion/react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -210,7 +211,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                 </div>
               ) : (
                 <Avatar className="size-8">
-                  <AvatarImage src={otherMember?.avatar_url || undefined} alt={channelName} />
+                  <AvatarImage src={getOptimizedImageUrl(otherMember?.avatar_url, { width: 96, height: 96 })} alt={channelName} />
                   <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
                     {channelName.charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -360,7 +361,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                         return (
                           <div key={idx} className="max-w-[240px]">
                             <img 
-                              src={att.downloadUrl} 
+                              src={getOptimizedImageUrl(att.downloadUrl, { width: 800 })} 
                               alt={att.fileName} 
                               className="max-h-48 object-contain rounded-lg border border-border hover:scale-[1.01] transition-transform cursor-pointer"
                               onClick={() => window.open(att.downloadUrl, "_blank")}
