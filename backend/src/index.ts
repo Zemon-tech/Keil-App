@@ -61,6 +61,14 @@ const startServer = async () => {
             dbLog.warn({ err }, "Note on creating meeting recordings indexes");
         }
 
+        // Ensure attachments column exists on messages table
+        try {
+            await pool.query("ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT NULL");
+            dbLog.info("Successfully verified and applied messages table attachments column");
+        } catch (err: unknown) {
+            dbLog.warn({ err }, "Note on altering messages table for attachments");
+        }
+
         // Initialize Mastra server (auto-registers agent endpoints)
         // Storage init may fail on first attempt due to connection pressure;
         // Mastra retries lazily on the first actual /chat request.

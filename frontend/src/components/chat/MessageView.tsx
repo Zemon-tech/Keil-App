@@ -3,10 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useChatMessages, useSendMessage, useChatChannels, useDeleteChannel } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
-import { ArrowLeft, Send, Check, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Send, Check, Trash2, Users, Paperclip, File, Download, Loader2, X } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMe } from "@/hooks/api/useMe";
+import api from "@/lib/api";
 import { GroupSettingsDialog } from "./GroupSettingsDialog";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -42,6 +43,87 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const [replyingTo, setReplyingTo] = useState<{ messageId: string; senderName: string; text: string } | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedAttachment, setUploadedAttachment] = useState<any | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Size validation (25MB limit)
+    const MAX_SIZE = 25 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert("File size exceeds the 25MB limit.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setAttachmentFile(file);
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadedAttachment(null);
+
+    try {
+      // Get S3 presigned upload URL
+      const res = await api.post("v1/s3-upload/chat/upload", {
+        channelId: channelId,
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream"
+      });
+
+      const { uploadUrl, s3Key } = res.data.data;
+
+      // Perform direct S3 upload via XMLHttpRequest for progress support
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl, true);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percent);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          setUploadedAttachment({
+            s3Key,
+            fileName: file.name,
+            mimeType: file.type || "application/octet-stream",
+            fileSize: file.size
+          });
+          setIsUploading(false);
+        } else {
+          console.error("S3 upload failed with status:", xhr.status);
+          alert("Failed to upload attachment. Please try again.");
+          setAttachmentFile(null);
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+      };
+
+      xhr.onerror = () => {
+        console.error("S3 upload network error");
+        alert("Attachment upload network error.");
+        setAttachmentFile(null);
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      };
+
+      xhr.send(file);
+    } catch (err) {
+      console.error("Failed to get S3 upload URL:", err);
+      alert("Failed to initiate file upload.");
+      setAttachmentFile(null);
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const scrollToMessage = (msgId: string) => {
     const el = document.getElementById(`msg-${msgId}`);
     if (el) {
@@ -74,10 +156,23 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   };
 
   const handleSend = () => {
-    if (!text.trim()) return;
-    sendMessage(channelId, text.trim(), replyingTo);
+    const hasText = text.trim().length > 0;
+    const hasAttachment = !!uploadedAttachment;
+    if (!hasText && !hasAttachment) return;
+
+    sendMessage(
+      channelId, 
+      text.trim(), 
+      replyingTo, 
+      uploadedAttachment ? [uploadedAttachment] : undefined
+    );
+
     setText("");
     setReplyingTo(null);
+    setAttachmentFile(null);
+    setUploadedAttachment(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
     const socket = getSocket();
     if (socket) {
       socket.emit("typing_end", { channel_id: channelId });
@@ -210,38 +305,79 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                     {msg.sender.name ?? "Unknown"}
                   </span>
                 )}
-                <div className={`flex items-center gap-2 max-w-[85%] ${isMine ? "flex-row-reverse" : "flex-row"}`}>
-                  <div
-                    className={`relative text-[13px] rounded-2xl px-4 py-2 w-fit leading-relaxed shadow-sm transition-all duration-300 ${
-                      isMine 
-                        ? "bg-primary text-primary-foreground rounded-tr-sm" 
-                        : "bg-card text-card-foreground border border-border/50 rounded-tl-sm"
-                    } ${
-                      highlightedMessageId === msg.id
-                        ? isMine
-                          ? "ring-4 ring-primary/30 scale-102"
-                          : "bg-muted/80 ring-4 ring-muted-foreground/20 scale-102"
-                        : ""
-                    }`}
-                  >
-                    {msg.reply_to && (
+                <div className={`flex items-start gap-2 max-w-[85%] ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                  <div className={`flex flex-col gap-1.5 ${isMine ? "items-end" : "items-start"}`}>
+                    {(msg.reply_to || msg.content) && (
                       <div
-                        onClick={() => scrollToMessage(msg.reply_to!.messageId)}
-                        className={`mb-1.5 p-2 rounded-lg text-xs cursor-pointer border-l-2 border-foreground select-none text-left ${
-                          isMine
-                            ? "bg-primary-foreground/15 text-primary-foreground/90"
-                            : "bg-muted text-muted-foreground"
+                        className={`relative text-[13px] rounded-2xl px-4 py-2 w-fit leading-relaxed shadow-sm transition-all duration-300 ${
+                          isMine 
+                            ? "bg-primary text-primary-foreground rounded-tr-sm" 
+                            : "bg-card text-card-foreground border border-border/50 rounded-tl-sm"
+                        } ${
+                          highlightedMessageId === msg.id
+                            ? isMine
+                              ? "ring-4 ring-primary/30 scale-102"
+                              : "bg-muted/80 ring-4 ring-muted-foreground/20 scale-102"
+                            : ""
                         }`}
                       >
-                        <div className="font-bold text-[10px] truncate">
-                          {msg.reply_to.senderName}
-                        </div>
-                        <div className="truncate text-[11px] leading-tight opacity-90">
-                          {msg.reply_to.text}
-                        </div>
+                        {msg.reply_to && (
+                          <div
+                            onClick={() => scrollToMessage(msg.reply_to!.messageId)}
+                            className={`mb-1.5 p-2 rounded-lg text-xs cursor-pointer border-l-2 border-foreground select-none text-left ${
+                              isMine
+                                ? "bg-primary-foreground/15 text-primary-foreground/90"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            <div className="font-bold text-[10px] truncate">
+                              {msg.reply_to.senderName}
+                            </div>
+                            <div className="truncate text-[11px] leading-tight opacity-90">
+                              {msg.reply_to.text}
+                            </div>
+                          </div>
+                        )}
+                        {msg.content && <div>{msg.content}</div>}
                       </div>
                     )}
-                    <div>{msg.content}</div>
+
+                    {msg.attachments && msg.attachments.map((att, idx) => {
+                      const isImage = att.mimeType.startsWith("image/");
+                      if (isImage) {
+                        return (
+                          <div key={idx} className="max-w-[240px]">
+                            <img 
+                              src={att.downloadUrl} 
+                              alt={att.fileName} 
+                              className="max-h-48 object-contain rounded-lg border border-border hover:scale-[1.01] transition-transform cursor-pointer"
+                              onClick={() => window.open(att.downloadUrl, "_blank")}
+                            />
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={idx} className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-card/60 border border-border/50 text-card-foreground text-xs min-w-[180px] max-w-[240px]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <File className="size-3.5 text-muted-foreground flex-shrink-0" />
+                            <div className="flex flex-col min-w-0 text-left">
+                              <span className="font-semibold truncate text-[10px]">{att.fileName}</span>
+                              <span className="text-[9px] text-muted-foreground mt-0.5">{(att.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                            </div>
+                          </div>
+                          <a 
+                            href={att.downloadUrl} 
+                            download={att.fileName}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors flex-shrink-0"
+                            title="Download File"
+                          >
+                            <Download className="size-3" />
+                          </a>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <button
@@ -250,7 +386,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                       senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
                       text: msg.content,
                     })}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted text-muted-foreground cursor-pointer flex items-center justify-center shrink-0"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted text-muted-foreground cursor-pointer flex items-center justify-center shrink-0 self-center"
                     title="Reply"
                   >
                     <span className="text-xs font-semibold">↩</span>
@@ -313,7 +449,55 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             </button>
           </div>
         )}
+        {attachmentFile && (
+          <div className="flex items-center justify-between bg-muted/80 backdrop-blur-[2px] rounded-xl px-4 py-3 mb-1 text-xs border border-border animate-in slide-in-from-bottom-2 duration-200">
+            <div className="flex items-center gap-3 min-w-0 pr-4">
+              <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                {isUploading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <File className="size-4" />
+                )}
+              </div>
+              <div className="flex flex-col min-w-0 text-left">
+                <span className="font-semibold text-foreground truncate">
+                  {attachmentFile.name}
+                </span>
+                <span className="text-muted-foreground text-[10px] mt-0.5">
+                  {isUploading ? `Uploading: ${uploadProgress}%` : `${(attachmentFile.size / 1024 / 1024).toFixed(2)} MB`}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setAttachmentFile(null);
+                setUploadedAttachment(null);
+                setIsUploading(false);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className="text-muted-foreground hover:text-foreground p-1 cursor-pointer font-bold shrink-0"
+              aria-label="Remove attachment"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-3">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileSelect} 
+            className="hidden" 
+          />
+          <button 
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading || !!attachmentFile}
+            className="flex items-center justify-center size-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0 disabled:opacity-40"
+            title="Attach file"
+          >
+            <Paperclip className="size-5" />
+          </button>
           <input
             value={text}
             onChange={handleInputChange}
@@ -323,7 +507,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
           />
           <button
             onClick={handleSend}
-            disabled={!text.trim()}
+            disabled={isUploading || (!text.trim() && !uploadedAttachment)}
             className="flex items-center justify-center size-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary transition-all active:scale-95"
             aria-label="Send message"
           >

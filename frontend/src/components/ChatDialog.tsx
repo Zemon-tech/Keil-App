@@ -16,13 +16,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
     Hash, Search, Send, 
     Paperclip, Smile, CheckCheck,
-    Users, MessageCircle, Trash2, Minimize2
+    Users, MessageCircle, Trash2, Minimize2,
+    File, Download, Loader2, X
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useRef, useEffect } from "react";
 import { useMe } from "@/hooks/api/useMe";
 import { useAppContext } from "@/contexts/AppContext";
 import { getSocket } from "@/lib/socket";
+import api from "@/lib/api";
 import { NewChatDialog } from "@/components/chat/NewChatDialog";
 import {
   AlertDialog,
@@ -65,6 +67,87 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     const inputRef = useRef<HTMLInputElement>(null);
     const [replyingTo, setReplyingTo] = useState<{ messageId: string; senderName: string; text: string } | null>(null);
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadedAttachment, setUploadedAttachment] = useState<any | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Size validation (25MB limit)
+        const MAX_SIZE = 25 * 1024 * 1024;
+        if (file.size > MAX_SIZE) {
+            alert("File size exceeds the 25MB limit.");
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
+
+        setAttachmentFile(file);
+        setIsUploading(true);
+        setUploadProgress(0);
+        setUploadedAttachment(null);
+
+        try {
+            // Get S3 presigned upload URL
+            const res = await api.post("v1/s3-upload/chat/upload", {
+                channelId: activeChannelId,
+                fileName: file.name,
+                contentType: file.type || "application/octet-stream"
+            });
+
+            const { uploadUrl, s3Key } = res.data.data;
+
+            // Perform direct S3 upload via XMLHttpRequest for progress support
+            const xhr = new XMLHttpRequest();
+            xhr.open("PUT", uploadUrl, true);
+            xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const percent = Math.round((event.loaded / event.total) * 100);
+                    setUploadProgress(percent);
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    setUploadedAttachment({
+                        s3Key,
+                        fileName: file.name,
+                        mimeType: file.type || "application/octet-stream",
+                        fileSize: file.size
+                    });
+                    setIsUploading(false);
+                } else {
+                    console.error("S3 upload failed with status:", xhr.status);
+                    alert("Failed to upload attachment. Please try again.");
+                    setAttachmentFile(null);
+                    setIsUploading(false);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                }
+            };
+
+            xhr.onerror = () => {
+                console.error("S3 upload network error");
+                alert("Attachment upload network error.");
+                setAttachmentFile(null);
+                setIsUploading(false);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+            };
+
+            xhr.send(file);
+        } catch (err) {
+            console.error("Failed to get S3 upload URL:", err);
+            alert("Failed to initiate file upload.");
+            setAttachmentFile(null);
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
 
     const scrollToMessage = (msgId: string) => {
         const el = document.getElementById(`msg-${msgId}`);
@@ -118,10 +201,22 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
 
 
     const handleSendMessage = () => {
-        if (!messageText.trim() || !activeChannelId) return;
-        sendMessage(activeChannelId, messageText.trim(), replyingTo);
+        const hasText = messageText.trim().length > 0;
+        const hasAttachment = !!uploadedAttachment;
+        if ((!hasText && !hasAttachment) || !activeChannelId) return;
+
+        sendMessage(
+            activeChannelId, 
+            messageText.trim(), 
+            replyingTo, 
+            uploadedAttachment ? [uploadedAttachment] : undefined
+        );
+        
         setMessageText("");
         setReplyingTo(null);
+        setAttachmentFile(null);
+        setUploadedAttachment(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
         getSocket()?.emit("typing_end", { channel_id: activeChannelId });
     };
 
@@ -463,45 +558,86 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                         <span className="text-[11px] font-semibold text-muted-foreground px-1">
                                                             {isMine ? "You" : (msg.sender.name ?? "Unknown")}
                                                         </span>
-                                                        <div className={`flex items-center gap-2 max-w-[70%] ${isMine ? "flex-row-reverse" : "flex-row"}`}>
-                                                            <div className={cn(
-                                                                "rounded-2xl px-4 py-2.5 text-sm transition-all duration-300",
-                                                                isMine 
-                                                                    ? "bg-primary text-primary-foreground rounded-tr-md" 
-                                                                    : "bg-muted text-foreground rounded-bl-md",
-                                                                highlightedMessageId === msg.id && (isMine ? "ring-4 ring-primary/30 scale-102" : "ring-4 ring-muted-foreground/20 scale-102")
-                                                            )}>
-                                                                {msg.reply_to && (
-                                                                    <div
-                                                                        onClick={() => scrollToMessage(msg.reply_to!.messageId)}
-                                                                        className={`mb-1.5 p-2 rounded-lg text-xs cursor-pointer border-l-2 border-foreground select-none text-left ${
-                                                                            isMine
-                                                                                ? "bg-primary-foreground/15 text-primary-foreground/90"
-                                                                                : "bg-background text-foreground border border-border"
-                                                                        }`}
-                                                                    >
-                                                                        <div className="font-bold text-[10px] truncate">
-                                                                            {msg.reply_to.senderName}
-                                                                        </div>
-                                                                        <div className="truncate text-[11px] leading-tight opacity-90">
-                                                                            {msg.reply_to.text}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                <p>{msg.content}</p>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => setReplyingTo({
-                                                                    messageId: msg.id,
-                                                                    senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
-                                                                    text: msg.content,
-                                                                })}
-                                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted text-muted-foreground cursor-pointer flex items-center justify-center shrink-0"
-                                                                title="Reply"
-                                                            >
-                                                                <span className="text-xs font-semibold">↩</span>
-                                                            </button>
-                                                        </div>
+                                                        <div className={`flex items-start gap-2 max-w-[70%] ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                                                             <div className={`flex flex-col gap-1.5 ${isMine ? "items-end" : "items-start"}`}>
+                                                                 {(msg.reply_to || msg.content) && (
+                                                                     <div className={cn(
+                                                                         "rounded-2xl px-4 py-2.5 text-sm transition-all duration-300",
+                                                                         isMine 
+                                                                             ? "bg-primary text-primary-foreground rounded-tr-md" 
+                                                                             : "bg-muted text-foreground rounded-bl-md",
+                                                                         highlightedMessageId === msg.id && (isMine ? "ring-4 ring-primary/30 scale-102" : "ring-4 ring-muted-foreground/20 scale-102")
+                                                                     )}>
+                                                                         {msg.reply_to && (
+                                                                             <div
+                                                                                 onClick={() => scrollToMessage(msg.reply_to!.messageId)}
+                                                                                 className={`mb-1.5 p-2 rounded-lg text-xs cursor-pointer border-l-2 border-foreground select-none text-left ${
+                                                                                     isMine
+                                                                                         ? "bg-primary-foreground/15 text-primary-foreground/90"
+                                                                                         : "bg-background text-foreground border border-border"
+                                                                                 }`}
+                                                                             >
+                                                                                 <div className="font-bold text-[10px] truncate">
+                                                                                     {msg.reply_to.senderName}
+                                                                                 </div>
+                                                                                 <div className="truncate text-[11px] leading-tight opacity-90">
+                                                                                     {msg.reply_to.text}
+                                                                                 </div>
+                                                                             </div>
+                                                                         )}
+                                                                         {msg.content && <p className="mb-1 last:mb-0">{msg.content}</p>}
+                                                                     </div>
+                                                                 )}
+
+                                                                 {msg.attachments && msg.attachments.map((att, idx) => {
+                                                                     const isImage = att.mimeType.startsWith("image/");
+                                                                     if (isImage) {
+                                                                         return (
+                                                                             <div key={idx} className="max-w-xs sm:max-w-sm">
+                                                                                 <img 
+                                                                                     src={att.downloadUrl} 
+                                                                                     alt={att.fileName} 
+                                                                                     className="max-h-60 object-contain rounded-lg border border-border hover:scale-[1.01] transition-transform cursor-pointer"
+                                                                                     onClick={() => window.open(att.downloadUrl, "_blank")}
+                                                                                 />
+                                                                             </div>
+                                                                        );
+                                                                     }
+                                                                     return (
+                                                                         <div key={idx} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-card/60 border border-border/50 text-card-foreground text-xs min-w-[200px] max-w-xs sm:max-w-sm">
+                                                                             <div className="flex items-center gap-2.5 min-w-0">
+                                                                                 <File className="size-4 text-muted-foreground flex-shrink-0" />
+                                                                                 <div className="flex flex-col min-w-0 text-left">
+                                                                                     <span className="font-semibold truncate text-[11px]">{att.fileName}</span>
+                                                                                     <span className="text-[10px] text-muted-foreground mt-0.5">{(att.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+                                                                                 </div>
+                                                                             </div>
+                                                                             <a 
+                                                                                 href={att.downloadUrl} 
+                                                                                 download={att.fileName}
+                                                                                 target="_blank"
+                                                                                 rel="noopener noreferrer"
+                                                                                 className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors flex-shrink-0"
+                                                                                 title="Download File"
+                                                                             >
+                                                                                 <Download className="size-3.5" />
+                                                                             </a>
+                                                                         </div>
+                                                                     );
+                                                                 })}
+                                                             </div>
+                                                             <button
+                                                                 onClick={() => setReplyingTo({
+                                                                     messageId: msg.id,
+                                                                     senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
+                                                                     text: msg.content,
+                                                                 })}
+                                                                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted text-muted-foreground cursor-pointer flex items-center justify-center shrink-0 self-center"
+                                                                 title="Reply"
+                                                             >
+                                                                 <span className="text-xs font-semibold">↩</span>
+                                                             </button>
+                                                         </div>
                                                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground px-1">
                                                             <span>
                                                                 {new Date(msg.created_at).toLocaleTimeString([], {
@@ -552,8 +688,53 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             </button>
                                         </div>
                                     )}
+                                    {attachmentFile && (
+                                        <div className="flex items-center justify-between bg-muted/80 backdrop-blur-[2px] rounded-xl px-4 py-3 mb-2.5 text-xs border border-border animate-in slide-in-from-bottom-2 duration-200">
+                                            <div className="flex items-center gap-3 min-w-0 pr-4">
+                                                <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                                                    {isUploading ? (
+                                                        <Loader2 className="size-4 animate-spin" />
+                                                    ) : (
+                                                        <File className="size-4" />
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col min-w-0 text-left">
+                                                    <span className="font-semibold text-foreground truncate">
+                                                        {attachmentFile.name}
+                                                    </span>
+                                                    <span className="text-muted-foreground text-[10px] mt-0.5">
+                                                        {isUploading ? `Uploading: ${uploadProgress}%` : `${(attachmentFile.size / 1024 / 1024).toFixed(2)} MB`}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setAttachmentFile(null);
+                                                    setUploadedAttachment(null);
+                                                    setIsUploading(false);
+                                                    if (fileInputRef.current) fileInputRef.current.value = "";
+                                                }}
+                                                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer font-bold shrink-0"
+                                                aria-label="Remove attachment"
+                                            >
+                                                <X className="size-4" />
+                                            </button>
+                                        </div>
+                                    )}
                                     <div className="flex items-end gap-2">
-                                        <Button variant="ghost" size="icon" className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0">
+                                        <input 
+                                            type="file" 
+                                            ref={fileInputRef} 
+                                            onChange={handleFileSelect} 
+                                            className="hidden" 
+                                        />
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={isUploading || !!attachmentFile}
+                                            className="size-10 text-muted-foreground hover:text-foreground flex-shrink-0 disabled:opacity-40"
+                                        >
                                             <Paperclip className="size-5" />
                                         </Button>
                                         <div className="flex-1 relative">
@@ -581,10 +762,10 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                 <EmojiPicker onSelect={handleSelectEmoji} />
                                             </PopoverContent>
                                         </Popover>
-
+ 
                                         <Button 
                                             onClick={handleSendMessage}
-                                            disabled={!messageText.trim()}
+                                            disabled={isUploading || (!messageText.trim() && !uploadedAttachment)}
                                             className="size-10 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground flex-shrink-0 transition-all disabled:opacity-50"
                                         >
                                             <Send className="size-4" />
