@@ -7,7 +7,7 @@ import { VisuallyHidden } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/useChatStore";
 import { useChatChannels, useReadChannel, useChatMessages, useSendMessage, useDeleteChannel } from "@/hooks/api/useChat";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -403,6 +403,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             >
                                                 <div className="relative flex-shrink-0">
                                                     <Avatar className="size-9">
+                                                        <AvatarImage src={channel.members[0]?.avatar_url || undefined} alt={displayName} />
                                                         <AvatarFallback className="text-sm font-semibold bg-primary/20 text-foreground">
                                                             {displayName.charAt(0).toUpperCase()}
                                                         </AvatarFallback>
@@ -442,6 +443,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                         {currentChannel.type === 'direct' ? (
                                             <>
                                                 <Avatar className="size-9">
+                                                    <AvatarImage src={currentChannel.members[0]?.avatar_url || undefined} alt={currentChannel.members[0]?.name || "Unknown"} />
                                                     <AvatarFallback className="text-sm font-semibold bg-primary/20">
                                                         {currentChannel.members[0]?.name?.charAt(0).toUpperCase() || "?"}
                                                     </AvatarFallback>

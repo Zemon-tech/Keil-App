@@ -57,13 +57,14 @@ export class OrganisationRepository extends BaseRepository<Organisation> {
   async findMembers(
     orgId: string,
     client?: PoolClient,
-  ): Promise<Array<{ user_id: string; role: string; name: string | null; email: string }>> {
+  ): Promise<Array<{ user_id: string; role: string; name: string | null; email: string; avatar_url: string | null }>> {
     const query = `
       SELECT
         om.user_id,
         om.role,
         u.name,
-        u.email
+        u.email,
+        u.avatar_url
       FROM public.organisation_members om
       INNER JOIN public.users u
         ON u.id = om.user_id
@@ -73,7 +74,7 @@ export class OrganisationRepository extends BaseRepository<Organisation> {
 
     const executor = client || this.pool;
     const result = await executor.query(query, [orgId]);
-    return result.rows as Array<{ user_id: string; role: string; name: string | null; email: string }>;
+    return result.rows as Array<{ user_id: string; role: string; name: string | null; email: string; avatar_url: string | null }>;
   }
 
   /**

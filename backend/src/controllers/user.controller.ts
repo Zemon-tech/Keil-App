@@ -23,6 +23,7 @@ export const getMe = async (req: any, res: Response, next: NextFunction) => {
                     email: user.email,
                     name: user.name,
                     created_at: user.created_at,
+                    avatar_url: user.avatar_url,
                 },
                 "User profile retrieved successfully"
             )
