@@ -1,5 +1,9 @@
 import pool from "../config/pg";
 import { ApiError } from "../utils/ApiError";
+import { getS3Client } from "../lib/s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { config } from "../config";
 
 const toISO = (value: Date | string | null | undefined): string | null => {
   if (!value) return null;
@@ -221,6 +225,27 @@ export const getChannelById = async (channelId: string, userId: string): Promise
   };
 };
 
+export const signMessageAttachments = async (messages: any[]): Promise<any[]> => {
+  for (const msg of messages) {
+    if (msg.attachments && Array.isArray(msg.attachments)) {
+      for (const attachment of msg.attachments) {
+        if (attachment.s3Key) {
+          try {
+            const command = new GetObjectCommand({
+              Bucket: config.awsS3BucketName,
+              Key: attachment.s3Key,
+            });
+            attachment.downloadUrl = await getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
+          } catch (err) {
+            console.error("Failed to sign S3 attachment key:", attachment.s3Key, err);
+          }
+        }
+      }
+    }
+  }
+  return messages;
+};
+
 export const getChannelMessages = async (channelId: string, limit = 50, beforeId?: string) => {
   const params: Array<string | number> = [channelId];
   let query = `
@@ -230,6 +255,7 @@ export const getChannelMessages = async (channelId: string, limit = 50, beforeId
       m.content,
       m.created_at,
       m.reply_to,
+      m.attachments,
       json_build_object('id', u.id, 'name', COALESCE(u.name, u.email)) AS sender
     FROM public.messages m
     JOIN public.users u ON m.sender_id = u.id
@@ -246,10 +272,11 @@ export const getChannelMessages = async (channelId: string, limit = 50, beforeId
   }
 
   const result = await pool.query(query, params);
-  return result.rows.reverse().map((row) => ({
+  const mapped = result.rows.reverse().map((row) => ({
     ...row,
     created_at: toISO(row.created_at),
   }));
+  return await signMessageAttachments(mapped);
 };
 
 export const markAsRead = async (channelId: string, userId: string): Promise<void> => {
@@ -264,18 +291,24 @@ export const markAsRead = async (channelId: string, userId: string): Promise<voi
   );
 };
 
-export const saveMessage = async (channelId: string, senderId: string, content: string, replyTo?: any) => {
+export const saveMessage = async (channelId: string, senderId: string, content: string, replyTo?: any, attachments?: any) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
     const result = await client.query(
       `
-        INSERT INTO public.messages (channel_id, sender_id, content, reply_to)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, channel_id, content, created_at, reply_to
+        INSERT INTO public.messages (channel_id, sender_id, content, reply_to, attachments)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, channel_id, content, created_at, reply_to, attachments
       `,
-      [channelId, senderId, content, replyTo ? JSON.stringify(replyTo) : null],
+      [
+        channelId,
+        senderId,
+        content,
+        replyTo ? JSON.stringify(replyTo) : null,
+        attachments ? JSON.stringify(attachments) : null
+      ],
     );
 
     const senderResult = await client.query(
@@ -340,17 +373,21 @@ export const saveMessage = async (channelId: string, senderId: string, content: 
 
     await client.query("COMMIT");
 
-    return {
+    const msgObj = {
       id: result.rows[0].id,
       channel_id: result.rows[0].channel_id,
       content: result.rows[0].content,
       created_at: toISO(result.rows[0].created_at),
       reply_to: result.rows[0].reply_to,
+      attachments: result.rows[0].attachments,
       sender: {
         id: sender.id,
         name: sender.name || sender.email,
       },
     };
+
+    const signedList = await signMessageAttachments([msgObj]);
+    return signedList[0];
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

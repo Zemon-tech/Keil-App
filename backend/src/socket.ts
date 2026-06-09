@@ -91,16 +91,18 @@ export const initSocket = (server: HttpServer) => {
             log.error({ err, userId: user.id }, "Error joining rooms");
         }
 
-        socket.on("send_message", async (payload: { channel_id: string; content: string; reply_to?: any }) => {
+        socket.on("send_message", async (payload: { channel_id: string; content?: string; reply_to?: any; attachments?: any[] }) => {
             try {
-                const { channel_id, content, reply_to } = payload;
-                if (!channel_id || !content) return;
+                const { channel_id, content, reply_to, attachments } = payload;
+                const hasContent = typeof content === "string" && content.trim().length > 0;
+                const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+                if (!channel_id || (!hasContent && !hasAttachments)) return;
 
                 // Verify user is in channel
                 if (!(await isChannelMember(channel_id))) return;
 
                 // Save message
-                const message = await orgChatService.saveMessage(channel_id, user.id, content, reply_to);
+                const message = await orgChatService.saveMessage(channel_id, user.id, content || "", reply_to, attachments);
 
                 // Broadcast strictly inside the channel_id socket room
                 io.to(`channel:${channel_id}`).emit("receive_message", message);
