@@ -83,7 +83,6 @@ export function resolveModel(requestContext?: RequestContext) {
       return getOpenRouterModel();
 
     case "github":
-    case "github-models":
       return getGithubModel();
 
     case "local": {
