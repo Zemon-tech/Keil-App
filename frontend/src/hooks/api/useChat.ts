@@ -30,6 +30,14 @@ export interface Channel {
   members: ChatMember[];
 }
 
+export interface ChatAttachment {
+  s3Key: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  downloadUrl?: string;
+}
+
 export interface ChatMessage {
   id: string;
   channel_id: string;
@@ -37,6 +45,7 @@ export interface ChatMessage {
   content: string;
   created_at: string;
   reply_to?: { messageId: string; senderName: string; text: string } | null;
+  attachments?: ChatAttachment[] | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,9 +137,14 @@ export function useReadChannel(orgId: string | null, spaceId: string | null) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useSendMessage() {
-  return useCallback((channelId: string, content: string, replyTo?: { messageId: string; senderName: string; text: string } | null) => {
+  return useCallback((
+    channelId: string, 
+    content: string, 
+    replyTo?: { messageId: string; senderName: string; text: string } | null,
+    attachments?: ChatAttachment[]
+  ) => {
     const socket = getSocket();
-    socket?.emit("send_message", { channel_id: channelId, content, reply_to: replyTo });
+    socket?.emit("send_message", { channel_id: channelId, content, reply_to: replyTo, attachments });
   }, []); // stable ref — socket is a module-level singleton
 }
 
