@@ -17,6 +17,7 @@ import motionRoutes from "./motion.routes";
 import aiRoutes from "./ai.routes";
 import notificationRoutes from "./notification.routes";
 import preferencesRoutes from "./preferences.routes";
+import s3UploadRoutes from "./s3-upload.routes";
 
 const router = Router();
 
@@ -50,6 +51,9 @@ router.use("/meetings", meetingRoutes);
 
 // ── User App Preferences ──────────────────────────────────────────────────────
 router.use("/preferences", preferencesRoutes);
+
+// ── S3 General Uploads ────────────────────────────────────────────────────────
+router.use("/s3-upload", s3UploadRoutes);
 
 // ── AI (OpenRouter via Vercel AI SDK) ─────────────────────────────────────────
 router.use("/ai", aiRoutes);
