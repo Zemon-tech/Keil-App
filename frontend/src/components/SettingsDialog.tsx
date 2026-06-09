@@ -2640,8 +2640,14 @@ export function SettingsDialog({
 
   useEffect(() => {
     if (open) {
-      setMode("account");
-      setActiveAccountTab(initialTab as AccountTab || "account");
+      const workspaceTabs: string[] = ["org-general", "org-members", "org-spaces", "api", "enterprise"];
+      if (workspaceTabs.includes(initialTab)) {
+        setMode("workspace");
+        setActiveWorkspaceTab(initialTab as WorkspaceTab);
+      } else {
+        setMode("account");
+        setActiveAccountTab(initialTab as AccountTab || "account");
+      }
     }
   }, [initialTab, open]);
 

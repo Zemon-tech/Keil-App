@@ -6,6 +6,7 @@ import { useAppContext } from "./AppContext";
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/store/useChatStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
 
 export interface Notification {
   id: string;
@@ -33,6 +34,7 @@ export interface Notification {
     channel_id?: string;
     task_id?: string;
     org_name?: string;
+    member_name?: string;
   };
   read_at: string | null;
   created_at: string;
@@ -214,7 +216,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
         navigate(`/tasks`);
       }
     } else if (n.event_type === "membership_updates") {
-      navigate(`/`);
+      if (n.payload.action === "member_joined") {
+        if (n.org_id && n.org_id !== activeOrgId) {
+          setActiveOrganisation(n.org_id, n.space_id);
+        }
+        useSettingsStore.getState().openSettings("org-members");
+      } else {
+        navigate(`/`);
+      }
     }
   };
 
@@ -295,6 +304,9 @@ export function getNotificationTitle(n: Notification): string {
     case "task_status_changed":
       return `🔄 Task Status Updated`;
     case "membership_updates":
+      if (n.payload.action === "member_joined") {
+        return `👥 New Member Joined`;
+      }
       return `👥 Membership Update`;
     case "mention_in_comment":
       return `💬 Mentioned in Comment`;
@@ -322,6 +334,12 @@ export function getNotificationSnippet(n: Notification, organisations?: any[]): 
     case "task_status_changed":
       return `"${n.payload.task_title}" moved to ${n.payload.status}`;
     case "membership_updates":
+      if (n.payload.action === "member_joined") {
+        const org = organisations?.find((o) => o.id === n.org_id);
+        const orgName = n.payload.org_name || org?.name || "the organisation";
+        const newMember = n.payload.member_name || "A new member";
+        return `${newMember} joined ${orgName}`;
+      }
       const action =
         n.payload.action === "added_space" ||
         n.payload.action === "added_workspace"

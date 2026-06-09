@@ -226,6 +226,12 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
           {/* Global Meeting Studio */}
           <MeetingDialog />
 
+          {/* Global Create Task Dialog */}
+          <CreateTaskDialog
+            open={createTaskOpen}
+            onOpenChange={setCreateTaskOpen}
+          />
+
           {/* Global Socket Manager for Chat */}
           <ChatSocketManager />
           <Toaster />

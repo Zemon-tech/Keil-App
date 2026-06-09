@@ -136,6 +136,44 @@ export const initSocket = (server: HttpServer) => {
             }
         });
 
+        socket.on("join_org_rooms", async (payload: { orgId: string }) => {
+            try {
+                const { orgId } = payload;
+                if (!orgId) return;
+
+                // 1. Verify user is a member of this organization
+                const orgMemberResult = await pool.query(
+                    'SELECT 1 FROM organisation_members WHERE org_id = $1 AND user_id = $2 LIMIT 1',
+                    [orgId, user.id]
+                );
+                if (orgMemberResult.rowCount === 0) return;
+
+                // 2. Query all spaces the user belongs to in this organization and join them
+                const spacesResult = await pool.query(
+                    'SELECT space_id FROM space_members WHERE org_id = $1 AND user_id = $2',
+                    [orgId, user.id]
+                );
+                spacesResult.rows.forEach((row: any) => {
+                    socket.join(`space:${row.space_id}`);
+                });
+
+                // 3. Query all channels the user belongs to in this organization and join them
+                const channelsResult = await pool.query(
+                    `SELECT cm.channel_id FROM channel_members cm
+                     INNER JOIN channels c ON c.id = cm.channel_id
+                     WHERE c.org_id = $1 AND cm.user_id = $2`,
+                    [orgId, user.id]
+                );
+                channelsResult.rows.forEach((row: any) => {
+                    socket.join(`channel:${row.channel_id}`);
+                });
+
+                log.info({ userId: user.id, orgId, spacesJoined: spacesResult.rows.length, channelsJoined: channelsResult.rows.length }, "User dynamically joined rooms for organisation");
+            } catch (err) {
+                log.error({ err, userId: user.id, orgId: payload?.orgId }, "Error handling join_org_rooms");
+            }
+        });
+
         socket.on("disconnect", () => {
             log.info({ userId: user.id }, "User disconnected");
         });

@@ -4,6 +4,8 @@ import { useJoinOrganisation } from "@/hooks/api/useOrganisations";
 import { useAppContext } from "@/contexts/AppContext";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getSocket } from "@/lib/socket";
+import { toast } from "sonner";
 
 export function InvitePage() {
   const { token } = useParams<{ token: string }>();
@@ -18,10 +20,20 @@ export function InvitePage() {
     }
 
     joinOrg.mutate(token, {
-      onSuccess: ({ orgId, spaceId }) => {
-        setActiveOrganisation(orgId, spaceId);
+      onSuccess: ({ org, space }) => {
+        toast.success(`Joined ${org.name} successfully!`);
+        setActiveOrganisation(org.id, space.id);
+        
+        const socket = getSocket();
+        if (socket) {
+          socket.emit("join_org_rooms", { orgId: org.id });
+        }
+
         navigate("/");
       },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.message || "Failed to join organisation");
+      }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
