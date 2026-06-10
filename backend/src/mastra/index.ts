@@ -12,6 +12,7 @@ import { chatAgent } from "./agents/chat.agent";
 import { motionAgent } from "./agents/motion.agent";
 import { schedulerAgent } from "./agents/scheduler.agent";
 import { githubAgent } from "./agents/github.agent";
+import { checkRateLimit } from "../services/rate-limiter.service";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 // Mastra storage needs a direct/session connection (not transaction pooler)
@@ -91,6 +92,30 @@ export const mastra = new Mastra({
             );
           }
           console.log(`[Chat] Auth verified in ${Date.now() - startTime}ms`);
+
+          // ── Rate Limiting (PostgreSQL distributed) ───────────────
+          const isTestEnv = process.env.NODE_ENV === "test" && !process.env.RATE_LIMIT_TEST;
+          if (!isTestEnv) {
+            try {
+              const minLimitResult = await checkRateLimit(`rl:ai:min:user:${authResult.userId}`, 20, 60);
+              if (!minLimitResult.allowed) {
+                return c.json(
+                  { success: false, message: "AI rate limit exceeded. Please wait a minute before making another request." },
+                  429
+                );
+              }
+              const dailyLimitResult = await checkRateLimit(`rl:ai:day:user:${authResult.userId}`, 100, 86400);
+              if (!dailyLimitResult.allowed) {
+                return c.json(
+                  { success: false, message: "Daily AI chat limit of 100 requests reached. Please try again tomorrow." },
+                  429
+                );
+              }
+            } catch (err) {
+              console.error("[Chat] Rate limiter error:", err);
+              // Fail open: let requests pass if rate limit DB check fails
+            }
+          }
 
           // ── Parse body & set requestContext ───────────────────────
           const body = await c.req.json();
