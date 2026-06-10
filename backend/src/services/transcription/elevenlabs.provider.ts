@@ -141,8 +141,7 @@ export class ElevenLabsProvider implements TranscriptionProvider {
 
     /**
      * Normalizes ElevenLabs response to our standard TranscriptionResult format.
-     * Output matches the Sarvam diarized format expected by the frontend:
-     * { entries: [{ speaker_id, start_time_seconds, end_time_seconds, transcript }] }
+     * Diarized output format: { entries: [{ speaker_id, start_time_seconds, end_time_seconds, transcript }] }
      */
     private normalizeResult(elResult: any): TranscriptionResult {
         const transcriptText = elResult.text || "";
@@ -150,7 +149,7 @@ export class ElevenLabsProvider implements TranscriptionProvider {
         const audioDurationSeconds = elResult.audio_duration_secs || null;
 
         // Build diarized transcript from words array (group by speaker)
-        // Output format must match Sarvam's: { entries: [{ speaker_id, start_time_seconds, end_time_seconds, transcript }] }
+        // Output format: { entries: [{ speaker_id, start_time_seconds, end_time_seconds, transcript }] }
         let transcriptDiarized = null;
         if (elResult.words && Array.isArray(elResult.words)) {
             const entries: Array<{

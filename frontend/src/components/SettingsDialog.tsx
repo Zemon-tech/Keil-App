@@ -1816,6 +1816,28 @@ function PreferencesTab() {
   );
 }
 
+const STT_PROVIDERS: Array<{
+  id: SttProvider;
+  name: string;
+  badge?: string;
+  description: string;
+  features: string[];
+}> = [
+  {
+    id: "sarvam",
+    name: "Sarvam AI",
+    badge: "Recommended",
+    description: "Saaras v3 — purpose-built for Indian languages and English.",
+    features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
+  },
+  {
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    description: "Scribe v2 — broad language support with word-level detail.",
+    features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
+  },
+];
+
 function SttProviderSelector() {
   const { data: prefs, isLoading } = usePreferences();
   const updateProvider = useUpdateSttProvider();
@@ -1823,14 +1845,11 @@ function SttProviderSelector() {
   const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
 
   const handleProviderChange = (provider: SttProvider) => {
-    if (provider === currentProvider) return;
+    if (provider === currentProvider || updateProvider.isPending) return;
+    const label = STT_PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
     updateProvider.mutate(provider, {
-      onSuccess: () => {
-        toast.success(`Speech-to-text provider changed to ${provider === "elevenlabs" ? "ElevenLabs" : "Sarvam AI"}`);
-      },
-      onError: () => {
-        toast.error("Failed to update STT provider");
-      },
+      onSuccess: () => toast.success(`Speech-to-text provider changed to ${label}`),
+      onError: () => toast.error("Failed to update STT provider"),
     });
   };
 
@@ -1852,47 +1871,58 @@ function SttProviderSelector() {
       <p className="text-xs text-muted-foreground mt-1 mb-4">
         Choose which AI service transcribes your meeting recordings.
       </p>
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={() => handleProviderChange("sarvam")}
-          disabled={updateProvider.isPending}
-          className={cn(
-            "flex flex-col items-start gap-2 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
-            currentProvider === "sarvam"
-              ? "border-primary bg-primary/5 shadow-sm"
-              : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
-          )}
-        >
-          <div className="flex items-center justify-between w-full">
-            <span className="text-sm font-semibold text-foreground">Sarvam AI</span>
-            {currentProvider === "sarvam" && (
-              <Check className="size-4 text-primary" />
-            )}
-          </div>
-          <span className="text-[11px] text-muted-foreground leading-tight">
-            Optimized for Indian languages. Batch processing with diarization.
-          </span>
-        </button>
-        <button
-          onClick={() => handleProviderChange("elevenlabs")}
-          disabled={updateProvider.isPending}
-          className={cn(
-            "flex flex-col items-start gap-2 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
-            currentProvider === "elevenlabs"
-              ? "border-primary bg-primary/5 shadow-sm"
-              : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
-          )}
-        >
-          <div className="flex items-center justify-between w-full">
-            <span className="text-sm font-semibold text-foreground">ElevenLabs</span>
-            {currentProvider === "elevenlabs" && (
-              <Check className="size-4 text-primary" />
-            )}
-          </div>
-          <span className="text-[11px] text-muted-foreground leading-tight">
-            Scribe v2 — 90+ languages, fast processing, word-level timestamps.
-          </span>
-        </button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {STT_PROVIDERS.map((provider) => {
+          const isActive = currentProvider === provider.id;
+          return (
+            <button
+              key={provider.id}
+              onClick={() => handleProviderChange(provider.id)}
+              disabled={updateProvider.isPending}
+              className={cn(
+                "flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
+                isActive
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+                updateProvider.isPending && "opacity-60 cursor-not-allowed",
+              )}
+            >
+              {/* Header row */}
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">{provider.name}</span>
+                  {provider.badge && (
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
+                      {provider.badge}
+                    </span>
+                  )}
+                </div>
+                {isActive && (
+                  updateProvider.isPending
+                    ? <Loader2 className="size-4 animate-spin text-primary" />
+                    : <Check className="size-4 text-primary shrink-0" />
+                )}
+              </div>
+
+              {/* Description */}
+              <span className="text-[11px] text-muted-foreground leading-tight">
+                {provider.description}
+              </span>
+
+              {/* Feature pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {provider.features.map((f) => (
+                  <span
+                    key={f}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

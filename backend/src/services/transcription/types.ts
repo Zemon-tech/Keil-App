@@ -2,7 +2,7 @@
  * Shared types for the transcription provider abstraction layer.
  */
 
-export type SttProvider = "sarvam" | "elevenlabs";
+export type SttProvider = "elevenlabs" | "sarvam";
 
 export interface TranscriptionResult {
     /** Full transcription text */

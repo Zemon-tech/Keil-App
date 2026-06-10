@@ -261,7 +261,6 @@ Ensure the following variables are configured in the Lightsail environment (or `
 | `GOOGLE_CLIENT_SECRET` | Yes | Google Client Secret for OAuth | Used in your calendar integration |
 | `GOOGLE_REDIRECT_URI` | Yes | Redirect target for Google OAuth | `https://<backend-domain>/api/v1/integrations/google/callback` |
 | `GOOGLE_OAUTH_STATE_SECRET`| Yes | CSRF state secret for Google OAuth | Long secure random string |
-| `SARVAM_API_KEY` | Yes | API key for Sarvam AI | Kept secure |
 | `SEVALLA_S3_ENDPOINT` | Yes | Cloudflare R2 / S3 Endpoint | From Sevalla dashboard |
 | `SEVALLA_S3_ACCESS_KEY_ID`| Yes | S3 Access Key | From Sevalla dashboard |
 | `SEVALLA_S3_SECRET_ACCESS_KEY`| Yes | S3 Secret Access Key | From Sevalla dashboard |

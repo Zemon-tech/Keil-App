@@ -6,7 +6,6 @@ export interface MeetingRecording {
     meeting_id: string | null;
     audio_s3_key: string;
     audio_duration_seconds: number | null;
-    sarvam_job_id: string | null;
     transcription_status: string;
     transcript_text: string | null;
     transcript_diarized: any | null;
@@ -23,7 +22,7 @@ export const createRecording = async (
     userId: string,
     meetingId: string | null,
     audioS3Key: string,
-    sttProvider: string = "sarvam"
+    sttProvider: string = "elevenlabs"
 ): Promise<MeetingRecording> => {
     const queryText = `
         INSERT INTO public.meeting_recordings (
@@ -40,11 +39,11 @@ export const createRecording = async (
 };
 
 /**
- * Updates the recording with the Sarvam batch job ID and sets status to processing
+ * Updates the recording with a job ID and sets status to processing
  */
 export const updateRecordingJob = async (
     recordingId: string,
-    sarvamJobId: string,
+    jobId: string,
     audioDurationSeconds?: number
 ): Promise<MeetingRecording> => {
     const queryText = `
@@ -58,7 +57,7 @@ export const updateRecordingJob = async (
     `;
     // Round duration to integer — the DB column is integer type
     const roundedDuration = audioDurationSeconds ? Math.round(audioDurationSeconds) : null;
-    const result = await pool.query(queryText, [sarvamJobId, roundedDuration, recordingId]);
+    const result = await pool.query(queryText, [jobId, roundedDuration, recordingId]);
     return result.rows[0];
 };
 
@@ -128,8 +127,8 @@ export const getRecordingById = async (recordingId: string): Promise<MeetingReco
  */
 export const getRecordingsByMeetingId = async (meetingId: string): Promise<MeetingRecording[]> => {
     const queryText = `
-        SELECT id, user_id, meeting_id, audio_s3_key, audio_duration_seconds, 
-               sarvam_job_id, transcription_status, language_detected, created_at, updated_at
+        SELECT id, user_id, meeting_id, audio_s3_key, audio_duration_seconds,
+               transcription_status, language_detected, created_at, updated_at
         FROM public.meeting_recordings
         WHERE meeting_id = $1
         ORDER BY created_at DESC
@@ -156,8 +155,8 @@ export const getMeetingHistory = async (
     const total = parseInt(countResult.rows[0].total, 10);
 
     const queryText = `
-        SELECT id, user_id, meeting_id, audio_s3_key, audio_duration_seconds, 
-               sarvam_job_id, transcription_status, language_detected, created_at, updated_at
+        SELECT id, user_id, meeting_id, audio_s3_key, audio_duration_seconds,
+               transcription_status, language_detected, created_at, updated_at
         FROM public.meeting_recordings
         WHERE user_id = $1
         ORDER BY created_at DESC
@@ -186,19 +185,6 @@ export const searchMeetings = async (
     `;
     const result = await pool.query(queryText, [userId, `%${query}%`]);
     return result.rows;
-};
-
-/**
- * Fetches a recording by its Sarvam job ID
- */
-export const getRecordingByJobId = async (sarvamJobId: string): Promise<MeetingRecording | null> => {
-    const queryText = `
-        SELECT * FROM public.meeting_recordings
-        WHERE sarvam_job_id = $1
-    `;
-    const result = await pool.query(queryText, [sarvamJobId]);
-    if (result.rows.length === 0) return null;
-    return result.rows[0];
 };
 
 /**

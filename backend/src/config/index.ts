@@ -24,11 +24,10 @@ export const config = {
     // Backend public URL — used to construct the Google Calendar webhook address
     // Must be publicly reachable by Google (e.g. https://api.yourdomain.com)
     backendUrl: process.env.BACKEND_URL || "",
-    // Sarvam AI
-    sarvamApiKey: process.env.SARVAM_API_KEY || "",
-    sarvamWebhookSecret: process.env.SARVAM_WEBHOOK_SECRET || "",
     // ElevenLabs STT
     elevenlabsApiKey: process.env.ELEVENLABS_API_KEY || "",
+    // Sarvam AI STT
+    sarvamApiKey: process.env.SARVAM_API_KEY || "",
     // OpenRouter / Vercel AI SDK
     openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
     openRouterBaseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",

@@ -3,7 +3,7 @@ import api from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type SttProvider = "sarvam" | "elevenlabs";
+export type SttProvider = "elevenlabs" | "sarvam";
 
 export interface UserAppPreferences {
   user_id: string;

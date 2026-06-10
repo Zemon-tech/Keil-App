@@ -73,6 +73,6 @@ export const getSttProvider = async (userId: string): Promise<SttProvider> => {
         return result.rows[0].stt_provider as SttProvider;
     }
 
-    // Default to sarvam if no preference exists
-    return "sarvam";
+    // Default to elevenlabs if no preference exists
+    return "elevenlabs";
 };
