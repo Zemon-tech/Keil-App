@@ -7,6 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useChatStore } from "@/store/useChatStore";
@@ -376,6 +377,10 @@ export function useChatSocketListeners(
       useChatStore.getState().removeTypingUser(data.channel_id, data.user_id);
     };
 
+    const handleError = (error: { message: string; code?: string }) => {
+      toast.error(error.message || "A socket error occurred");
+    };
+
     socket.on("receive_message", handleReceiveMessage);
     socket.on("channel_added", handleChannelAdded);
     socket.on("connect", handleConnect);
@@ -383,6 +388,7 @@ export function useChatSocketListeners(
     socket.on("user_stopped_typing", handleUserStoppedTyping);
     socket.on("channel_updated", handleChannelUpdated);
     socket.on("channel_removed", handleChannelRemoved);
+    socket.on("error", handleError);
 
     return () => {
       socket.off("receive_message", handleReceiveMessage);
@@ -392,6 +398,7 @@ export function useChatSocketListeners(
       socket.off("user_stopped_typing", handleUserStoppedTyping);
       socket.off("channel_updated", handleChannelUpdated);
       socket.off("channel_removed", handleChannelRemoved);
+      socket.off("error", handleError);
     };
   }, [activeChannelId, orgId, spaceId, queryClient]);
 }

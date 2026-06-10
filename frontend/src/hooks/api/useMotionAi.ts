@@ -45,7 +45,14 @@ export function useMotionAi(orgId: string | null, spaceId: string | null, pageId
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
-        throw new Error(errorText || `AI request failed: ${response.statusText}`);
+        let message = errorText;
+        try {
+          const parsed = JSON.parse(errorText);
+          message = parsed.message || parsed.error || errorText;
+        } catch {
+          // fallback to raw text if not JSON
+        }
+        throw new Error(message || `AI request failed: ${response.statusText}`);
       }
 
       if (!response.body) {

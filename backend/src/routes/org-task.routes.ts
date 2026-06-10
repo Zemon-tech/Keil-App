@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware";
 import { requireOrgMember, requireSpaceMember } from "../middlewares/org-context.middleware";
 import { requireSpaceRole } from "../middlewares/rbac.middleware";
+import { taskCreationRateLimiter } from "../middlewares/rate-limiter.middleware";
 import {
   addDependency,
   addTaskComment,
@@ -23,7 +24,7 @@ const router = Router({ mergeParams: true });
 
 router.use(protect, requireOrgMember, requireSpaceMember);
 
-router.post("/", requireSpaceRole("admin", "manager"), createTask);
+router.post("/", taskCreationRateLimiter, requireSpaceRole("admin", "manager"), createTask);
 router.get("/", requireSpaceRole("admin", "manager", "member"), getTasks);
 router.get("/:id", requireSpaceRole("admin", "manager", "member"), getTaskById);
 router.patch("/:id", requireSpaceRole("admin", "manager"), updateTask);

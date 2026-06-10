@@ -259,8 +259,9 @@ export function useCreateMotionPage(
         newPage
       );
     },
-    onError: () => {
-      toast.error("Failed to create page. Please try again.");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to create page. Please try again.");
     },
   });
 }
@@ -412,13 +413,14 @@ export function useSoftDeleteMotionPage(
       });
       toast(`"${title}" moved to trash`);
     },
-    onError: () => {
+    onError: (error: any) => {
       if (orgId && spaceId) {
         queryClient.invalidateQueries({
           queryKey: motionPageKeys.lists(orgId, spaceId),
         });
       }
-      toast.error("Failed to delete page. Please try again.");
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to delete page. Please try again.");
     },
   });
 }
@@ -446,8 +448,9 @@ export function useRestoreMotionPage(
         queryKey: motionPageKeys.trash(orgId, spaceId),
       });
     },
-    onError: () => {
-      toast.error("Failed to restore page.");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to restore page.");
     },
   });
 }
@@ -469,8 +472,9 @@ export function useHardDeleteMotionPage(
         queryKey: motionPageKeys.trash(orgId, spaceId),
       });
     },
-    onError: () => {
-      toast.error("Failed to permanently delete page.");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to permanently delete page.");
     },
   });
 }
