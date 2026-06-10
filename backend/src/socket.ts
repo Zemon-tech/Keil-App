@@ -4,6 +4,7 @@ import { supabaseAdmin } from "./config/supabase";
 import pool from "./config/pg";
 import * as orgChatService from "./services/org-chat.service";
 import { config } from "./config";
+import { checkRateLimit } from "./services/rate-limiter.service";
 import { createServiceLogger } from "./lib/logger";
 
 const log = createServiceLogger("socket");
@@ -100,6 +101,19 @@ export const initSocket = (server: HttpServer) => {
 
                 // Verify user is in channel
                 if (!(await isChannelMember(channel_id))) return;
+
+                // Rate Limiting (PostgreSQL distributed)
+                const isTestEnv = process.env.NODE_ENV === "test" && !process.env.RATE_LIMIT_TEST;
+                if (!isTestEnv) {
+                    const rateCheck = await checkRateLimit(`rl:socket:send_message:user:${user.id}`, 120, 60);
+                    if (!rateCheck.allowed) {
+                        socket.emit("error", {
+                            message: "Rate limit exceeded. You can only send up to 120 messages per minute.",
+                            code: "RATE_LIMIT_EXCEEDED"
+                        });
+                        return;
+                    }
+                }
 
                 // Save message
                 const message = await orgChatService.saveMessage(channel_id, user.id, content || "", reply_to, attachments);

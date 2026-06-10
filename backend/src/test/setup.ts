@@ -54,7 +54,7 @@ vi.mock("@supabase/supabase-js", () => {
 
 // ─── Mock Google AI SDK ──────────────────────────────────────────────────────
 vi.mock("@ai-sdk/google", () => ({
-    google: () => {}
+    google: () => { }
 }));
 
 // ─── Mock ElevenLabs ─────────────────────────────────────────────────────────

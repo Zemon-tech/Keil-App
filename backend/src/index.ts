@@ -11,6 +11,7 @@ import { taskOverdueWorkerService } from "./services/task-overdue-worker.service
 import { renewExpiringWatchChannels, healDegradedWatchChannels, cleanupWebhookReceipts } from "./services/gcal-watch-renewal.service";
 import { NotificationWorkerService } from "./services/notification-worker.service";
 import { createServiceLogger } from "./lib/logger";
+import { cleanupExpiredRateLimits } from "./services/rate-limiter.service";
 
 const log = createServiceLogger("server");
 const dbLog = createServiceLogger("database");
@@ -104,6 +105,9 @@ const startServer = async () => {
             );
             await cleanupWebhookReceipts().catch(err =>
                 cronLog.error({ err }, "cleanupWebhookReceipts error")
+            );
+            await cleanupExpiredRateLimits().catch(err =>
+                cronLog.error({ err }, "cleanupExpiredRateLimits error")
             );
         }, TWELVE_HOURS_MS);
 

@@ -294,8 +294,9 @@ export function useCreateOrgTask(orgId: string | null, spaceId: string | null) {
         });
       }
     },
-    onError: () => {
-      toast.error("Failed to create task. Please try again.");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to create task. Please try again.");
     },
   });
 }
@@ -320,8 +321,9 @@ export function useUpdateOrgTask(orgId: string | null, spaceId: string | null) {
         queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
       });
     },
-    onError: () => {
-      toast.error("Failed to update task. Please try again.");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to update task. Please try again.");
     },
   });
 }
