@@ -150,9 +150,9 @@ export const listShares = catchAsync(async (req: Request, res: Response) => {
 export const createShare = catchAsync(async (req: Request, res: Response) => {
   const { orgId, spaceId, userId } = getContext(req);
   const pageId = asString(req.params.id);
-  const { share_type, permission, target_org_id, target_space_id, expires_at } = req.body;
+  const { share_type, permission, target_org_id, target_space_id, expires_at, email } = req.body;
 
-  if (!validateShareType(share_type)) {
+  if (!email && !validateShareType(share_type)) {
     throw new ApiError(400, 'share_type must be "public_link" or "space"');
   }
   if (permission !== undefined && !validatePermission(permission)) {
@@ -161,11 +161,12 @@ export const createShare = catchAsync(async (req: Request, res: Response) => {
 
   const spaceRole = (req as any).space?.membership_role as string;
   const share = await motionPageService.createShare(orgId, spaceId, pageId, userId, {
-    share_type,
+    share_type: email ? MotionShareType.SPACE : share_type,
     permission,
     target_org_id: target_org_id ?? null,
     target_space_id: target_space_id ?? null,
     expires_at: expires_at ?? null,
+    email: email ?? null,
   }, spaceRole);
 
   res.status(201).json(new ApiResponse(201, share, 'Share created successfully'));
