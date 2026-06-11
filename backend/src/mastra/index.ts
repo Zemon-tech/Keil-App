@@ -154,7 +154,21 @@ export const mastra = new Mastra({
 
           const baseInstructions = await agent.getInstructions({ requestContext });
           const temporalContext = buildTemporalContext();
-          const instructionsOverride = `${temporalContext}\n\n${baseInstructions}`;
+
+          // ── Page context from the frontend (current route) ────────
+          const pageContextBlock = body?.pageContext
+            ? [
+                `<page_context>`,
+                `The user is currently using the KeilHQ app on the following page:`,
+                body.pageContext,
+                `Use this to answer questions about what the user is currently viewing or working on, without asking them to specify the page or title again.`,
+                `</page_context>`,
+              ].join("\n")
+            : "";
+
+          const instructionsOverride = [temporalContext, pageContextBlock, baseInstructions]
+            .filter(Boolean)
+            .join("\n\n");
 
           const agentStream = await agent.stream(messages, {
             requestContext,
