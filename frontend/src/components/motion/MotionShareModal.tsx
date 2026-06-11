@@ -353,15 +353,46 @@ export function MotionSharePanel({
   const [importPopoverOpen, setImportPopoverOpen] = useState(false);
   const [importedSource, setImportedSource] = useState<"Slack" | "Google" | "Microsoft" | "None">("None");
 
-  // Invited users local session state list
-  const [invitedUsers, setInvitedUsers] = useState<any[]>([]);
+  // Real-time backend user search states
+  const [searchedUsers, setSearchedUsers] = useState<any[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+
+  useEffect(() => {
+    const search = async () => {
+      const q = searchQuery.trim();
+      if (q.length < 2) {
+        setSearchedUsers([]);
+        return;
+      }
+      setIsSearchingUsers(true);
+      try {
+        const res = await api.get<{ data: any[] }>(`users/search?q=${encodeURIComponent(q)}`);
+        setSearchedUsers(res.data.data || []);
+      } catch (err) {
+        console.error("Failed to search users:", err);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    };
+
+    const delayDebounce = setTimeout(() => {
+      search();
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
 
   const publicShares = shares.filter((s) => s.share_type === "public_link");
   const isPublicEnabled = publicShares.length > 0;
   const publicUrl = buildPublicUrl(pageTitle, pageId);
 
   const [orgSpaces, setOrgSpaces] = useState<Record<string, Space[]>>({});
-  const spaceShares = shares.filter((s) => s.share_type === "space" && s.target_org_id && s.target_space_id);
+  const spaceShares = shares.filter(
+    (s) => s.share_type === "space" && s.target_org_id && s.target_space_id && !s.target_org_is_personal
+  );
+  const userShares = shares.filter(
+    (s) => s.share_type === "space" && s.target_org_id && s.target_space_id && s.target_org_is_personal
+  );
 
   // Active space object and name
   const activeSpaceObj = spaces.find((s) => s.id === spaceId);
@@ -470,15 +501,6 @@ export function MotionSharePanel({
         space.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const filteredUsers = MOCK_KEILHQ_USERS.filter(
-    (u) =>
-      u.email !== user?.email &&
-      (searchQuery.trim() === "" ||
-        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
   // Suggestions toggling
   const toggleSuggestion = (key: string) => {
     setSelectedSuggestions((prev) => {
@@ -506,28 +528,25 @@ export function MotionSharePanel({
               permission: "view_all",
               target_org_id: matchedSpace.space.org_id,
               target_space_id: matchedSpace.space.id,
+            }, {
+              onSuccess: () => {
+                toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
+              }
             });
-            toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
           }
         } else if (itemKey.startsWith("user-")) {
           const uId = itemKey.replace("user-", "");
-          const matchedUser = MOCK_KEILHQ_USERS.find((u) => u.id === uId);
+          const matchedUser = searchedUsers.find((u) => u.id === uId);
           if (matchedUser) {
-            const alreadyInvited = invitedUsers.some((u) => u.email === matchedUser.email);
-            if (!alreadyInvited) {
-              setInvitedUsers((prev) => [
-                ...prev,
-                {
-                  id: matchedUser.id,
-                  name: matchedUser.name,
-                  email: matchedUser.email,
-                  username: matchedUser.username,
-                  permission: "view",
-                  role: "member",
-                },
-              ]);
-              toast.success(`Shared with user "${matchedUser.name}" successfully`);
-            }
+            createShare.mutate({
+              share_type: "space",
+              permission: "view_all",
+              email: matchedUser.email,
+            }, {
+              onSuccess: () => {
+                toast.success(`Shared with user "${matchedUser.name || matchedUser.email}" successfully`);
+              }
+            });
           }
         }
       });
@@ -549,46 +568,22 @@ export function MotionSharePanel({
           permission: "view_all",
           target_org_id: matchedSpace.space.org_id,
           target_space_id: matchedSpace.space.id,
-        });
-        toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
-      } else {
-        const matchedUser = MOCK_KEILHQ_USERS.find(
-          (u) =>
-            u.email.toLowerCase() === input.toLowerCase() ||
-            u.username.toLowerCase() === input.toLowerCase()
-        );
-
-        if (matchedUser) {
-          const alreadyInvited = invitedUsers.some((u) => u.email === matchedUser.email);
-          if (!alreadyInvited) {
-            setInvitedUsers((prev) => [
-              ...prev,
-              {
-                id: matchedUser.id,
-                name: matchedUser.name,
-                email: matchedUser.email,
-                username: matchedUser.username,
-                permission: "view",
-                role: "member",
-              },
-            ]);
-            toast.success(`Shared with user "${matchedUser.name}" successfully`);
-          } else {
-            toast.error("User is already invited");
+        }, {
+          onSuccess: () => {
+            toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
           }
-        } else {
-          const guestName = isEmail ? formatGuestName(input.split("@")[0]) : formatGuestName(input);
-          const newGuest = {
-            id: `invited-${Date.now()}`,
-            name: guestName,
-            email: isEmail ? input : `${input}@keilhq.com`,
-            username: isEmail ? input.split("@")[0] : input,
-            permission: "view",
-            role: "member",
-          };
-          setInvitedUsers((prev) => [...prev, newGuest]);
-          toast.success(`Shared with user "${newGuest.name}" successfully`);
-        }
+        });
+      } else {
+        const email = isEmail ? input : `${input}@keilhq.com`;
+        createShare.mutate({
+          share_type: "space",
+          permission: "view_all",
+          email: email,
+        }, {
+          onSuccess: (res) => {
+            toast.success(`Shared with user "${res.target_user_name || email}" successfully`);
+          }
+        });
       }
       setSearchQuery("");
       setIsSearching(false);
@@ -801,9 +796,10 @@ export function MotionSharePanel({
                     })}
 
                     {/* Users Suggestions */}
-                    {filteredUsers.map((u) => {
+                    {searchedUsers.map((u) => {
                       const itemKey = `user-${u.id}`;
                       const isSelected = selectedSuggestions.has(itemKey);
+                      const userName = u.name || u.email.split("@")[0];
                       return (
                         <div
                           key={u.id}
@@ -815,11 +811,11 @@ export function MotionSharePanel({
                               "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
                               getAvatarBg(u.email)
                             )}>
-                              {getInitials(u.name, u.email)}
+                              {getInitials(userName, u.email)}
                             </div>
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-foreground truncate">{u.name}</span>
+                                <span className="font-semibold text-foreground truncate">{userName}</span>
                                 <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider scale-95 shrink-0">
                                   Guest
                                 </span>
@@ -844,9 +840,16 @@ export function MotionSharePanel({
                       );
                     })}
 
-                    {filteredSpaces.length === 0 && filteredUsers.length === 0 && (
+                    {isSearchingUsers && (
+                      <div className="flex items-center justify-center py-4 text-xs text-muted-foreground gap-2">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Searching users...
+                      </div>
+                    )}
+
+                    {!isSearchingUsers && filteredSpaces.length === 0 && searchedUsers.length === 0 && (
                       <div className="text-center py-6 text-xs text-muted-foreground">
-                        No results found
+                        {searchQuery.trim().length >= 2 ? "No results found" : "Type at least 2 characters to search users..."}
                       </div>
                     )}
                   </div>
@@ -937,42 +940,49 @@ export function MotionSharePanel({
                 })}
 
                 {/* Invited Users (Guests) */}
-                {invitedUsers.map((userItem) => (
-                  <div key={userItem.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
-                        getAvatarBg(userItem.email)
-                      )}>
-                        {getInitials(userItem.name, userItem.email)}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
-                          {userItem.name}
-                          <span className="bg-amber-500/10 text-amber-500 border border-amber-500/25 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide shrink-0">
-                            Guest
-                          </span>
-                        </span>
-                        <span className="text-[10px] text-muted-foreground truncate">{userItem.email}</span>
-                      </div>
-                    </div>
+                {userShares.map((share) => {
+                  const userName = share.target_user_name || share.target_user_email?.split("@")[0] || "User";
+                  const userEmail = share.target_user_email || "";
+                  const accessValue = share.permission.startsWith("edit_") ? "edit" : "view";
 
-                    <RolePopover
-                      value={userItem.permission}
-                      onValueChange={(val) => {
-                        if (val === "remove") {
-                          setInvitedUsers((prev) => prev.filter((u) => u.id !== userItem.id));
-                          toast.success(`Removed user "${userItem.name}" access`);
-                        } else {
-                          setInvitedUsers((prev) =>
-                            prev.map((u) => (u.id === userItem.id ? { ...u, permission: val } : u))
-                          );
-                          toast.success(`Updated user "${userItem.name}" access to ${val}`);
-                        }
-                      }}
-                    />
-                  </div>
-                ))}
+                  const handleAccessChange = (val: string) => {
+                    if (val === "remove") {
+                      revokeShare.mutate(share.id);
+                      toast.success(`Removed user "${userName}" access`);
+                    } else {
+                      const permission = (val === "edit" ? "edit_all" : "view_all") as MotionPermission;
+                      updateShare.mutate({ shareId: share.id, permission });
+                      toast.success(`Updated user "${userName}" access to ${val}`);
+                    }
+                  };
+
+                  return (
+                    <div key={share.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
+                          getAvatarBg(userEmail)
+                        )}>
+                          {getInitials(userName, userEmail)}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
+                            {userName}
+                            <span className="bg-amber-500/10 text-amber-500 border border-amber-500/25 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide shrink-0">
+                              Guest
+                            </span>
+                          </span>
+                          <span className="text-[10px] text-muted-foreground truncate">{userEmail}</span>
+                        </div>
+                      </div>
+
+                      <RolePopover
+                        value={accessValue as any}
+                        onValueChange={handleAccessChange as any}
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               {/* General Access Section */}

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { motionPageRepository, motionPageShareRepository, spaceRepository, organisationRepository, motionAnalyticsRepository } from '../repositories';
+import { motionPageRepository, motionPageShareRepository, spaceRepository, organisationRepository, motionAnalyticsRepository, userRepository } from '../repositories';
 import { MotionPage, MotionPageShare } from '../types/entities';
 import { MotionShareType, MotionPermission } from '../types/enums';
 import { ApiError } from '../utils/ApiError';
@@ -43,6 +43,12 @@ export interface MotionPageShareDTO {
   created_by: string;
   created_at: string;
   expires_at: string | null;
+  target_user_email?: string | null;
+  target_user_name?: string | null;
+  target_user_avatar?: string | null;
+  target_space_name?: string | null;
+  target_org_name?: string | null;
+  target_org_is_personal?: boolean;
 }
 
 // ─── Input types ──────────────────────────────────────────────────────────────
@@ -71,6 +77,7 @@ export interface CreateShareInput {
   target_org_id?: string | null;
   target_space_id?: string | null;
   expires_at?: string | null;
+  email?: string | null;
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -101,7 +108,7 @@ const toPageDTO = (page: any): MotionPageDTO => ({
   share_permission: page.share_permission,
 });
 
-const toShareDTO = (share: MotionPageShare): MotionPageShareDTO => ({
+const toShareDTO = (share: any): MotionPageShareDTO => ({
   id: share.id,
   page_id: share.page_id,
   share_type: share.share_type,
@@ -112,6 +119,12 @@ const toShareDTO = (share: MotionPageShare): MotionPageShareDTO => ({
   created_by: share.created_by,
   created_at: toISO(share.created_at)!,
   expires_at: toISO(share.expires_at),
+  target_user_email: share.target_user_email ?? null,
+  target_user_name: share.target_user_name ?? null,
+  target_user_avatar: share.target_user_avatar ?? null,
+  target_space_name: share.target_space_name ?? null,
+  target_org_name: share.target_org_name ?? null,
+  target_org_is_personal: share.target_org_is_personal ?? false,
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -188,6 +201,35 @@ const assertPageInSpace = async (
   }
 
   return page;
+};
+
+const broadcastToAllAccessSpaces = async (
+  pageId: string,
+  sourceSpaceId: string,
+  payload: { type: string; pageId?: string; page?: any; userId?: string }
+) => {
+  broadcastMotionChange(sourceSpaceId, payload);
+
+  try {
+    const shares = await motionPageShareRepository.findByPage(pageId);
+    for (const share of shares) {
+      if (share.share_type === MotionShareType.SPACE && share.target_space_id) {
+        let spacePayload = payload;
+        if (payload.type === 'update' && payload.page) {
+          spacePayload = {
+            ...payload,
+            page: {
+              ...payload.page,
+              share_permission: share.permission,
+            },
+          };
+        }
+        broadcastMotionChange(share.target_space_id, spacePayload);
+      }
+    }
+  } catch (err) {
+    log.error({ err, pageId }, 'Error broadcasting motion change to shared spaces');
+  }
 };
 
 // ─── Page CRUD ────────────────────────────────────────────────────────────────
@@ -320,7 +362,7 @@ export const updatePage = async (
   const updated = await motionPageRepository.update(pageId, updates);
   if (updated) {
     const dto = toPageDTO(updated);
-    broadcastMotionChange(spaceId, { type: 'update', pageId, page: dto, userId });
+    await broadcastToAllAccessSpaces(pageId, spaceId, { type: 'update', pageId, page: dto, userId });
     return dto;
   }
   return null;
@@ -347,7 +389,7 @@ export const softDeletePage = async (
   // Uses a recursive CTE to walk the full subtree, then bulk-updates deleted_at.
   // This is safe because all pages are scoped to the same org+space (enforced on create).
   await motionPageRepository.softDeleteWithDescendants(pageId);
-  broadcastMotionChange(spaceId, { type: 'delete', pageId, userId });
+  await broadcastToAllAccessSpaces(pageId, spaceId, { type: 'delete', pageId, userId });
 };
 
 export const restorePage = async (
@@ -374,7 +416,7 @@ export const restorePage = async (
   if (!restored) throw new ApiError(404, 'Page not found');
   
   const dto = toPageDTO(restored);
-  broadcastMotionChange(spaceId, { type: 'restore', page: dto, userId });
+  await broadcastToAllAccessSpaces(pageId, spaceId, { type: 'restore', page: dto, userId });
   return dto;
 };
 
@@ -395,9 +437,17 @@ export const hardDeletePage = async (
     throw new ApiError(403, 'Managers can only permanently delete their own pages');
   }
 
+  // Get shares before hard delete to find target spaces
+  const shares = await motionPageShareRepository.findByPage(pageId);
+
   // DB CASCADE on parent_id handles recursive deletion of all subpages
   await motionPageRepository.hardDelete(pageId);
   broadcastMotionChange(spaceId, { type: 'hard_delete', pageId, userId });
+  for (const share of shares) {
+    if (share.share_type === MotionShareType.SPACE && share.target_space_id) {
+      broadcastMotionChange(share.target_space_id, { type: 'hard_delete', pageId, userId });
+    }
+  }
 };
 
 // ─── Shares ───────────────────────────────────────────────────────────────────
@@ -433,6 +483,28 @@ export const createShare = async (
     throw new ApiError(403, 'Managers can only share their own pages');
   }
 
+  if (input.email) {
+    const targetUser = await userRepository.findByEmail(input.email);
+    if (!targetUser) {
+      throw new ApiError(404, `User with email ${input.email} is not registered on Keil`);
+    }
+
+    const targetOrgs = await organisationRepository.findAll({ owner_user_id: targetUser.id, is_personal: true });
+    if (targetOrgs.length === 0) {
+      throw new ApiError(404, 'Target user does not have a personal organisation');
+    }
+    const targetOrg = targetOrgs[0];
+
+    const targetSpace = await spaceRepository.findDefaultSpace(targetOrg.id);
+    if (!targetSpace) {
+      throw new ApiError(404, 'Target user does not have a default space in their personal organisation');
+    }
+
+    input.target_org_id = targetOrg.id;
+    input.target_space_id = targetSpace.id;
+    input.share_type = MotionShareType.SPACE;
+  }
+
   if (input.share_type === MotionShareType.PUBLIC_LINK) {
     // Generate a unique token
     const share = await motionPageShareRepository.create({
@@ -457,7 +529,8 @@ export const createShare = async (
       log.error({ err }, 'Error logging public share creation');
     }
 
-    return toShareDTO(share);
+    const shareWithDetails = await motionPageShareRepository.findByIdWithDetails(share.id);
+    return toShareDTO(shareWithDetails || share);
   }
 
   if (input.share_type === MotionShareType.SPACE) {
@@ -543,7 +616,21 @@ export const createShare = async (
     } catch (err) {
       log.error({ err }, 'Error logging space share creation');
     }
-    return toShareDTO(share);
+
+    if (input.target_space_id) {
+      const pageWithPermission = {
+        ...toPageDTO(page),
+        share_permission: share.permission,
+      };
+      broadcastMotionChange(input.target_space_id, {
+        type: 'create',
+        page: pageWithPermission,
+        userId,
+      });
+    }
+
+    const shareWithDetails = await motionPageShareRepository.findByIdWithDetails(share.id);
+    return toShareDTO(shareWithDetails || share);
   }
 
   throw new ApiError(400, 'Invalid share_type');
@@ -598,6 +685,15 @@ export const revokeShare = async (
   }
 
   await motionPageShareRepository.delete(shareId);
+
+  // Broadcast the share revocation to the target space
+  if (share.share_type === MotionShareType.SPACE && share.target_space_id) {
+    broadcastMotionChange(share.target_space_id, {
+      type: 'delete',
+      pageId,
+      userId,
+    });
+  }
 };
 
 export const updateShare = async (
@@ -658,6 +754,19 @@ export const updateShare = async (
     }
   } catch (err) {
     log.error({ err }, 'Error logging share update');
+  }
+
+  if (updated && updated.share_type === MotionShareType.SPACE && updated.target_space_id) {
+    const pageWithPermission = {
+      ...toPageDTO(page),
+      share_permission: updated.permission,
+    };
+    broadcastMotionChange(updated.target_space_id, {
+      type: 'update',
+      pageId,
+      page: pageWithPermission,
+      userId,
+    });
   }
 
   return toShareDTO(updated!);
