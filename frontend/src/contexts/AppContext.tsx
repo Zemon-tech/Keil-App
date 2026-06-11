@@ -105,6 +105,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.removeItem(STORAGE_MODE);
   }, []);
 
+  // ── Cross-tab sync via storage events ────────────────────────────────────
+  // When a different tab writes keil_active_org or keil_active_space, the
+  // browser fires a "storage" event on all OTHER tabs. We listen here so
+  // every open tab stays in sync without a page reload.
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_ORG_ID && e.newValue !== null) {
+        setActiveOrgId(e.newValue);
+      }
+      if (e.key === STORAGE_SPACE_ID) {
+        setActiveSpaceId(e.newValue); // null means the key was removed
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   // ── Auth readiness ────────────────────────────────────────────────────────
   const { isAuthenticated } = useAuth();
 

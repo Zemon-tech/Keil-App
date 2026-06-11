@@ -31,23 +31,17 @@ import {
 import {
   Bell,
   CalendarClock,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Flag,
   Focus,
   Timer,
   X,
+  PanelRightOpen,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   Popover,
@@ -76,6 +70,8 @@ type Props = {
     endISO: string,
     isAllDay: boolean,
   ) => void;
+  /** Callback to open/expand the task list sidebar */
+  onOpenSidebar?: () => void;
 };
 
 type CalendarView =
@@ -576,6 +572,7 @@ export function TaskSchedulePane({
   onViewChange,
   onDateChange,
   onTaskSchedule,
+  onOpenSidebar,
 }: Props) {
   const { activeOrgId, activeSpaceId } = useAppContext();
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
@@ -1117,79 +1114,109 @@ export function TaskSchedulePane({
   return (
     <>
       <div className="h-full min-h-0 flex flex-col">
-        <div className="shrink-0 border-b border-border/60 bg-linear-to-b from-card/50 to-background px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1">
-              <div className="inline-flex">
+        <div className="px-3 pt-3 pb-2 border-b border-border/60 shrink-0">
+          <div className="flex items-center justify-between gap-2 min-h-[32px]">
+
+            {/* Left: open-sidebar button + Day/Week/Month pill toggle */}
+            <div className="flex items-center gap-0.5">
+              {onOpenSidebar && (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="h-8 px-2.5 text-xs rounded-r-none border-r-0"
-                  onClick={
-                    currentViewType === "dayGridMonth"
-                      ? goToday
-                      : () => setView("dayGridMonth")
-                  }
+                  className="size-7 p-0 rounded-md shrink-0 mr-0.5"
+                  onClick={onOpenSidebar}
+                  title="Open task list"
                 >
-                  {currentViewType === "dayGridMonth" ? "Today" : "Month"}
+                  <PanelRightOpen className="size-3.5 text-muted-foreground" />
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "sm" }),
-                      "h-8 px-2 rounded-l-none flex items-center justify-center cursor-pointer",
-                    )}
-                    aria-label="Change calendar view"
-                  >
-                    <ChevronDown className="size-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="rounded-xl">
-                    <DropdownMenuItem onClick={goToday}>Today</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setView("timeGridWeek")}>
-                      Week
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setView("dayGridMonth")}>
-                      Month
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              )}
+
+              <div className="flex bg-muted/40 rounded-lg p-0.5 gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setView("timeGridDay")}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                    currentViewType === "timeGridDay"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Day
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("timeGridWeek")}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                    currentViewType === "timeGridWeek"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Week
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("dayGridMonth")}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                    currentViewType === "dayGridMonth"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Month
+                </button>
               </div>
             </div>
 
-            <div className="min-w-0 flex-1 flex items-center justify-center gap-2">
+            {/* Right: prev / date title / next + Today */}
+            <div className="flex items-center gap-0.5 shrink-0">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="h-8 px-2"
+                className="size-7 p-0 rounded-md"
                 onClick={goPrev}
               >
-                <ChevronLeft className="size-4" />
+                <ChevronLeft className="size-3.5 text-muted-foreground" />
               </Button>
+
               <QuickNavPopover
                 currentViewDate={currentViewDate}
                 calendarApi={calendarRef.current?.getApi()}
               >
                 <button
                   type="button"
-                  className="truncate text-sm font-semibold text-center cursor-pointer transition-colors duration-200 select-none py-1 px-2.5 rounded-md hover:bg-muted/80 active:bg-muted/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="px-2 py-1 text-xs font-semibold cursor-pointer transition-colors duration-200 select-none rounded-md hover:bg-muted/80 active:bg-muted/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring whitespace-nowrap"
                 >
                   {headerTitle}
                 </button>
               </QuickNavPopover>
+
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="h-8 px-2"
+                className="size-7 p-0 rounded-md"
                 onClick={goNext}
               >
-                <ChevronRight className="size-4" />
+                <ChevronRight className="size-3.5 text-muted-foreground" />
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2.5 text-xs rounded-md ml-1"
+                onClick={goToday}
+              >
+                Today
               </Button>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0 w-[88px]" />
           </div>
         </div>
 

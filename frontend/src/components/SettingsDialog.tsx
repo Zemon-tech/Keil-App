@@ -75,6 +75,9 @@ import {
   MessageSquare,
   PanelRight,
   Clock,
+  Smartphone,
+  Globe2,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
@@ -117,6 +120,8 @@ import { usePreferences, useUpdateSttProvider, type SttProvider } from "@/hooks/
 import { useOpenDM } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { getSessionRecords, type SessionRecord } from "@/contexts/AuthContext";
+import { useSettingsStore } from "@/store/useSettingsStore";
 
 // ─── Helper Functions ─────────────────────────────────────────────────
 const handleCopyToClipboard = async (text: string, label: string) => {
@@ -138,7 +143,8 @@ type AccountTab =
   | "shortcuts"
   | "tasks"
   | "notifications"
-  | "connectors";
+  | "connectors"
+  | "sessions";
 
 type WorkspaceTab = "org-general" | "org-members" | "org-spaces" | "api" | "enterprise";
 
@@ -165,6 +171,7 @@ const accountNavItems: AccountNavItem[] = [
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "connectors", label: "Connectors", icon: Plug },
+  { id: "sessions", label: "Sessions", icon: Monitor },
 ];
 
 const workspaceNavItems: WorkspaceNavItem[] = [
@@ -1000,7 +1007,7 @@ function SpaceMembersPanel({
 }
 
 function AccountTab() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, signOutGlobal } = useAuth();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1530,6 +1537,38 @@ function AccountTab() {
             </div>
             <Switch />
           </div>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Sessions section */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Monitor className="size-4 text-muted-foreground" />
+          Active Sessions
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Manage where you're signed in. Sign out of all devices or just this one.
+        </p>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200 dark:border-red-800/40"
+            onClick={signOutGlobal}
+          >
+            <Globe2 className="size-3.5 mr-1.5" />
+            Sign out all devices
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs rounded-lg text-muted-foreground"
+            onClick={() => useSettingsStore.getState().openSettings("sessions")}
+          >
+            View all sessions
+          </Button>
         </div>
       </div>
 
@@ -2809,6 +2848,246 @@ function EnterpriseTab() {
   );
 }
 
+// ─── Sessions Tab ─────────────────────────────────────────────────────
+
+function parseBrowserFromUA(ua: string): { browser: string; os: string } {
+  let browser = "Unknown Browser";
+  let os = "Unknown OS";
+
+  // OS detection
+  if (/Windows/.test(ua)) os = "Windows";
+  else if (/Macintosh|Mac OS X/.test(ua)) os = "macOS";
+  else if (/Linux/.test(ua)) os = "Linux";
+  else if (/Android/.test(ua)) os = "Android";
+  else if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+
+  // Browser detection (order matters — Edge before Chrome, etc.)
+  if (/Edg\//.test(ua)) browser = "Microsoft Edge";
+  else if (/OPR\/|Opera/.test(ua)) browser = "Opera";
+  else if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) browser = "Google Chrome";
+  else if (/Chromium/.test(ua)) browser = "Chromium";
+  else if (/Firefox\//.test(ua)) browser = "Firefox";
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = "Safari";
+
+  return { browser, os };
+}
+
+function formatRelativeTime(isoStr: string): string {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days = Math.floor(diff / 86_400_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+function getBrowserIcon(browser: string): React.ReactNode {
+  // Simple icon selection based on browser name
+  if (browser.includes("Chrome") || browser.includes("Chromium")) return <Globe2 className="size-5 text-blue-500" />;
+  if (browser.includes("Firefox")) return <Globe2 className="size-5 text-orange-500" />;
+  if (browser.includes("Safari")) return <Globe2 className="size-5 text-sky-500" />;
+  if (browser.includes("Edge")) return <Globe2 className="size-5 text-indigo-500" />;
+  return <Monitor className="size-5 text-muted-foreground" />;
+}
+
+function SessionsTab() {
+  const { signOut, signOutGlobal } = useAuth();
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [isSigningOutAll, setIsSigningOutAll] = useState(false);
+
+  // Load sessions from localStorage on mount and on focus
+  const loadSessions = () => {
+    const records = getSessionRecords();
+    // Sort: current first, then newest login first
+    records.sort((a, b) => {
+      if (a.isCurrent) return -1;
+      if (b.isCurrent) return 1;
+      return new Date(b.loginAt).getTime() - new Date(a.loginAt).getTime();
+    });
+    setSessions(records);
+  };
+
+  useEffect(() => {
+    loadSessions();
+    // Refresh when the tab gains focus (other tabs may have updated sessions)
+    window.addEventListener("focus", loadSessions);
+    return () => window.removeEventListener("focus", loadSessions);
+  }, []);
+
+  const handleSignOutAll = async () => {
+    setIsSigningOutAll(true);
+    try {
+      await signOutGlobal();
+    } finally {
+      setIsSigningOutAll(false);
+    }
+  };
+
+  const handleRemoveSession = (id: string) => {
+    try {
+      const stored = localStorage.getItem("keil_sessions");
+      if (!stored) return;
+      const records: SessionRecord[] = JSON.parse(stored);
+      const updated = records.filter((r) => r.id !== id);
+      localStorage.setItem("keil_sessions", JSON.stringify(updated));
+      loadSessions();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Sessions</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Manage where you're signed in to KeilHQ.
+        </p>
+      </div>
+
+      <Separator />
+
+      {/* Current session summary */}
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-muted/20 p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+            <Shield className="size-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Session Overview</p>
+            <p className="text-xs text-muted-foreground">
+              {sessions.length} active {sessions.length === 1 ? "session" : "sessions"} tracked on this machine
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Sessions are stored locally per browser. Signing out on one device does not affect others unless you use "Sign out all devices."
+        </p>
+      </div>
+
+      {/* Session list */}
+      {sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Monitor className="size-10 text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium text-muted-foreground">No session records yet</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            Sessions will appear here after your next login.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            Active Sessions
+          </p>
+          {sessions.map((session) => {
+            const { browser, os } = parseBrowserFromUA(session.userAgent);
+            return (
+              <div
+                key={session.id}
+                className={cn(
+                  "group flex items-start gap-4 p-4 rounded-2xl border transition-all duration-200",
+                  session.isCurrent
+                    ? "border-primary/30 bg-primary/5"
+                    : "border-border bg-muted/20 hover:bg-muted/40"
+                )}
+              >
+                {/* Icon */}
+                <div className={cn(
+                  "size-10 rounded-xl flex items-center justify-center shrink-0",
+                  session.isCurrent ? "bg-primary/10" : "bg-muted"
+                )}>
+                  {getBrowserIcon(browser)}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-foreground truncate">{browser}</p>
+                    {session.isCurrent && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        This device
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{os}</p>
+                  <div className="flex items-center gap-4 mt-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <Clock className="size-3 shrink-0" />
+                      <span>Logged in {formatRelativeTime(session.loginAt)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <RefreshCw className="size-3 shrink-0" />
+                      <span>Last seen {formatRelativeTime(session.lastSeen)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action */}
+                <div className="shrink-0">
+                  {session.isCurrent ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-[11px] h-7 px-3 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200 dark:border-red-800/40"
+                      onClick={signOut}
+                    >
+                      <LogOut className="size-3 mr-1" />
+                      Sign out
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[11px] h-7 px-3 rounded-lg text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleRemoveSession(session.id)}
+                    >
+                      <Trash2 className="size-3 mr-1" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Separator />
+
+      {/* Sign out all devices */}
+      <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-destructive mb-1">
+              <AlertTriangle className="size-4" />
+              <p className="text-sm font-semibold">Sign Out All Devices</p>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              This will revoke all refresh tokens and immediately sign you out everywhere — including this device.
+              You'll need to sign in again.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="shrink-0 text-xs rounded-lg"
+            onClick={handleSignOutAll}
+            disabled={isSigningOutAll}
+          >
+            {isSigningOutAll ? (
+              <Loader2 className="size-3.5 animate-spin mr-1.5" />
+            ) : (
+              <Globe2 className="size-3.5 mr-1.5" />
+            )}
+            Sign out all
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab Content Map ─────────────────────────────────────────────────
 const accountTabContent: Record<AccountTab, React.FC> = {
   account: AccountTab,
@@ -2819,6 +3098,7 @@ const accountTabContent: Record<AccountTab, React.FC> = {
   tasks: TasksTab,
   notifications: NotificationsTab,
   connectors: ConnectorsTab,
+  sessions: SessionsTab,
 };
 
 const workspaceTabContent: Record<WorkspaceTab, React.FC> = {
