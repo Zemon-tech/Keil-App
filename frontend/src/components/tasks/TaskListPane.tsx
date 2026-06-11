@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { format, isSameDay, isSameMonth, isSameYear, subDays, startOfDay } from "date-fns";
+import {
+  format,
+  isSameDay,
+  isSameMonth,
+  isSameYear,
+  subDays,
+  startOfDay,
+  differenceInDays,
+  isAfter,
+  isBefore,
+  addDays,
+  startOfWeek,
+  endOfWeek,
+} from "date-fns";
 import { Draggable } from "@fullcalendar/interaction";
 import {
   Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User,
   AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil,
-  SlidersHorizontal, CalendarClock, UserCheck,
-  CalendarRange, ShieldAlert, Check, PanelLeftClose,
+  SlidersHorizontal, CalendarClock, Rocket,
+  Check, PanelLeftClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,6 +56,7 @@ import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon } from "./task-detail-shared";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useSpaces } from "@/hooks/api/useSpaces";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Props = {
   query: string;
@@ -86,10 +100,8 @@ function formatTaskDateRange(start?: string, end?: string, isAllDay?: boolean) {
   if (!start) return format(new Date(end), "MMM d");
 
   const startDate = new Date(start);
-  // All-day due_date is stored as exclusive end (next day midnight).
-  // Subtract 1 day to get the inclusive last day for display.
   const endDate = isAllDay ? subDays(startOfDay(new Date(end)), 1) : new Date(end);
-  
+
   if (isSameDay(startDate, endDate)) {
     return format(startDate, "MMM d");
   }
@@ -101,31 +113,95 @@ function formatTaskDateRange(start?: string, end?: string, isAllDay?: boolean) {
   return `${format(startDate, "MMM d")} – ${format(endDate, "MMM d")}`;
 }
 
-// Using STATUS_COLOR from task-detail-shared
+function getSprintStatus(dateStr?: string): "current" | "next" | "backlog" {
+  if (!dateStr) return "backlog";
+  const date = new Date(dateStr);
+  const today = new Date();
 
-// ── Filter state types ────────────────────────────────────────────────────────
+  const currentSprintStart = startOfWeek(today, { weekStartsOn: 1 });
+  const currentSprintEnd = endOfWeek(addDays(currentSprintStart, 7), { weekStartsOn: 1 });
 
-type TypeFilter = "all" | "tasks" | "events" | "blocked";
-type PriorityFilter = "all" | "urgent" | "high" | "medium" | "low";
-type SortPreset = "due-soon" | "due-latest" | "highest-priority" | "recently-created" | "oldest-created";
-type QuickPreset = "focus" | "urgent" | "meetings" | "assigned-to-me" | "upcoming" | "blocked";
+  const nextSprintStart = addDays(currentSprintEnd, 1);
+  const nextSprintEnd = endOfWeek(addDays(nextSprintStart, 7), { weekStartsOn: 1 });
 
-// Maps a SortPreset to the SortBy + SortOrder the parent expects
-const SORT_PRESET_MAP: Record<SortPreset, { by: SortBy; order: SortOrder }> = {
-  "due-soon":          { by: "due_date",   order: "asc"  },
-  "due-latest":        { by: "due_date",   order: "desc" },
-  "highest-priority":  { by: "priority",   order: "desc" },
-  "recently-created":  { by: "created_at", order: "desc" },
-  "oldest-created":    { by: "created_at", order: "asc"  },
-};
+  if (isBefore(date, addDays(currentSprintEnd, 1))) {
+    return "current";
+  }
+  if (isAfter(date, subDays(nextSprintStart, 1)) && isBefore(date, addDays(nextSprintEnd, 1))) {
+    return "next";
+  }
+  return "backlog";
+}
 
-const SORT_PRESET_LABELS: Record<SortPreset, string> = {
-  "due-soon":         "Due Soon",
-  "due-latest":       "Due Latest",
-  "highest-priority": "Highest Priority",
-  "recently-created": "Recently Created",
-  "oldest-created":   "Oldest Created",
-};
+function calculateAttentionScore(
+  task: TaskDTO,
+  userId: string,
+  allTasks: TaskDTO[]
+): number {
+  let score = 0;
+
+  // 1. Priority Weight
+  const priority = task.priority || "medium";
+  if (priority === "urgent") score += 100;
+  else if (priority === "high") score += 60;
+  else if (priority === "medium") score += 30;
+  else if (priority === "low") score += 10;
+  else score += 10;
+
+  // 2. Due Date Weight (Urgency Weight)
+  if (task.due_date) {
+    const due = startOfDay(new Date(task.due_date));
+    const today = startOfDay(new Date());
+    const isCompleted = task.status === "done" || task.status === "completed";
+
+    if (!isCompleted && isBefore(due, today)) {
+      score += 120;
+    } else if (isSameDay(due, today)) {
+      score += 90;
+    } else if (isSameDay(due, addDays(today, 1))) {
+      score += 60;
+    } else if (isBefore(due, addDays(today, 7)) && isAfter(due, today)) {
+      score += 40;
+    }
+  }
+
+  // 3. Assignment Weight
+  const isAssignedToMe = task.assignees?.some(a => a.id === userId) || false;
+  if (isAssignedToMe) score += 40;
+  if (task.created_by === userId) score += 10;
+
+  const isWatching = (task as any).watchers?.includes(userId) || (task as any).watchers?.some((w: any) => w.id === userId);
+  if (isWatching) score += 15;
+
+  // 4. Dependency Weight
+  const dependentCount = allTasks.filter(other =>
+    other.id !== task.id &&
+    other.dependencies?.some(dep => dep.id === task.id)
+  ).length;
+  score += dependentCount * 10;
+
+  // 5. Sprint Weight
+  const sprintStatus = getSprintStatus(task.due_date || task.start_date);
+  if (sprintStatus === "current") score += 50;
+  else if (sprintStatus === "next") score += 20;
+
+  // 6. Activity Weight
+  if (task.updated_at) {
+    const hoursSinceUpdate = differenceInDays(new Date(), new Date(task.updated_at)) * 24;
+    if (hoursSinceUpdate <= 24) {
+      score += 15;
+    }
+  }
+
+  // 7. Aging Weight
+  const isCompleted = task.status === "done" || task.status === "completed";
+  if (!isCompleted && task.updated_at) {
+    const daysWithoutUpdate = Math.max(0, differenceInDays(new Date(), new Date(task.updated_at)));
+    score += Math.min(40, daysWithoutUpdate * 2);
+  }
+
+  return score;
+}
 
 /** Inline component to fetch & render subtasks when expanded */
 function SubtaskList({
@@ -157,8 +233,8 @@ function SubtaskList({
 
   if (subtasks.length === 0) {
     return (
-      <div className="pl-4 border-l border-border/40 ml-5 py-2">
-        <span className="text-[11px] text-muted-foreground/60 italic">No subtasks</span>
+      <div className="h-7 pl-6 text-xs font-medium italic leading-7 text-muted-foreground/50 select-none">
+        No subtasks
       </div>
     );
   }
@@ -231,7 +307,7 @@ function SubtaskList({
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
               {(sub as any).type === "event" && (
                 <span title="Event">
-                  <CalendarClock className="size-3 text-[#3730A3] dark:text-[#C7D2FE] shrink-0" />
+                  <CalendarClock className="size-3 text-muted-foreground shrink-0" />
                 </span>
               )}
               {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
@@ -269,11 +345,78 @@ function getTaskPermissions(
   };
 }
 
+interface SectionHeaderProps {
+  title: string;
+  icon?: React.ReactNode;
+  count?: number;
+  isCollapsed: boolean;
+  onToggle: () => void;
+  badgeColor?: string;
+  extraWidget?: React.ReactNode;
+  onCreateClick?: () => void;
+}
+
+function SectionHeader({
+  title,
+  isCollapsed,
+  onToggle,
+  extraWidget,
+  onCreateClick,
+}: SectionHeaderProps) {
+  return (
+    <div className="group/section flex h-8 items-center justify-between mt-2 first:mt-0 select-none">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <div
+          className={cn(
+            "transition-transform duration-200 text-muted-foreground/60",
+            isCollapsed && "-rotate-90"
+          )}
+        >
+          <ChevronDown className="size-3 shrink-0" />
+        </div>
+        <span className="truncate">{title}</span>
+      </button>
+
+      <div className="flex items-center gap-1 shrink-0 px-2">
+        {onCreateClick && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreateClick();
+            }}
+            aria-label={`Add to ${title}`}
+          >
+            <Plus className="size-3.5" />
+          </Button>
+        )}
+        {extraWidget}
+      </div>
+    </div>
+  );
+}
+
+function SprintCapacityWidget({ hours, percentage, color }: { hours: number; percentage: number; color: string }) {
+  return (
+    <div className="flex items-center gap-1.5 shrink-0 text-[9px] font-medium text-muted-foreground">
+      <span>{hours}h/80h</span>
+      <div className="w-8 h-1 rounded-full bg-muted overflow-hidden shrink-0">
+        <div className={cn("h-full transition-all duration-300", color)} style={{ width: `${percentage}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function TaskListPane({
   query,
   onQueryChange,
   onStatusFilterChange,
-  onSortChange,
   tasks,
   allTasks,
   selectedTaskId,
@@ -294,6 +437,7 @@ export function TaskListPane({
   onSpaceFilterChange,
   onCollapse,
 }: Props) {
+  const { user } = useAuth();
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(!!query);
@@ -302,83 +446,406 @@ export function TaskListPane({
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
 
-  // Unified filter panel state
-  const [mineOnly, setMineOnly] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
-  const [sortPreset, setSortPreset] = useState<SortPreset>("due-soon");
-  const [activeQuickPresets, setActiveQuickPresets] = useState<Set<QuickPreset>>(new Set());
-  const [selectedOrgId, setSelectedOrgId] = useState<string>("all");
-  const [selectedSpaceId, setSelectedSpaceId] = useState<string>("all");
-
-  const { activeOrgId, activeSpace, organisations } = useAppContext();
-
-
-  const { canCreateTask } = useSpaceRole();
-
-  // Sync internal filter state → parent props
-  useEffect(() => {
-    // Type → statusFilter
-    if (typeFilter === "tasks") onStatusFilterChange("Task");
-    else if (typeFilter === "events") onStatusFilterChange("Event");
-    else if (typeFilter === "blocked") onStatusFilterChange("Blocked");
-    else if (mineOnly) onStatusFilterChange("Mine");
-    else onStatusFilterChange("All");
-  }, [typeFilter, mineOnly]);
-
-  useEffect(() => {
-    // Sort preset → parent sortBy + sortOrder
-    const { by, order } = SORT_PRESET_MAP[sortPreset];
-    onSortChange(by, order);
-  }, [sortPreset]);
-
-  useEffect(() => {
-    // Org/space → parent
-    onOrgFilterChange?.(selectedOrgId);
-  }, [selectedOrgId]);
-
-  useEffect(() => {
-    onSpaceFilterChange?.(selectedSpaceId);
-  }, [selectedSpaceId]);
-
-  // Spaces for selected org
-  const { data: orgSpaces = [] } = useSpaces(selectedOrgId !== "all" ? selectedOrgId : null);
-
-  // Active filter chips for the "active filters" strip
-  const activeFilterChips = useMemo(() => {
-    const chips: { label: string; onRemove: () => void }[] = [];
-    if (mineOnly) chips.push({ label: "Mine", onRemove: () => setMineOnly(false) });
-    if (typeFilter !== "all") chips.push({ label: typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1), onRemove: () => setTypeFilter("all") });
-    if (priorityFilter !== "all") chips.push({ label: priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1) + " Priority", onRemove: () => setPriorityFilter("all") });
-    if (selectedOrgId !== "all") {
-      const org = organisations.find(o => o.id === selectedOrgId);
-      chips.push({ label: org?.name ?? "Workspace", onRemove: () => { setSelectedOrgId("all"); setSelectedSpaceId("all"); } });
+  // Additive filter state
+  const [filters, setFilters] = useState<{
+    statuses: string[];
+    priorities: string[];
+    assignments: string[];
+    sprints: string[];
+    orgId: string;
+    spaceId: string;
+  }>(() => {
+    let defaults = {
+      statuses: [],
+      priorities: [],
+      assignments: [],
+      sprints: [],
+      orgId: "all",
+      spaceId: "all",
+    };
+    try {
+      const stored = localStorage.getItem("task_default_filters");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        defaults = { ...defaults, ...parsed };
+      }
+    } catch (e) {
+      // Fallback
     }
-    if (selectedSpaceId !== "all") {
-      const sp = orgSpaces.find(s => s.id === selectedSpaceId);
-      chips.push({ label: sp?.name ?? "Space", onRemove: () => setSelectedSpaceId("all") });
-    }
-    activeQuickPresets.forEach(p => {
-      const labels: Record<QuickPreset, string> = {
-        focus: "Focus", urgent: "Urgent", meetings: "Meetings",
-        "assigned-to-me": "Assigned to Me", upcoming: "Upcoming", blocked: "Blocked",
-      };
-      chips.push({ label: labels[p], onRemove: () => {
-        const next = new Set(activeQuickPresets);
-        next.delete(p);
-        setActiveQuickPresets(next);
-      }});
-    });
-    return chips;
-  }, [mineOnly, typeFilter, priorityFilter, selectedOrgId, selectedSpaceId, activeQuickPresets, organisations, orgSpaces]);
+    return defaults;
+  });
 
-  const toggleQuickPreset = (p: QuickPreset) => {
-    const next = new Set(activeQuickPresets);
-    if (next.has(p)) next.delete(p); else next.add(p);
-    setActiveQuickPresets(next);
+  const [visibleSections, setVisibleSections] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("task_visible_sections");
+      return stored ? JSON.parse(stored) : ["needsAttention", "currentSprint"];
+    } catch {
+      return ["needsAttention", "currentSprint"];
+    }
+  });
+
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    needsAttention: false,
+    myFocus: false,
+    currentSprint: false,
+    upcomingWork: false,
+    recentlyCompleted: true,
+  });
+
+  const [collapsedSubFilters, setCollapsedSubFilters] = useState<Record<string, boolean>>({});
+
+  const toggleSubFilter = (groupKey: string) => {
+    setCollapsedSubFilters(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
-  // Toggle subtask expansion for a task
+  // Global settings change listener
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      try {
+        const storedSections = localStorage.getItem("task_visible_sections");
+        if (storedSections) {
+          setVisibleSections(JSON.parse(storedSections));
+        }
+        const storedFilters = localStorage.getItem("task_default_filters");
+        if (storedFilters) {
+          const parsed = JSON.parse(storedFilters);
+          setFilters(prev => ({
+            ...prev,
+            ...parsed
+          }));
+        }
+      } catch (e) {
+        console.error("Error loading task settings", e);
+      }
+    };
+
+    window.addEventListener("task_settings_changed", handleSettingsChange);
+    return () => {
+      window.removeEventListener("task_settings_changed", handleSettingsChange);
+    };
+  }, []);
+
+  const { activeOrgId, activeSpace, organisations } = useAppContext();
+  const { canCreateTask } = useSpaceRole();
+
+  const toggleSectionCollapse = (section: string) => {
+    setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const toggleFilter = (category: keyof typeof filters, value: string) => {
+    setFilters(prev => {
+      const current = prev[category];
+      if (Array.isArray(current)) {
+        const next = current.includes(value)
+          ? current.filter(x => x !== value)
+          : [...current, value];
+        return { ...prev, [category]: next };
+      }
+      return prev;
+    });
+  };
+
+  // Reset filters when changing active organisation or space
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, orgId: "all", spaceId: "all" }));
+  }, [activeOrgId, activeSpace?.id]);
+
+  // Sync workspace filters up to parent
+  useEffect(() => {
+    onOrgFilterChange?.(filters.orgId);
+  }, [filters.orgId]);
+
+  useEffect(() => {
+    onSpaceFilterChange?.(filters.spaceId);
+  }, [filters.spaceId]);
+
+  // Sync assignment filters up to parent
+  useEffect(() => {
+    if (filters.assignments.length === 1 && filters.assignments[0] === "assigned-to-me") {
+      onStatusFilterChange("Mine");
+    } else {
+      onStatusFilterChange("All");
+    }
+  }, [filters.assignments]);
+
+  // Fetch spaces for selected workspace
+  const { data: orgSpaces = [] } = useSpaces(filters.orgId !== "all" ? filters.orgId : null);
+
+  const isFiltered = useMemo(() => {
+    return (
+      query.trim().length > 0 ||
+      filters.statuses.length > 0 ||
+      filters.priorities.length > 0 ||
+      filters.assignments.length > 0 ||
+      filters.sprints.length > 0 ||
+      filters.orgId !== "all" ||
+      filters.spaceId !== "all"
+    );
+  }, [query, filters]);
+
+  // Apply additive filters
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t => {
+      // Filter out events as we are not showing events in TaskListPane
+      if (t.type === "event") return false;
+
+      // 1. Status Filter
+      if (filters.statuses.length > 0) {
+        if (!filters.statuses.includes(t.status)) return false;
+      }
+
+      // 2. Priority Filter
+      if (filters.priorities.length > 0) {
+        if (!filters.priorities.includes(t.priority)) return false;
+      }
+
+      // 3. Assignment Filter
+      if (filters.assignments.length > 0) {
+        const matches = filters.assignments.some(a => {
+          if (a === "assigned-to-me") return t.assignees?.some(as => as.id === user?.id);
+          if (a === "created-by-me") return t.created_by === user?.id;
+          if (a === "watching") return (t as any).watchers?.includes(user?.id) || (t as any).watchers?.some((w: any) => w.id === user?.id);
+          if (a === "unassigned") return !t.assignees || t.assignees.length === 0;
+          return false;
+        });
+        if (!matches) return false;
+      }
+
+      // 4. Sprint Filter
+      if (filters.sprints.length > 0) {
+        const sStatus = getSprintStatus(t.due_date || t.start_date);
+        if (!filters.sprints.includes(sStatus)) return false;
+      }
+
+      // 5. Workspace Filter
+      if (filters.orgId !== "all") {
+        if (t.org_id !== filters.orgId) return false;
+      }
+
+      // 6. Space Filter
+      if (filters.spaceId !== "all") {
+        if (t.space_id !== filters.spaceId) return false;
+      }
+
+      return true;
+    });
+  }, [tasks, filters, user]);
+
+  // Deduplicate subtasks inside main top-level views if not filtered
+  const displayedTasks = useMemo(() => {
+    if (isFiltered) {
+      return filteredTasks;
+    } else {
+      return filteredTasks.filter(t => !t.parent_task_id);
+    }
+  }, [filteredTasks, isFiltered]);
+
+  // Sections construction
+  const sections = useMemo(() => {
+    const today = startOfDay(new Date());
+    const tomorrow = addDays(today, 1);
+    const sevenDaysOut = addDays(today, 7);
+    const yesterday = subDays(today, 1);
+    const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
+
+    const sourceTasks = allTasks || tasks;
+
+    // Calculate metadata for scoring
+    const tasksWithMetadata = displayedTasks.map(t => {
+      const score = calculateAttentionScore(t, user?.id || "", sourceTasks);
+      const sprint = getSprintStatus(t.due_date || t.start_date);
+      return { ...t, score, sprint };
+    });
+
+    // 1. Needs Attention (max 10)
+    const needsAttentionRaw = tasksWithMetadata.filter(t => {
+      if (t.type === "event") return false;
+      const isCompleted = t.status === "done" || t.status === "completed";
+      if (isCompleted) return false;
+
+      const overdue = t.due_date && isBefore(startOfDay(new Date(t.due_date)), today);
+      const blocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
+      const dueToday = t.due_date && isSameDay(new Date(t.due_date), today);
+      const critical = t.priority === "urgent" || t.priority === "high";
+
+      return overdue || blocked || dueToday || critical;
+    });
+    const needsAttention = [...needsAttentionRaw]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
+    // 2. My Focus (max 25)
+    const myFocusRaw = tasksWithMetadata.filter(t => {
+      if (t.type === "event") return false;
+      const isCompleted = t.status === "done" || t.status === "completed";
+      if (isCompleted) return false;
+
+      const isAssigned = t.assignees?.some(a => a.id === user?.id);
+      const currentSprint = t.sprint === "current";
+
+      return isAssigned && currentSprint;
+    });
+    const myFocus = [...myFocusRaw]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 25);
+
+    // 3. Current Sprint
+    const currentSprintTasks = tasksWithMetadata.filter(t => t.type !== "event" && t.sprint === "current");
+    const currentSprintGrouped = {
+      todo: [...currentSprintTasks.filter(t => t.status === "todo" || t.status === "backlog")].sort((a, b) => b.score - a.score),
+      inProgress: [...currentSprintTasks.filter(t => t.status === "in-progress")].sort((a, b) => b.score - a.score),
+      review: [...currentSprintTasks.filter(t => t.status === "in-review")].sort((a, b) => b.score - a.score),
+      done: [...currentSprintTasks.filter(t => t.status === "done" || t.status === "completed")].sort((a, b) => b.score - a.score),
+    };
+
+    // 4. Upcoming Work
+    const upcomingTasks = tasksWithMetadata.filter(t => {
+      if (t.type === "event") return false;
+      const isCompleted = t.status === "done" || t.status === "completed";
+      if (isCompleted) return false;
+      if (!t.due_date) return false;
+
+      const due = startOfDay(new Date(t.due_date));
+      return isAfter(due, subDays(today, 1)) && isBefore(due, addDays(sevenDaysOut, 1));
+    });
+
+    const upcomingGrouped = {
+      today: [...upcomingTasks.filter(t => t.due_date && isSameDay(new Date(t.due_date), today))].sort((a, b) => b.score - a.score),
+      tomorrow: [...upcomingTasks.filter(t => t.due_date && isSameDay(new Date(t.due_date), tomorrow))].sort((a, b) => b.score - a.score),
+      thisWeek: [...upcomingTasks.filter(t => {
+        if (!t.due_date) return false;
+        const due = startOfDay(new Date(t.due_date));
+        return isAfter(due, tomorrow) && isBefore(due, addDays(sevenDaysOut, 1));
+      })].sort((a, b) => b.score - a.score),
+    };
+
+    // 5. Events
+    const allEvents = filteredTasks.filter(t => t.type === "event");
+    const eventsGrouped = {
+      today: allEvents.filter(t => t.start_date && isSameDay(new Date(t.start_date), today)),
+      tomorrow: allEvents.filter(t => t.start_date && isSameDay(new Date(t.start_date), tomorrow)),
+      thisWeek: allEvents.filter(t => {
+        if (!t.start_date) return false;
+        const start = startOfDay(new Date(t.start_date));
+        return isAfter(start, tomorrow) && isBefore(start, addDays(sevenDaysOut, 1));
+      }),
+    };
+
+    // 6. Recently Completed
+    const completedTasks = tasksWithMetadata.filter(t => t.type !== "event" && (t.status === "done" || t.status === "completed"));
+    const recentlyCompletedGrouped = {
+      today: completedTasks.filter(t => t.updated_at && isSameDay(new Date(t.updated_at), today)),
+      yesterday: completedTasks.filter(t => t.updated_at && isSameDay(new Date(t.updated_at), yesterday)),
+      thisWeek: completedTasks.filter(t => {
+        if (!t.updated_at) return false;
+        const updated = startOfDay(new Date(t.updated_at));
+        return isAfter(updated, startOfCurrentWeek) && !isSameDay(updated, today) && !isSameDay(updated, yesterday);
+      }),
+    };
+
+    return {
+      needsAttention,
+      myFocus,
+      currentSprint: currentSprintGrouped,
+      upcomingWork: upcomingGrouped,
+      events: eventsGrouped,
+      recentlyCompleted: recentlyCompletedGrouped,
+    };
+  }, [displayedTasks, filteredTasks, allTasks, tasks, user]);
+
+  // Sprint Capacity widget calculations
+  const sprintCapacity = useMemo(() => {
+    if (!user) return { hours: 0, percentage: 0, color: "bg-emerald-500" };
+    const sourceTasks = allTasks || tasks;
+    const userSprintTasks = sourceTasks.filter(t => {
+      if (t.type === "event") return false;
+      const sprint = getSprintStatus(t.due_date || t.start_date);
+      const isAssigned = t.assignees?.some(a => a.id === user.id);
+      const isNotDone = t.status !== "done" && t.status !== "completed";
+      return sprint === "current" && isAssigned && isNotDone;
+    });
+
+    const totalMinutes = userSprintTasks.reduce((acc, t) => acc + (t.time_estimate || 0), 0);
+    const hours = Math.round((totalMinutes / 60) * 10) / 10;
+    const capacityHours = 80;
+    const percentage = Math.min(100, Math.round((hours / capacityHours) * 100));
+
+    let color = "bg-emerald-500";
+    if (percentage > 100) {
+      color = "bg-rose-500";
+    } else if (percentage > 80) {
+      color = "bg-amber-500";
+    }
+
+    return { hours, percentage, color };
+  }, [allTasks, tasks, user]);
+
+  // Active filter chips list
+  const activeFilterChips = useMemo(() => {
+    const chips: { label: string; onRemove: () => void }[] = [];
+
+    // Status
+    filters.statuses.forEach(s => {
+      chips.push({
+        label: `Status: ${s.charAt(0).toUpperCase() + s.slice(1)}`,
+        onRemove: () => setFilters(prev => ({ ...prev, statuses: prev.statuses.filter(x => x !== s) }))
+      });
+    });
+
+    // Priority
+    filters.priorities.forEach(p => {
+      chips.push({
+        label: `Priority: ${p.charAt(0).toUpperCase() + p.slice(1)}`,
+        onRemove: () => setFilters(prev => ({ ...prev, priorities: prev.priorities.filter(x => x !== p) }))
+      });
+    });
+
+    // Assignment
+    filters.assignments.forEach(a => {
+      const labels: Record<string, string> = {
+        "assigned-to-me": "Assigned to Me",
+        "created-by-me": "Created by Me",
+        "watching": "Watching",
+        "unassigned": "Unassigned"
+      };
+      chips.push({
+        label: labels[a] || a,
+        onRemove: () => setFilters(prev => ({ ...prev, assignments: prev.assignments.filter(x => x !== a) }))
+      });
+    });
+
+    // Sprint
+    filters.sprints.forEach(s => {
+      const labels: Record<string, string> = {
+        current: "Current Sprint",
+        next: "Next Sprint",
+        backlog: "Backlog Sprint"
+      };
+      chips.push({
+        label: labels[s] || s,
+        onRemove: () => setFilters(prev => ({ ...prev, sprints: prev.sprints.filter(x => x !== s) }))
+      });
+    });
+
+    if (filters.orgId !== "all") {
+      const org = organisations.find(o => o.id === filters.orgId);
+      chips.push({
+        label: org?.name ?? "Workspace",
+        onRemove: () => setFilters(prev => ({ ...prev, orgId: "all", spaceId: "all" }))
+      });
+    }
+    if (filters.spaceId !== "all") {
+      const sp = orgSpaces.find(s => s.id === filters.spaceId);
+      chips.push({
+        label: sp?.name ?? "Space",
+        onRemove: () => setFilters(prev => ({ ...prev, spaceId: "all" }))
+      });
+    }
+
+    return chips;
+  }, [filters, organisations, orgSpaces]);
+
+  // Toggle subtask expansion
   const toggleExpanded = (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation();
     const next = new Set(expandedTasks);
@@ -386,27 +853,6 @@ export function TaskListPane({
     else next.add(taskId);
     setExpandedTasks(next);
   };
-
-  // Re-structure task list to include subtasks and stack them on top of parents
-  const taskList = useMemo(() => {
-    const parents = tasks.filter(t => !t.parent_task_id);
-    const subtasks = tasks.filter(t => t.parent_task_id);
-
-    const result: TaskDTO[] = [];
-    parents.forEach(p => {
-      // Find children for this parent
-      const children = subtasks.filter(s => s.parent_task_id === p.id);
-      // Stack children on TOP of parent
-      result.push(...children);
-      result.push(p);
-    });
-
-    // Add any subtasks whose parents are not in the current list
-    const orphans = subtasks.filter(s => !parents.some(p => p.id === s.parent_task_id));
-    result.push(...orphans);
-
-    return result;
-  }, [tasks]);
 
   // Keyboard shortcut: press C to open create dialog
   const onCreateDialogOpenChangeRef = useRef(onCreateDialogOpenChange);
@@ -433,10 +879,7 @@ export function TaskListPane({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Logic handle by useMemo above
-  // const taskList = tasks.filter(t => !t.parent_task_id);
-
-  // Initialize FullCalendar Draggable for task cards
+  // Initialize FullCalendar Draggable
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -452,7 +895,7 @@ export function TaskListPane({
         return {
           id: taskId,
           title: taskTitle,
-          duration: "01:00", // 1 hour default duration
+          duration: "01:00",
           extendedProps: {
             taskId,
             taskTitle,
@@ -513,11 +956,9 @@ export function TaskListPane({
   };
 
   const handleBulkUnassign = () => {
-    // Get first selected task to check assignees
     const firstTaskId = Array.from(selectedTaskIds)[0];
     const firstTask = tasks.find((t) => t.id === firstTaskId);
     if (firstTask?.assignees && onRemoveAssignee) {
-      // Remove all assignees from each selected task
       selectedTaskIds.forEach((taskId) => {
         const task = tasks.find((t) => t.id === taskId);
         task?.assignees?.forEach((assignee) => {
@@ -538,6 +979,204 @@ export function TaskListPane({
 
   const confirmDelete = () => {
     setDeleteDialogOpen(true);
+  };
+
+  const renderTaskRow = (t: TaskDTO, isSubtask = false) => {
+    const active = t.id === selectedTaskId;
+    const isChecked = selectedTaskIds.has(t.id);
+    const isDone = t.status === "done" || t.status === "completed";
+    const isDraggable = t.status !== "done" && t.status !== "completed";
+    const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
+
+    const { canEditTask: itemCanEdit, canDeleteTask: itemCanDelete } = getTaskPermissions(
+      t,
+      activeOrgId,
+      activeSpace?.id ?? null,
+      activeSpace?.role ?? null
+    );
+
+    return (
+      <div key={t.id} className="group/item">
+        <div
+          onClick={() => !isMultiSelecting && onSelectTask(t.id)}
+          data-task-id={t.id}
+          data-task-title={t.title}
+          data-task-status={t.status}
+          className={cn(
+            "flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+            active && !isMultiSelecting
+              ? "bg-[#EEF2FF] dark:bg-[#1E1B4B]"
+              : "hover:bg-[#F4F4F5] dark:hover:bg-[#18181B]",
+            isDone && "opacity-50",
+            isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing",
+            isSubtask && "pl-5"
+          )}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Selection & Drag actions */}
+            <div
+              className={cn(
+                "flex items-center overflow-hidden transition-all duration-200 shrink-0",
+                !isChecked && !isMultiSelecting
+                  ? "w-0 opacity-0 group-hover:w-[36px] group-hover:opacity-100"
+                  : "w-[36px] opacity-100"
+              )}
+            >
+              {/* Drag handle */}
+              {isDraggable ? (
+                <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
+                  <GripVertical className="size-3.5 text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="w-[22px] shrink-0" />
+              )}
+
+              {/* Multi-select checkbox */}
+              <div
+                className="shrink-0"
+                onClick={(e) => toggleSelection(e, t.id)}
+              >
+                <Checkbox checked={isChecked} className="size-3.5" />
+              </div>
+            </div>
+
+            {/* Icon/Dot — click opens popover or expands on hover */}
+            <div className="size-4 flex items-center justify-center relative shrink-0">
+              {/* Status/Event icon — visible by default, hidden on hover */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 transition-transform hover:scale-110 group-hover/item:opacity-0 transition-opacity flex items-center justify-center"
+                  >
+                    {t.type === "event" ? (
+                      <CalendarClock className="size-3.5 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <StatusIcon
+                        status={t.status}
+                        type="task"
+                        className="size-3.5 shrink-0"
+                      />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-36 p-1 rounded-lg shadow-lg"
+                >
+                  {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
+                    <PopoverClose asChild key={s}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateTask?.(t.id, { status: s });
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                      >
+                        <StatusIcon
+                          status={s}
+                          type={t.type === "event" ? "event" : "task"}
+                          className="size-3.5 shrink-0"
+                        />
+                        {s}
+                      </button>
+                    </PopoverClose>
+                  ))}
+                </PopoverContent>
+              </Popover>
+
+              {/* Chevron — visible ALWAYS on hover for all tasks */}
+              <button
+                onClick={(e) => toggleExpanded(e, t.id)}
+                className="absolute inset-0 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-opacity hover:text-foreground"
+              >
+                {expandedTasks.has(t.id) ? (
+                  <ChevronDown className="size-3" />
+                ) : (
+                  <ChevronRight className="size-3" />
+                )}
+              </button>
+            </div>
+
+            <div className="task-name-container flex flex-col items-start gap-0.5">
+              <span className={cn(
+                "task-name-scroll text-xs font-medium leading-snug",
+                isDone && "line-through opacity-60"
+              )} title={t.title}>
+                {t.title}
+              </span>
+            </div>
+          </div>
+
+          {/* Right block: Badge and Date */}
+          <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground justify-end relative ml-auto min-w-fit">
+            {/* Badges & Icons */}
+            <div className="flex items-center gap-1">
+              {isBlocked && (
+                <Zap className="size-2.5 text-yellow-400 shrink-0" />
+              )}
+            </div>
+
+            {/* Date / Action Menu */}
+            <div className="relative flex items-center justify-end min-w-fit ml-1">
+              <span className={cn(
+                "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight",
+                isDone && "opacity-40"
+              )}>
+                {formatTaskDateRange(t.start_date, t.due_date, t.is_all_day)}
+              </span>
+
+              <div className="absolute right-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="size-5 p-0 hover:bg-muted-foreground/10"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MoreHorizontal className="size-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
+                      View Details
+                    </DropdownMenuItem>
+                    {itemCanEdit && (
+                      <DropdownMenuItem onClick={() => setEditingTask(t)}>
+                        <Pencil className="size-3 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    {itemCanDelete && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => {
+                          if (onDeleteTask) onDeleteTask(t.id);
+                        }}
+                      >
+                        <Trash2 className="size-3 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Expanded subtasks dropdown — only rendered when expanded and NOT in filtered flat view */}
+        {!isFiltered && expandedTasks.has(t.id) && (
+          <SubtaskList
+            parentTaskId={t.id}
+            selectedTaskId={selectedTaskId}
+            onSelectTask={onSelectTask}
+            onUpdateTask={onUpdateTask}
+          />
+        )}
+      </div>
+    );
   };
 
   return (
@@ -571,19 +1210,19 @@ export function TaskListPane({
               {/* Mine / All pill toggle */}
               <div className="flex bg-muted/40 rounded-lg p-0.5 gap-0.5">
                 <button
-                  onClick={() => setMineOnly(false)}
+                  onClick={() => setFilters(prev => ({ ...prev, assignments: prev.assignments.filter(x => x !== "assigned-to-me") }))}
                   className={cn(
                     "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                    !mineOnly ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    !filters.assignments.includes("assigned-to-me") ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   All
                 </button>
                 <button
-                  onClick={() => setMineOnly(true)}
+                  onClick={() => setFilters(prev => ({ ...prev, assignments: Array.from(new Set([...prev.assignments, "assigned-to-me"])) }))}
                   className={cn(
                     "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                    mineOnly ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    filters.assignments.includes("assigned-to-me") ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   Mine
@@ -612,25 +1251,20 @@ export function TaskListPane({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48 rounded-xl">
 
-                    {/* Type */}
+                    {/* Status */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="text-xs gap-2">
-                        <span className="size-3.5 flex items-center justify-center text-muted-foreground">
-                          <ChevronRight className="size-3" />
-                        </span>
-                        Type
-                        {typeFilter !== "all" && (
-                          <span className="ml-auto text-[10px] text-primary font-medium capitalize">{typeFilter}</span>
+                        Status
+                        {filters.statuses.length > 0 && (
+                          <span className="ml-auto text-[10px] text-primary font-medium">{filters.statuses.length} selected</span>
                         )}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent className="w-40 rounded-xl">
-                        {(["all", "tasks", "events", "blocked"] as TypeFilter[]).map(t => (
-                          <DropdownMenuItem key={t} className="text-xs capitalize gap-2"
-                            onClick={() => setTypeFilter(t)}>
-                            {typeFilter === t && <Check className="size-3 text-primary shrink-0" />}
-                            <span className={typeFilter === t ? "ml-0" : "ml-5"}>
-                              {t === "all" ? "All" : t.charAt(0).toUpperCase() + t.slice(1)}
-                            </span>
+                        {TASK_STATUS_OPTIONS.map(s => (
+                          <DropdownMenuItem key={s} className="text-xs capitalize gap-2"
+                            onClick={(e) => { e.preventDefault(); toggleFilter("statuses", s); }}>
+                            {filters.statuses.includes(s) ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                            {s}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuSubContent>
@@ -641,70 +1275,65 @@ export function TaskListPane({
                       <DropdownMenuSubTrigger className="text-xs gap-2">
                         <Flag className="size-3.5 text-muted-foreground shrink-0" />
                         Priority
-                        {priorityFilter !== "all" && (
-                          <span className="ml-auto text-[10px] text-primary font-medium capitalize">{priorityFilter}</span>
+                        {filters.priorities.length > 0 && (
+                          <span className="ml-auto text-[10px] text-primary font-medium">{filters.priorities.length} selected</span>
                         )}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent className="w-40 rounded-xl">
-                        {(["all", "urgent", "high", "medium", "low"] as PriorityFilter[]).map(p => (
+                        {(["urgent", "high", "medium", "low"] as TaskPriority[]).map(p => (
                           <DropdownMenuItem key={p} className="text-xs capitalize gap-2"
-                            onClick={() => setPriorityFilter(p)}>
-                            {priorityFilter === p && <Check className="size-3 text-primary shrink-0" />}
-                            <span className={priorityFilter === p ? "ml-0" : "ml-5"}>
-                              {p === "all" ? "Any" : p.charAt(0).toUpperCase() + p.slice(1)}
-                            </span>
+                            onClick={(e) => { e.preventDefault(); toggleFilter("priorities", p); }}>
+                            {filters.priorities.includes(p) ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                            {p}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
 
-                    {/* Sort */}
+                    {/* Assignment */}
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="text-xs gap-2">
-                        <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                        Sort
-                        <span className="ml-auto text-[10px] text-primary font-medium truncate max-w-[60px]">
-                          {SORT_PRESET_LABELS[sortPreset].split(" ").slice(0, 2).join(" ")}
-                        </span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="w-44 rounded-xl">
-                        {(Object.keys(SORT_PRESET_LABELS) as SortPreset[]).map(p => (
-                          <DropdownMenuItem key={p} className="text-xs gap-2"
-                            onClick={() => setSortPreset(p)}>
-                            {sortPreset === p && <Check className="size-3 text-primary shrink-0" />}
-                            <span className={sortPreset === p ? "ml-0" : "ml-5"}>
-                              {SORT_PRESET_LABELS[p]}
-                            </span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-
-                    {/* Quick Filters */}
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="text-xs gap-2">
-                        <Zap className="size-3.5 text-muted-foreground shrink-0" />
-                        Quick Filters
-                        {activeQuickPresets.size > 0 && (
-                          <span className="ml-auto text-[10px] text-primary font-medium">{activeQuickPresets.size} on</span>
+                        <User className="size-3.5 text-muted-foreground shrink-0" />
+                        Assignment
+                        {filters.assignments.length > 0 && (
+                          <span className="ml-auto text-[10px] text-primary font-medium">{filters.assignments.length} selected</span>
                         )}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent className="w-44 rounded-xl">
                         {([
-                          { id: "focus",          label: "Focus",          icon: Zap },
-                          { id: "urgent",         label: "Urgent",         icon: ShieldAlert },
-                          { id: "meetings",       label: "Meetings",       icon: CalendarClock },
-                          { id: "assigned-to-me", label: "Assigned to Me", icon: UserCheck },
-                          { id: "upcoming",       label: "Upcoming",       icon: CalendarRange },
-                          { id: "blocked",        label: "Blocked",        icon: ShieldAlert },
-                        ] as { id: QuickPreset; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
-                          <DropdownMenuItem key={id} className="text-xs gap-2"
-                            onClick={(e) => { e.preventDefault(); toggleQuickPreset(id); }}>
-                            {activeQuickPresets.has(id)
-                              ? <Check className="size-3 text-primary shrink-0" />
-                              : <Icon className="size-3 text-muted-foreground shrink-0" />
-                            }
-                            {label}
+                          { id: "assigned-to-me", label: "Assigned to Me" },
+                          { id: "created-by-me", label: "Created by Me" },
+                          { id: "watching", label: "Watching" },
+                          { id: "unassigned", label: "Unassigned" },
+                        ]).map(a => (
+                          <DropdownMenuItem key={a.id} className="text-xs gap-2"
+                            onClick={(e) => { e.preventDefault(); toggleFilter("assignments", a.id); }}>
+                            {filters.assignments.includes(a.id) ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                            {a.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+
+                    {/* Sprint */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-xs gap-2">
+                        <Rocket className="size-3.5 text-muted-foreground shrink-0" />
+                        Sprint
+                        {filters.sprints.length > 0 && (
+                          <span className="ml-auto text-[10px] text-primary font-medium">{filters.sprints.length} selected</span>
+                        )}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-44 rounded-xl">
+                        {([
+                          { id: "current", label: "Current Sprint" },
+                          { id: "next", label: "Next Sprint" },
+                          { id: "backlog", label: "Backlog" },
+                        ]).map(s => (
+                          <DropdownMenuItem key={s.id} className="text-xs gap-2"
+                            onClick={(e) => { e.preventDefault(); toggleFilter("sprints", s.id); }}>
+                            {filters.sprints.includes(s.id) ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                            {s.label}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuSubContent>
@@ -716,40 +1345,38 @@ export function TaskListPane({
                         <DropdownMenuSubTrigger className="text-xs gap-2">
                           <User className="size-3.5 text-muted-foreground shrink-0" />
                           Workspace
-                          {selectedOrgId !== "all" && (
+                          {filters.orgId !== "all" && (
                             <span className="ml-auto text-[10px] text-primary font-medium truncate max-w-[50px]">
-                              {organisations.find(o => o.id === selectedOrgId)?.name ?? ""}
+                              {organisations.find(o => o.id === filters.orgId)?.name ?? ""}
                             </span>
                           )}
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-48 rounded-xl">
                           <DropdownMenuItem className="text-xs gap-2"
-                            onClick={() => { setSelectedOrgId("all"); setSelectedSpaceId("all"); }}>
-                            {selectedOrgId === "all" && <Check className="size-3 text-primary shrink-0" />}
-                            <span className={selectedOrgId === "all" ? "ml-0" : "ml-5"}>All workspaces</span>
+                            onClick={() => setFilters(prev => ({ ...prev, orgId: "all", spaceId: "all" }))}>
+                            {filters.orgId === "all" ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                            All workspaces
                           </DropdownMenuItem>
                           {organisations.map(org => (
                             <DropdownMenuItem key={org.id} className="text-xs gap-2"
-                              onClick={() => { setSelectedOrgId(org.id); setSelectedSpaceId("all"); }}>
-                              {selectedOrgId === org.id && <Check className="size-3 text-primary shrink-0" />}
-                              <span className={selectedOrgId === org.id ? "ml-0" : "ml-5 truncate"}>
-                                {org.name}{org.is_personal ? " (Personal)" : ""}
-                              </span>
+                              onClick={() => setFilters(prev => ({ ...prev, orgId: org.id, spaceId: "all" }))}>
+                              {filters.orgId === org.id ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                              <span className="truncate">{org.name}{org.is_personal ? " (Personal)" : ""}</span>
                             </DropdownMenuItem>
                           ))}
-                          {selectedOrgId !== "all" && orgSpaces.length > 0 && (
+                          {filters.orgId !== "all" && orgSpaces.length > 0 && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-xs gap-2"
-                                onClick={() => setSelectedSpaceId("all")}>
-                                {selectedSpaceId === "all" && <Check className="size-3 text-primary shrink-0" />}
-                                <span className={selectedSpaceId === "all" ? "ml-0" : "ml-5"}>All spaces</span>
+                                onClick={() => setFilters(prev => ({ ...prev, spaceId: "all" }))}>
+                                {filters.spaceId === "all" ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                                All spaces
                               </DropdownMenuItem>
                               {orgSpaces.map(sp => (
                                 <DropdownMenuItem key={sp.id} className="text-xs gap-2"
-                                  onClick={() => setSelectedSpaceId(sp.id)}>
-                                  {selectedSpaceId === sp.id && <Check className="size-3 text-primary shrink-0" />}
-                                  <span className={selectedSpaceId === sp.id ? "ml-0" : "ml-5 truncate"}>{sp.name}</span>
+                                  onClick={() => setFilters(prev => ({ ...prev, spaceId: sp.id }))}>
+                                  {filters.spaceId === sp.id ? <Check className="size-3 text-primary shrink-0" /> : <div className="size-3 shrink-0" />}
+                                  <span className="truncate">{sp.name}</span>
                                 </DropdownMenuItem>
                               ))}
                             </>
@@ -764,9 +1391,14 @@ export function TaskListPane({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-xs text-muted-foreground"
                           onClick={() => {
-                            setTypeFilter("all"); setPriorityFilter("all");
-                            setSelectedOrgId("all"); setSelectedSpaceId("all");
-                            setActiveQuickPresets(new Set()); setMineOnly(false);
+                            setFilters({
+                              statuses: [],
+                              priorities: [],
+                              assignments: [],
+                              sprints: [],
+                              orgId: "all",
+                              spaceId: "all",
+                            });
                           }}>
                           <X className="size-3 mr-2" />
                           Clear all filters
@@ -815,9 +1447,14 @@ export function TaskListPane({
             ))}
             <button
               onClick={() => {
-                setTypeFilter("all"); setPriorityFilter("all");
-                setSelectedOrgId("all"); setSelectedSpaceId("all");
-                setActiveQuickPresets(new Set()); setMineOnly(false);
+                setFilters({
+                  statuses: [],
+                  priorities: [],
+                  assignments: [],
+                  sprints: [],
+                  orgId: "all",
+                  spaceId: "all",
+                });
               }}
               className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-1"
             >
@@ -829,7 +1466,7 @@ export function TaskListPane({
 
       {/* ── Task list ──────────────────────────────────────────── */}
       <ScrollArea className="flex-1 min-h-0">
-        <div ref={containerRef} className="px-2 py-2 space-y-px pb-20">
+        <div ref={containerRef} className="px-2 py-2 space-y-1 pb-20">
 
           {/* Loading skeleton */}
           {isLoading && (
@@ -850,223 +1487,192 @@ export function TaskListPane({
             </div>
           )}
 
-          {/* Task rows */}
-          {!isLoading && taskList.map((t) => {
-            const active = t.id === selectedTaskId;
-            const isChecked = selectedTaskIds.has(t.id);
-            const isDone = t.status === "done" || t.status === "completed";
-            const isDraggable = t.status !== "done" && t.status !== "completed";
-            const isBlocked = ((t as any).blocked_by_count || (t.dependencies?.length || 0)) > 0;
-
-            const { canEditTask: itemCanEdit, canDeleteTask: itemCanDelete } = getTaskPermissions(
-              t,
-              activeOrgId,
-              activeSpace?.id ?? null,
-              activeSpace?.role ?? null
-            );
-
-            return (
-              <div key={t.id} className="group/item">
-                <div
-                  onClick={() => !isMultiSelecting && onSelectTask(t.id)}
-                  data-task-id={t.id}
-                  data-task-title={t.title}
-                  data-task-status={t.status}
-                  className={cn(
-                    "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
-                    active && !isMultiSelecting
-                      ? "bg-[#EEF2FF] dark:bg-[#1E1B4B]"
-                      : "hover:bg-[#F4F4F5] dark:hover:bg-[#18181B]",
-                    isDone && "opacity-50",
-                    isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
+          {/* 1. Needs Attention */}
+          {!isLoading && visibleSections.includes("needsAttention") && (
+            <>
+              <SectionHeader
+                title="Needs Attention"
+                isCollapsed={collapsedSections.needsAttention}
+                onToggle={() => toggleSectionCollapse("needsAttention")}
+                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
+              />
+              {!collapsedSections.needsAttention && (
+                <div className="flex flex-col gap-px">
+                  {sections.needsAttention.map(t => renderTaskRow(t))}
+                  {sections.needsAttention.length === 0 && (
+                    <div className="h-7 pl-6 text-xs font-medium italic leading-7 text-muted-foreground/50 select-none">No urgent tasks</div>
                   )}
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    {/* Selection & Drag actions */}
-                    <div
-                      className={cn(
-                        "flex items-center overflow-hidden transition-all duration-200 shrink-0",
-                        !isChecked && !isMultiSelecting
-                          ? "w-0 opacity-0 group-hover:w-[36px] group-hover:opacity-100"
-                          : "w-[36px] opacity-100"
-                      )}
-                    >
-                      {/* Drag handle */}
-                      {isDraggable ? (
-                        <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
-                          <GripVertical className="size-3.5 text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <div className="w-[22px] shrink-0" />
-                      )}
-
-                      {/* Multi-select checkbox */}
-                      <div
-                        className="shrink-0"
-                        onClick={(e) => toggleSelection(e, t.id)}
-                      >
-                        <Checkbox checked={isChecked} className="size-3.5" />
-                      </div>
-                    </div>
-
-                    {/* Icon/Dot — click opens popover or expands on hover */}
-                    <div className="size-5 flex items-center justify-center relative shrink-0">
-                      {/* Status/Event icon — visible by default, hidden on hover */}
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button
-                            onClick={(e) => e.stopPropagation()}
-                            className="shrink-0 transition-transform hover:scale-110 group-hover/item:opacity-0 transition-opacity flex items-center justify-center"
-                          >
-                            {t.type === "event" ? (
-                              <CalendarClock className="size-4 shrink-0 text-[#3730A3] dark:text-[#C7D2FE]" />
-                            ) : (
-                              <StatusIcon
-                                status={t.status}
-                                type="task"
-                                className="size-4 shrink-0"
-                              />
-                            )}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="start"
-                          className="w-36 p-1 rounded-lg shadow-lg"
-                        >
-                          {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
-                            <PopoverClose asChild key={s}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onUpdateTask?.(t.id, { status: s });
-                                }}
-                                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
-                              >
-                                <StatusIcon
-                                  status={s}
-                                  type={t.type === "event" ? "event" : "task"}
-                                  className="size-3.5 shrink-0"
-                                />
-                                {s}
-                              </button>
-                            </PopoverClose>
-                          ))}
-                        </PopoverContent>
-                      </Popover>
-
-                      {/* Chevron — visible ALWAYS on hover for all tasks */}
-                      <button
-                        onClick={(e) => toggleExpanded(e, t.id)}
-                        className="absolute inset-0 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-opacity hover:text-foreground"
-                      >
-                        {expandedTasks.has(t.id) ? (
-                          <ChevronDown className="size-3.5" />
-                        ) : (
-                          <ChevronRight className="size-3.5" />
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="task-name-container flex flex-col items-start gap-0.5">
-                      <span className={cn(
-                        "task-name-scroll text-sm font-medium leading-snug",
-                        isDone && "line-through opacity-60"
-                      )} title={t.title}>
-                        {t.title}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Right block: Badge and Date */}
-                  <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground justify-end relative ml-auto min-w-fit">
-                    {/* Badges & Icons */}
-                    <div className="flex items-center gap-1.5">
-                      {isBlocked && (
-                        <Zap className="size-3 text-yellow-400 shrink-0" />
-                      )}
-                    </div>
-                    
-                    {/* Date / Action Menu */}
-                    <div className="relative flex items-center justify-end min-w-fit ml-2">
-                      <span className={cn(
-                        "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight",
-                        isDone && "opacity-40"
-                      )}>
-                        {formatTaskDateRange(t.start_date, t.due_date, t.is_all_day)}
-                      </span>
-                      
-                      <div className="absolute right-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="size-6 p-0 hover:bg-muted-foreground/10"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
-                              View Details
-                            </DropdownMenuItem>
-                            {itemCanEdit && (
-                              <DropdownMenuItem onClick={() => setEditingTask(t)}>
-                                <Pencil className="size-3.5 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                            )}
-                            {itemCanDelete && (
-                              <DropdownMenuItem 
-                                className="text-destructive focus:text-destructive" 
-                                onClick={() => {
-                                  if (onDeleteTask) onDeleteTask(t.id);
-                                }}
-                              >
-                                <Trash2 className="size-3.5 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  </div>
                 </div>
+              )}
+            </>
+          )}
 
-                {/* Expanded subtasks dropdown — available for all tasks */}
-                {expandedTasks.has(t.id) && (
-                  <SubtaskList
-                    parentTaskId={t.id}
-                    selectedTaskId={selectedTaskId}
-                    onSelectTask={onSelectTask}
-                    onUpdateTask={onUpdateTask}
-                  />
-                )}
-              </div>
-            );
-          })}
+          {/* 2. My Focus */}
+          {!isLoading && visibleSections.includes("myFocus") && (
+            <>
+              <SectionHeader
+                title="My Focus"
+                isCollapsed={collapsedSections.myFocus}
+                onToggle={() => toggleSectionCollapse("myFocus")}
+                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
+              />
+              {!collapsedSections.myFocus && (
+                <div className="flex flex-col gap-px">
+                  {sections.myFocus.map(t => renderTaskRow(t))}
+                  {sections.myFocus.length === 0 && (
+                    <div className="h-7 pl-6 text-xs font-medium italic leading-7 text-muted-foreground/50 select-none">No focus tasks</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
-          {/* Empty state */}
-          {!isLoading && taskList.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
-              <p className="text-sm text-muted-foreground">No tasks yet</p>
-              <p className="text-xs text-muted-foreground/60">
-                Press{" "}
-                <kbd className="px-1.5 py-0.5 text-[10px] rounded border border-border bg-muted font-mono">
-                  C
-                </kbd>{" "}
-                to create one
-              </p>
-            </div>
+          {/* 3. Current Sprint */}
+          {!isLoading && visibleSections.includes("currentSprint") && (
+            <>
+              <SectionHeader
+                title="Current Sprint"
+                isCollapsed={collapsedSections.currentSprint}
+                onToggle={() => toggleSectionCollapse("currentSprint")}
+                extraWidget={<SprintCapacityWidget {...sprintCapacity} />}
+                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
+              />
+              {!collapsedSections.currentSprint && (
+                <div className="flex flex-col gap-2">
+                  {([
+                    { id: "todo", label: "Todo", tasks: sections.currentSprint.todo },
+                    { id: "inProgress", label: "In Progress", tasks: sections.currentSprint.inProgress },
+                    { id: "review", label: "Review", tasks: sections.currentSprint.review },
+                    { id: "done", label: "Done", tasks: sections.currentSprint.done },
+                  ]).map(group => {
+                    const groupKey = `sprint-${group.id}`;
+                    const isCollapsed = collapsedSubFilters[groupKey] !== undefined
+                      ? collapsedSubFilters[groupKey]
+                      : group.tasks.length === 0;
+                    return (
+                      <div key={group.id} className="space-y-px">
+                        <button
+                          type="button"
+                          onClick={() => toggleSubFilter(groupKey)}
+                          className="flex items-center gap-1 px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                        >
+                          <ChevronDown className={cn("size-2.5 text-muted-foreground/60 transition-transform duration-200", isCollapsed && "-rotate-90")} />
+                          <span>{group.label}</span>
+                          <span className="text-muted-foreground/50 font-bold ml-1">({group.tasks.length})</span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="flex flex-col gap-px">
+                            {group.tasks.map(t => renderTaskRow(t))}
+                            {group.tasks.length === 0 && (
+                              <div className="h-7 pl-3 text-[11px] font-medium italic leading-7 text-muted-foreground/45 select-none font-medium">Empty</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 4. Upcoming Work */}
+          {!isLoading && visibleSections.includes("upcomingWork") && (
+            <>
+              <SectionHeader
+                title="Upcoming Work"
+                isCollapsed={collapsedSections.upcomingWork}
+                onToggle={() => toggleSectionCollapse("upcomingWork")}
+                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
+              />
+              {!collapsedSections.upcomingWork && (
+                <div className="flex flex-col gap-2">
+                  {([
+                    { id: "today", label: "Today", tasks: sections.upcomingWork.today },
+                    { id: "tomorrow", label: "Tomorrow", tasks: sections.upcomingWork.tomorrow },
+                    { id: "thisWeek", label: "This Week", tasks: sections.upcomingWork.thisWeek },
+                  ]).map(group => {
+                    const groupKey = `upcoming-${group.id}`;
+                    const isCollapsed = collapsedSubFilters[groupKey] !== undefined
+                      ? collapsedSubFilters[groupKey]
+                      : group.tasks.length === 0;
+                    return (
+                      <div key={group.id} className="space-y-px">
+                        <button
+                          type="button"
+                          onClick={() => toggleSubFilter(groupKey)}
+                          className="flex items-center gap-1 px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                        >
+                          <ChevronDown className={cn("size-2.5 text-muted-foreground/60 transition-transform duration-200", isCollapsed && "-rotate-90")} />
+                          <span>{group.label}</span>
+                          <span className="text-muted-foreground/50 font-bold ml-1">({group.tasks.length})</span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="flex flex-col gap-px">
+                            {group.tasks.map(t => renderTaskRow(t))}
+                            {group.tasks.length === 0 && (
+                              <div className="h-7 pl-3 text-[11px] font-medium italic leading-7 text-muted-foreground/45 select-none font-medium">Empty</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 6. Recently Completed */}
+          {!isLoading && visibleSections.includes("recentlyCompleted") && (
+            <>
+              <SectionHeader
+                title="Recently Completed"
+                isCollapsed={collapsedSections.recentlyCompleted}
+                onToggle={() => toggleSectionCollapse("recentlyCompleted")}
+              />
+              {!collapsedSections.recentlyCompleted && (
+                <div className="flex flex-col gap-2">
+                  {([
+                    { id: "today", label: "Today", tasks: sections.recentlyCompleted.today },
+                    { id: "yesterday", label: "Yesterday", tasks: sections.recentlyCompleted.yesterday },
+                    { id: "thisWeek", label: "This Week", tasks: sections.recentlyCompleted.thisWeek },
+                  ]).map(group => {
+                    const groupKey = `completed-${group.id}`;
+                    const isCollapsed = collapsedSubFilters[groupKey] !== undefined
+                      ? collapsedSubFilters[groupKey]
+                      : group.tasks.length === 0;
+                    return (
+                      <div key={group.id} className="space-y-px">
+                        <button
+                          type="button"
+                          onClick={() => toggleSubFilter(groupKey)}
+                          className="flex items-center gap-1 px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                        >
+                          <ChevronDown className={cn("size-2.5 text-muted-foreground/60 transition-transform duration-200", isCollapsed && "-rotate-90")} />
+                          <span>{group.label}</span>
+                          <span className="text-muted-foreground/50 font-bold ml-1">({group.tasks.length})</span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="flex flex-col gap-px">
+                            {group.tasks.map(t => renderTaskRow(t))}
+                            {group.tasks.length === 0 && (
+                              <div className="h-7 pl-3 text-[11px] font-medium italic leading-7 text-muted-foreground/45 select-none font-medium">Empty</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {/* Load more button */}
-          {!isLoading && hasMore && taskList.length > 0 && (
+          {!isLoading && hasMore && filteredTasks.length > 0 && (
             <div className="flex justify-center py-3">
               <Button
-                variant="ghost"
                 size="sm"
                 className="h-7 text-xs text-muted-foreground hover:text-foreground"
                 onClick={onLoadMore}
@@ -1078,6 +1684,8 @@ export function TaskListPane({
           )}
         </div>
       </ScrollArea>
+
+
 
       {/* ── Floating bulk-action bar ───────────────────────────── */}
       {isMultiSelecting && (

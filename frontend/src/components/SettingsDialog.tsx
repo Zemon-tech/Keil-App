@@ -33,6 +33,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -2369,55 +2370,307 @@ function ShortcutsTab() {
 }
 
 function TasksTab() {
+  const [autoAssign, setAutoAssign] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("task_auto_assign") === "true";
+    }
+    return false;
+  });
+
+  const [dueReminders, setDueReminders] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("task_reminders");
+      return stored === null ? true : stored === "true";
+    }
+    return true;
+  });
+
+  const [showCompleted, setShowCompleted] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("task_show_completed") === "true";
+    }
+    return false;
+  });
+
+  const [visibleSections, setVisibleSections] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("task_visible_sections");
+        return stored ? JSON.parse(stored) : ["needsAttention", "currentSprint"];
+      } catch {
+        return ["needsAttention", "currentSprint"];
+      }
+    }
+    return ["needsAttention", "currentSprint"];
+  });
+
+  const [defaultFilters, setDefaultFilters] = useState<{
+    statuses: string[];
+    priorities: string[];
+    assignments: string[];
+    sprints: string[];
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("task_default_filters");
+        return stored ? JSON.parse(stored) : { statuses: [], priorities: [], assignments: [], sprints: [] };
+      } catch {
+        return { statuses: [], priorities: [], assignments: [], sprints: [] };
+      }
+    }
+    return { statuses: [], priorities: [], assignments: [], sprints: [] };
+  });
+
+  const handleAutoAssignChange = (checked: boolean) => {
+    setAutoAssign(checked);
+    localStorage.setItem("task_auto_assign", String(checked));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleDueRemindersChange = (checked: boolean) => {
+    setDueReminders(checked);
+    localStorage.setItem("task_reminders", String(checked));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleShowCompletedChange = (checked: boolean) => {
+    setShowCompleted(checked);
+    localStorage.setItem("task_show_completed", String(checked));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleSectionToggle = (section: string) => {
+    let next: string[];
+    if (visibleSections.includes(section)) {
+      next = visibleSections.filter(s => s !== section);
+    } else {
+      next = [...visibleSections, section];
+    }
+    setVisibleSections(next);
+    localStorage.setItem("task_visible_sections", JSON.stringify(next));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleFilterToggle = (category: "statuses" | "priorities" | "assignments" | "sprints", value: string) => {
+    const nextList = defaultFilters[category].includes(value)
+      ? defaultFilters[category].filter(v => v !== value)
+      : [...defaultFilters[category], value];
+
+    const nextFilters = {
+      ...defaultFilters,
+      [category]: nextList
+    };
+    setDefaultFilters(nextFilters);
+    localStorage.setItem("task_default_filters", JSON.stringify(nextFilters));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const sectionsList = [
+    { id: "needsAttention", label: "🔥 Needs Attention" },
+    { id: "myFocus", label: "🎯 My Focus" },
+    { id: "currentSprint", label: "🚀 Current Sprint" },
+    { id: "upcomingWork", label: "📅 Upcoming Work" },
+    { id: "recentlyCompleted", label: "✅ Recently Completed" },
+  ];
+
+  const statusesList = ["todo", "in-progress", "in-review", "done", "blocked", "backlog"];
+  const prioritiesList = ["urgent", "high", "medium", "low"];
+  const sprintsList = [
+    { id: "current", label: "Current Sprint" },
+    { id: "next", label: "Next Sprint" },
+    { id: "backlog", label: "Backlog" }
+  ];
+  const assignmentsList = [
+    { id: "assigned-to-me", label: "Assigned to Me" },
+    { id: "created-by-me", label: "Created by Me" },
+    { id: "watching", label: "Watching" },
+    { id: "unassigned", label: "Unassigned" }
+  ];
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Tasks</h2>
+        <h2 className="text-lg font-semibold text-foreground">Tasks Preferences</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Configure task defaults and behavior.
+          Configure default task visibility, filters, and behavior.
         </p>
       </div>
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Auto-assign to me
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Automatically assign new tasks to yourself
-          </p>
+      {/* General Settings */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground">General</h3>
+        <div className="space-y-4 pt-1">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Auto-assign to me</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically assign new tasks to yourself
+              </p>
+            </div>
+            <Switch checked={autoAssign} onCheckedChange={handleAutoAssignChange} />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Due date reminders</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Get notified before a task is due
+              </p>
+            </div>
+            <Switch checked={dueReminders} onCheckedChange={handleDueRemindersChange} />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Show completed tasks</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Keep completed tasks visible in lists
+              </p>
+            </div>
+            <Switch checked={showCompleted} onCheckedChange={handleShowCompletedChange} />
+          </div>
         </div>
-        <Switch />
       </div>
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Due date reminders
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Get notified before a task is due
-          </p>
+      {/* Visible Sections Settings */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground">Default Visible Sections</h3>
+        <p className="text-xs text-muted-foreground">Select sections to show by default in your task list sidebar.</p>
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          {sectionsList.map(sec => {
+            const isChecked = visibleSections.includes(sec.id);
+            return (
+              <div key={sec.id} className="flex items-center space-x-2 bg-muted/20 hover:bg-muted/40 p-2 rounded-lg border border-border/40 transition-colors">
+                <Checkbox
+                  id={`sec-${sec.id}`}
+                  checked={isChecked}
+                  onCheckedChange={() => handleSectionToggle(sec.id)}
+                />
+                <Label htmlFor={`sec-${sec.id}`} className="text-xs font-medium cursor-pointer flex-1 select-none">
+                  {sec.label}
+                </Label>
+              </div>
+            );
+          })}
         </div>
-        <Switch defaultChecked />
       </div>
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Show completed tasks
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Keep completed tasks visible in lists
-          </p>
+      {/* Default Filters Settings */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground">Default Task Filters</h3>
+        <p className="text-xs text-muted-foreground">Apply these filters automatically when loading the tasks page.</p>
+
+        <div className="space-y-4 pt-1">
+          {/* Status Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Status</Label>
+            <div className="flex flex-wrap gap-2">
+              {statusesList.map(s => {
+                const isActive = defaultFilters.statuses.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => handleFilterToggle("statuses", s)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all capitalize font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Priority Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Priority</Label>
+            <div className="flex flex-wrap gap-2">
+              {prioritiesList.map(p => {
+                const isActive = defaultFilters.priorities.includes(p);
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handleFilterToggle("priorities", p)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all capitalize font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Assignment Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Assignment</Label>
+            <div className="flex flex-wrap gap-2">
+              {assignmentsList.map(a => {
+                const isActive = defaultFilters.assignments.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => handleFilterToggle("assignments", a.id)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sprint Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sprint</Label>
+            <div className="flex flex-wrap gap-2">
+              {sprintsList.map(s => {
+                const isActive = defaultFilters.sprints.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleFilterToggle("sprints", s.id)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <Switch />
       </div>
     </div>
   );
