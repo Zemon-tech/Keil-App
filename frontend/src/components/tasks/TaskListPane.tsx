@@ -5,7 +5,7 @@ import {
   Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User,
   AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil,
   SlidersHorizontal, CalendarClock, UserCheck,
-  CalendarRange, ShieldAlert, Check,
+  CalendarRange, ShieldAlert, Check, PanelLeftClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,8 @@ type Props = {
   onOrgFilterChange?: (value: string) => void;
   spaceFilter?: string;
   onSpaceFilterChange?: (value: string) => void;
+  /** Callback to collapse/hide the task list sidebar */
+  onCollapse?: () => void;
 };
 
 function formatTaskDateRange(start?: string, end?: string, isAllDay?: boolean) {
@@ -228,8 +230,8 @@ function SubtaskList({
             {/* Right block: Badge and Date */}
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
               {(sub as any).type === "event" && (
-                <span className="text-[9px] bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE] font-medium leading-none px-1 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
-                  event
+                <span title="Event">
+                  <CalendarClock className="size-3 text-[#3730A3] dark:text-[#C7D2FE] shrink-0" />
                 </span>
               )}
               {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
@@ -290,6 +292,7 @@ export function TaskListPane({
   workspaceMembers = [],
   onOrgFilterChange,
   onSpaceFilterChange,
+  onCollapse,
 }: Props) {
   const draggableRef = useRef<Draggable | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -779,6 +782,18 @@ export function TaskListPane({
                     <Plus className="size-3.5" />
                   </Button>
                 )}
+
+                {onCollapse && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="size-7 p-0 rounded-md"
+                    onClick={onCollapse}
+                    title="Close sidebar"
+                  >
+                    <PanelLeftClose className="size-3.5 text-muted-foreground" />
+                  </Button>
+                )}
               </div>
             </>
           )}
@@ -894,20 +909,24 @@ export function TaskListPane({
                       </div>
                     </div>
 
-                    {/* Icon/Dot — click opens popover or expands if parent hovered */}
+                    {/* Icon/Dot — click opens popover or expands on hover */}
                     <div className="size-5 flex items-center justify-center relative shrink-0">
-                      {/* Status icon — visible by default, hidden on hover if parent */}
+                      {/* Status/Event icon — visible by default, hidden on hover */}
                       <Popover>
                         <PopoverTrigger asChild>
                           <button
                             onClick={(e) => e.stopPropagation()}
                             className="shrink-0 transition-transform hover:scale-110 group-hover/item:opacity-0 transition-opacity flex items-center justify-center"
                           >
-                            <StatusIcon
-                              status={t.status}
-                              type={t.type === "event" ? "event" : "task"}
-                              className="size-4 shrink-0"
-                            />
+                            {t.type === "event" ? (
+                              <CalendarClock className="size-4 shrink-0 text-[#3730A3] dark:text-[#C7D2FE]" />
+                            ) : (
+                              <StatusIcon
+                                status={t.status}
+                                type="task"
+                                className="size-4 shrink-0"
+                              />
+                            )}
                           </button>
                         </PopoverTrigger>
                         <PopoverContent
@@ -962,12 +981,6 @@ export function TaskListPane({
                   <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground justify-end relative ml-auto min-w-fit">
                     {/* Badges & Icons */}
                     <div className="flex items-center gap-1.5">
-                      {t.type === "event" ? (
-                        <span className="text-[10px] bg-[#EEF2FF] text-[#3730A3] dark:bg-[#1E1B4B] dark:text-[#C7D2FE] font-medium leading-none px-1.5 py-0.5 rounded uppercase tracking-wider whitespace-nowrap">
-                          event
-                        </span>
-                      ) : null}
-                      
                       {isBlocked && (
                         <Zap className="size-3 text-yellow-400 shrink-0" />
                       )}

@@ -51,6 +51,12 @@ export interface MotionPageShareDTO {
   created_by: string;
   created_at: string;
   expires_at: string | null;
+  target_user_email?: string | null;
+  target_user_name?: string | null;
+  target_user_avatar?: string | null;
+  target_space_name?: string | null;
+  target_org_name?: string | null;
+  target_org_is_personal?: boolean;
 }
 
 export interface CreateMotionPageInput {
@@ -77,6 +83,7 @@ export interface CreateShareInput {
   target_org_id?: string | null;
   target_space_id?: string | null;
   expires_at?: string | null;
+  email?: string | null;
 }
 
 // ─── Query Key Factory ────────────────────────────────────────────────────────
@@ -281,7 +288,7 @@ export function useUpdateMotionPage(
     MotionPageDTO,
     Error,
     { id: string; updates: UpdateMotionPageInput },
-    { previousList?: MotionPageDTO[]; previousDetail?: MotionPageDTO }
+    { previousList?: MotionPageDTO[]; previousDetail?: MotionPageDTO; previousShared?: MotionPageDTO[] }
   >({
     onMutate: async ({ id, updates }) => {
       if (!orgId || !spaceId) return {};
@@ -293,12 +300,18 @@ export function useUpdateMotionPage(
       await queryClient.cancelQueries({
         queryKey: motionPageKeys.lists(orgId, spaceId),
       });
+      await queryClient.cancelQueries({
+        queryKey: motionPageKeys.shared(orgId, spaceId),
+      });
 
       const previousDetail = queryClient.getQueryData<MotionPageDTO>(
         motionPageKeys.detail(orgId, spaceId, id)
       );
       const previousList = queryClient.getQueryData<MotionPageDTO[]>(
         motionPageKeys.lists(orgId, spaceId)
+      );
+      const previousShared = queryClient.getQueryData<MotionPageDTO[]>(
+        motionPageKeys.shared(orgId, spaceId)
       );
 
       // Apply optimistic update to detail cache
@@ -320,7 +333,18 @@ export function useUpdateMotionPage(
           )
       );
 
-      return { previousDetail, previousList };
+      // Apply optimistic update to shared list cache
+      queryClient.setQueryData<MotionPageDTO[]>(
+        motionPageKeys.shared(orgId, spaceId),
+        (old) =>
+          old?.map((p) =>
+            p.id === id
+              ? { ...p, ...updates, updated_at: new Date().toISOString() }
+              : p
+          )
+      );
+
+      return { previousDetail, previousList, previousShared };
     },
     mutationFn: async ({ id, updates }) => {
       const res = await api.patch<{ data: MotionPageDTO }>(
@@ -338,6 +362,10 @@ export function useUpdateMotionPage(
       );
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.lists(orgId, spaceId),
+        (old) => old?.map((p) => (p.id === serverPage.id ? serverPage : p))
+      );
+      queryClient.setQueryData<MotionPageDTO[]>(
+        motionPageKeys.shared(orgId, spaceId),
         (old) => old?.map((p) => (p.id === serverPage.id ? serverPage : p))
       );
       // Invalidate motion-analytics query keys to trigger fresh updates reload in the drawer
@@ -359,6 +387,12 @@ export function useUpdateMotionPage(
         queryClient.setQueryData(
           motionPageKeys.lists(orgId, spaceId),
           context.previousList
+        );
+      }
+      if (context?.previousShared && orgId && spaceId) {
+        queryClient.setQueryData(
+          motionPageKeys.shared(orgId, spaceId),
+          context.previousShared
         );
       }
       // Don't toast on content save failures — the save indicator in MotionPage handles it
@@ -603,10 +637,25 @@ export function useMotionSocketListeners(
       switch (type) {
         case "create":
           if (page) {
-            queryClient.setQueryData<MotionPageDTO[]>(
-              motionPageKeys.lists(orgId, spaceId),
-              (old) => (old ? [page, ...old] : [page])
-            );
+            if (page.share_permission) {
+              queryClient.setQueryData<MotionPageDTO[]>(
+                motionPageKeys.shared(orgId, spaceId),
+                (old) => {
+                  if (!old) return [page];
+                  if (old.some((p) => p.id === page.id)) return old;
+                  return [page, ...old];
+                }
+              );
+            } else {
+              queryClient.setQueryData<MotionPageDTO[]>(
+                motionPageKeys.lists(orgId, spaceId),
+                (old) => {
+                  if (!old) return [page];
+                  if (old.some((p) => p.id === page.id)) return old;
+                  return [page, ...old];
+                }
+              );
+            }
           }
           break;
 
@@ -615,6 +664,12 @@ export function useMotionSocketListeners(
             // Update list cache
             queryClient.setQueryData<MotionPageDTO[]>(
               motionPageKeys.lists(orgId, spaceId),
+              (old) => old?.map((p) => (p.id === pageId ? page : p))
+            );
+
+            // Update shared cache
+            queryClient.setQueryData<MotionPageDTO[]>(
+              motionPageKeys.shared(orgId, spaceId),
               (old) => old?.map((p) => (p.id === pageId ? page : p))
             );
             
@@ -635,6 +690,10 @@ export function useMotionSocketListeners(
               motionPageKeys.lists(orgId, spaceId),
               (old) => old?.filter((p) => p.id !== pageId && p.parent_id !== pageId) ?? []
             );
+            queryClient.setQueryData<MotionPageDTO[]>(
+              motionPageKeys.shared(orgId, spaceId),
+              (old) => old?.filter((p) => p.id !== pageId) ?? []
+            );
             queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
 
             if (pageId === currentPageId) {
@@ -645,10 +704,25 @@ export function useMotionSocketListeners(
 
         case "restore":
           if (page) {
-            queryClient.setQueryData<MotionPageDTO[]>(
-              motionPageKeys.lists(orgId, spaceId),
-              (old) => (old ? [...old, page] : [page])
-            );
+            if (page.share_permission) {
+              queryClient.setQueryData<MotionPageDTO[]>(
+                motionPageKeys.shared(orgId, spaceId),
+                (old) => {
+                  if (!old) return [page];
+                  if (old.some((p) => p.id === page.id)) return old;
+                  return [...old, page];
+                }
+              );
+            } else {
+              queryClient.setQueryData<MotionPageDTO[]>(
+                motionPageKeys.lists(orgId, spaceId),
+                (old) => {
+                  if (!old) return [page];
+                  if (old.some((p) => p.id === page.id)) return old;
+                  return [...old, page];
+                }
+              );
+            }
             queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
           }
           break;

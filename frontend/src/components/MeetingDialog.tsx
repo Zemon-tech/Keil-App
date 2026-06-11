@@ -414,7 +414,7 @@ export const MeetingDialog: React.FC = () => {
     stopRecording();
   };
 
-  // Audio Upload S3/Sarvam Pipeline in background
+  // Audio Upload pipeline — uploads to S3 then triggers ElevenLabs transcription in background
   const handleAudioUpload = async (audioBlob: Blob, durationSeconds: number) => {
     if (durationSeconds > 3600) {
       toast.warning("Meeting duration exceeds 60 minutes.");
@@ -427,80 +427,26 @@ export const MeetingDialog: React.FC = () => {
         contentType: audioBlob.type,
       });
 
-      const { uploadUrl, sarvamUploadUrl, sarvamJobId, s3Key, recordingId: recId, provider } = response.data.data;
+      const { uploadUrl, s3Key, recordingId: recId } = response.data.data;
 
-      // ElevenLabs flow: upload to S3 only
-      if (provider === "elevenlabs") {
-        await fetch(uploadUrl, {
-          method: "PUT",
-          body: audioBlob,
-          headers: { "Content-Type": audioBlob.type },
-        });
+      // Upload audio to S3
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        body: audioBlob,
+        headers: { "Content-Type": audioBlob.type },
+      });
 
-        await api.post("v1/meetings/transcribe", {
-          recordingId: recId,
-          s3Key,
-          durationSeconds: durationSeconds,
-          contentType: audioBlob.type,
-          provider: "elevenlabs",
-        });
-        return;
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload audio to S3 cloud storage.");
       }
 
-      // Sarvam Dual-Upload flow
-      if (sarvamUploadUrl && sarvamJobId) {
-        const [s3Result, sarvamResult] = await Promise.allSettled([
-          fetch(uploadUrl, {
-            method: "PUT",
-            body: audioBlob,
-            headers: { "Content-Type": audioBlob.type },
-          }),
-          fetch(sarvamUploadUrl, {
-            method: "PUT",
-            body: audioBlob,
-            headers: { "x-ms-blob-type": "BlockBlob", "Content-Type": audioBlob.type },
-          }),
-        ]);
-
-        if (s3Result.status === "rejected" || (s3Result.status === "fulfilled" && !s3Result.value.ok)) {
-          throw new Error("Failed to upload audio to S3 cloud storage.");
-        }
-
-        if (sarvamResult.status === "rejected" || (sarvamResult.status === "fulfilled" && !sarvamResult.value.ok)) {
-          // Fall back to legacy flow if direct Sarvam upload fails
-          await api.post("v1/meetings/transcribe", {
-            recordingId: recId,
-            s3Key,
-            durationSeconds: durationSeconds,
-            contentType: audioBlob.type,
-          });
-          return;
-        }
-
-        await api.post("v1/meetings/transcribe", {
-          recordingId: recId,
-          sarvamJobId,
-          durationSeconds: durationSeconds,
-        });
-      } else {
-        // Legacy S3 flow
-        const uploadResponse = await fetch(uploadUrl, {
-          method: "PUT",
-          body: audioBlob,
-          headers: { "Content-Type": audioBlob.type },
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload audio to S3 cloud storage.");
-        }
-
-        await api.post("v1/meetings/transcribe", {
-          recordingId: recId,
-          s3Key,
-          durationSeconds: durationSeconds,
-          contentType: audioBlob.type,
-        });
-      }
+      // Trigger transcription
+      await api.post("v1/meetings/transcribe", {
+        recordingId: recId,
+        s3Key,
+        durationSeconds: durationSeconds,
+        contentType: audioBlob.type,
+      });
     } catch (err: any) {
       console.error("[MeetingCompanion] Background Upload Error:", err);
       toast.error("Failed to process meeting recording", {
@@ -546,7 +492,7 @@ export const MeetingDialog: React.FC = () => {
         } else if (jobStatus === "failed") {
           if (!active) return;
           setStatus("error");
-          setLocalErrorMessage("Sarvam AI STT job processing failed.");
+          setLocalErrorMessage("AI transcription job processing failed.");
           toast.error("AI Transcription failed");
           return;
         }
@@ -588,7 +534,7 @@ export const MeetingDialog: React.FC = () => {
           toast.success("AI Transcription completed!");
         } else if (payload.status === "failed") {
           setStatus("error");
-          setLocalErrorMessage("Sarvam AI STT job processing failed. Check console logs.");
+          setLocalErrorMessage("AI transcription job processing failed. Check console logs.");
           toast.error("AI Transcription failed");
         }
       }

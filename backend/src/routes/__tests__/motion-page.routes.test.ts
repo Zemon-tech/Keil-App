@@ -772,4 +772,90 @@ describe("Motion Page Routes", () => {
                 .expect(403);
         });
     });
+
+    describe("Single User Sharing via Email", () => {
+        const recipientUserId = "a1000000-0000-0000-0000-000000000099";
+        const recipientEmail = "motion-recipient@test.com";
+        const recipientName = "Motion Recipient";
+        const recipientToken = `mock-user-id-${recipientUserId}`;
+
+        let pageId: string;
+
+        beforeEach(async () => {
+            // Seed a recipient user
+            await seedUser(recipientUserId, recipientEmail, recipientName);
+
+            // Manually ensure the recipient has a personal org and default space (in case triggers are bypassed in tests)
+            const orgRes = await pool.query(
+                `INSERT INTO public.organisations (name, owner_user_id, is_personal)
+                 VALUES ($1, $2, TRUE)
+                 ON CONFLICT DO NOTHING
+                 RETURNING id`,
+                [`${recipientName}'s Org`, recipientUserId]
+            );
+            const rOrgId = orgRes.rows[0]?.id || (await pool.query(
+                `SELECT id FROM public.organisations WHERE owner_user_id = $1 AND is_personal = TRUE LIMIT 1`,
+                [recipientUserId]
+            )).rows[0]?.id;
+
+            await pool.query(
+                `INSERT INTO public.organisation_members (org_id, user_id, role)
+                 VALUES ($1, $2, 'owner')
+                 ON CONFLICT DO NOTHING`,
+                [rOrgId, recipientUserId]
+            );
+
+            await pool.query(
+                `INSERT INTO public.spaces (org_id, name, visibility, created_by, is_default, is_private)
+                 VALUES ($1, 'Private', 'private', $2, TRUE, TRUE)
+                 ON CONFLICT DO NOTHING`,
+                [rOrgId, recipientUserId]
+            );
+
+            // Admin creates a page
+            const pageRes = await request(app)
+                .post(basePath)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ title: "Shared Page by Email" })
+                .expect(201);
+            pageId = pageRes.body.data.id;
+        });
+
+        it("should share a page with an existing user by email", async () => {
+            const res = await request(app)
+                .post(`${basePath}/${pageId}/shares`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ email: recipientEmail, permission: "view_all" })
+                .expect(201);
+
+            expect(res.body.data).toMatchObject({
+                page_id: pageId,
+                share_type: "space",
+                permission: "view_all",
+                target_org_is_personal: true,
+                target_user_email: recipientEmail,
+                target_user_name: recipientName,
+            });
+
+            // Recipient should be able to fetch shared pages
+            const sharedRes = await request(app)
+                .get(`/api/v1/orgs/${res.body.data.target_org_id}/spaces/${res.body.data.target_space_id}/notes/shared`)
+                .set("Authorization", `Bearer ${recipientToken}`)
+                .expect(200);
+
+            expect(sharedRes.body.data).toHaveLength(1);
+            expect(sharedRes.body.data[0].id).toBe(pageId);
+            expect(sharedRes.body.data[0].title).toBe("Shared Page by Email");
+        });
+
+        it("should reject sharing with an email that is not registered", async () => {
+            const res = await request(app)
+                .post(`${basePath}/${pageId}/shares`)
+                .set("Authorization", `Bearer ${adminToken}`)
+                .send({ email: "not-registered@test.com", permission: "view_all" })
+                .expect(404);
+
+            expect(res.body.message).toContain("is not registered on Keil");
+        });
+    });
 });

@@ -1,4 +1,8 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
 import fetch from "node-fetch";
+import { SarvamAIClient } from "sarvamai";
 import { config } from "../../config";
 import { createServiceLogger } from "../../lib/logger";
 import {
@@ -11,223 +15,253 @@ import {
 
 const log = createServiceLogger("sarvam-provider");
 
-const sarvamHeaders = {
-    "api-subscription-key": config.sarvamApiKey,
-    "Content-Type": "application/json",
-};
-
 /**
- * Sarvam AI batch transcription provider.
- * Uses the Sarvam batch job API with Azure blob staging.
+ * Sarvam AI Saaras v3 transcription provider.
+ *
+ * Uses the Batch API — required because the REST API only handles up to 30s of audio.
+ * Flow:
+ *   1. createJob (saaras:v3, with_diarization)
+ *   2. Download audio from presigned S3 URL to a temp file
+ *   3. uploadFiles (via SDK — needs local path)
+ *   4. start()
+ *   5. Poll getStatus until Completed / Failed
+ *   6. downloadOutputs → parse 0.json → normalise result
+ *
+ * Auth: `api-subscription-key` header (NOT Authorization: Bearer)
  */
 export class SarvamProvider implements TranscriptionProvider {
     readonly name = "sarvam" as const;
+
+    private getClient(): SarvamAIClient {
+        if (!config.sarvamApiKey) {
+            throw new Error("SARVAM_API_KEY is not configured");
+        }
+        return new SarvamAIClient({ apiSubscriptionKey: config.sarvamApiKey });
+    }
 
     async startTranscription(
         presignedAudioUrl: string,
         options: StartTranscriptionOptions
     ): Promise<TranscriptionJobInfo> {
-        // 1. Create Sarvam batch job
-        log.info({ recordingId: options.recordingId }, "Creating Sarvam batch job");
+        const { recordingId, durationSeconds, contentType } = options;
 
-        const createJobResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1", {
-            method: "POST",
-            headers: sarvamHeaders,
-            body: JSON.stringify({
-                job_parameters: {
-                    model: "saaras:v3",
-                    mode: "transcribe",
-                    language_code: "en-IN",
-                    with_diarization: true,
-                    num_speakers: 2,
-                },
-                ...(options.webhookSecret && options.webhookUrl
-                    ? {
-                          callback: {
-                              url: options.webhookUrl,
-                              auth_token: options.webhookSecret,
-                          },
-                      }
-                    : {}),
-            }),
-        });
+        log.info({ recordingId, durationSeconds, contentType }, "[Sarvam] Starting Saaras v3 Batch transcription");
 
-        if (!createJobResponse.ok) {
-            const errText = await createJobResponse.text();
-            log.error({ errText }, "Sarvam job creation failed");
-            throw new Error(`Sarvam job creation failed: ${errText}`);
-        }
+        const client = this.getClient();
+        let tempFilePath: string | null = null;
+        let tempDir: string | null = null;
+        let outputDir: string | null = null;
 
-        const { job_id: sarvamJobId } = (await createJobResponse.json()) as any;
-        log.info({ sarvamJobId }, "Sarvam job created");
+        try {
+            // Step 1: Create batch job
+            const job = await client.speechToTextJob.createJob({
+                model: "saaras:v3",
+                mode: "transcribe",
+                withDiarization: true,
+                // Let Sarvam auto-detect language — works well for Indian languages + English
+                // languageCode: "hi-IN",  // uncomment to pin language
+            });
 
-        // 2. Download audio from S3
-        const audioResponse = await fetch(presignedAudioUrl);
-        if (!audioResponse.ok) {
-            throw new Error(`Failed to download audio from S3: status ${audioResponse.status}`);
-        }
-        const contentLength = audioResponse.headers.get("content-length");
+            log.info({ recordingId, jobId: job.jobId }, "[Sarvam] Batch job created");
 
-        // 3. Get Sarvam Azure upload URL
-        const fileName = `audio-${Date.now()}.webm`;
-        const uploadUrlsResponse = await fetch("https://api.sarvam.ai/speech-to-text/job/v1/upload-files", {
-            method: "POST",
-            headers: sarvamHeaders,
-            body: JSON.stringify({
-                job_id: sarvamJobId,
-                files: [fileName],
-            }),
-        });
+            // Step 2: Download audio from S3 presigned URL to a temp file
+            const ext = this.guessExtension(contentType);
+            tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `sarvam-${recordingId}-`));
+            tempFilePath = path.join(tempDir, `audio${ext}`);
 
-        if (!uploadUrlsResponse.ok) {
-            const errText = await uploadUrlsResponse.text();
-            throw new Error(`Failed to get Sarvam upload URL: ${errText}`);
-        }
+            log.debug({ recordingId, tempFilePath }, "[Sarvam] Downloading audio from S3 to temp file");
 
-        const uploadData = (await uploadUrlsResponse.json()) as any;
-        const sarvamUploadUrlObj = uploadData.upload_urls?.[fileName];
-        const sarvamUploadUrl =
-            typeof sarvamUploadUrlObj === "string"
-                ? sarvamUploadUrlObj
-                : sarvamUploadUrlObj?.file_url;
-
-        if (!sarvamUploadUrl) {
-            throw new Error("Sarvam did not return an upload URL for the audio file");
-        }
-
-        // 4. Upload audio to Sarvam Azure
-        const contentType = options.contentType || "audio/webm";
-        const sanitizedMime = contentType.split(";")[0].trim();
-
-        const sarvamUploadResponse = await fetch(sarvamUploadUrl, {
-            method: "PUT",
-            headers: {
-                "x-ms-blob-type": "BlockBlob",
-                "Content-Type": sanitizedMime,
-                ...(contentLength ? { "Content-Length": contentLength } : {}),
-            },
-            body: audioResponse.body,
-        });
-
-        if (!sarvamUploadResponse.ok) {
-            const errText = await sarvamUploadResponse.text();
-            throw new Error(`Failed to upload audio to Sarvam storage: ${errText}`);
-        }
-        log.info({ sarvamJobId }, "Audio uploaded to Sarvam Azure");
-
-        // 5. Start the job
-        const startResponse = await fetch(
-            `https://api.sarvam.ai/speech-to-text/job/v1/${sarvamJobId}/start`,
-            {
-                method: "POST",
-                headers: sarvamHeaders,
-                body: JSON.stringify({}),
+            const audioResponse = await fetch(presignedAudioUrl);
+            if (!audioResponse.ok) {
+                throw new Error(`Failed to download audio from S3: ${audioResponse.status} ${audioResponse.statusText}`);
             }
-        );
 
-        if (!startResponse.ok) {
-            const errText = await startResponse.text();
-            throw new Error(`Failed to start Sarvam job: ${errText}`);
+            const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+            fs.writeFileSync(tempFilePath, audioBuffer);
+            log.debug({ recordingId, sizeBytes: audioBuffer.length }, "[Sarvam] Audio downloaded to temp file");
+
+            // Step 3: Upload to Sarvam
+            await job.uploadFiles([tempFilePath]);
+            log.debug({ recordingId, jobId: job.jobId }, "[Sarvam] Audio uploaded to Sarvam storage");
+
+            // Step 4: Start the job
+            await job.start();
+            log.info({ recordingId, jobId: job.jobId }, "[Sarvam] Batch job started");
+
+            // Step 5: Poll for completion (fire-and-forget background loop)
+            // We do this inline so the entire transcription completes before returning.
+            // The controller already wraps this in a fire-and-forget IIFE.
+            const MAX_POLLS = 120;       // up to 10 minutes (5s intervals)
+            const POLL_INTERVAL_MS = 5000;
+
+            let polls = 0;
+            while (polls < MAX_POLLS) {
+                await sleep(POLL_INTERVAL_MS);
+                polls++;
+
+                const status = await this.checkStatus(job.jobId);
+                log.debug({ recordingId, jobId: job.jobId, status: status.status, poll: polls }, "[Sarvam] Status poll");
+
+                if (status.status === "completed" && status.result) {
+                    log.info({ recordingId, jobId: job.jobId, polls }, "[Sarvam] Transcription completed");
+                    return {
+                        jobId: job.jobId,
+                        completed: true,
+                        result: status.result,
+                    };
+                }
+
+                if (status.status === "failed") {
+                    throw new Error(`Sarvam batch job ${job.jobId} failed during processing`);
+                }
+                // status === "processing" → keep polling
+            }
+
+            throw new Error(`Sarvam batch job ${job.jobId} timed out after ${MAX_POLLS} polls`);
+
+        } finally {
+            // Clean up temp files
+            try {
+                if (tempFilePath && fs.existsSync(tempFilePath)) {
+                    fs.unlinkSync(tempFilePath);
+                }
+                if (tempDir && fs.existsSync(tempDir)) {
+                    fs.rmSync(tempDir, { recursive: true, force: true });
+                }
+                if (outputDir && fs.existsSync(outputDir)) {
+                    fs.rmSync(outputDir, { recursive: true, force: true });
+                }
+            } catch (cleanupErr) {
+                log.warn({ cleanupErr, recordingId }, "[Sarvam] Temp file cleanup failed (non-fatal)");
+            }
         }
-        log.info({ sarvamJobId }, "Sarvam job started");
-
-        return {
-            jobId: sarvamJobId,
-            completed: false,
-        };
     }
 
     async checkStatus(jobId: string): Promise<TranscriptionStatusResult> {
-        const statusResponse = await fetch(
-            `https://api.sarvam.ai/speech-to-text/job/v1/${jobId}/status`,
-            {
-                method: "GET",
-                headers: sarvamHeaders,
+        try {
+            const client = this.getClient();
+            const statusResponse = await client.speechToTextJob.getStatus(jobId);
+            const state: string = (statusResponse as any).job_state ?? (statusResponse as any).jobState ?? "";
+
+            log.debug({ jobId, state }, "[Sarvam] checkStatus response");
+
+            if (state === "Completed") {
+                // Download and parse results
+                const result = await this.downloadAndParseResult(jobId, statusResponse);
+                return { status: "completed", result };
             }
-        );
 
-        if (!statusResponse.ok) {
-            const errText = await statusResponse.text();
-            log.error({ errText, jobId }, "Sarvam status check failed");
-            throw new Error(`Failed to fetch Sarvam job status: ${errText}`);
-        }
+            if (state === "Failed") {
+                return { status: "failed" };
+            }
 
-        const statusData = (await statusResponse.json()) as any;
-        const jobState = statusData.job_state; // Accepted | Pending | Running | Completed | Failed
-
-        if (jobState === "Completed") {
-            const result = await this.fetchResult(jobId, statusData);
-            return { status: "completed", result };
-        } else if (jobState === "Failed") {
-            return { status: "failed" };
-        } else {
+            // Accepted / Pending / Running → still processing
             return { status: "processing" };
+
+        } catch (err: any) {
+            log.error({ err, jobId }, "[Sarvam] checkStatus error");
+            return { status: "failed" };
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Private helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Downloads output JSON from a completed Sarvam batch job and normalises it
+     * into our standard TranscriptionResult shape.
+     */
+    private async downloadAndParseResult(jobId: string, statusResponse: any): Promise<TranscriptionResult> {
+        const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), `sarvam-out-${jobId}-`));
+
+        try {
+            const client = this.getClient();
+            const jobInstance = client.speechToTextJob.getJob(jobId);
+
+            // downloadOutputs saves output JSON files to the given directory
+            await jobInstance.downloadOutputs(outputDir);
+
+            // Find the first JSON output file (e.g. "0.json")
+            const files = fs.readdirSync(outputDir).filter(f => f.endsWith(".json"));
+            if (files.length === 0) {
+                throw new Error(`No output JSON files found in ${outputDir}`);
+            }
+
+            const raw = JSON.parse(fs.readFileSync(path.join(outputDir, files[0]), "utf-8"));
+            log.debug({ jobId, outputFile: files[0], keys: Object.keys(raw) }, "[Sarvam] Parsed output JSON");
+
+            return this.normalizeResult(raw);
+        } finally {
+            try {
+                fs.rmSync(outputDir, { recursive: true, force: true });
+            } catch (_) { /* non-fatal */ }
         }
     }
 
     /**
-     * Fetches the transcription result from Sarvam download URLs.
+     * Normalises Sarvam batch output JSON into our TranscriptionResult format.
+     *
+     * Sarvam output shape:
+     * {
+     *   transcript: string,
+     *   language_code: string,
+     *   diarized_transcript?: {
+     *     entries: [{ transcript, start_time_seconds, end_time_seconds, speaker_id }]
+     *   },
+     *   timestamps?: { words, start_time_seconds, end_time_seconds }
+     * }
      */
-    private async fetchResult(jobId: string, statusData: any): Promise<TranscriptionResult> {
-        const jobDetails = statusData.job_details || [];
-        let transcriptText = "";
-        let transcriptDiarized = null;
-        let languageDetected = null;
+    private normalizeResult(raw: any): TranscriptionResult {
+        const transcriptText: string = raw.transcript ?? "";
+        const languageDetected: string | null = raw.language_code ?? null;
 
-        const successDetail = jobDetails.find(
-            (d: any) => d.state === "Success" && d.outputs && d.outputs.length > 0
-        );
-
-        if (successDetail) {
-            const outputFile = successDetail.outputs[0];
-            const outputFileName = outputFile.file_name;
-
-            // Request download URL
-            const downloadUrlsResponse = await fetch(
-                "https://api.sarvam.ai/speech-to-text/job/v1/download-files",
-                {
-                    method: "POST",
-                    headers: sarvamHeaders,
-                    body: JSON.stringify({
-                        job_id: jobId,
-                        files: [outputFileName],
-                    }),
-                }
-            );
-
-            if (!downloadUrlsResponse.ok) {
-                const errText = await downloadUrlsResponse.text();
-                throw new Error(`Failed to get Sarvam download URL: ${errText}`);
-            }
-
-            const downloadData = (await downloadUrlsResponse.json()) as any;
-            const downloadUrlObj = downloadData.download_urls?.[outputFileName];
-            const downloadUrl =
-                typeof downloadUrlObj === "string" ? downloadUrlObj : downloadUrlObj?.file_url;
-
-            if (!downloadUrl) {
-                throw new Error("Sarvam did not return a download URL for the result file");
-            }
-
-            // Download and parse result
-            const resultFileResponse = await fetch(downloadUrl);
-            if (!resultFileResponse.ok) {
-                throw new Error(
-                    `Failed to download transcription results: status ${resultFileResponse.status}`
-                );
-            }
-
-            const resultJson = (await resultFileResponse.json()) as any;
-            transcriptText = resultJson.transcript || resultJson.text || "";
-            transcriptDiarized = resultJson.diarized_transcript || null;
-            languageDetected = resultJson.language_code || resultJson.language || null;
+        // Diarized output: already in our preferred format
+        let transcriptDiarized: any | null = null;
+        if (raw.diarized_transcript?.entries?.length > 0) {
+            // Normalise speaker_id to a consistent format (Sarvam returns "0", "1", etc.)
+            const entries = raw.diarized_transcript.entries.map((e: any) => ({
+                speaker_id: `speaker_${e.speaker_id}`,
+                transcript: e.transcript,
+                start_time_seconds: e.start_time_seconds,
+                end_time_seconds: e.end_time_seconds,
+            }));
+            transcriptDiarized = { entries };
         }
 
         return {
             transcriptText,
             transcriptDiarized,
             languageDetected,
-            audioDurationSeconds: null,
+            audioDurationSeconds: null, // Sarvam batch doesn't return duration directly
         };
     }
+
+    /**
+     * Guesses a safe file extension from a MIME type.
+     * Falls back to .webm since that's what the browser MediaRecorder produces.
+     */
+    private guessExtension(contentType?: string): string {
+        if (!contentType) return ".webm";
+        const mime = contentType.split(";")[0].trim().toLowerCase();
+        const map: Record<string, string> = {
+            "audio/webm": ".webm",
+            "audio/ogg": ".ogg",
+            "audio/mp4": ".mp4",
+            "audio/mpeg": ".mp3",
+            "audio/wav": ".wav",
+            "audio/x-wav": ".wav",
+            "audio/flac": ".flac",
+            "audio/aac": ".aac",
+        };
+        return map[mime] ?? ".webm";
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility
+// ─────────────────────────────────────────────────────────────────────────────
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

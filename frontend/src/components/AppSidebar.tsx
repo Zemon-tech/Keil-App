@@ -383,7 +383,7 @@ export function AppSidebar({
       } else if (payload.status === "failed") {
         console.error("[AppSidebar] Meeting transcription job failed for recording ID:", payload.recordingId, payload.recording);
         toast.error("Meeting Sync Failed", {
-          description: "Sarvam AI failed to transcribe the background capture. Check developer console logs.",
+          description: "AI transcription failed for the background capture. Check developer console logs.",
           duration: 8000
         });
       }

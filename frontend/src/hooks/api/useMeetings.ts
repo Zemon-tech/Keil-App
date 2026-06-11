@@ -9,7 +9,6 @@ export interface MeetingRecordingDTO {
   meeting_id: string | null;
   audio_s3_key: string;
   audio_duration_seconds: number | null;
-  sarvam_job_id: string | null;
   transcription_status: string;
   transcript_text: string | null;
   transcript_diarized: any | null;

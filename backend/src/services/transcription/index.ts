@@ -4,27 +4,29 @@ import { ElevenLabsProvider } from "./elevenlabs.provider";
 
 export * from "./types";
 
-// Singleton instances
+// Singletons
 let sarvamInstance: SarvamProvider | null = null;
 let elevenlabsInstance: ElevenLabsProvider | null = null;
 
 /**
- * Returns the appropriate transcription provider based on the provider name.
+ * Returns the transcription provider for the given name.
+ * Defaults to Sarvam (the primary provider).
  */
-export function getTranscriptionProvider(provider: SttProvider): TranscriptionProvider {
-    switch (provider) {
-        case "elevenlabs":
-            if (!elevenlabsInstance) {
-                elevenlabsInstance = new ElevenLabsProvider();
-            }
-            return elevenlabsInstance;
-        case "sarvam":
-        default:
-            if (!sarvamInstance) {
-                sarvamInstance = new SarvamProvider();
-            }
-            return sarvamInstance;
+export function getTranscriptionProvider(provider?: SttProvider): TranscriptionProvider {
+    const chosen = provider ?? "sarvam";
+
+    if (chosen === "sarvam") {
+        if (!sarvamInstance) {
+            sarvamInstance = new SarvamProvider();
+        }
+        return sarvamInstance;
     }
+
+    // Fallback: ElevenLabs
+    if (!elevenlabsInstance) {
+        elevenlabsInstance = new ElevenLabsProvider();
+    }
+    return elevenlabsInstance;
 }
 
 /**

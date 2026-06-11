@@ -57,6 +57,7 @@ export function TasksPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [orgFilter, setOrgFilter] = useState<string>("all");
   const [spaceFilter, setSpaceFilter] = useState<string>("all");
+  const [listPaneVisible, setListPaneVisible] = useState(true);
 
   // ── Subtask navigation stack ──
   // Tracks the parent task when user navigates into a subtask
@@ -557,7 +558,12 @@ export function TasksPage() {
     <div className="h-dvh w-full bg-background text-foreground overflow-hidden overscroll-none">
       <main className={containerClassName}>
         <div className="flex size-full">
-          <div className="w-[300px] shrink-0 bg-card border-r border-border h-full">
+          <div
+            className={cn(
+              "shrink-0 bg-card border-r border-border h-full overflow-hidden transition-all duration-300 ease-in-out",
+              listPaneVisible ? "w-[300px] opacity-100" : "w-0 opacity-0 pointer-events-none"
+            )}
+          >
             <TaskListPane
               query={query}
               onQueryChange={setQuery}
@@ -609,6 +615,7 @@ export function TasksPage() {
               onOrgFilterChange={setOrgFilter}
               spaceFilter={spaceFilter}
               onSpaceFilterChange={setSpaceFilter}
+              onCollapse={() => setListPaneVisible(false)}
             />
           </div>
 
@@ -668,6 +675,7 @@ export function TasksPage() {
                 statusFilter={statusFilter}
                 onDateChange={setCalendarMonth}
                 onTaskSchedule={handleTaskSchedule}
+                onOpenSidebar={!listPaneVisible ? () => setListPaneVisible(true) : undefined}
               />
             )}
           </div>

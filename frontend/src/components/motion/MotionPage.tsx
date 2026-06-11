@@ -1204,40 +1204,43 @@ export function MotionPage() {
 
             <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16 motion-page-container">
               <div className="group/title-area">
-                {!isPageReadOnly && (
-                  <div className={cn(
-                    "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
-                    "mt-3 mb-2",
-                    "opacity-0 group-hover/title-area:opacity-100"
-                  )}>
-                    {!displayPage.icon && (
-                      <button
-                        className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                        onClick={() => {
-                          setShowEmojiPicker(true);
-                        }}
-                      >
-                        Add icon
-                      </button>
-                    )}
-                    {!displayPage.cover_image && (
-                      <button
-                        className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
-                        onClick={() => {
-                          const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
-                          if (pageId) {
-                            updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
-                          }
-                        }}
-                      >
-                        Add cover
-                      </button>
-                    )}
-                    <button className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5">
-                      Add comment
+                <div className={cn(
+                  "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
+                  "mt-3 mb-2",
+                  "opacity-0 group-hover/title-area:opacity-100"
+                )}>
+                  {!displayPage.icon && !isPageReadOnly && (
+                    <button
+                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                      onClick={() => {
+                        setShowEmojiPicker(true);
+                      }}
+                    >
+                      Add icon
                     </button>
-                  </div>
-                )}
+                  )}
+                  {!displayPage.cover_image && !isPageReadOnly && (
+                    <button
+                      className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                      onClick={() => {
+                        const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
+                        if (pageId) {
+                          updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
+                        }
+                      }}
+                    >
+                      Add cover
+                    </button>
+                  )}
+                  <button
+                    className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
+                    onClick={() => {
+                      toast("Comments feature coming soon!");
+                    }}
+                  >
+                    Add comment
+                  </button>
+                </div>
 
                 {/* Title */}
                 <input

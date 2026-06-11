@@ -169,7 +169,7 @@ Stop losing what was decided in your last meeting:
 
 - **Record meetings directly** inside KielHQ — no third-party app needed
 - Audio uploaded securely to AWS S3
-- **Transcribed automatically** via Sarvam AI
+- **Transcribed automatically** via ElevenLabs
 - **Speaker diarization** — the transcript tells you who said what
 - Transcripts stored, searchable, and tied to the right project
 - Turn meeting decisions into tasks in one click
@@ -243,7 +243,7 @@ KielHQ connects with 50+ tools your team already relies on:
 | AI Providers | Anthropic (Claude), OpenAI, Grok, Google Gemini |
 | Calendar | Google Calendar |
 | Storage | AWS S3 |
-| Speech-to-Text | Sarvam AI |
+| Speech-to-Text | ElevenLabs |
 
 > Changes in connected tools **instantly reflect in KielHQ** — no manual syncing, no stale data.
 

@@ -222,18 +222,50 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
   }
 
   /**
-   * Returns all shares for a given page.
+   * Finds a single share by its ID with target details joined.
    */
-  async findByPage(pageId: string, client?: PoolClient): Promise<MotionPageShare[]> {
+  async findByIdWithDetails(id: string, client?: PoolClient): Promise<any | null> {
     const query = `
-      SELECT *
-      FROM public.motion_page_shares
-      WHERE page_id = $1
-      ORDER BY created_at ASC
+      SELECT 
+        mps.*,
+        o.name as target_org_name,
+        o.is_personal as target_org_is_personal,
+        s.name as target_space_name,
+        u.email as target_user_email,
+        u.name as target_user_name,
+        u.avatar_url as target_user_avatar
+      FROM public.motion_page_shares mps
+      LEFT JOIN public.organisations o ON o.id = mps.target_org_id
+      LEFT JOIN public.spaces s ON s.id = mps.target_space_id
+      LEFT JOIN public.users u ON u.id = o.owner_user_id AND o.is_personal = TRUE
+      WHERE mps.id = $1
+      LIMIT 1
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [id]);
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  async findByPage(pageId: string, client?: PoolClient): Promise<any[]> {
+    const query = `
+      SELECT 
+        mps.*,
+        o.name as target_org_name,
+        o.is_personal as target_org_is_personal,
+        s.name as target_space_name,
+        u.email as target_user_email,
+        u.name as target_user_name,
+        u.avatar_url as target_user_avatar
+      FROM public.motion_page_shares mps
+      LEFT JOIN public.organisations o ON o.id = mps.target_org_id
+      LEFT JOIN public.spaces s ON s.id = mps.target_space_id
+      LEFT JOIN public.users u ON u.id = o.owner_user_id AND o.is_personal = TRUE
+      WHERE mps.page_id = $1
+      ORDER BY mps.created_at ASC
     `;
     const executor = client || this.pool;
     const result = await executor.query(query, [pageId]);
-    return result.rows as MotionPageShare[];
+    return result.rows;
   }
 
   /**

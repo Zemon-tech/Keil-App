@@ -6,7 +6,7 @@
 
 CREATE TABLE IF NOT EXISTS public.user_app_preferences (
     user_id             UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
-    stt_provider        TEXT NOT NULL DEFAULT 'sarvam',  -- 'sarvam' | 'elevenlabs'
+    stt_provider        TEXT NOT NULL DEFAULT 'elevenlabs',  -- 'elevenlabs'
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -16,7 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_user_app_preferences_user_id ON public.user_app_p
 
 -- Add provider column to meeting_recordings to track which provider was used
 ALTER TABLE public.meeting_recordings
-    ADD COLUMN IF NOT EXISTS stt_provider TEXT NOT NULL DEFAULT 'sarvam';
+    ADD COLUMN IF NOT EXISTS stt_provider TEXT NOT NULL DEFAULT 'elevenlabs';
 
 -- Backfill existing users with default preferences
 INSERT INTO public.user_app_preferences (user_id)

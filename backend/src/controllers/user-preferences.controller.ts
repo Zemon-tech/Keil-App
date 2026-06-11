@@ -25,7 +25,7 @@ export const getPreferences = catchAsync(async (req: Request, res: Response) => 
 /**
  * PATCH /api/v1/preferences/stt-provider
  * Update the user's STT provider preference.
- * Body: { provider: "sarvam" | "elevenlabs" }
+ * Body: { provider: "elevenlabs" }
  */
 export const updateSttProvider = catchAsync(async (req: Request, res: Response) => {
     const user = (req as any).user;
@@ -37,7 +37,7 @@ export const updateSttProvider = catchAsync(async (req: Request, res: Response) 
 
     if (!provider || !isValidSttProvider(provider)) {
         return res.status(400).json({
-            error: "Invalid provider. Must be one of: sarvam, elevenlabs",
+            error: "Invalid provider. Must be: elevenlabs",
         });
     }
 

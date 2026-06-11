@@ -4,11 +4,7 @@ import * as meetingController from "../controllers/meeting.controller";
 
 const router = Router();
 
-// ── Unprotected routes (called by external services) ──────────────────────────
-// Sarvam AI webhook — called by Sarvam servers on job completion
-router.post("/webhook/sarvam", meetingController.handleSarvamWebhook);
-
-// Apply auth middleware to protect all remaining routes
+// Apply auth middleware to all routes
 router.use(protect);
 
 // Endpoint to retrieve paginated meeting history for the user
@@ -20,10 +16,10 @@ router.get("/search/query", meetingController.searchMeetings);
 // Endpoint to generate presigned S3 upload URL
 router.post("/upload-url", meetingController.getUploadUrl);
 
-// Endpoint to orchestrate and start a Sarvam STT batch job
+// Endpoint to start a transcription job via ElevenLabs
 router.post("/transcribe", meetingController.transcribeRecording);
 
-// Endpoint to poll transcription status of a Sarvam job
+// Endpoint to poll transcription status
 router.get("/transcribe/status", meetingController.getTranscriptionStatus);
 
 // Endpoint to retrieve a single recording for review
