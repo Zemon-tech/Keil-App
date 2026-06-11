@@ -518,16 +518,22 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                 {/* Messages Area */}
                                 <ScrollArea className="flex-1 h-0 px-4 py-4">
                                     <div className="space-y-4">
-                                        {messagesLoading ? (
-                                            <div className="space-y-4">
-                                                {[...Array(5)].map((_, i) => (
-                                                    <div key={i} className={`flex flex-col gap-1 ${i % 2 === 0 ? "items-start" : "items-end"}`}>
-                                                        <Skeleton className="h-3 w-16" />
-                                                        <Skeleton className="h-12 w-2/3 rounded-lg" />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : messages.length === 0 ? (
+                                         {messagesLoading ? (
+                                             <div className="space-y-4 animate-pulse">
+                                                 {[...Array(5)].map((_, i) => {
+                                                     const isMine = i % 2 !== 0;
+                                                     return (
+                                                         <div key={i} className={`flex flex-col gap-1.5 w-full ${isMine ? "items-end" : "items-start"}`}>
+                                                             <div className="h-3 w-20 bg-muted-foreground/15 rounded" />
+                                                             <div className={cn(
+                                                                 "h-10 w-[60%] bg-muted rounded-2xl",
+                                                                 isMine ? "bg-primary/20 rounded-tr-md" : "bg-muted/60 rounded-bl-md"
+                                                             )} />
+                                                         </div>
+                                                     );
+                                                 })}
+                                             </div>
+                                         ) : messages.length === 0 ? (
                                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-12">
                                                 <MessageCircle className="size-12 mb-3 opacity-40" />
                                                 <p className="text-sm">No messages yet. Start the conversation!</p>
