@@ -75,7 +75,6 @@ import {
   MessageSquare,
   PanelRight,
   Clock,
-  Smartphone,
   Globe2,
   RefreshCw,
 } from "lucide-react";

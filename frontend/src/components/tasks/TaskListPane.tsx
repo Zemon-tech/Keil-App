@@ -230,7 +230,9 @@ function SubtaskList({
             {/* Right block: Badge and Date */}
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
               {(sub as any).type === "event" && (
-                <CalendarClock className="size-3 text-[#3730A3] dark:text-[#C7D2FE] shrink-0" title="Event" />
+                <span title="Event">
+                  <CalendarClock className="size-3 text-[#3730A3] dark:text-[#C7D2FE] shrink-0" />
+                </span>
               )}
               {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
               <span className="tabular-nums text-right leading-tight">

@@ -45,23 +45,6 @@ export interface MotionSharePanelProps {
   spaceId: string;
 }
 
-interface MockUser {
-  id: string;
-  name: string;
-  username: string;
-  email: string;
-  role: string;
-}
-
-// ─── Mock KeilHQ Users ────────────────────────────────────────────────────────
-
-const MOCK_KEILHQ_USERS: MockUser[] = [
-  { id: "u1", name: "Satyajit Jena", username: "satyajit", email: "jenasatyajit.sj@gmail.com", role: "member" },
-  { id: "u2", name: "Shivang Kandoi", username: "shivang", email: "shivang.k006@gmail.com", role: "admin" },
-  { id: "u3", name: "John Doe", username: "johndoe", email: "john.doe@keilhq.com", role: "member" },
-  { id: "u4", name: "Alice Smith", username: "alice", email: "alice.smith@keilhq.com", role: "member" },
-  { id: "u5", name: "Bob Johnson", username: "bobjohnson", email: "bob.johnson@keilhq.com", role: "member" },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -103,11 +86,6 @@ function getAvatarBg(input: string): string {
     sum += str.charCodeAt(i);
   }
   return colors[sum % colors.length];
-}
-
-function formatGuestName(input: string): string {
-  const parts = input.split(/[._-]/);
-  return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
 }
 
 // ─── SVGs for Brand Logos ─────────────────────────────────────────────────────
