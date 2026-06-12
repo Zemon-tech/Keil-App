@@ -54,6 +54,7 @@ import {
   LogOut,
   ChevronRight,
   ChevronUp,
+  ChevronDown,
   Shield,
   Palette,
   Globe,
@@ -79,6 +80,7 @@ import {
   Globe2,
   RefreshCw,
 } from "lucide-react";
+import { Flame, Target, Rocket, CalendarOff, CalendarDays, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { useAppContext } from "@/contexts/AppContext";
@@ -2392,16 +2394,23 @@ function TasksTab() {
     return false;
   });
 
+  const [showClarityDefault, setShowClarityDefault] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("task_show_clarity_default") === "true";
+    }
+    return false;
+  });
+
   const [visibleSections, setVisibleSections] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem("task_visible_sections");
-        return stored ? JSON.parse(stored) : ["needsAttention", "currentSprint"];
+        return stored ? JSON.parse(stored) : ["needsAttention", "currentSprint", "sprintDone", "unscheduled"];
       } catch {
-        return ["needsAttention", "currentSprint"];
+        return ["needsAttention", "currentSprint", "sprintDone", "unscheduled"];
       }
     }
-    return ["needsAttention", "currentSprint"];
+    return ["needsAttention", "currentSprint", "sprintDone", "unscheduled"];
   });
 
   const [defaultFilters, setDefaultFilters] = useState<{
@@ -2439,6 +2448,12 @@ function TasksTab() {
     window.dispatchEvent(new Event("task_settings_changed"));
   };
 
+  const handleShowClarityDefaultChange = (checked: boolean) => {
+    setShowClarityDefault(checked);
+    localStorage.setItem("task_show_clarity_default", String(checked));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
   const handleSectionToggle = (section: string) => {
     let next: string[];
     if (visibleSections.includes(section)) {
@@ -2466,12 +2481,59 @@ function TasksTab() {
   };
 
   const sectionsList = [
-    { id: "needsAttention", label: "🔥 Needs Attention" },
-    { id: "myFocus", label: "🎯 My Focus" },
-    { id: "currentSprint", label: "🚀 Current Sprint" },
-    { id: "upcomingWork", label: "📅 Upcoming Work" },
-    { id: "recentlyCompleted", label: "✅ Recently Completed" },
+    { id: "needsAttention", label: "Needs Attention", icon: Flame, iconColor: "text-rose-500" },
+    { id: "myFocus", label: "My Focus", icon: Target, iconColor: "text-indigo-500" },
+    { id: "currentSprint", label: "Current Sprint", icon: Rocket, iconColor: "text-amber-500" },
+    { id: "sprintDone", label: "Sprint Done", icon: CheckCircle2, iconColor: "text-sky-500" },
+    { id: "unscheduled", label: "Unscheduled", icon: CalendarOff, iconColor: "text-muted-foreground" },
+    { id: "upcomingWork", label: "Upcoming Work", icon: CalendarDays, iconColor: "text-emerald-500" },
+    { id: "recentlyCompleted", label: "Recently Completed", icon: CheckCircle2, iconColor: "text-sky-500" },
   ];
+
+  const [sectionsOrder, setSectionsOrder] = useState<string[]>(() => {
+    const masterKeys = [
+      "needsAttention",
+      "myFocus",
+      "currentSprint",
+      "sprintDone",
+      "unscheduled",
+      "upcomingWork",
+      "recentlyCompleted"
+    ];
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("task_sections_order");
+        if (stored) {
+          const parsed = JSON.parse(stored) as string[];
+          const filtered = parsed.filter(k => masterKeys.includes(k));
+          const missing = masterKeys.filter(k => !filtered.includes(k));
+          return [...filtered, ...missing];
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return masterKeys;
+  });
+
+  const handleMoveSection = (index: number, direction: "up" | "down") => {
+    const nextOrder = [...sectionsOrder];
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    if (targetIndex >= 0 && targetIndex < nextOrder.length) {
+      const temp = nextOrder[index];
+      nextOrder[index] = nextOrder[targetIndex];
+      nextOrder[targetIndex] = temp;
+
+      setSectionsOrder(nextOrder);
+      localStorage.setItem("task_sections_order", JSON.stringify(nextOrder));
+      window.dispatchEvent(new Event("task_settings_changed"));
+    }
+  };
+
+  const orderedSections = sectionsOrder
+    .map(id => sectionsList.find(s => s.id === id))
+    .filter((s): s is typeof sectionsList[number] => !!s);
 
   const statusesList = ["todo", "in-progress", "in-review", "done", "blocked", "backlog"];
   const prioritiesList = ["urgent", "high", "medium", "low"];
@@ -2488,7 +2550,7 @@ function TasksTab() {
   ];
 
   return (
-    <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Tasks Preferences</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -2535,6 +2597,18 @@ function TasksTab() {
             </div>
             <Switch checked={showCompleted} onCheckedChange={handleShowCompletedChange} />
           </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Show Clarity sections by default</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Display Objective and Success Criteria sections by default when creating tasks
+              </p>
+            </div>
+            <Switch checked={showClarityDefault} onCheckedChange={handleShowClarityDefaultChange} />
+          </div>
         </div>
       </div>
 
@@ -2543,20 +2617,48 @@ function TasksTab() {
       {/* Visible Sections Settings */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-foreground">Default Visible Sections</h3>
-        <p className="text-xs text-muted-foreground">Select sections to show by default in your task list sidebar.</p>
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          {sectionsList.map(sec => {
+        <p className="text-xs text-muted-foreground">Toggle sections to show by default, and use the arrow buttons on hover to adjust their display order in the sidebar.</p>
+        <div className="flex flex-col gap-2 pt-1 max-w-md">
+          {orderedSections.map((sec, index) => {
             const isChecked = visibleSections.includes(sec.id);
+            const Icon = sec.icon;
             return (
-              <div key={sec.id} className="flex items-center space-x-2 bg-muted/20 hover:bg-muted/40 p-2 rounded-lg border border-border/40 transition-colors">
-                <Checkbox
-                  id={`sec-${sec.id}`}
-                  checked={isChecked}
-                  onCheckedChange={() => handleSectionToggle(sec.id)}
-                />
-                <Label htmlFor={`sec-${sec.id}`} className="text-xs font-medium cursor-pointer flex-1 select-none">
-                  {sec.label}
-                </Label>
+              <div key={sec.id} className="flex items-center justify-between bg-muted/20 hover:bg-muted/30 p-2 px-3 rounded-xl border border-border/40 transition-colors group/sec-item">
+                <div className="flex items-center space-x-3 flex-1">
+                  <Checkbox
+                    id={`sec-${sec.id}`}
+                    checked={isChecked}
+                    onCheckedChange={() => handleSectionToggle(sec.id)}
+                  />
+                  <Label htmlFor={`sec-${sec.id}`} className="text-xs font-medium cursor-pointer flex-1 select-none flex items-center gap-2">
+                    <Icon className={cn("size-4 shrink-0", sec.iconColor)} />
+                    <span>{sec.label}</span>
+                  </Label>
+                </div>
+
+                {/* Ordering Buttons */}
+                <div className="flex items-center gap-1 opacity-0 group-hover/sec-item:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                    disabled={index === 0}
+                    onClick={() => handleMoveSection(index, "up")}
+                    title="Move up"
+                  >
+                    <ChevronUp className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                    disabled={index === orderedSections.length - 1}
+                    onClick={() => handleMoveSection(index, "down")}
+                    title="Move down"
+                  >
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </div>
               </div>
             );
           })}

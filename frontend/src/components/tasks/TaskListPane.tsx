@@ -16,7 +16,7 @@ import {
 import { Draggable } from "@fullcalendar/interaction";
 import {
   Search, Plus, GripVertical, Flag, Zap, X, Trash2, Calendar, User,
-  AlertCircle, ChevronDown, ChevronRight, MoreHorizontal, Pencil,
+  AlertCircle, ChevronDown, ChevronRight, ChevronUp, MoreHorizontal, Pencil,
   SlidersHorizontal, CalendarClock, Rocket,
   Check, PanelLeftClose,
 } from "lucide-react";
@@ -53,7 +53,7 @@ import type { Task, AnyStatus, TaskPriority } from "@/types/task";
 import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
-import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon } from "./task-detail-shared";
+import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon, getStatusTextColor } from "./task-detail-shared";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useSpaces } from "@/hooks/api/useSpaces";
 import { useAuth } from "@/contexts/AuthContext";
@@ -240,7 +240,7 @@ function SubtaskList({
   }
 
   return (
-    <div className="pl-4 border-l border-border/40 ml-5 space-y-px">
+    <div className="space-y-px">
       {subtasks.map((sub) => {
         const active = sub.id === selectedTaskId;
         const isDone = sub.status === "done";
@@ -264,11 +264,15 @@ function SubtaskList({
                     onClick={(e) => e.stopPropagation()}
                     className="shrink-0 transition-transform hover:scale-110 flex items-center justify-center"
                   >
-                    <StatusIcon
-                      status={sub.status as AnyStatus}
-                      type={(sub as any).type === "event" ? "event" : "task"}
-                      className="size-3.5 shrink-0"
-                    />
+                    {(sub as any).type === "event" ? (
+                      <CalendarClock className={cn("size-3.5 shrink-0", getStatusTextColor(sub.status as AnyStatus))} />
+                    ) : (
+                      <StatusIcon
+                        status={sub.status as AnyStatus}
+                        type="task"
+                        className="size-3.5 shrink-0"
+                      />
+                    )}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-36 p-1 rounded-lg shadow-lg">
@@ -279,13 +283,17 @@ function SubtaskList({
                           e.stopPropagation();
                           onUpdateTask?.(sub.id, { status: s });
                         }}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize text-left"
                       >
-                        <StatusIcon
-                          status={s}
-                          type={(sub as any).type === "event" ? "event" : "task"}
-                          className="size-3 shrink-0"
-                        />
+                        {(sub as any).type === "event" ? (
+                          <CalendarClock className={cn("size-3 shrink-0", getStatusTextColor(s))} />
+                        ) : (
+                          <StatusIcon
+                            status={s}
+                            type="task"
+                            className="size-3 shrink-0"
+                          />
+                        )}
                         {s}
                       </button>
                     </PopoverClose>
@@ -305,11 +313,6 @@ function SubtaskList({
 
             {/* Right block: Badge and Date */}
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
-              {(sub as any).type === "event" && (
-                <span title="Event">
-                  <CalendarClock className="size-3 text-muted-foreground shrink-0" />
-                </span>
-              )}
               {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
               <span className="tabular-nums text-right leading-tight">
                 {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined, (sub as any).is_all_day)}
@@ -353,7 +356,6 @@ interface SectionHeaderProps {
   onToggle: () => void;
   badgeColor?: string;
   extraWidget?: React.ReactNode;
-  onCreateClick?: () => void;
 }
 
 function SectionHeader({
@@ -361,7 +363,6 @@ function SectionHeader({
   isCollapsed,
   onToggle,
   extraWidget,
-  onCreateClick,
 }: SectionHeaderProps) {
   return (
     <div className="group/section flex h-8 items-center justify-between mt-2 first:mt-0 select-none">
@@ -376,39 +377,21 @@ function SectionHeader({
             isCollapsed && "-rotate-90"
           )}
         >
-          <ChevronDown className="size-3 shrink-0" />
         </div>
         <span className="truncate">{title}</span>
       </button>
 
       <div className="flex items-center gap-1 shrink-0 px-2">
-        {onCreateClick && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCreateClick();
-            }}
-            aria-label={`Add to ${title}`}
-          >
-            <Plus className="size-3.5" />
-          </Button>
-        )}
         {extraWidget}
       </div>
     </div>
   );
 }
 
-function SprintCapacityWidget({ hours, percentage, color }: { hours: number; percentage: number; color: string }) {
+function SprintCapacityWidget({ hours }: { hours: number; percentage: number; color: string }) {
   return (
-    <div className="flex items-center gap-1.5 shrink-0 text-[9px] font-medium text-muted-foreground">
+    <div className="flex items-center shrink-0 text-[9px] font-medium text-muted-foreground">
       <span>{hours}h/80h</span>
-      <div className="w-8 h-1 rounded-full bg-muted overflow-hidden shrink-0">
-        <div className={cn("h-full transition-all duration-300", color)} style={{ width: `${percentage}%` }} />
-      </div>
     </div>
   );
 }
@@ -445,6 +428,16 @@ export function TaskListPane({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
+  const [expandedSectionsLimit, setExpandedSectionsLimit] = useState<Record<string, boolean>>({
+    needsAttention: false,
+    myFocus: false,
+    currentSprintTasks: false,
+    currentSprintEvents: false,
+    sprintDone: false,
+    unscheduled: false,
+    upcomingWork: false,
+    recentlyCompleted: false,
+  });
 
   // Additive filter state
   const [filters, setFilters] = useState<{
@@ -478,25 +471,46 @@ export function TaskListPane({
   const [visibleSections, setVisibleSections] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem("task_visible_sections");
-      return stored ? JSON.parse(stored) : ["needsAttention", "currentSprint"];
+      return stored ? JSON.parse(stored) : ["needsAttention", "currentSprint", "sprintDone", "unscheduled"];
     } catch {
-      return ["needsAttention", "currentSprint"];
+      return ["needsAttention", "currentSprint", "sprintDone", "unscheduled"];
     }
+  });
+
+  const [sectionsOrder, setSectionsOrder] = useState<string[]>(() => {
+    const masterKeys = [
+      "needsAttention",
+      "myFocus",
+      "currentSprint",
+      "sprintDone",
+      "unscheduled",
+      "upcomingWork",
+      "recentlyCompleted"
+    ];
+    try {
+      const stored = localStorage.getItem("task_sections_order");
+      if (stored) {
+        const parsed = JSON.parse(stored) as string[];
+        const filtered = parsed.filter(k => masterKeys.includes(k));
+        const missing = masterKeys.filter(k => !filtered.includes(k));
+        return [...filtered, ...missing];
+      }
+    } catch {
+      // fallback
+    }
+    return masterKeys;
   });
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     needsAttention: false,
     myFocus: false,
     currentSprint: false,
+    sprintDone: false,
+    unscheduled: false,
     upcomingWork: false,
     recentlyCompleted: true,
   });
 
-  const [collapsedSubFilters, setCollapsedSubFilters] = useState<Record<string, boolean>>({});
-
-  const toggleSubFilter = (groupKey: string) => {
-    setCollapsedSubFilters(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
-  };
 
   // Global settings change listener
   useEffect(() => {
@@ -505,6 +519,22 @@ export function TaskListPane({
         const storedSections = localStorage.getItem("task_visible_sections");
         if (storedSections) {
           setVisibleSections(JSON.parse(storedSections));
+        }
+        const storedOrder = localStorage.getItem("task_sections_order");
+        if (storedOrder) {
+          const masterKeys = [
+            "needsAttention",
+            "myFocus",
+            "currentSprint",
+            "sprintDone",
+            "unscheduled",
+            "upcomingWork",
+            "recentlyCompleted"
+          ];
+          const parsed = JSON.parse(storedOrder) as string[];
+          const filtered = parsed.filter(k => masterKeys.includes(k));
+          const missing = masterKeys.filter(k => !filtered.includes(k));
+          setSectionsOrder([...filtered, ...missing]);
         }
         const storedFilters = localStorage.getItem("task_default_filters");
         if (storedFilters) {
@@ -586,9 +616,6 @@ export function TaskListPane({
   // Apply additive filters
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
-      // Filter out events as we are not showing events in TaskListPane
-      if (t.type === "event") return false;
-
       // 1. Status Filter
       if (filters.statuses.length > 0) {
         if (!filters.statuses.includes(t.status)) return false;
@@ -643,11 +670,6 @@ export function TaskListPane({
   // Sections construction
   const sections = useMemo(() => {
     const today = startOfDay(new Date());
-    const tomorrow = addDays(today, 1);
-    const sevenDaysOut = addDays(today, 7);
-    const yesterday = subDays(today, 1);
-    const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
-
     const sourceTasks = allTasks || tasks;
 
     // Calculate metadata for scoring
@@ -659,7 +681,6 @@ export function TaskListPane({
 
     // 1. Needs Attention (max 10)
     const needsAttentionRaw = tasksWithMetadata.filter(t => {
-      if (t.type === "event") return false;
       const isCompleted = t.status === "done" || t.status === "completed";
       if (isCompleted) return false;
 
@@ -676,7 +697,6 @@ export function TaskListPane({
 
     // 2. My Focus (max 25)
     const myFocusRaw = tasksWithMetadata.filter(t => {
-      if (t.type === "event") return false;
       const isCompleted = t.status === "done" || t.status === "completed";
       if (isCompleted) return false;
 
@@ -689,67 +709,74 @@ export function TaskListPane({
       .sort((a, b) => b.score - a.score)
       .slice(0, 25);
 
-    // 3. Current Sprint
-    const currentSprintTasks = tasksWithMetadata.filter(t => t.type !== "event" && t.sprint === "current");
-    const currentSprintGrouped = {
-      todo: [...currentSprintTasks.filter(t => t.status === "todo" || t.status === "backlog")].sort((a, b) => b.score - a.score),
-      inProgress: [...currentSprintTasks.filter(t => t.status === "in-progress")].sort((a, b) => b.score - a.score),
-      review: [...currentSprintTasks.filter(t => t.status === "in-review")].sort((a, b) => b.score - a.score),
-      done: [...currentSprintTasks.filter(t => t.status === "done" || t.status === "completed")].sort((a, b) => b.score - a.score),
-    };
+    // 3. Current Sprint (separated into active tasks, active events, and done)
+    const currentSprintItems = tasksWithMetadata.filter(t => t.sprint === "current");
 
-    // 4. Upcoming Work
-    const upcomingTasks = tasksWithMetadata.filter(t => {
-      if (t.type === "event") return false;
-      const isCompleted = t.status === "done" || t.status === "completed";
-      if (isCompleted) return false;
-      if (!t.due_date) return false;
+    const currentSprintTasks = currentSprintItems
+      .filter(t => t.type === "task" && t.status !== "done" && t.status !== "completed")
+      .sort((a, b) => b.score - a.score);
 
-      const due = startOfDay(new Date(t.due_date));
-      return isAfter(due, subDays(today, 1)) && isBefore(due, addDays(sevenDaysOut, 1));
-    });
+    const currentSprintEvents = currentSprintItems
+      .filter(t => t.type === "event" && t.status !== "done" && t.status !== "completed")
+      .sort((a, b) => b.score - a.score);
 
-    const upcomingGrouped = {
-      today: [...upcomingTasks.filter(t => t.due_date && isSameDay(new Date(t.due_date), today))].sort((a, b) => b.score - a.score),
-      tomorrow: [...upcomingTasks.filter(t => t.due_date && isSameDay(new Date(t.due_date), tomorrow))].sort((a, b) => b.score - a.score),
-      thisWeek: [...upcomingTasks.filter(t => {
-        if (!t.due_date) return false;
-        const due = startOfDay(new Date(t.due_date));
-        return isAfter(due, tomorrow) && isBefore(due, addDays(sevenDaysOut, 1));
-      })].sort((a, b) => b.score - a.score),
-    };
+    const currentSprintDone = currentSprintItems
+      .filter(t => t.status === "done" || t.status === "completed")
+      .sort((a, b) => {
+        const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return timeB - timeA;
+      });
 
-    // 5. Events
-    const allEvents = filteredTasks.filter(t => t.type === "event");
-    const eventsGrouped = {
-      today: allEvents.filter(t => t.start_date && isSameDay(new Date(t.start_date), today)),
-      tomorrow: allEvents.filter(t => t.start_date && isSameDay(new Date(t.start_date), tomorrow)),
-      thisWeek: allEvents.filter(t => {
-        if (!t.start_date) return false;
-        const start = startOfDay(new Date(t.start_date));
-        return isAfter(start, tomorrow) && isBefore(start, addDays(sevenDaysOut, 1));
-      }),
-    };
+    // 4. Unscheduled
+    const unscheduled = tasksWithMetadata
+      .filter(t => {
+        const isCompleted = t.status === "done" || t.status === "completed";
+        if (isCompleted) return false;
+        if (t.due_date || t.start_date) return false;
+        // Avoid duplicate display if already in Needs Attention
+        return !needsAttention.some(n => n.id === t.id);
+      })
+      .sort((a, b) => b.score - a.score);
 
-    // 6. Recently Completed
-    const completedTasks = tasksWithMetadata.filter(t => t.type !== "event" && (t.status === "done" || t.status === "completed"));
-    const recentlyCompletedGrouped = {
-      today: completedTasks.filter(t => t.updated_at && isSameDay(new Date(t.updated_at), today)),
-      yesterday: completedTasks.filter(t => t.updated_at && isSameDay(new Date(t.updated_at), yesterday)),
-      thisWeek: completedTasks.filter(t => {
-        if (!t.updated_at) return false;
-        const updated = startOfDay(new Date(t.updated_at));
-        return isAfter(updated, startOfCurrentWeek) && !isSameDay(updated, today) && !isSameDay(updated, yesterday);
-      }),
-    };
+    // 5. Upcoming Work (flat, chronologically sorted)
+    const upcomingWork = tasksWithMetadata
+      .filter(t => {
+        const isCompleted = t.status === "done" || t.status === "completed";
+        if (isCompleted) return false;
+        if (!t.due_date && !t.start_date) return false;
+
+        const targetDate = t.due_date || t.start_date;
+        if (!targetDate) return false;
+
+        const due = startOfDay(new Date(targetDate));
+        return isAfter(due, subDays(today, 1));
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.due_date || a.start_date!).getTime();
+        const dateB = new Date(b.due_date || b.start_date!).getTime();
+        return dateA - dateB;
+      });
+
+    // 6. Recently Completed (flat, most recently completed first, max 15)
+    const recentlyCompleted = tasksWithMetadata
+      .filter(t => t.status === "done" || t.status === "completed")
+      .sort((a, b) => {
+        const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return timeB - timeA;
+      })
+      .slice(0, 15);
 
     return {
       needsAttention,
       myFocus,
-      currentSprint: currentSprintGrouped,
-      upcomingWork: upcomingGrouped,
-      events: eventsGrouped,
-      recentlyCompleted: recentlyCompletedGrouped,
+      currentSprintTasks,
+      currentSprintEvents,
+      currentSprintDone,
+      unscheduled,
+      upcomingWork,
+      recentlyCompleted,
     };
   }, [displayedTasks, filteredTasks, allTasks, tasks, user]);
 
@@ -913,6 +940,18 @@ export function TaskListPane({
 
   const isMultiSelecting = selectedTaskIds.size > 0;
 
+  const selectedTasks = useMemo(() => {
+    return tasks.filter((t) => selectedTaskIds.has(t.id));
+  }, [tasks, selectedTaskIds]);
+
+  const hasEventSelected = useMemo(() => {
+    return selectedTasks.some((t) => t.type === "event");
+  }, [selectedTasks]);
+
+  const hasTaskSelected = useMemo(() => {
+    return selectedTasks.some((t) => t.type === "task");
+  }, [selectedTasks]);
+
   const toggleSelection = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const next = new Set(selectedTaskIds);
@@ -981,7 +1020,7 @@ export function TaskListPane({
     setDeleteDialogOpen(true);
   };
 
-  const renderTaskRow = (t: TaskDTO, isSubtask = false) => {
+  const renderTaskRow = (t: TaskDTO) => {
     const active = t.id === selectedTaskId;
     const isChecked = selectedTaskIds.has(t.id);
     const isDone = t.status === "done" || t.status === "completed";
@@ -995,6 +1034,9 @@ export function TaskListPane({
       activeSpace?.role ?? null
     );
 
+    const sourceTasks = allTasks || tasks;
+    const hasSubtasks = sourceTasks.some(other => other.parent_task_id === t.id);
+
     return (
       <div key={t.id} className="group/item">
         <div
@@ -1003,35 +1045,30 @@ export function TaskListPane({
           data-task-title={t.title}
           data-task-status={t.status}
           className={cn(
-            "flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-colors cursor-pointer group w-full min-w-0",
+            "flex items-center justify-between gap-2 py-1 rounded-md transition-colors cursor-pointer group w-full min-w-0",
             active && !isMultiSelecting
               ? "bg-[#EEF2FF] dark:bg-[#1E1B4B]"
               : "hover:bg-[#F4F4F5] dark:hover:bg-[#18181B]",
             isDone && "opacity-50",
             isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing",
-            isSubtask && "pl-5"
+            "pl-2 pr-2"
           )}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* Selection & Drag actions */}
+            {/* Selection & Drag actions (slides in on hover, shifting status icon and text) */}
             <div
               className={cn(
-                "flex items-center overflow-hidden transition-all duration-200 shrink-0",
+                "flex items-center overflow-hidden transition-all duration-200 shrink-0 select-none",
                 !isChecked && !isMultiSelecting
-                  ? "w-0 opacity-0 group-hover:w-[36px] group-hover:opacity-100"
-                  : "w-[36px] opacity-100"
+                  ? "w-0 opacity-0 group-hover/item:w-9 group-hover/item:opacity-100"
+                  : "w-9 opacity-100"
               )}
             >
-              {/* Drag handle */}
               {isDraggable ? (
-                <div className="shrink-0 opacity-40 hover:opacity-100 mr-2">
-                  <GripVertical className="size-3.5 text-muted-foreground" />
-                </div>
+                <GripVertical className="size-3 text-muted-foreground/30 hover:text-muted-foreground mr-1 shrink-0 cursor-grab active:cursor-grabbing" />
               ) : (
-                <div className="w-[22px] shrink-0" />
+                <div className="w-[12px] shrink-0 mr-1" />
               )}
-
-              {/* Multi-select checkbox */}
               <div
                 className="shrink-0"
                 onClick={(e) => toggleSelection(e, t.id)}
@@ -1040,17 +1077,16 @@ export function TaskListPane({
               </div>
             </div>
 
-            {/* Icon/Dot — click opens popover or expands on hover */}
-            <div className="size-4 flex items-center justify-center relative shrink-0">
-              {/* Status/Event icon — visible by default, hidden on hover */}
+            {/* Status icon (clicks open status changer) */}
+            <div className="size-4 shrink-0 flex items-center justify-center mr-1.5">
               <Popover>
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="shrink-0 transition-transform hover:scale-110 group-hover/item:opacity-0 transition-opacity flex items-center justify-center"
+                    className="shrink-0 transition-transform hover:scale-110 flex items-center justify-center"
                   >
                     {t.type === "event" ? (
-                      <CalendarClock className="size-3.5 shrink-0 text-muted-foreground" />
+                      <CalendarClock className={cn("size-3.5 shrink-0", getStatusTextColor(t.status))} />
                     ) : (
                       <StatusIcon
                         status={t.status}
@@ -1062,7 +1098,7 @@ export function TaskListPane({
                 </PopoverTrigger>
                 <PopoverContent
                   align="start"
-                  className="w-36 p-1 rounded-lg shadow-lg"
+                  className="w-36 p-1 rounded-lg shadow-lg bg-popover border border-border text-popover-foreground"
                 >
                   {(t.type === "event" ? EVENT_STATUS_OPTIONS : TASK_STATUS_OPTIONS).map((s) => (
                     <PopoverClose asChild key={s}>
@@ -1071,36 +1107,42 @@ export function TaskListPane({
                           e.stopPropagation();
                           onUpdateTask?.(t.id, { status: s });
                         }}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize"
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-accent/60 transition-colors capitalize text-left"
                       >
-                        <StatusIcon
-                          status={s}
-                          type={t.type === "event" ? "event" : "task"}
-                          className="size-3.5 shrink-0"
-                        />
+                        {t.type === "event" ? (
+                          <CalendarClock className={cn("size-3.5 shrink-0", getStatusTextColor(s))} />
+                        ) : (
+                          <StatusIcon
+                            status={s}
+                            type="task"
+                            className="size-3.5 shrink-0"
+                          />
+                        )}
                         {s}
                       </button>
                     </PopoverClose>
                   ))}
                 </PopoverContent>
               </Popover>
-
-              {/* Chevron — visible ALWAYS on hover for all tasks */}
-              <button
-                onClick={(e) => toggleExpanded(e, t.id)}
-                className="absolute inset-0 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-opacity hover:text-foreground"
-              >
-                {expandedTasks.has(t.id) ? (
-                  <ChevronDown className="size-3" />
-                ) : (
-                  <ChevronRight className="size-3" />
-                )}
-              </button>
             </div>
 
-            <div className="task-name-container flex flex-col items-start gap-0.5">
+            {/* Chevron and Title (Chevron is only shown before title if subtasks exist) */}
+            <div className="task-name-container flex items-center gap-1.5 min-w-0 flex-1">
+              {hasSubtasks && (
+                <button
+                  type="button"
+                  onClick={(e) => toggleExpanded(e, t.id)}
+                  className="text-muted-foreground/60 hover:text-foreground transition-colors shrink-0"
+                >
+                  {expandedTasks.has(t.id) ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                </button>
+              )}
               <span className={cn(
-                "task-name-scroll text-xs font-medium leading-snug",
+                "task-name-scroll text-[13px] font-medium leading-snug truncate w-full",
                 isDone && "line-through opacity-60"
               )} title={t.title}>
                 {t.title}
@@ -1109,59 +1151,58 @@ export function TaskListPane({
           </div>
 
           {/* Right block: Badge and Date */}
-          <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground justify-end relative ml-auto min-w-fit">
+          <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground justify-end relative ml-auto min-w-[70px]">
             {/* Badges & Icons */}
-            <div className="flex items-center gap-1">
-              {isBlocked && (
+            {isBlocked && (
+              <div className="flex items-center gap-1 mr-1">
                 <Zap className="size-2.5 text-yellow-400 shrink-0" />
-              )}
-            </div>
-
-            {/* Date / Action Menu */}
-            <div className="relative flex items-center justify-end min-w-fit ml-1">
-              <span className={cn(
-                "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight",
-                isDone && "opacity-40"
-              )}>
-                {formatTaskDateRange(t.start_date, t.due_date, t.is_all_day)}
-              </span>
-
-              <div className="absolute right-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="size-5 p-0 hover:bg-muted-foreground/10"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MoreHorizontal className="size-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
-                      View Details
-                    </DropdownMenuItem>
-                    {itemCanEdit && (
-                      <DropdownMenuItem onClick={() => setEditingTask(t)}>
-                        <Pencil className="size-3 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                    )}
-                    {itemCanDelete && (
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => {
-                          if (onDeleteTask) onDeleteTask(t.id);
-                        }}
-                      >
-                        <Trash2 className="size-3 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
+            )}
+
+            {/* Date text */}
+            <span className={cn(
+              "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight w-full",
+              isDone && "opacity-40"
+            )}>
+              {formatTaskDateRange(t.start_date, t.due_date, t.is_all_day)}
+            </span>
+
+            {/* Hover Action Menu */}
+            <div className="absolute right-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-5 p-0 hover:bg-muted-foreground/10"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onSelectTask(t.id)}>
+                    View Details
+                  </DropdownMenuItem>
+                  {itemCanEdit && (
+                    <DropdownMenuItem onClick={() => setEditingTask(t)}>
+                      <Pencil className="size-3 mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {itemCanDelete && (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => {
+                        if (onDeleteTask) onDeleteTask(t.id);
+                      }}
+                    >
+                      <Trash2 className="size-3 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -1179,6 +1220,120 @@ export function TaskListPane({
     );
   };
 
+  const renderSection = (
+    key: string,
+    title: string,
+    tasksList: TaskDTO[],
+    isCollapsed: boolean,
+    onToggle: () => void,
+    emptyText: string,
+    extraWidget?: React.ReactNode
+  ) => {
+    const isVisible = key === "sprintDone"
+      ? (visibleSections.includes("currentSprint") || visibleSections.includes("sprintDone"))
+      : visibleSections.includes(key);
+
+    if (!isVisible) return null;
+
+    const isExpanded = expandedSectionsLimit[key];
+    const displayedList = isExpanded ? tasksList : tasksList.slice(0, 5);
+    const hasMoreItems = tasksList.length > 5;
+
+    return (
+      <div key={key} className="group/section-block flex flex-col mb-2 last:mb-0">
+        <SectionHeader
+          title={title}
+          isCollapsed={isCollapsed}
+          onToggle={onToggle}
+          extraWidget={extraWidget}
+        />
+        {!isCollapsed && (
+          <div className="flex flex-col gap-px relative">
+            {displayedList.map(t => renderTaskRow(t))}
+            {tasksList.length === 0 && (
+              <div className="h-7 pl-6 text-xs font-medium italic leading-7 text-muted-foreground/50 select-none">
+                {emptyText}
+              </div>
+            )}
+            {hasMoreItems && (
+              <div className="opacity-0 group-hover/section-block:opacity-100 transition-opacity duration-200 mt-1 px-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center hover:bg-muted/40 rounded-md border border-dashed border-border/40"
+                  onClick={() => setExpandedSectionsLimit(prev => ({ ...prev, [key]: !prev[key] }))}
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="size-3" />
+                      Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="size-3" />
+                      Show More ({tasksList.length - 5} more)
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSubSection = (
+    subKey: string,
+    title: string,
+    tasksList: TaskDTO[],
+    emptyText: string,
+    defaultLimit = 3
+  ) => {
+    const isExpanded = expandedSectionsLimit[subKey];
+    const displayedList = isExpanded ? tasksList : tasksList.slice(0, defaultLimit);
+    const hasMoreItems = tasksList.length > defaultLimit;
+
+    return (
+      <div className="group/subsection-block flex flex-col mb-1.5 last:mb-0 pl-3">
+        <div className="text-[9px] font-semibold text-muted-foreground/40 uppercase tracking-wider mb-1 select-none flex items-center justify-between pr-2 border-b border-border/20 pb-0.5">
+          <span>{title}</span>
+          <span className="text-[9px] bg-muted/60 px-1 rounded-sm text-muted-foreground/50">{tasksList.length}</span>
+        </div>
+        <div className="flex flex-col gap-px relative">
+          {displayedList.map(t => renderTaskRow(t))}
+          {tasksList.length === 0 && (
+            <div className="h-6 pl-2 text-xs font-medium italic leading-6 text-muted-foreground/40 select-none">
+              {emptyText}
+            </div>
+          )}
+          {hasMoreItems && (
+            <div className="opacity-0 group-hover/subsection-block:opacity-100 transition-opacity duration-200 mt-0.5 px-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 text-[9px] font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1 w-full justify-center hover:bg-muted/40 rounded-sm border border-dashed border-border/30"
+                onClick={() => setExpandedSectionsLimit(prev => ({ ...prev, [subKey]: !prev[subKey] }))}
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="size-2.5" />
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="size-2.5" />
+                    Show More ({tasksList.length - defaultLimit} more)
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="h-full min-h-0 flex flex-col w-full relative overflow-hidden">
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -1187,22 +1342,28 @@ export function TaskListPane({
         {/* Top bar: Mine/All toggle + icons */}
         <div className="flex items-center justify-between gap-2 min-h-[32px]">
           {isSearchOpen ? (
-            <div className="relative flex-1 animate-in fade-in slide-in-from-right-2 duration-200">
+            <div className="relative flex-1 animate-in fade-in slide-in-from-right-2 duration-200 w-full">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
               <Input
                 autoFocus
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
                 placeholder="Search tasks…"
-                className="pl-8 pr-8 h-8 text-xs rounded-md w-full"
-                onBlur={(e) => { if (!e.target.value) setIsSearchOpen(false); }}
+                className="pl-8 pr-8 h-8 text-xs rounded-md w-full focus-visible:ring-1 focus-visible:ring-primary border-border bg-background"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    onQueryChange("");
+                    setIsSearchOpen(false);
+                  }
+                }}
               />
               <Button
                 variant="ghost" size="sm"
-                className="absolute right-1 top-1/2 -translate-y-1/2 size-6 p-0 hover:bg-transparent"
+                className="absolute right-1 top-1/2 -translate-y-1/2 size-6 p-0 hover:bg-transparent text-muted-foreground hover:text-foreground"
                 onClick={() => { onQueryChange(""); setIsSearchOpen(false); }}
+                title="Close search"
               >
-                <X className="size-3.5 text-muted-foreground" />
+                <X className="size-3.5" />
               </Button>
             </div>
           ) : (
@@ -1432,7 +1593,7 @@ export function TaskListPane({
         </div>
 
         {/* Active filter chips strip */}
-        {activeFilterChips.length > 0 && (
+        {!isSearchOpen && activeFilterChips.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2 animate-in fade-in duration-150">
             {activeFilterChips.map(chip => (
               <span
@@ -1466,11 +1627,11 @@ export function TaskListPane({
 
       {/* ── Task list ──────────────────────────────────────────── */}
       <ScrollArea className="flex-1 min-h-0">
-        <div ref={containerRef} className="px-2 py-2 space-y-1 pb-20">
+        <div ref={containerRef} className="pl-0 pr-0 py-2 space-y-1 pb-20">
 
           {/* Loading skeleton */}
           {isLoading && (
-            <div className="space-y-px px-2 py-2">
+            <div className="space-y-px pl-0 pr-0 py-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
@@ -1487,186 +1648,119 @@ export function TaskListPane({
             </div>
           )}
 
-          {/* 1. Needs Attention */}
-          {!isLoading && visibleSections.includes("needsAttention") && (
-            <>
-              <SectionHeader
-                title="Needs Attention"
-                isCollapsed={collapsedSections.needsAttention}
-                onToggle={() => toggleSectionCollapse("needsAttention")}
-                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
-              />
-              {!collapsedSections.needsAttention && (
+          {!isLoading && (
+            isSearchOpen ? (
+              <div className="flex flex-col gap-px px-2">
+                <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider select-none">
+                  Search Results ({displayedTasks.length})
+                </div>
                 <div className="flex flex-col gap-px">
-                  {sections.needsAttention.map(t => renderTaskRow(t))}
-                  {sections.needsAttention.length === 0 && (
-                    <div className="h-7 pl-6 text-xs font-medium italic leading-7 text-muted-foreground/50 select-none">No urgent tasks</div>
-                  )}
+                  {displayedTasks.map(t => renderTaskRow(t))}
                 </div>
-              )}
-            </>
-          )}
-
-          {/* 2. My Focus */}
-          {!isLoading && visibleSections.includes("myFocus") && (
-            <>
-              <SectionHeader
-                title="My Focus"
-                isCollapsed={collapsedSections.myFocus}
-                onToggle={() => toggleSectionCollapse("myFocus")}
-                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
-              />
-              {!collapsedSections.myFocus && (
-                <div className="flex flex-col gap-px">
-                  {sections.myFocus.map(t => renderTaskRow(t))}
-                  {sections.myFocus.length === 0 && (
-                    <div className="h-7 pl-6 text-xs font-medium italic leading-7 text-muted-foreground/50 select-none">No focus tasks</div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 3. Current Sprint */}
-          {!isLoading && visibleSections.includes("currentSprint") && (
-            <>
-              <SectionHeader
-                title="Current Sprint"
-                isCollapsed={collapsedSections.currentSprint}
-                onToggle={() => toggleSectionCollapse("currentSprint")}
-                extraWidget={<SprintCapacityWidget {...sprintCapacity} />}
-                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
-              />
-              {!collapsedSections.currentSprint && (
-                <div className="flex flex-col gap-2">
-                  {([
-                    { id: "todo", label: "Todo", tasks: sections.currentSprint.todo },
-                    { id: "inProgress", label: "In Progress", tasks: sections.currentSprint.inProgress },
-                    { id: "review", label: "Review", tasks: sections.currentSprint.review },
-                    { id: "done", label: "Done", tasks: sections.currentSprint.done },
-                  ]).map(group => {
-                    const groupKey = `sprint-${group.id}`;
-                    const isCollapsed = collapsedSubFilters[groupKey] !== undefined
-                      ? collapsedSubFilters[groupKey]
-                      : group.tasks.length === 0;
+                {displayedTasks.length === 0 && (
+                  <div className="py-12 flex flex-col items-center justify-center text-center px-4">
+                    <Search className="size-8 text-muted-foreground/20 mb-2" />
+                    <p className="text-xs text-muted-foreground italic">No matching tasks or events</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {sectionsOrder.map(key => {
+                  if (key === "needsAttention") {
+                    return renderSection(
+                      "needsAttention",
+                      "Needs Attention",
+                      sections.needsAttention,
+                      collapsedSections.needsAttention,
+                      () => toggleSectionCollapse("needsAttention"),
+                      "No urgent tasks"
+                    );
+                  }
+                  if (key === "myFocus") {
+                    return renderSection(
+                      "myFocus",
+                      "My Focus",
+                      sections.myFocus,
+                      collapsedSections.myFocus,
+                      () => toggleSectionCollapse("myFocus"),
+                      "No focus tasks"
+                    );
+                  }
+                  if (key === "currentSprint") {
+                    const isVisible = visibleSections.includes("currentSprint");
+                    if (!isVisible) return null;
                     return (
-                      <div key={group.id} className="space-y-px">
-                        <button
-                          type="button"
-                          onClick={() => toggleSubFilter(groupKey)}
-                          className="flex items-center gap-1 px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-                        >
-                          <ChevronDown className={cn("size-2.5 text-muted-foreground/60 transition-transform duration-200", isCollapsed && "-rotate-90")} />
-                          <span>{group.label}</span>
-                          <span className="text-muted-foreground/50 font-bold ml-1">({group.tasks.length})</span>
-                        </button>
-                        {!isCollapsed && (
-                          <div className="flex flex-col gap-px">
-                            {group.tasks.map(t => renderTaskRow(t))}
-                            {group.tasks.length === 0 && (
-                              <div className="h-7 pl-3 text-[11px] font-medium italic leading-7 text-muted-foreground/45 select-none font-medium">Empty</div>
+                      <div key="currentSprint" className="group/section-block flex flex-col mb-2 last:mb-0">
+                        <SectionHeader
+                          title="Current Sprint"
+                          isCollapsed={collapsedSections.currentSprint}
+                          onToggle={() => toggleSectionCollapse("currentSprint")}
+                          extraWidget={<SprintCapacityWidget {...sprintCapacity} />}
+                        />
+                        {!collapsedSections.currentSprint && (
+                          <div className="flex flex-col gap-3 mt-1">
+                            {renderSubSection(
+                              "currentSprintTasks",
+                              "Sprint Tasks",
+                              sections.currentSprintTasks,
+                              "No active sprint tasks"
+                            )}
+                            {renderSubSection(
+                              "currentSprintEvents",
+                              "Sprint Events",
+                              sections.currentSprintEvents,
+                              "No active sprint events"
                             )}
                           </div>
                         )}
                       </div>
                     );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 4. Upcoming Work */}
-          {!isLoading && visibleSections.includes("upcomingWork") && (
-            <>
-              <SectionHeader
-                title="Upcoming Work"
-                isCollapsed={collapsedSections.upcomingWork}
-                onToggle={() => toggleSectionCollapse("upcomingWork")}
-                onCreateClick={canCreateTask ? () => onCreateDialogOpenChange(true) : undefined}
-              />
-              {!collapsedSections.upcomingWork && (
-                <div className="flex flex-col gap-2">
-                  {([
-                    { id: "today", label: "Today", tasks: sections.upcomingWork.today },
-                    { id: "tomorrow", label: "Tomorrow", tasks: sections.upcomingWork.tomorrow },
-                    { id: "thisWeek", label: "This Week", tasks: sections.upcomingWork.thisWeek },
-                  ]).map(group => {
-                    const groupKey = `upcoming-${group.id}`;
-                    const isCollapsed = collapsedSubFilters[groupKey] !== undefined
-                      ? collapsedSubFilters[groupKey]
-                      : group.tasks.length === 0;
-                    return (
-                      <div key={group.id} className="space-y-px">
-                        <button
-                          type="button"
-                          onClick={() => toggleSubFilter(groupKey)}
-                          className="flex items-center gap-1 px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-                        >
-                          <ChevronDown className={cn("size-2.5 text-muted-foreground/60 transition-transform duration-200", isCollapsed && "-rotate-90")} />
-                          <span>{group.label}</span>
-                          <span className="text-muted-foreground/50 font-bold ml-1">({group.tasks.length})</span>
-                        </button>
-                        {!isCollapsed && (
-                          <div className="flex flex-col gap-px">
-                            {group.tasks.map(t => renderTaskRow(t))}
-                            {group.tasks.length === 0 && (
-                              <div className="h-7 pl-3 text-[11px] font-medium italic leading-7 text-muted-foreground/45 select-none font-medium">Empty</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                  }
+                  if (key === "sprintDone") {
+                    return renderSection(
+                      "sprintDone",
+                      "Sprint Done",
+                      sections.currentSprintDone,
+                      collapsedSections.sprintDone,
+                      () => toggleSectionCollapse("sprintDone"),
+                      "No completed sprint items"
                     );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 6. Recently Completed */}
-          {!isLoading && visibleSections.includes("recentlyCompleted") && (
-            <>
-              <SectionHeader
-                title="Recently Completed"
-                isCollapsed={collapsedSections.recentlyCompleted}
-                onToggle={() => toggleSectionCollapse("recentlyCompleted")}
-              />
-              {!collapsedSections.recentlyCompleted && (
-                <div className="flex flex-col gap-2">
-                  {([
-                    { id: "today", label: "Today", tasks: sections.recentlyCompleted.today },
-                    { id: "yesterday", label: "Yesterday", tasks: sections.recentlyCompleted.yesterday },
-                    { id: "thisWeek", label: "This Week", tasks: sections.recentlyCompleted.thisWeek },
-                  ]).map(group => {
-                    const groupKey = `completed-${group.id}`;
-                    const isCollapsed = collapsedSubFilters[groupKey] !== undefined
-                      ? collapsedSubFilters[groupKey]
-                      : group.tasks.length === 0;
-                    return (
-                      <div key={group.id} className="space-y-px">
-                        <button
-                          type="button"
-                          onClick={() => toggleSubFilter(groupKey)}
-                          className="flex items-center gap-1 px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-                        >
-                          <ChevronDown className={cn("size-2.5 text-muted-foreground/60 transition-transform duration-200", isCollapsed && "-rotate-90")} />
-                          <span>{group.label}</span>
-                          <span className="text-muted-foreground/50 font-bold ml-1">({group.tasks.length})</span>
-                        </button>
-                        {!isCollapsed && (
-                          <div className="flex flex-col gap-px">
-                            {group.tasks.map(t => renderTaskRow(t))}
-                            {group.tasks.length === 0 && (
-                              <div className="h-7 pl-3 text-[11px] font-medium italic leading-7 text-muted-foreground/45 select-none font-medium">Empty</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                  }
+                  if (key === "unscheduled") {
+                    return renderSection(
+                      "unscheduled",
+                      "Unscheduled",
+                      sections.unscheduled,
+                      collapsedSections.unscheduled,
+                      () => toggleSectionCollapse("unscheduled"),
+                      "No unscheduled tasks"
                     );
-                  })}
-                </div>
-              )}
-            </>
+                  }
+                  if (key === "upcomingWork") {
+                    return renderSection(
+                      "upcomingWork",
+                      "Upcoming Work",
+                      sections.upcomingWork,
+                      collapsedSections.upcomingWork,
+                      () => toggleSectionCollapse("upcomingWork"),
+                      "No upcoming tasks"
+                    );
+                  }
+                  if (key === "recentlyCompleted") {
+                    return renderSection(
+                      "recentlyCompleted",
+                      "Recently Completed",
+                      sections.recentlyCompleted,
+                      collapsedSections.recentlyCompleted,
+                      () => toggleSectionCollapse("recentlyCompleted"),
+                      "No recently completed tasks"
+                    );
+                  }
+                  return null;
+                })}
+              </>
+            )
           )}
 
           {/* Load more button */}
@@ -1705,53 +1799,57 @@ export function TaskListPane({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-48">
-              {/* Status submenu */}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="text-xs">
-                  <div className="size-2 rounded-full bg-blue-500 mr-2" />
-                  Change status
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="text-xs">Task Status</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      {TASK_STATUS_OPTIONS.map((s) => (
-                        <DropdownMenuItem
-                          key={s}
-                          className="text-xs capitalize gap-2"
-                          onClick={() => handleBulkStatusChange(s)}
-                        >
-                          <StatusIcon
-                            status={s}
-                            type="task"
-                            className="size-3 shrink-0"
-                          />
-                          {s}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="text-xs">Event Status</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      {EVENT_STATUS_OPTIONS.map((s) => (
-                        <DropdownMenuItem
-                          key={s}
-                          className="text-xs capitalize gap-2"
-                          onClick={() => handleBulkStatusChange(s)}
-                        >
-                          <StatusIcon
-                            status={s}
-                            type="event"
-                            className="size-3 shrink-0"
-                          />
-                          {s}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              {/* Status submenu for Tasks */}
+              {hasTaskSelected && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="text-xs">
+                    <div className="size-2 rounded-full bg-blue-500 mr-2" />
+                    Change task status
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {TASK_STATUS_OPTIONS.map((s) => (
+                      <DropdownMenuItem
+                        key={s}
+                        className="text-xs capitalize gap-2"
+                        onClick={() => handleBulkStatusChange(s)}
+                      >
+                        <StatusIcon
+                          status={s}
+                          type="task"
+                          className="size-3 shrink-0"
+                        />
+                        {s}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+
+              {/* Status submenu for Events */}
+              {hasEventSelected && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="text-xs">
+                    <div className="size-2 rounded-full bg-yellow-500 mr-2" />
+                    Change event status
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {EVENT_STATUS_OPTIONS.map((s) => (
+                      <DropdownMenuItem
+                        key={s}
+                        className="text-xs capitalize gap-2"
+                        onClick={() => handleBulkStatusChange(s)}
+                      >
+                        <StatusIcon
+                          status={s}
+                          type="event"
+                          className="size-3 shrink-0"
+                        />
+                        {s}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
 
               {/* Priority submenu */}
               <DropdownMenuSub>
