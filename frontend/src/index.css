@@ -614,6 +614,11 @@ body.ai-sidebar-open [data-slot="sidebar-inset"] > main {
         @apply border-border outline-ring/50;
     }
 
+    *:focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+    }
+
     body {
         @apply bg-background text-foreground;
     }
@@ -864,4 +869,36 @@ body.ai-sidebar-open [data-slot="sidebar-inset"] > main {
 .no-scrollbar {
   -ms-overflow-style: none !important;  /* IE and Edge */
   scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Touch target expansion helper for touch UIs */
+.touch-target-expand {
+    position: relative;
+}
+
+.touch-target-expand::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    min-width: 44px;
+    min-height: 44px;
+    width: 100%;
+    height: 100%;
+    transform: translate(-50%, -50%);
+}
+
+/* Reduced Motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+        animation-delay: -1ms !important;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        background-attachment: initial !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0s !important;
+        transition-delay: 0s !important;
+    }
 }

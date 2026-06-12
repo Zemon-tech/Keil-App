@@ -18,9 +18,12 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
 import { useMotionStore } from "@/store/useMotionStore";
-import { useCachedPageById } from "@/hooks/api/useMotionPages";
+import { useCachedPageById, useCreateMotionPage } from "@/hooks/api/useMotionPages";
 import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
 import { CreateTaskDialog } from "./tasks/CreateTaskDialog";
+import { useTheme } from "next-themes";
+import { toast } from "sonner";
+import { useAppContext } from "@/contexts/AppContext";
 
 type LayoutProps = {
   children?: ReactNode;
@@ -29,6 +32,10 @@ type LayoutProps = {
 };
 
 export function Layout({ children, className, sidebar }: LayoutProps) {
+  const { theme, setTheme } = useTheme();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const createPage = useCreateMotionPage(activeOrgId, activeSpaceId);
+
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
@@ -158,11 +165,44 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         navigate("/motion");
         return;
       }
+
+      // ⌘I — Go to Inbox
+      if (mod && e.key === "i") {
+        e.preventDefault();
+        navigate("/inbox");
+        return;
+      }
+
+      // ⌘D — Toggle theme
+      if (mod && e.key === "d") {
+        e.preventDefault();
+        const nextTheme = theme === "dark" ? "light" : "dark";
+        setTheme(nextTheme);
+        toast.success(`Switched theme to ${nextTheme}`);
+        return;
+      }
+
+      // ⌘⌥N — Create a new Note page
+      if (mod && e.altKey && e.key === "n") {
+        e.preventDefault();
+        toast.promise(
+          createPage.mutateAsync({}).then((newPage) => {
+            navigate(`/motion/${newPage.id}`);
+            return newPage;
+          }),
+          {
+            loading: "Creating new Note page...",
+            success: "New Note page created",
+            error: "Failed to create Note page",
+          }
+        );
+        return;
+      }
     };
 
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, [navigate]);
+  }, [navigate, theme, setTheme, createPage]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">

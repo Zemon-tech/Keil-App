@@ -1297,13 +1297,13 @@ export function MotionPage() {
             line-height: 1.5 !important;
           }
           .motion-page-small-text .tiptap.ProseMirror.simple-editor h1,
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="1"] { font-size: 1.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="1"] { font-size: 1.5rem !important; }
           .motion-page-small-text .tiptap.ProseMirror.simple-editor h2,
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="2"] { font-size: 1.45rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="2"] { font-size: 1.25rem !important; }
           .motion-page-small-text .tiptap.ProseMirror.simple-editor h3,
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="3"] { font-size: 1.05rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="3"] { font-size: 1.15rem !important; }
           .motion-page-small-text .tiptap.ProseMirror.simple-editor h4,
-          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="4"] { font-size: 0.9rem !important; }
+          .motion-page-small-text .tiptap.ProseMirror.simple-editor [data-type="detailsSummary"][data-level="4"] { font-size: 1.05rem !important; }
           .motion-page-small-text .tiptap.ProseMirror.simple-editor p,
           .motion-page-small-text .tiptap.ProseMirror.simple-editor li,
           .motion-page-small-text .tiptap.ProseMirror.simple-editor td,

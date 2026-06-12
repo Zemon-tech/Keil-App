@@ -1,6 +1,5 @@
 
 import { useCallback, useMemo, useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { TaskListPane } from "@/components/tasks/TaskListPane";
@@ -622,9 +621,36 @@ export function TasksPage() {
           <div className="flex-1 min-w-0 bg-background h-full">
             {selectedTaskId ? (
               isAnyTaskLoading && !selected ? (
-                <div className="flex flex-col items-center justify-center py-6 h-full text-muted-foreground gap-2">
-                  <Loader2 className="size-5 animate-spin" />
-                  <span className="text-sm">Loading task...</span>
+                <div className="flex-1 flex flex-col h-full bg-background animate-pulse p-6">
+                  {/* Header Skeleton */}
+                  <div className="flex items-center justify-between pb-6 border-b border-border">
+                    <div className="flex items-center gap-3 w-2/3">
+                      <div className="size-6 bg-muted-foreground/15 rounded-md shrink-0" />
+                      <div className="h-6 bg-muted-foreground/15 rounded-md w-1/2" />
+                    </div>
+                    <div className="size-8 bg-muted-foreground/10 rounded-md shrink-0" />
+                  </div>
+
+                  {/* Body Grid Skeleton */}
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-6 pt-6 flex-1 min-h-0">
+                    <div className="space-y-4">
+                      <div className="h-4 bg-muted-foreground/15 rounded-md w-1/3" />
+                      <div className="h-24 bg-muted-foreground/10 rounded-lg w-full" />
+                      <div className="space-y-2.5">
+                        <div className="h-3 bg-muted-foreground/15 rounded-md w-3/4" />
+                        <div className="h-3 bg-muted-foreground/10 rounded-md w-2/3" />
+                        <div className="h-3 bg-muted-foreground/10 rounded-md w-1/2" />
+                      </div>
+                    </div>
+                    <div className="border border-border/60 bg-muted/20 rounded-xl p-4 h-48 space-y-4">
+                      <div className="h-3 bg-muted-foreground/15 rounded w-1/2" />
+                      <div className="flex gap-2">
+                        <div className="size-6 bg-muted-foreground/15 rounded-full" />
+                        <div className="h-3 bg-muted-foreground/10 rounded w-2/3" />
+                      </div>
+                      <div className="h-3 bg-muted-foreground/10 rounded w-3/4" />
+                    </div>
+                  </div>
                 </div>
               ) : isDefinitelyNotFound ? (
                 <div className="flex flex-col items-center justify-center h-full">

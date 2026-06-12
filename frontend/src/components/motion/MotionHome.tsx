@@ -95,9 +95,19 @@ export function MotionHome() {
                 </div>
 
                 {isLoading ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Loading pages…
+                  <div className="flex flex-wrap gap-3">
+                    {[...Array(4)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="w-[120px] h-[108px] flex-shrink-0 rounded-xl border border-border bg-muted/40 animate-pulse overflow-hidden flex flex-col justify-between p-2.5"
+                      >
+                        <div className="h-[40px] w-full bg-muted-foreground/10 rounded-md" />
+                        <div className="space-y-1.5 mt-2">
+                          <div className="h-3 w-16 bg-muted-foreground/15 rounded" />
+                          <div className="h-2 w-10 bg-muted-foreground/10 rounded" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-3">

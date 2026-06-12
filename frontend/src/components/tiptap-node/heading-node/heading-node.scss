@@ -5,34 +5,35 @@
   h4 {
     position: relative;
     color: var(--foreground);
-    font-weight: 700;
-    line-height: 1.2;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol" !important;
+    font-weight: 600;
+    line-height: 1.3;
     letter-spacing: -0.02em;
+    padding: 3px 2px;
   }
 
   h1 {
-    font-size: 1.85rem;
-    margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
+    font-size: 1.875rem;
+    margin-top: 2rem;
+    margin-bottom: 4px;
   }
 
   h2 {
     font-size: 1.5rem;
-    margin-top: 1.25rem;
-    margin-bottom: 0.5rem;
+    margin-top: 1.4rem;
+    margin-bottom: 4px;
   }
 
   h3 {
     font-size: 1.25rem;
     margin-top: 1rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 4px;
   }
 
   h4 {
     font-size: 1.1rem;
     margin-top: 0.75rem;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
+    margin-bottom: 4px;
   }
 
   /* Remove top margin for the first element in the editor */

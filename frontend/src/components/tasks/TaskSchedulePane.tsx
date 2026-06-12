@@ -206,11 +206,15 @@ function renderEventContent(arg: EventContentArg) {
           style={{ color: arg.textColor || "inherit" }}
         >
           {isScheduledTask && (
-            <StatusIcon
-              status={arg.event.extendedProps.taskStatus}
-              type={taskType === "event" ? "event" : "task"}
-              className="size-3 shrink-0 opacity-70"
-            />
+            taskType === "event" ? (
+              <CalendarClock className="size-3 shrink-0 opacity-70" />
+            ) : (
+              <StatusIcon
+                status={arg.event.extendedProps.taskStatus}
+                type="task"
+                className="size-3 shrink-0 opacity-70"
+              />
+            )
           )}
           <span
             className={cn(
@@ -238,11 +242,15 @@ function renderEventContent(arg: EventContentArg) {
           className="size-full p-2 overflow-hidden flex items-center gap-1.5"
           style={{ color: arg.textColor || "inherit" }}
         >
-          <StatusIcon
-            status={arg.event.extendedProps.taskStatus}
-            type={taskType === "event" ? "event" : "task"}
-            className="size-3.5 shrink-0 opacity-70"
-          />
+          {taskType === "event" ? (
+            <CalendarClock className="size-3.5 shrink-0 opacity-70" />
+          ) : (
+            <StatusIcon
+              status={arg.event.extendedProps.taskStatus}
+              type="task"
+              className="size-3.5 shrink-0 opacity-70"
+            />
+          )}
           <div
             className={cn(
               "text-[11px] font-bold leading-tight truncate flex-1",
@@ -1560,11 +1568,15 @@ export function TaskSchedulePane({
                       }}
                     >
                       <div className="flex items-center gap-1.5">
-                        <StatusIcon
-                          status={evt.status as AnyStatus}
-                          type={evt.type === "event" ? "event" : "task"}
-                          className="size-3 shrink-0 opacity-70"
-                        />
+                        {evt.type === "event" ? (
+                          <CalendarClock className="size-3 shrink-0 opacity-70" />
+                        ) : (
+                          <StatusIcon
+                            status={evt.status as AnyStatus}
+                            type="task"
+                            className="size-3 shrink-0 opacity-70"
+                          />
+                        )}
                         <span className="truncate">{evt.title || "Untitled"}</span>
                       </div>
                     </button>

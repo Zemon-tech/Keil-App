@@ -1,14 +1,14 @@
-# KielHQ — The Operating System for Teams That Ship
+# KeilHQ — The Operating System for Teams That Ship
 
 > **"Clarity first. Execution follows."**
 > Replace Slack. Replace Asana. Replace Notion. Replace your calendar chaos.
-> KielHQ is the one workspace where your team actually gets work done.
+> KeilHQ is the one workspace where your team actually gets work done.
 
 ---
 
-## 🧭 What Is KielHQ?
+## 🧭 What Is KeilHQ?
 
-KielHQ is an **all-in-one work operating system** built for agencies, startups, and growing teams who are tired of paying for 6 different tools that don't talk to each other.
+KeilHQ is an **all-in-one work operating system** built for agencies, startups, and growing teams who are tired of paying for 6 different tools that don't talk to each other.
 
 It combines:
 - ✅ Smart Task Management (replaces Linear / Asana / Jira)
@@ -32,21 +32,21 @@ All of it. In one place. For one price.
 | Otter.ai / Fireflies | ~$10–$19 |
 | Google Calendar (Workspace) | ~$6–$12 |
 | **Total per seat** | **~$41–$75/month** |
-| **KielHQ** | **One plan. Everything included.** |
+| **KeilHQ** | **One plan. Everything included.** |
 
-> Teams switching to KielHQ report saving **$40–$70 per seat every single month.** For a 10-person team, that's **$400–$700 back in your pocket — every month.**
+> Teams switching to KeilHQ report saving **$40–$70 per seat every single month.** For a 10-person team, that's **$400–$700 back in your pocket — every month.**
 
 Not just cheaper. Better. Because everything is connected.
 
 ---
 
-## 🎯 Who Is KielHQ Built For?
+## 🎯 Who Is KeilHQ Built For?
 
 ### 🏢 Agencies
-You manage multiple clients, multiple projects, and multiple deadlines — simultaneously. KielHQ's org/space model maps directly to how agencies work: one workspace, separate spaces per client, full visibility across all of them. Built-in approvals, file versioning, and client-ready shareable links mean you stop chasing sign-offs over email.
+You manage multiple clients, multiple projects, and multiple deadlines — simultaneously. KeilHQ's org/space model maps directly to how agencies work: one workspace, separate spaces per client, full visibility across all of them. Built-in approvals, file versioning, and client-ready shareable links mean you stop chasing sign-offs over email.
 
 ### 🚀 Startups & Product Teams
-Move fast without breaking communication. Kanban boards, Gantt timelines, task dependencies, blocking logic, and a live AI assistant that knows your sprint state — KielHQ is the command center product teams actually want to use.
+Move fast without breaking communication. Kanban boards, Gantt timelines, task dependencies, blocking logic, and a live AI assistant that knows your sprint state — KeilHQ is the command center product teams actually want to use.
 
 ### 🧑‍💻 Freelancers & Solopreneurs
 Start in personal mode — no team required. Manage your projects, notes, calendar, and client communication in one place. Upgrade to org mode the moment you bring someone on board. No migration. No friction.
@@ -56,7 +56,7 @@ Connect commits to tasks. Review diffs without leaving your workflow context. De
 
 ---
 
-## ⚡ The Problem KielHQ Solves
+## ⚡ The Problem KeilHQ Solves
 
 Your team is talented. But right now:
 
@@ -68,17 +68,17 @@ Your team is talented. But right now:
 
 **Every hour your team spends context-switching between tools is an hour not spent on work that actually moves the needle.**
 
-KielHQ eliminates the gap between where work is discussed, where it's planned, where it's documented, and where it gets done.
+KeilHQ eliminates the gap between where work is discussed, where it's planned, where it's documented, and where it gets done.
 
 ---
 
 ## 🔑 Core Features — In Depth
 
-### 1. 🧠 The Clarity Engine — *KielHQ's Biggest Differentiator*
+### 1. 🧠 The Clarity Engine — *KeilHQ's Biggest Differentiator*
 
-Most task managers let you create a task called "Fix the thing." KielHQ doesn't.
+Most task managers let you create a task called "Fix the thing." KeilHQ doesn't.
 
-Every task in KielHQ comes with built-in **Objectives** and **Success Criteria** fields. Before work begins, the system (and the AI) pushes you to define:
+Every task in KeilHQ comes with built-in **Objectives** and **Success Criteria** fields. Before work begins, the system (and the AI) pushes you to define:
 - *What are we trying to achieve?*
 - *How will we know when it's done?*
 
@@ -107,7 +107,7 @@ Everything your team needs to execute without confusion:
 
 ### 3. 📊 Smart Dashboard — Know What to Work on Right Now
 
-Stop wasting the first 20 minutes of every morning figuring out what to do. KielHQ's Smart Dashboard ranks your work automatically using real context:
+Stop wasting the first 20 minutes of every morning figuring out what to do. KeilHQ's Smart Dashboard ranks your work automatically using real context:
 
 | Priority Bucket | What's In It |
 |---|---|
@@ -122,12 +122,12 @@ Inline AI chat activates directly from the dashboard. Ask "what should I tackle 
 
 ### 4. 📝 Motion — Rich-Text Docs & Notes (Notion-Quality, Built In)
 
-Stop paying for Notion. KielHQ's built-in editor gives you everything:
+Stop paying for Notion. KeilHQ's built-in editor gives you everything:
 
-- **Block-based editing** — text, headings, code blocks, toggles, callouts, and more
+- **Block-based editing** — text, headings, code blocks, toggles, callouts, and more (built on TipTap)
 - **Cover images + emoji icons** — make your docs feel like yours
 - **Subpage hierarchy** — build a full knowledge base inside your workspace
-- **Real-time collaborative editing** — multiple team members edit the same doc simultaneously
+- **Real-time collaborative editing** — multiple team members edit the same doc simultaneously (Socket.io)
 - **Comment threads** on any block — give feedback in context, not in a separate Slack message
 - **Cross-space sharing** — share a doc with a different team with view or edit permissions
 - **Public shareable links** — share externally with no login required
@@ -142,7 +142,7 @@ Stop paying for Notion. KielHQ's built-in editor gives you everything:
 The same Slack-style experience you're used to — minus the subscription fee:
 
 - **Group channels** for projects, teams, or topics
-- **Direct messages** — 1:1 or group
+- **Direct messages** — 1:1 or group DMs
 - **Unread badges** — never miss a message
 - **Real-time delivery** via Socket.io — messages land instantly
 - **Notifications** for new messages, mentions, and task updates
@@ -151,45 +151,50 @@ Everything stays connected to the work it belongs to. No more "wait, what was th
 
 ---
 
-### 6. 📅 Google Calendar Integration
+### 6. 📅 Google Calendar Integration (Live & Connected)
 
 Your calendar and your tasks — finally talking to each other:
 
-- Connect your Google Calendar via one-click OAuth
-- Tasks sync automatically as calendar events
-- 2-way sync: changes in Google Calendar reflect back in KielHQ
+- Connect your Google Calendar via one-click OAuth flow
+- Scheduled tasks sync automatically as calendar events
+- 2-way sync: changes in Google Calendar reflect back in KeilHQ immediately
 - Smart conflict detection and sync loop prevention
 - Your schedule respects your actual workload
 
 ---
 
-### 7. 🎙️ Meeting Recordings & Transcription
+### 7. 🎙️ Meeting Recordings & Transcription (Live & Connected)
 
 Stop losing what was decided in your last meeting:
 
-- **Record meetings directly** inside KielHQ — no third-party app needed
-- Audio uploaded securely to AWS S3
-- **Transcribed automatically** via ElevenLabs
-- **Speaker diarization** — the transcript tells you who said what
+- **Record meetings directly** inside KeilHQ via the frontend audio recorder
+- Audio uploaded securely to AWS S3 storage buckets
+- **Transcribed automatically** via **Sarvam AI (Saaras v3)** (primary provider, optimized for 23 Indian languages + English, with auto language detection) or **ElevenLabs** (fallback provider)
+- **Speaker diarization** — the transcript automatically identifies who said what
 - Transcripts stored, searchable, and tied to the right project
 - Turn meeting decisions into tasks in one click
 
-> **The average team wastes 31 hours/month in unproductive meetings. KielHQ ensures the decisions that come out of those meetings never disappear.**
+> **The average team wastes 31 hours/month in unproductive meetings. KeilHQ ensures the decisions that come out of those meetings never disappear.**
 
 ---
 
-### 8. 🤖 KielHQ AI — The Assistant That Actually Knows Your Work
+### 8. 🤖 KeilHQ AI — The Assistant That Actually Knows Your Work (Live & Connected)
 
-Not another generic chatbot. KielHQ AI is powered by Google Gemini and **reads your actual data**:
+Not another generic chatbot. KeilHQ AI is orchestrated by the **Mastra Agentic Framework** and **reads your actual workspace data**:
 
-- Fetches your personal tasks and team workload in real time
+- **Supervisor Agent & 5 Specialist Sub-Agents**: Coordinates workflows across dedicated agents:
+  - `keilhq-task-agent`: Searches, lists, views, creates, updates, and deletes tasks/events
+  - `keilhq-chat-agent`: Lists channels, retrieves recent messages, and checks unread counts
+  - `keilhq-motion-agent`: Searches titles, creates/updates, and reads/summarizes doc content chunk-by-chunk
+  - `keilhq-scheduler-agent`: Lists unscheduled tasks and auto-schedules them into free calendar slots
+  - `keilhq-github-agent`: Connects GitHub issues/PRs/contributors to workspace tasks
+- **Flexible Model Architecture**: Supports Google Gemini (default), OpenRouter models, OpenAI, Anthropic, Grok, or even **Local AI Models** (configured with a custom base URL and model name like Ollama)
 - Answers "what's blocking my team right now?" with real context
 - Creates tasks directly from a conversation
 - Lists your organisations, spaces, and sprint state
-- Multi-turn stateful conversations — it remembers what you asked
-- Turns meeting discussions into actionable tasks automatically
+- Multi-turn stateful conversations using Postgres memory storage
 
-> **"KielHQ AI isn't built on top of your work. It's built into it."**
+> **"KeilHQ AI isn't built on top of your work. It's built into it."**
 
 ---
 
@@ -232,20 +237,32 @@ Stay in the loop without being overwhelmed:
 
 ## 🔌 Integrations — Connect the Tools You Already Use
 
-KielHQ connects with 50+ tools your team already relies on:
+KeilHQ connects with your critical tools to keep data unified and flowing:
 
-| Category | Tools |
+### 🟢 Live & Working Integrations (Fully Implemented)
+
+These integrations are fully functional, support OAuth or API key credentials, and are wired into the backend logic and Mastra AI agents:
+
+| Integration | What It Does |
 |---|---|
-| Communication | Slack |
-| Code & Dev | GitHub |
-| Project Management | Linear, Asana, Jira, Monday, ClickUp |
-| Documentation | Notion, Confluence |
-| AI Providers | Anthropic (Claude), OpenAI, Grok, Google Gemini |
-| Calendar | Google Calendar |
-| Storage | AWS S3 |
-| Speech-to-Text | ElevenLabs |
+| **Google Calendar** | 2-way calendar sync, automated scheduling slot detection, task-to-event mirroring |
+| **GitHub** | Fetch repository issues, pull requests, and contributors. Create tasks from GitHub issues, and generate GitHub issues from KeilHQ tasks automatically |
+| **Google Mail (Gmail)** | Read recent inbox emails and thread details. Turn messages into task cards or Motion docs, or summarize the context with AI in one click |
+| **AWS S3** | Secure storage for meeting recordings and uploaded files |
+| **Sarvam AI (Saaras v3)** | Batch transcription of meeting audio with multi-speaker diarization and multi-lingual auto-detection |
+| **ElevenLabs** | Fallback transcription provider for meetings |
+| **Google Gemini / OpenRouter / Local AI** | Model backends powering the agentic orchestrations and chat capabilities |
 
-> Changes in connected tools **instantly reflect in KielHQ** — no manual syncing, no stale data.
+### 🟡 Planned Integrations (UI Placeholders / Coming Soon)
+
+The following services are represented as connectors in the settings UI and are on the roadmap for direct native sync:
+
+- **Notion**: Import pages, wikis, and databases directly
+- **Linear**: Sync issues and engineering tasks
+- **Jira**: Connect enterprise Jira boards
+- **Slack**: Feed notification activity to channels
+- **ChronicleHQ**: Create premium looking PPTs using AI
+- **Google Meet, Google Docs, Google Sheets, Google Slides, Google Drive**: Deep in-context workspace sync
 
 ---
 
@@ -253,10 +270,10 @@ KielHQ connects with 50+ tools your team already relies on:
 
 | Metric | What It Means For You |
 |---|---|
-| **7,000+ teams** trust KielHQ globally | You're in good company |
+| **7,000+ teams** trust KeilHQ globally | You're in good company |
 | **$40–$70/seat/month** saved vs. full stack | Real, measurable ROI from day one |
-| **31 hrs/month** wasted in unproductive meetings — KielHQ cuts that | Your team gets hours back |
-| **50+ integrations** | Works with what you already have |
+| **31 hrs/month** wasted in unproductive meetings — KeilHQ cuts that | Your team gets hours back |
+| **10+ Live integrations** | Connects with your core developer & calendar stack |
 | **Real-time sync** across tasks, docs, chat, and calendar | One source of truth, always |
 | **Zero "what's next?" conversations** needed | The Smart Dashboard handles it |
 
@@ -264,7 +281,7 @@ KielHQ connects with 50+ tools your team already relies on:
 
 ## 🏆 What Our Users Are Saying
 
-> *"KielHQ is by far the best agency tool I have ever used."*
+> *"KeilHQ is by far the best agency tool I have ever used."*
 > — **Martha Punla**, VP Marketing, Meta
 
 > *"From client onboarding to getting paid, this just works — clean, fast, and beautifully built."*
@@ -281,9 +298,9 @@ KielHQ connects with 50+ tools your team already relies on:
 
 ---
 
-## 💡 Why KielHQ Wins Against Everything Else
+## 💡 Why KeilHQ Wins Against Everything Else
 
-| Feature | KielHQ | Notion | Asana | Linear | Slack |
+| Feature | KeilHQ | Notion | Asana | Linear | Slack |
 |---|---|---|---|---|---|
 | Task Management | ✅ Full | ❌ Basic | ✅ Yes | ✅ Yes | ❌ No |
 | Rich-Text Docs | ✅ Full | ✅ Yes | ❌ No | ❌ No | ❌ No |
@@ -303,11 +320,11 @@ KielHQ connects with 50+ tools your team already relies on:
 
 ### Week 1
 - Import your existing tasks and docs
-- Connect Google Calendar — your schedule is already synced
+- Connect Google Calendar & Google Mail — your schedule and inbox are already synced
 - Invite your team — they're up and running in under 10 minutes
 
 ### Week 2
-- Your first meeting is recorded and transcribed inside KielHQ
+- Your first meeting is recorded and transcribed inside KeilHQ via Sarvam AI
 - AI starts answering "what's blocking us?" with real data
 - Clients get shareable task and doc links — no more "can you send me an update?"
 
@@ -323,9 +340,9 @@ KielHQ connects with 50+ tools your team already relies on:
 
 ---
 
-## 🎁 Who Gets the Most Out of KielHQ
+## 🎁 Who Gets the Most Out of KeilHQ
 
-| If you are... | KielHQ gives you... |
+| If you are... | KeilHQ gives you... |
 |---|---|
 | An **agency owner** | Client spaces, approvals, file versioning, and billing clarity |
 | A **product manager** | Sprint boards, dependency maps, AI workload summaries, and Gantt views |
@@ -338,25 +355,27 @@ KielHQ connects with 50+ tools your team already relies on:
 
 ## 🔒 Built on Infrastructure You Can Trust
 
-- **Frontend**: React 19 + TypeScript, deployed on Cloudflare Workers — globally fast, always available
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS — globally fast, always available
 - **Backend**: Node.js + Express 5 — built for high concurrency and real-time performance
 - **Database**: PostgreSQL on Supabase — enterprise-grade reliability
-- **Auth**: Supabase JWT — secure, standards-based authentication
+- **Auth**: Supabase JWT — secure, locally verified token authentication (<1ms verification)
 - **Storage**: AWS S3 — your meeting recordings are safe
 - **Real-time**: Socket.io — chat, docs, and notifications update instantly
-- **AI**: Google Gemini + OpenRouter — the best models, working with your actual data
+- **AI Agentic Framework**: Mastra Core with PostgreSQL storage (direct connections capped for pool security)
+- **AI Models**: Google Gemini (default), OpenRouter, or Local AI models (Ollama support)
+- **Speech-to-Text**: Sarvam AI (Saaras v3 Batch transcription with speaker diarization) + ElevenLabs fallback
 
 ---
 
 ## ✨ The 7 Things No Other Tool Gives You Together
 
 1. **Clarity before action** — every task has objectives + success criteria, not just a title
-2. **AI that reads your actual tasks and workload** — not generic advice, real context
+2. **AI that reads your actual tasks and workload** — not generic advice, real context via dedicated agent specialists
 3. **Automatically derived "Blocked" state** — no manual tagging, the system figures it out
 4. **Personal mode + org mode in one app** — works alone, scales with your team
-5. **Notion-quality docs with live multi-user editing** — built in, not bolted on
-6. **Meeting transcription with speaker identification** — no third-party app required
-7. **Everything connected** — tasks link to docs, chats, calendar events, and meetings
+5. **Notion-quality docs with live multi-user editing** — built in, not bolted on (Tiptap block-based editor)
+6. **Meeting transcription with speaker identification** — built-in Sarvam AI & ElevenLabs diarized audio uploads
+7. **Everything connected** — tasks link to docs, chats, calendar events, emails, and meetings
 
 ---
 
@@ -366,7 +385,7 @@ Your team doesn't have a productivity problem. They have a **clarity problem.**
 
 They're switching between tools, losing decisions in Slack, creating vague tasks that mean different things to different people, and spending hours in sync meetings just to find out what's actually blocked.
 
-KielHQ fixes all of it — not by adding another tool to your stack, but by **becoming your entire stack.**
+KeilHQ fixes all of it — not by adding another tool to your stack, but by **becoming your entire stack.**
 
 > **One workspace. Every function. One clear line from idea to done.**
 
@@ -374,7 +393,7 @@ KielHQ fixes all of it — not by adding another tool to your stack, but by **be
 
 ## 🟢 Get Started Today
 
-**Try KielHQ free** — no credit card required, no time limit on the free plan.
+**Try KeilHQ free** — no credit card required, no time limit on the free plan.
 
 Bring your whole team. Connect your calendar. Let the AI read your backlog. And feel what it's like when work is finally clear.
 
@@ -387,21 +406,21 @@ Bring your whole team. Connect your calendar. Let the AI read your backlog. And 
 ---
 
 *Trusted by 7,000+ startups, agencies, freelancers, and studios worldwide.*
-*Teams on KielHQ save an average of $40–$70 per seat per month versus running a full tool stack.*
+*Teams on KeilHQ save an average of $40–$70 per seat per month versus running a full tool stack.*
 
 ---
 
-## 📌 Quick Reference — KielHQ at a Glance
+## 📌 Quick Reference — KeilHQ at a Glance
 
 | | |
 |---|---|
 | **Best for** | Agencies, startups, product teams, freelancers |
 | **Replaces** | Slack + Asana/Linear + Notion + Otter.ai + Google Calendar (separately) |
 | **Key differentiator** | Clarity Engine + AI with real data access |
-| **Integrations** | 50+ including GitHub, Slack, Notion, Linear, Google, OpenAI |
+| **Integrations** | Google Calendar, GitHub, Gmail, AWS S3, Sarvam AI, ElevenLabs, Gemini |
 | **Real-time** | Chat, doc editing, notifications, calendar sync |
-| **AI engine** | Google Gemini + OpenRouter |
-| **Infrastructure** | Cloudflare, AWS S3, Supabase, Socket.io |
+| **AI engine** | Google Gemini + OpenRouter + Local AI, orchestrated by Mastra |
+| **Infrastructure** | Vite, Express, AWS S3, Supabase PostgreSQL, Socket.io |
 | **Personal mode** | ✅ Works without a team |
 | **Free plan** | ✅ Available |
 | **Trusted by** | 7,000+ teams globally |

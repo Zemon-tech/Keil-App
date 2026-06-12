@@ -33,6 +33,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -492,15 +493,15 @@ function OrgMembersTab() {
                         <span className="font-semibold text-foreground/80">{member.workspaces?.length || 0}</span>
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent 
-                      className="w-56 p-1 rounded-xl shadow-lg border border-border/80 bg-popover" 
+                    <PopoverContent
+                      className="w-56 p-1 rounded-xl shadow-lg border border-border/80 bg-popover"
                       align="start"
                       onWheel={(e) => e.stopPropagation()}
                     >
                       <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border/40 mb-1">
                         Workspaces ({member.workspaces?.length || 0})
                       </div>
-                      <div 
+                      <div
                         className="space-y-0.5 max-h-48 overflow-y-auto"
                         onWheel={(e) => e.stopPropagation()}
                       >
@@ -603,7 +604,7 @@ function OrgMembersTab() {
                           className={cn(
                             "w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg hover:bg-muted transition-colors",
                             member.role === "member" &&
-                              "text-primary font-medium",
+                            "text-primary font-medium",
                           )}
                         >
                           Member
@@ -1044,15 +1045,15 @@ function AccountTab() {
   const avatarUrl = me?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
 
   // Determine if user logged in with Google
-  const isGoogleUser = user?.app_metadata?.provider === "google" || 
-                       user?.identities?.some(id => id.provider === "google");
-  
+  const isGoogleUser = user?.app_metadata?.provider === "google" ||
+    user?.identities?.some(id => id.provider === "google");
+
   // Check if they have a password (this is a bit tricky with Supabase, 
   // but usually email provider means they have a password).
   // If they have a password, we show "Change password", else "Set password".
-  const hasPassword = user?.app_metadata?.provider === "email" || 
-                      user?.identities?.some(id => id.provider === "email") ||
-                      user?.user_metadata?.password_set === true;
+  const hasPassword = user?.app_metadata?.provider === "email" ||
+    user?.identities?.some(id => id.provider === "email") ||
+    user?.user_metadata?.password_set === true;
 
   const userInitials =
     userDisplayName
@@ -1237,8 +1238,8 @@ function AccountTab() {
         {(success || error) && (
           <div className={cn(
             "text-xs px-3 py-1 rounded-full animate-in fade-in slide-in-from-top-1 duration-300",
-            success ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : 
-                      "bg-red-500/10 text-red-500 border border-red-500/20"
+            success ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" :
+              "bg-red-500/10 text-red-500 border border-red-500/20"
           )}>
             {success || error}
           </div>
@@ -1250,7 +1251,7 @@ function AccountTab() {
       {/* Profile Section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Avatar 
+          <Avatar
             className={cn(
               "size-14 rounded-full ring-2 ring-background shadow-sm",
               avatarUrl && "cursor-pointer hover:opacity-90 transition-opacity"
@@ -1295,9 +1296,9 @@ function AccountTab() {
             accept="image/*"
             onChange={handleFileChange}
           />
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="text-xs rounded-lg"
             onClick={handleAvatarClick}
             disabled={loading}
@@ -1337,9 +1338,9 @@ function AccountTab() {
           )}
         </div>
         {!isEditingName && (
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="text-xs rounded-lg"
             onClick={() => setIsEditingName(true)}
           >
@@ -1377,9 +1378,9 @@ function AccountTab() {
           )}
         </div>
         {!isEditingUsername && (
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="text-xs rounded-lg"
             onClick={() => setIsEditingUsername(true)}
           >
@@ -1424,9 +1425,9 @@ function AccountTab() {
                 </p>
               </div>
               {passwordFlow === "none" && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="text-xs rounded-lg"
                   onClick={() => setPasswordFlow(hasPassword ? "change" : "set")}
                 >
@@ -1458,10 +1459,10 @@ function AccountTab() {
                         {showPasswords ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                       </button>
                     </div>
-                    <button 
+                    <button
                       type="button"
                       className="text-[10px] text-primary hover:underline"
-                      onClick={() => {}} // Dummy as requested
+                      onClick={() => { }} // Dummy as requested
                     >
                       Forgot password?
                     </button>
@@ -1498,19 +1499,19 @@ function AccountTab() {
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">
-                  <Button 
-                    size="sm" 
-                    className="h-9 px-4 rounded-lg text-xs" 
+                  <Button
+                    size="sm"
+                    className="h-9 px-4 rounded-lg text-xs"
                     onClick={handlePasswordAction}
                     disabled={loading || !password || !confirmPassword || (passwordFlow === 'change' && !oldPassword)}
                   >
                     {loading && <Loader2 className="size-3 animate-spin mr-2" />}
                     Confirm
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-9 px-4 rounded-lg text-xs" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-4 rounded-lg text-xs"
                     onClick={() => {
                       setPasswordFlow("none");
                       setOldPassword("");
@@ -1861,20 +1862,20 @@ const STT_PROVIDERS: Array<{
   description: string;
   features: string[];
 }> = [
-  {
-    id: "sarvam",
-    name: "Sarvam AI",
-    badge: "Recommended",
-    description: "Saaras v3 — purpose-built for Indian languages and English.",
-    features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
-  },
-  {
-    id: "elevenlabs",
-    name: "ElevenLabs",
-    description: "Scribe v2 — broad language support with word-level detail.",
-    features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
-  },
-];
+    {
+      id: "sarvam",
+      name: "Sarvam AI",
+      badge: "Recommended",
+      description: "Saaras v3 — purpose-built for Indian languages and English.",
+      features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
+    },
+    {
+      id: "elevenlabs",
+      name: "ElevenLabs",
+      description: "Scribe v2 — broad language support with word-level detail.",
+      features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
+    },
+  ];
 
 function SttProviderSelector() {
   const { data: prefs, isLoading } = usePreferences();
@@ -2062,7 +2063,7 @@ function PersonalizationTab() {
           <Bot className="size-4 text-muted-foreground" />
           Default AI Model
         </h3>
-        
+
         <div className="space-y-3 pt-1">
           <div>
             <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -2094,7 +2095,7 @@ function PersonalizationTab() {
           <Globe className="size-4 text-muted-foreground" />
           OpenRouter Model Configuration
         </h3>
-        
+
         <div className="space-y-3 pt-1">
           <div>
             <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -2126,7 +2127,7 @@ function PersonalizationTab() {
           <SlidersHorizontal className="size-4 text-muted-foreground" />
           Local AI Model Integration
         </h3>
-        
+
         <div className="space-y-3 pt-1">
           <div>
             <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -2243,61 +2244,63 @@ function AssistantTab() {
 function ShortcutsTab() {
   const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform);
   const mod = isMac ? "⌘" : "Ctrl";
-
   const groups: Array<{
     label: string;
     items: Array<{ keys: string[]; description: string; implemented: boolean }>;
   }> = [
-    {
-      label: "Navigation",
-      items: [
-        { keys: [mod, "G"],       description: "Go to Dashboard",          implemented: true  },
-        { keys: [mod, "Q"],       description: "Go to Tasks",               implemented: true  },
-        { keys: [mod, "P"],       description: "Go to Motion (Pages)",      implemented: true  },
-        { keys: [mod, "K"],       description: "Open command palette",      implemented: true  },
-      ],
-    },
-    {
-      label: "Meetings",
-      items: [
-        { keys: [mod, "M"],       description: "Open / restore Meeting Studio", implemented: true  },
-        { keys: ["Esc"],          description: "Minimize Meeting Studio",   implemented: false },
-      ],
-    },
-    {
-      label: "Chat",
-      items: [
-        { keys: [mod, "J"],       description: "Toggle Chat",               implemented: true  },
-        { keys: [mod, "⇧", "C"], description: "Open Chat full dialog",     implemented: true  },
-      ],
-    },
-    {
-      label: "Notifications",
-      items: [
-        { keys: [mod, "L"],       description: "Toggle Notifications",      implemented: true  },
-      ],
-    },
-    {
-      label: "Tasks",
-      items: [
-        { keys: [mod, "⇧", "X"], description: "Create task / event",       implemented: true  },
-      ],
-    },
-    {
-      label: "Settings",
-      items: [
-        { keys: [mod, ","],       description: "Open Settings",             implemented: true  },
-        { keys: [mod, "/"],       description: "Open Shortcuts",            implemented: true  },
-      ],
-    },
-    {
-      label: "General",
-      items: [
-        { keys: ["Esc"],          description: "Close dialog / cancel",     implemented: true  },
-        { keys: [mod, "B"],       description: "Toggle sidebar",            implemented: false },
-      ],
-    },
-  ];
+      {
+        label: "Navigation",
+        items: [
+          { keys: [mod, "G"], description: "Go to Dashboard", implemented: true },
+          { keys: [mod, "Q"], description: "Go to Tasks", implemented: true },
+          { keys: [mod, "P"], description: "Go to Motion (Pages)", implemented: true },
+          { keys: [mod, "I"], description: "Go to Inbox", implemented: true },
+          { keys: [mod, "K"], description: "Open command palette", implemented: true },
+        ],
+      },
+      {
+        label: "Meetings",
+        items: [
+          { keys: [mod, "M"], description: "Open / restore Meeting Studio", implemented: true },
+          { keys: ["Esc"], description: "Minimize Meeting Studio", implemented: false },
+        ],
+      },
+      {
+        label: "Chat",
+        items: [
+          { keys: [mod, "J"], description: "Toggle Chat", implemented: true },
+          { keys: [mod, "⇧", "C"], description: "Open Chat full dialog", implemented: true },
+        ],
+      },
+      {
+        label: "Notifications",
+        items: [
+          { keys: [mod, "L"], description: "Toggle Notifications", implemented: true },
+        ],
+      },
+      {
+        label: "Tasks",
+        items: [
+          { keys: [mod, "⇧", "X"], description: "Create task / event", implemented: true },
+        ],
+      },
+      {
+        label: "Settings",
+        items: [
+          { keys: [mod, ","], description: "Open Settings", implemented: true },
+          { keys: [mod, "/"], description: "Open Shortcuts", implemented: true },
+        ],
+      },
+      {
+        label: "General",
+        items: [
+          { keys: [mod, "D"], description: "Toggle Light/Dark Theme", implemented: true },
+          { keys: [mod, "⌥", "N"], description: "Create new Note page", implemented: true },
+          { keys: ["Esc"], description: "Close dialog / cancel", implemented: true },
+          { keys: [mod, "B"], description: "Toggle sidebar", implemented: false },
+        ],
+      },
+    ];
 
   return (
     <div className="space-y-8">
@@ -2367,55 +2370,307 @@ function ShortcutsTab() {
 }
 
 function TasksTab() {
+  const [autoAssign, setAutoAssign] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("task_auto_assign") === "true";
+    }
+    return false;
+  });
+
+  const [dueReminders, setDueReminders] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("task_reminders");
+      return stored === null ? true : stored === "true";
+    }
+    return true;
+  });
+
+  const [showCompleted, setShowCompleted] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("task_show_completed") === "true";
+    }
+    return false;
+  });
+
+  const [visibleSections, setVisibleSections] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("task_visible_sections");
+        return stored ? JSON.parse(stored) : ["needsAttention", "currentSprint"];
+      } catch {
+        return ["needsAttention", "currentSprint"];
+      }
+    }
+    return ["needsAttention", "currentSprint"];
+  });
+
+  const [defaultFilters, setDefaultFilters] = useState<{
+    statuses: string[];
+    priorities: string[];
+    assignments: string[];
+    sprints: string[];
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("task_default_filters");
+        return stored ? JSON.parse(stored) : { statuses: [], priorities: [], assignments: [], sprints: [] };
+      } catch {
+        return { statuses: [], priorities: [], assignments: [], sprints: [] };
+      }
+    }
+    return { statuses: [], priorities: [], assignments: [], sprints: [] };
+  });
+
+  const handleAutoAssignChange = (checked: boolean) => {
+    setAutoAssign(checked);
+    localStorage.setItem("task_auto_assign", String(checked));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleDueRemindersChange = (checked: boolean) => {
+    setDueReminders(checked);
+    localStorage.setItem("task_reminders", String(checked));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleShowCompletedChange = (checked: boolean) => {
+    setShowCompleted(checked);
+    localStorage.setItem("task_show_completed", String(checked));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleSectionToggle = (section: string) => {
+    let next: string[];
+    if (visibleSections.includes(section)) {
+      next = visibleSections.filter(s => s !== section);
+    } else {
+      next = [...visibleSections, section];
+    }
+    setVisibleSections(next);
+    localStorage.setItem("task_visible_sections", JSON.stringify(next));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const handleFilterToggle = (category: "statuses" | "priorities" | "assignments" | "sprints", value: string) => {
+    const nextList = defaultFilters[category].includes(value)
+      ? defaultFilters[category].filter(v => v !== value)
+      : [...defaultFilters[category], value];
+
+    const nextFilters = {
+      ...defaultFilters,
+      [category]: nextList
+    };
+    setDefaultFilters(nextFilters);
+    localStorage.setItem("task_default_filters", JSON.stringify(nextFilters));
+    window.dispatchEvent(new Event("task_settings_changed"));
+  };
+
+  const sectionsList = [
+    { id: "needsAttention", label: "🔥 Needs Attention" },
+    { id: "myFocus", label: "🎯 My Focus" },
+    { id: "currentSprint", label: "🚀 Current Sprint" },
+    { id: "upcomingWork", label: "📅 Upcoming Work" },
+    { id: "recentlyCompleted", label: "✅ Recently Completed" },
+  ];
+
+  const statusesList = ["todo", "in-progress", "in-review", "done", "blocked", "backlog"];
+  const prioritiesList = ["urgent", "high", "medium", "low"];
+  const sprintsList = [
+    { id: "current", label: "Current Sprint" },
+    { id: "next", label: "Next Sprint" },
+    { id: "backlog", label: "Backlog" }
+  ];
+  const assignmentsList = [
+    { id: "assigned-to-me", label: "Assigned to Me" },
+    { id: "created-by-me", label: "Created by Me" },
+    { id: "watching", label: "Watching" },
+    { id: "unassigned", label: "Unassigned" }
+  ];
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Tasks</h2>
+        <h2 className="text-lg font-semibold text-foreground">Tasks Preferences</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Configure task defaults and behavior.
+          Configure default task visibility, filters, and behavior.
         </p>
       </div>
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Auto-assign to me
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Automatically assign new tasks to yourself
-          </p>
+      {/* General Settings */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground">General</h3>
+        <div className="space-y-4 pt-1">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Auto-assign to me</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically assign new tasks to yourself
+              </p>
+            </div>
+            <Switch checked={autoAssign} onCheckedChange={handleAutoAssignChange} />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Due date reminders</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Get notified before a task is due
+              </p>
+            </div>
+            <Switch checked={dueReminders} onCheckedChange={handleDueRemindersChange} />
+          </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Show completed tasks</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Keep completed tasks visible in lists
+              </p>
+            </div>
+            <Switch checked={showCompleted} onCheckedChange={handleShowCompletedChange} />
+          </div>
         </div>
-        <Switch />
       </div>
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Due date reminders
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Get notified before a task is due
-          </p>
+      {/* Visible Sections Settings */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground">Default Visible Sections</h3>
+        <p className="text-xs text-muted-foreground">Select sections to show by default in your task list sidebar.</p>
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          {sectionsList.map(sec => {
+            const isChecked = visibleSections.includes(sec.id);
+            return (
+              <div key={sec.id} className="flex items-center space-x-2 bg-muted/20 hover:bg-muted/40 p-2 rounded-lg border border-border/40 transition-colors">
+                <Checkbox
+                  id={`sec-${sec.id}`}
+                  checked={isChecked}
+                  onCheckedChange={() => handleSectionToggle(sec.id)}
+                />
+                <Label htmlFor={`sec-${sec.id}`} className="text-xs font-medium cursor-pointer flex-1 select-none">
+                  {sec.label}
+                </Label>
+              </div>
+            );
+          })}
         </div>
-        <Switch defaultChecked />
       </div>
 
       <Separator />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Show completed tasks
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Keep completed tasks visible in lists
-          </p>
+      {/* Default Filters Settings */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-foreground">Default Task Filters</h3>
+        <p className="text-xs text-muted-foreground">Apply these filters automatically when loading the tasks page.</p>
+
+        <div className="space-y-4 pt-1">
+          {/* Status Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Status</Label>
+            <div className="flex flex-wrap gap-2">
+              {statusesList.map(s => {
+                const isActive = defaultFilters.statuses.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => handleFilterToggle("statuses", s)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all capitalize font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Priority Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Priority</Label>
+            <div className="flex flex-wrap gap-2">
+              {prioritiesList.map(p => {
+                const isActive = defaultFilters.priorities.includes(p);
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handleFilterToggle("priorities", p)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all capitalize font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Assignment Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Assignment</Label>
+            <div className="flex flex-wrap gap-2">
+              {assignmentsList.map(a => {
+                const isActive = defaultFilters.assignments.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => handleFilterToggle("assignments", a.id)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sprint Filters */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sprint</Label>
+            <div className="flex flex-wrap gap-2">
+              {sprintsList.map(s => {
+                const isActive = defaultFilters.sprints.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleFilterToggle("sprints", s.id)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-all font-medium",
+                      isActive
+                        ? "bg-primary border-primary text-primary-foreground font-semibold shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <Switch />
       </div>
     </div>
   );
@@ -2457,7 +2712,7 @@ function NotificationsTab() {
   const handleToggle = async (key: string, currentValue: boolean) => {
     if (!prefs) return;
     const newValue = !currentValue;
-    
+
     // Optimistic UI update
     setPrefs((prev: any) => ({ ...prev, [key]: newValue }));
 
@@ -2546,8 +2801,8 @@ function NotificationsTab() {
                     {item.description}
                   </p>
                 </div>
-                <Switch 
-                  checked={checked} 
+                <Switch
+                  checked={checked}
                   onCheckedChange={() => handleToggle(item.key, checked)}
                 />
               </div>
@@ -2571,11 +2826,66 @@ function ConnectorsTab() {
   const connectGithub = useConnectGitHub();
   const disconnectGithub = useDisconnectGitHub();
 
-  // Static placeholder connectors (not yet implemented)
+  // Static placeholder connectors (as requested)
+  const googleConnectors = [
+    {
+      name: "Google Mail",
+      description: "Sync contacts and import task items from emails",
+      logo: "/integrations/gmail.png",
+    },
+    {
+      name: "Google Meet",
+      description: "Schedule and join video calls directly from events",
+      logo: "/integrations/gmeet.png",
+    },
+    {
+      name: "Google Docs",
+      description: "Create, view, and sync document content inline",
+      logo: "/integrations/gdocs.png",
+    },
+    {
+      name: "Google Sheets",
+      description: "Link spreadsheet metrics and tables directly",
+      logo: "/integrations/gsheets.png",
+    },
+    {
+      name: "Google Slides",
+      description: "Embed presentations and presentation details",
+      logo: "/integrations/gslides.png",
+    },
+    {
+      name: "Google Drive",
+      description: "Browse and reference workspace files from your chats",
+      logo: "/integrations/gdrive.png",
+    },
+  ];
+
   const staticConnectors = [
-    { name: "Slack", description: "Send notifications to Slack" },
-    { name: "Jira", description: "Sync tasks with Jira" },
-    { name: "Figma", description: "View design files inline" },
+    {
+      name: "Notion",
+      description: "Import pages, wikis, and databases into Motion",
+      logo: "/integrations/notion.png",
+    },
+    {
+      name: "Linear",
+      description: "Sync project issues and engineering tasks automatically",
+      logo: "/integrations/linear.jpeg",
+    },
+    {
+      name: "Jira",
+      description: "Connect Jira boards to track enterprise team progress",
+      logo: "/integrations/atlassianjira.png",
+    },
+    {
+      name: "Slack",
+      description: "Send instant notifications and feed updates to Slack channels",
+      logo: "/integrations/slack.png",
+    },
+    {
+      name: "ChronicleHQ",
+      description: "Create premium looking PPTs using Ai",
+      logo: "/integrations/chroniclehq.jpeg",
+    },
   ];
 
   return (
@@ -2593,8 +2903,8 @@ function ConnectorsTab() {
         {/* Google Calendar — live integration */}
         <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-muted flex items-center justify-center">
-              <Plug className="size-4 text-muted-foreground" />
+            <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
+              <img src="/integrations/gcalendar.png" alt="Google Calendar" className="size-6 object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -2650,11 +2960,41 @@ function ConnectorsTab() {
           )}
         </div>
 
+        {/* Other Google Suite Integrations (Mail, Meet, Docs/Sheets/Slides) */}
+        {googleConnectors.map((connector, i) => (
+          <div
+            key={`google-${i}`}
+            className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
+                <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {connector.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {connector.description}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs rounded-lg"
+              disabled
+            >
+              Coming soon
+            </Button>
+          </div>
+        ))}
+
         {/* GitHub — live integration */}
         <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-muted flex items-center justify-center">
-              <Github className="size-4 text-muted-foreground" />
+            <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20">
+              <Github className="size-5 text-foreground" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -2710,15 +3050,15 @@ function ConnectorsTab() {
           )}
         </div>
 
-        {/* Static placeholder connectors */}
+        {/* Other static placeholder connectors */}
         {staticConnectors.map((connector, i) => (
           <div
-            key={i}
+            key={`static-${i}`}
             className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
           >
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center">
-                <Plug className="size-4 text-muted-foreground" />
+              <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
+                <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">
@@ -3123,11 +3463,11 @@ export function SettingsDialog({
   const { organisations, activeOrgId, setActiveOrganisation } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   const handleManualSwitch = (orgId: string) => {
     const isDetailRoute = /^\/(tasks|events)\/[^\/]+/.test(location.pathname);
     const isChanging = orgId !== activeOrgId;
-    
+
     setActiveOrganisation(orgId);
 
     if (isDetailRoute && isChanging) {
@@ -3219,9 +3559,9 @@ export function SettingsDialog({
                   >
                     <div className="space-y-1">
                       {organisations.map((org) => (
-                         <button
-                           key={org.id}
-                           onClick={() => handleManualSwitch(org.id)}
+                        <button
+                          key={org.id}
+                          onClick={() => handleManualSwitch(org.id)}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors",
                             activeOrgId === org.id
