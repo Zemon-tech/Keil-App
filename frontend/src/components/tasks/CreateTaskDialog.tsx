@@ -3,7 +3,6 @@ import { format, addDays, subDays, nextMonday, startOfToday, startOfDay, parseIS
 import {
   CalendarIcon,
   Flag,
-  Plus,
   Target,
   MapPin,
   Users,
@@ -11,17 +10,21 @@ import {
   Clock,
   Timer,
   Zap,
-  Layout
+  Layout,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  X,
+  Paperclip,
+  Video
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -42,15 +45,23 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
 import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
-import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useSpaceMembers, useSpaces } from "@/hooks/api/useSpaces";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import type { AnyStatus } from "@/types/task";
+import { StatusIcon, STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 
 type SimpleAssigneeOption = {
   id: string;
@@ -108,16 +119,42 @@ export function CreateTaskDialog({
   orgId,
   spaceId,
 }: CreateTaskDialogProps) {
-  const { activeOrgId, activeSpaceId } = useAppContext();
-  const resolvedOrgId = orgId ?? initialValues?.org_id ?? activeOrgId;
-  const resolvedSpaceId = spaceId ?? initialValues?.space_id ?? activeSpaceId;
+  const { activeOrgId, activeSpaceId, organisations } = useAppContext();
 
-  const createOrgTask = useCreateOrgTask(resolvedOrgId, resolvedSpaceId);
-  const updateOrgTask = useUpdateOrgTask(resolvedOrgId, resolvedSpaceId);
+  // Internal selection state for org/space
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
+
+  // Sync state with props/context on dialog open or changes
+  useEffect(() => {
+    if (open) {
+      setSelectedOrgId(orgId ?? initialValues?.org_id ?? activeOrgId);
+      setSelectedSpaceId(spaceId ?? initialValues?.space_id ?? activeSpaceId);
+    }
+  }, [open, orgId, spaceId, initialValues, activeOrgId, activeSpaceId]);
+
+  // Fetch spaces for the currently selected organisation
+  const { data: spacesForSelectedOrg = [] } = useSpaces(selectedOrgId);
+
+  // Sync space when organisation changes to ensure a valid space is selected
+  useEffect(() => {
+    if (selectedOrgId && spacesForSelectedOrg.length > 0) {
+      const belongs = spacesForSelectedOrg.some((s) => s.id === selectedSpaceId);
+      if (!belongs) {
+        setSelectedSpaceId(spacesForSelectedOrg[0].id);
+      }
+    }
+  }, [selectedOrgId, spacesForSelectedOrg, selectedSpaceId]);
+
+  const currentOrg = organisations.find((o) => o.id === selectedOrgId) ?? null;
+  const currentSpace = spacesForSelectedOrg.find((s) => s.id === selectedSpaceId) ?? null;
+
+  const createOrgTask = useCreateOrgTask(selectedOrgId, selectedSpaceId);
+  const updateOrgTask = useUpdateOrgTask(selectedOrgId, selectedSpaceId);
 
   const { data: spaceMembers = [] } = useSpaceMembers(
-    resolvedOrgId,
-    resolvedSpaceId
+    selectedOrgId,
+    selectedSpaceId
   );
 
   const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
@@ -131,6 +168,12 @@ export function CreateTaskDialog({
   // ── Form State ─────────────────────────────────────────────────────────────
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"task" | "event">("task");
+  const [status, setStatus] = useState<AnyStatus>("todo");
+
+  // Sync status default when type changes
+  useEffect(() => {
+    setStatus(type === "task" ? "todo" : "confirmed");
+  }, [type]);
 
   // Metadata
   const [date, setDate] = useState<Date | undefined>(undefined);
@@ -143,12 +186,16 @@ export function CreateTaskDialog({
   const [objective, setObjective] = useState("");
   const [successCriteria, setSuccessCriteria] = useState("");
   const [location, setLocation] = useState("");
+  const [agenda, setAgenda] = useState("");
 
   // Collapsible states
-  const [showDetails, setShowDetails] = useState(false);
   const [showClarity, setShowClarity] = useState(false);
   const [showAgenda, setShowAgenda] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
+
+  // Redesign UI state helpers
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [createMore, setCreateMore] = useState(false);
 
   // Ref for programmatically closing the date popover
   const dateCloseRef = useRef<HTMLButtonElement>(null);
@@ -260,7 +307,6 @@ export function CreateTaskDialog({
     if (open && initialValues) {
       setTitle(initialValues.title ?? "");
       setType((initialValues.type as "task" | "event") ?? "task");
-      setDescription(initialValues.description ?? "");
       setObjective(initialValues.objective ?? "");
       setSuccessCriteria(initialValues.success_criteria ?? "");
       setPriority((initialValues.priority as any) ?? "medium");
@@ -268,6 +314,19 @@ export function CreateTaskDialog({
       setLocation(initialValues.location ?? "");
       setIsAllDay(initialValues.is_all_day ?? true);
       setEventType(initialValues.event_type ?? "meeting");
+      setStatus((initialValues.status as AnyStatus) ?? (initialValues.type === "event" ? "confirmed" : "todo"));
+
+      const desc = initialValues.description ?? "";
+      const agendaIndex = desc.indexOf("\n\nAgenda:\n");
+      if (agendaIndex !== -1) {
+        setDescription(desc.substring(0, agendaIndex));
+        setAgenda(desc.substring(agendaIndex + 10));
+        setShowAgenda(true);
+      } else {
+        setDescription(desc);
+        setAgenda("");
+        setShowAgenda(false);
+      }
 
       const start = (initialValues as any).start_date;
       const end = (initialValues as any).due_date;
@@ -281,7 +340,6 @@ export function CreateTaskDialog({
       }
 
       // Auto-expand if content exists
-      if (initialValues.description) setShowDetails(true);
       if (initialValues.objective || initialValues.success_criteria) setShowClarity(true);
 
       setStoryPoints(initialValues.story_points || undefined);
@@ -290,6 +348,7 @@ export function CreateTaskDialog({
       // Reset
       setTitle("");
       setType("task");
+      setStatus("todo");
       setDate(undefined);
       setEndDate(undefined);
       setPriority("medium");
@@ -298,8 +357,13 @@ export function CreateTaskDialog({
       setObjective("");
       setSuccessCriteria("");
       setLocation("");
-      setShowDetails(false);
-      setShowClarity(false);
+      setAgenda("");
+
+      const defaultShowClarity = typeof window !== "undefined"
+        ? localStorage.getItem("task_show_clarity_default") === "true"
+        : false;
+      setShowClarity(defaultShowClarity);
+
       setShowAgenda(false);
       setStoryPoints(undefined);
       setTimeEstimate(undefined);
@@ -360,18 +424,20 @@ export function CreateTaskDialog({
       return endDate?.toISOString() || (type === 'task' ? date?.toISOString() : undefined);
     })();
 
+    const finalDescription = description.trim() + (type === "event" && agenda.trim() ? `\n\nAgenda:\n${agenda.trim()}` : "");
+
     const input: CreateTaskInput = {
       title: title.trim(),
       type,
       priority: priority as any,
-      description: description.trim() || undefined,
+      description: finalDescription || undefined,
       objective: objective.trim() || undefined,
       success_criteria: successCriteria.trim() || undefined,
       location: location.trim() || undefined,
       start_date: isAllDay && date ? startOfDay(date).toISOString() : date?.toISOString(),
       due_date: computedDueDate,
       assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
-      status: (type === 'task' ? 'todo' : 'confirmed') as any,
+      status: status as any,
       parent_task_id: parentTaskId,
       story_points: storyPoints,
       time_estimate: timeEstimate,
@@ -402,331 +468,579 @@ export function CreateTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[600px] bg-background border-border p-0 overflow-hidden shadow-2xl [&>button]:hidden">
-        <DialogHeader className="p-6 pb-2 relative">
-          <DialogTitle className="sr-only">
-            {mode === "edit" ? "Edit Task" : "Create Task"}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Use this form to define task details, assignees, dates, and priorities.
-          </DialogDescription>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex bg-muted/50 rounded-lg p-1">
-              <button
-                onClick={() => setType("task")}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                  type === "task" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Task
-              </button>
-              <button
-                onClick={() => setType("event")}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                  type === "event" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Event
-              </button>
-            </div>
+      <DialogContent className={cn(
+        "bg-background border border-border p-0 overflow-hidden shadow-2xl transition-all duration-200 [&>button]:hidden text-foreground flex flex-col w-full",
+        isMaximized ? "sm:max-w-[900px] h-[650px] rounded-xl" : "sm:max-w-[900px] h-[420px] rounded-xl"
+      )}>
+        <DialogTitle className="sr-only">
+          {mode === "edit" ? "Edit Task" : "Create Task"}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          Use this form to define task details, assignees, dates, and priorities.
+        </DialogDescription>
 
-            <div className="flex items-center gap-3">
-              {/* Top Right Actions: All Day & Date */}
-              <div className="flex items-center gap-3 pr-2">
-                <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-muted/30 border border-border/50">
-                  <Switch id="header-all-day" checked={isAllDay} onCheckedChange={setIsAllDay} className="scale-75" />
-                  <Label htmlFor="header-all-day" className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider cursor-pointer pr-1">All Day</Label>
+        {/* Header Breadcrumbs & Action Row */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-2 bg-background select-none">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+            {/* Org Badge Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-0.5 px-2 py-0.5 rounded text-secondary-foreground hover:text-foreground hover:bg-secondary/80 transition-colors cursor-pointer focus:outline-none font-semibold">
+                <span className="truncate max-w-[120px]">{currentOrg?.name || "KAY"}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-popover border border-border text-popover-foreground max-h-60 overflow-y-auto custom-scrollbar">
+                {organisations.map((org) => (
+                  <DropdownMenuItem
+                    key={org.id}
+                    onClick={() => setSelectedOrgId(org.id)}
+                    className="hover:bg-accent focus:bg-accent hover:text-accent-foreground focus:text-accent-foreground cursor-pointer flex items-center gap-2"
+                  >
+                    <span>{org.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <ChevronRight className="size-3 text-muted-foreground" />
+
+            {/* Space Badge Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-0.5 px-2 py-0.5 rounded text-secondary-foreground hover:text-foreground hover:bg-secondary/80 transition-colors cursor-pointer focus:outline-none font-medium">
+                <span className="truncate max-w-[120px]">{currentSpace?.name || "General"}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-popover border border-border text-popover-foreground max-h-60 overflow-y-auto custom-scrollbar">
+                {spacesForSelectedOrg.map((space) => (
+                  <DropdownMenuItem
+                    key={space.id}
+                    onClick={() => setSelectedSpaceId(space.id)}
+                    className="hover:bg-accent focus:bg-accent hover:text-accent-foreground focus:text-accent-foreground cursor-pointer"
+                  >
+                    <span>{space.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <ChevronRight className="size-3 text-muted-foreground" />
+
+            {/* Task/Event Dropdown Selector */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-0.5 text-foreground/80 hover:text-foreground transition-colors font-semibold focus:outline-none cursor-pointer">
+                <span>{type === "task" ? "New task" : "New event"}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-popover border border-border text-popover-foreground">
+                <DropdownMenuItem onClick={() => setType("task")} className="hover:bg-accent focus:bg-accent hover:text-accent-foreground focus:text-accent-foreground cursor-pointer">
+                  New task
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setType("event")} className="hover:bg-accent focus:bg-accent hover:text-accent-foreground focus:text-accent-foreground cursor-pointer">
+                  New event
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Top-Right Controls */}
+          <div className="flex items-center gap-2.5">
+            {parentTaskId && (
+              <Badge variant="outline" className="bg-muted text-muted-foreground border-none text-[9px] uppercase tracking-wider px-2 py-0">
+                Subtask of {parentTaskTitle}
+              </Badge>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsMaximized(!isMaximized)}
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all focus:outline-none cursor-pointer"
+              title={isMaximized ? "Restore window" : "Expand window"}
+            >
+              {isMaximized ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all focus:outline-none cursor-pointer"
+              title="Close dialog"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Dialog Content Canvas & Pills Container */}
+        <div className="flex-1 overflow-hidden px-6 pb-4 flex flex-col justify-between">
+
+          {/* Scrollable Fields Canvas */}
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar min-h-0">
+            {/* Title input and Slash commands */}
+            <div className="relative pt-1">
+              <input
+                autoFocus
+                value={title}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTitle(val);
+                  setShowCommandMenu(val.startsWith("/") && val.length > 0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !showCommandMenu) {
+                    handleSubmit();
+                  }
+                }}
+                placeholder={type === "task" ? "Task title" : "Event title"}
+                className="w-full text-[19px] font-semibold bg-transparent border-0 p-0 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
+              />
+
+              {showCommandMenu && (
+                <div className="absolute left-0 top-full z-50 w-64 mt-1 bg-popover border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                  <Command className="bg-transparent text-popover-foreground">
+                    <CommandList>
+                      <CommandGroup heading="Quick Actions">
+                        <CommandItem onSelect={() => {
+                          setPriority("urgent");
+                          setShowCommandMenu(false);
+                        }} className="gap-2 cursor-pointer text-xs hover:bg-muted">
+                          <Flag className="size-3.5 text-red-500" /> Set Urgent Priority
+                        </CommandItem>
+                        <CommandItem onSelect={() => { setDate(startOfToday()); setShowCommandMenu(false); }} className="gap-2 cursor-pointer text-xs hover:bg-muted">
+                          <CalendarIcon className="size-3.5 text-blue-500" /> Due Today
+                        </CommandItem>
+                        <CommandItem onSelect={() => { setType("event"); setShowCommandMenu(false); }} className="gap-2 cursor-pointer text-xs hover:bg-muted">
+                          <Clock className="size-3.5 text-purple-500" /> Convert to Event
+                        </CommandItem>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
                 </div>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors text-[11px] font-bold text-primary">
-                      <CalendarIcon className="size-3.5" />
-                      {date && isValidDate(date) ? (
-                        isAllDay
-                          ? (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
-                            ? `${safeFormat(date, "MMM d")} - ${safeFormat(endDate, "MMM d, yyyy")}`
-                            : safeFormat(date, "MMM d, yyyy"))
-                          : (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
-                            ? `${safeFormat(date, "MMM d, h:mm a")} - ${safeFormat(endDate, "MMM d, h:mm a")}`
-                            : safeFormat(date, "MMM d, h:mm a"))
-                      ) : "Set date"}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 w-auto bg-background border-border shadow-xl" align="end">
-                    <div className="flex flex-col">
-                      <PopoverClose ref={dateCloseRef} className="hidden" />
-                      <Calendar
-                        mode="range"
-                        selected={
-                          isDragging && dragStart && dragEnd
-                            ? getOrderedRange(dragStart, dragEnd)
-                            : { from: date, to: endDate || date }
-                        }
-                        onSelect={(range) => {
-                          if (range?.from) {
-                            const newStart = new Date(range.from);
-                            if (date && !isAllDay) {
-                              newStart.setHours(date.getHours(), date.getMinutes());
-                            }
-                            setDate(newStart);
-
-                            if (range.to) {
-                              const newEnd = new Date(range.to);
-                              if (endDate && !isAllDay) {
-                                newEnd.setHours(endDate.getHours(), endDate.getMinutes());
-                              } else if (!isAllDay) {
-                                newEnd.setHours(newStart.getHours() + 1, newStart.getMinutes());
-                              }
-                              setEndDate(newEnd);
-                            } else {
-                              setEndDate(undefined);
-                            }
-
-                            // Auto-close on two-click range completion
-                            if (isAllDay && range.to) {
-                              dateCloseRef.current?.click();
-                            }
-                          } else {
-                            setDate(undefined);
-                            setEndDate(undefined);
-                          }
-                        }}
-                        components={{
-                          DayButton: (props) => (
-                            <CalendarDayButton
-                              {...props}
-                              onMouseDown={(e) => {
-                                if (e.button === 0) { // left click
-                                  dragStartRef.current = props.day.date;
-                                  isMouseDownRef.current = true;
-                                  hasDraggedRef.current = false;
-                                }
-                                props.onMouseDown?.(e);
-                              }}
-                              onMouseEnter={(e) => {
-                                if (isMouseDownRef.current && dragStartRef.current) {
-                                  const dayDate = props.day.date;
-                                  if (dayDate.getTime() !== dragStartRef.current.getTime()) {
-                                    if (!hasDraggedRef.current) {
-                                      hasDraggedRef.current = true;
-                                      setIsDragging(true);
-                                      setDragStart(dragStartRef.current);
-                                    }
-                                    setDragEnd(dayDate);
-                                  }
-                                }
-                                props.onMouseEnter?.(e);
-                              }}
-                            />
-                          )
-                        }}
-                        initialFocus
-                        className="bg-background"
-                      />
-                      {!isAllDay && (
-                        <div className="p-3 border-t border-border flex items-center justify-between gap-4 bg-muted/20">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Start Time</span>
-                            <Input
-                              type="time"
-                              className="h-8 w-[110px] text-xs bg-background border-border focus-visible:ring-primary/20"
-                              value={date && isValidDate(date) ? safeFormat(date, "HH:mm") : ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const newDate = date && isValidDate(date) ? new Date(date) : new Date();
-                                if (!val) {
-                                  newDate.setHours(0, 0, 0, 0);
-                                } else {
-                                  const [hStr, mStr] = val.split(':');
-                                  const h = parseInt(hStr, 10);
-                                  const m = parseInt(mStr, 10);
-                                  newDate.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
-                                }
-                                setDate(newDate);
-                              }}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-1 items-end">
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-right">End Time</span>
-                            <Input
-                              type="time"
-                              className="h-8 w-[110px] text-xs bg-background border-border focus-visible:ring-primary/20"
-                              value={endDate && isValidDate(endDate) ? safeFormat(endDate, "HH:mm") : (date && isValidDate(date) ? safeFormat(date, "HH:mm") : "")}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const newEndDate = endDate && isValidDate(endDate) ? new Date(endDate) : (date && isValidDate(date) ? new Date(date) : new Date());
-                                if (!val) {
-                                  newEndDate.setHours(0, 0, 0, 0);
-                                } else {
-                                  const [hStr, mStr] = val.split(':');
-                                  const h = parseInt(hStr, 10);
-                                  const m = parseInt(mStr, 10);
-                                  newEndDate.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
-                                }
-                                setEndDate(newEndDate);
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {parentTaskId && (
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] uppercase tracking-wider px-2 py-0">
-                  Subtask of {parentTaskTitle}
-                </Badge>
               )}
             </div>
-          </div>
-          <div className="relative mt-2 px-1">
-            <Input
-              autoFocus
-              value={title}
-              onChange={(e) => {
-                const val = e.target.value;
-                setTitle(val);
-                setShowCommandMenu(val.startsWith("/") && val.length > 0);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !showCommandMenu) {
-                  handleSubmit();
-                }
-              }}
-              placeholder={type === "task" ? "What needs to be done?" : "What is this event?"}
-              className="text-2xl font-semibold border-none bg-transparent px-3 py-3 h-auto focus-visible:ring-0 placeholder:text-muted-foreground/50"
+
+            {/* Description Textarea */}
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add description..."
+              className="w-full text-sm bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/65 focus:outline-none focus:ring-0 resize-none min-h-[100px] custom-scrollbar"
             />
 
-            {showCommandMenu && (
-              <div className="absolute left-3 top-full z-50 w-64 mt-1 bg-background border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                <Command className="bg-transparent">
-                  <CommandList>
-                    <CommandGroup heading="Quick Actions">
-                      <CommandItem onSelect={() => {
-                        // Assuming you have access to the current user's ID
-                        // For now, I'll assume allUsers has the current user or we can find them
-                        // But since I don't have the current user ID directly in this component's props, 
-                        // I'll leave it for now or just add the UI.
-                        setPriority("urgent");
-                        setShowCommandMenu(false);
-                      }} className="gap-2">
-                        <Flag className="size-3.5 text-red-500" /> Set Urgent Priority
-                      </CommandItem>
-                      <CommandItem onSelect={() => { setDate(startOfToday()); setShowCommandMenu(false); }} className="gap-2">
-                        <CalendarIcon className="size-3.5 text-blue-500" /> Due Today
-                      </CommandItem>
-                      <CommandItem onSelect={() => { setType("event"); setShowCommandMenu(false); }} className="gap-2">
-                        <Clock className="size-3.5 text-purple-500" /> Convert to Event
-                      </CommandItem>
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+            {/* Collapsible Clarity Section (Objective & Success Criteria) */}
+            {type === "task" && (
+              <Collapsible open={showClarity} onOpenChange={setShowClarity} className="w-full">
+                <CollapsibleContent className="space-y-2.5 pt-1 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="flex items-center gap-2.5 bg-background border border-border rounded-lg px-3 py-1.5 focus-within:border-muted-foreground/50 transition-colors">
+                    <Target className="size-3.5 text-muted-foreground shrink-0" />
+                    <input
+                      value={objective}
+                      onChange={(e) => setObjective(e.target.value)}
+                      placeholder="What is the high-level objective?"
+                      className="w-full text-xs bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2.5 bg-background border border-border rounded-lg px-3 py-1.5 focus-within:border-muted-foreground/50 transition-colors">
+                    <CheckCircle2 className="size-3.5 text-muted-foreground shrink-0" />
+                    <input
+                      value={successCriteria}
+                      onChange={(e) => setSuccessCriteria(e.target.value)}
+                      placeholder="How do we measure success?"
+                      className="w-full text-xs bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {/* Collapsible Event Section (Location & Agenda) */}
+            {type === "event" && (
+              <div className="space-y-3 pt-1 animate-in fade-in duration-150">
+                {/* Location Input */}
+                {location !== undefined && (
+                  <div className="flex items-center gap-2.5 bg-background border border-border rounded-lg px-3 py-1.5 focus-within:border-muted-foreground/50 transition-colors">
+                    <MapPin className="size-3.5 text-muted-foreground shrink-0" />
+                    <input
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Add location or meeting link..."
+                      className="w-full text-xs bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
+                    />
+                  </div>
+                )}
+
+                {/* Google Meet Toggle Block */}
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3.5 py-2">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="create-meet-link" className="text-xs font-semibold text-muted-foreground cursor-pointer">
+                      Schedule Google Meet
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Automatically generate a Google Meet video conference
+                    </p>
+                  </div>
+                  <Switch
+                    id="create-meet-link"
+                    checked={createMeetLink}
+                    onCheckedChange={setCreateMeetLink}
+                    className="scale-90 data-[state=checked]:bg-primary"
+                  />
+                </div>
+
+                {/* Agenda Collapsible */}
+                <Collapsible open={showAgenda} onOpenChange={setShowAgenda}>
+                  <CollapsibleContent className="animate-in fade-in slide-in-from-top-2 duration-150 mt-1">
+                    <textarea
+                      value={agenda}
+                      onChange={(e) => setAgenda(e.target.value)}
+                      placeholder="List agenda items..."
+                      className="w-full text-xs bg-background border border-border focus-within:border-muted-foreground/50 rounded-lg p-3 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0 resize-none min-h-[80px]"
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             )}
           </div>
-        </DialogHeader>
 
-        <div className="px-6 pb-6 space-y-6">
-          {/* Metadata Chips */}
-          <div className="flex flex-wrap gap-2 items-center">
-            {/* Event Type (Event Only) */}
-            {type === "event" && (
+          {/* Metadata Inline Pills Row (Always pinned to bottom of dialog canvas) */}
+          <div className="pt-3 pb-1 flex flex-wrap gap-2 items-center select-none overflow-x-auto no-scrollbar">
+
+            {/* Status Selector Pill */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 text-secondary-foreground capitalize cursor-pointer">
+                  <StatusIcon status={status} type={type} className="size-3.5" />
+                  <span>{status.replace("-", " ")}</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-1 w-36 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                {(type === "task" ? STATUS_OPTIONS : EVENT_STATUS_OPTIONS).map((opt) => (
+                  <PopoverClose asChild key={opt}>
+                    <button
+                      onClick={() => setStatus(opt)}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors text-left capitalize cursor-pointer"
+                    >
+                      <StatusIcon status={opt} type={type} className="size-3.5" />
+                      <span>{opt.replace("-", " ")}</span>
+                    </button>
+                  </PopoverClose>
+                ))}
+              </PopoverContent>
+            </Popover>
+
+            {/* Priority Pill (Task Only) */}
+            {type === "task" && (
               <Popover>
                 <PopoverTrigger asChild>
-                  <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground capitalize">
-                    <Layout className="size-3.5" />
-                    {eventType}
+                  <button className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80",
+                    priority === "urgent" ? "text-red-400 font-semibold" :
+                      priority === "high" ? "text-orange-400 font-semibold" :
+                        priority === "medium" ? "text-yellow-400 font-semibold" :
+                          "text-muted-foreground"
+                  )}>
+                    <currentPriority.icon className="size-3.5" />
+                    <span>{currentPriority.label}</span>
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="p-1 w-32 bg-background border-border">
-                  {["meeting", "call", "birthday", "workshop", "other"].map((t) => (
-                    <PopoverClose asChild key={t}>
+                <PopoverContent className="p-1 w-32 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                  {PRIORITY_LEVELS.map((p) => (
+                    <PopoverClose asChild key={p.value}>
                       <button
-                        onClick={() => setEventType(t)}
-                        className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors capitalize"
+                        onClick={() => setPriority(p.value)}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors text-left cursor-pointer"
                       >
-                        {t}
+                        <p.icon className={cn("size-3.5", p.color.split(' ')[0])} />
+                        <span>{p.label}</span>
                       </button>
                     </PopoverClose>
                   ))}
                 </PopoverContent>
               </Popover>
             )}
-            {type === "event" && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground">
-                    <Clock className="size-3.5" />
-                    {endDate && isValidDate(endDate) ? safeFormat(endDate, "HH:mm") : "End time"}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="p-4 w-48 bg-background border-border">
-                  <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">End Time</div>
-                  <Input
-                    type="time"
-                    className="bg-muted/50 border-border"
-                    value={endDate && isValidDate(endDate) ? safeFormat(endDate, "HH:mm") : ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const d = endDate && isValidDate(endDate) ? new Date(endDate) : (date && isValidDate(date) ? new Date(date) : new Date());
-                      if (!val) {
-                        d.setHours(0, 0, 0, 0);
-                      } else {
-                        const [hStr, mStr] = val.split(':');
-                        const h = parseInt(hStr, 10);
-                        const m = parseInt(mStr, 10);
-                        d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
-                      }
-                      setEndDate(d);
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
 
-            {/* Priority (Task Only) */}
-            {type === "task" && (
+            {/* Date Picker Pill */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80",
+                  date ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
+                )}>
+                  <CalendarIcon className="size-3.5" />
+                  <span>
+                    {date && isValidDate(date) ? (
+                      isAllDay
+                        ? (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
+                          ? `${safeFormat(date, "MMM d")} - ${safeFormat(endDate, "MMM d, yyyy")}`
+                          : safeFormat(date, "MMM d, yyyy"))
+                        : (endDate && isValidDate(endDate) && safeFormat(date, "yyyy-MM-dd") !== safeFormat(endDate, "yyyy-MM-dd")
+                          ? `${safeFormat(date, "MMM d, h:mm a")} - ${safeFormat(endDate, "MMM d, h:mm a")}`
+                          : safeFormat(date, "MMM d, h:mm a"))
+                    ) : "Set date"}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-auto bg-popover border border-border shadow-xl rounded-lg overflow-hidden" align="start">
+                <div className="flex flex-col">
+                  <PopoverClose ref={dateCloseRef} className="hidden" />
+                  <Calendar
+                    mode="range"
+                    selected={
+                      isDragging && dragStart && dragEnd
+                        ? getOrderedRange(dragStart, dragEnd)
+                        : { from: date, to: endDate || date }
+                    }
+                    onSelect={(range) => {
+                      if (range?.from) {
+                        const newStart = new Date(range.from);
+                        if (date && !isAllDay) {
+                          newStart.setHours(date.getHours(), date.getMinutes());
+                        }
+                        setDate(newStart);
+
+                        if (range.to) {
+                          const newEnd = new Date(range.to);
+                          if (endDate && !isAllDay) {
+                            newEnd.setHours(endDate.getHours(), endDate.getMinutes());
+                          } else if (!isAllDay) {
+                            newEnd.setHours(newStart.getHours() + 1, newStart.getMinutes());
+                          }
+                          setEndDate(newEnd);
+                        } else {
+                          setEndDate(undefined);
+                        }
+
+                        if (isAllDay && range.to) {
+                          dateCloseRef.current?.click();
+                        }
+                      } else {
+                        setDate(undefined);
+                        setEndDate(undefined);
+                      }
+                    }}
+                    components={{
+                      DayButton: (props) => (
+                        <CalendarDayButton
+                          {...props}
+                          onMouseDown={(e) => {
+                            if (e.button === 0) {
+                              dragStartRef.current = props.day.date;
+                              isMouseDownRef.current = true;
+                              hasDraggedRef.current = false;
+                            }
+                            props.onMouseDown?.(e);
+                          }}
+                          onMouseEnter={(e) => {
+                            if (isMouseDownRef.current && dragStartRef.current) {
+                              const dayDate = props.day.date;
+                              if (dayDate.getTime() !== dragStartRef.current.getTime()) {
+                                if (!hasDraggedRef.current) {
+                                  hasDraggedRef.current = true;
+                                  setIsDragging(true);
+                                  setDragStart(dragStartRef.current);
+                                }
+                                setDragEnd(dayDate);
+                              }
+                            }
+                            props.onMouseEnter?.(e);
+                          }}
+                        />
+                      )
+                    }}
+                    initialFocus
+                    className="bg-popover text-foreground font-sans"
+                  />
+                  <div className="p-3 border-t border-border flex flex-col gap-3 bg-background/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">All Day</span>
+                      <Switch checked={isAllDay} onCheckedChange={setIsAllDay} className="scale-75 data-[state=checked]:bg-primary" />
+                    </div>
+                    {!isAllDay && (
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Start Time</span>
+                          <Input
+                            type="time"
+                            className="h-8 w-[110px] text-xs bg-background border-border text-foreground focus-visible:ring-primary/20"
+                            value={date && isValidDate(date) ? safeFormat(date, "HH:mm") : ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const newDate = date && isValidDate(date) ? new Date(date) : new Date();
+                              if (!val) {
+                                newDate.setHours(0, 0, 0, 0);
+                              } else {
+                                const [hStr, mStr] = val.split(':');
+                                const h = parseInt(hStr, 10);
+                                const m = parseInt(mStr, 10);
+                                newDate.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+                              }
+                              setDate(newDate);
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1 items-end">
+                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-right">End Time</span>
+                          <Input
+                            type="time"
+                            className="h-8 w-[110px] text-xs bg-background border-border text-foreground focus-visible:ring-primary/20"
+                            value={endDate && isValidDate(endDate) ? safeFormat(endDate, "HH:mm") : (date && isValidDate(date) ? safeFormat(date, "HH:mm") : "")}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const newEndDate = endDate && isValidDate(endDate) ? new Date(endDate) : (date && isValidDate(date) ? new Date(date) : new Date());
+                              if (!val) {
+                                newEndDate.setHours(0, 0, 0, 0);
+                              } else {
+                                const [hStr, mStr] = val.split(':');
+                                const h = parseInt(hStr, 10);
+                                const m = parseInt(mStr, 10);
+                                newEndDate.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+                              }
+                              setEndDate(newEndDate);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Assignees Pill */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80",
+                  assigneeIds.length > 0 ? "text-secondary-foreground" : "text-muted-foreground"
+                )}>
+                  {assigneeIds.length > 0 ? (
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex -space-x-1.5">
+                        {assigneeIds.map(id => {
+                          const user = resolvedUsers.find(u => u.id === id);
+                          return (
+                            <Avatar key={id} className="size-4.5 border border-background shrink-0">
+                              <AvatarImage src={user?.avatarUrl} />
+                              <AvatarFallback className="text-[7px] bg-secondary text-secondary-foreground font-bold">{(user?.name || "?")[0].toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                          );
+                        })}
+                      </div>
+                      <span className="text-xs text-secondary-foreground font-medium">
+                        {assigneeIds.length === 1
+                          ? (resolvedUsers.find(u => u.id === assigneeIds[0])?.name || "1 Assignee")
+                          : `${assigneeIds.length} Assigned`}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <Users className="size-3.5 text-muted-foreground" />
+                      <span>Assignee</span>
+                    </div>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-64 bg-popover border border-border text-popover-foreground overflow-hidden rounded-lg shadow-xl" align="start">
+                <Command className="bg-transparent">
+                  <CommandInput placeholder="Assign to..." className="border-none focus:ring-0 text-foreground placeholder:text-muted-foreground/50" />
+                  <CommandList className="max-h-56">
+                    <CommandEmpty>No members found.</CommandEmpty>
+                    <CommandGroup>
+                      {resolvedUsers.map((user) => (
+                        <CommandItem
+                          key={user.id}
+                          onSelect={() => {
+                            setAssigneeIds(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]);
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 cursor-pointer text-muted-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
+                        >
+                          <Avatar className="size-6">
+                            <AvatarImage src={user.avatarUrl} />
+                            <AvatarFallback className="bg-muted text-muted-foreground font-bold">{user.name[0].toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 flex flex-col">
+                            <span className="text-sm font-medium">{user.name}</span>
+                          </div>
+                          {assigneeIds.includes(user.id) && <CheckCircle2 className="size-4 text-indigo-500" />}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            {/* Event Specific Pills */}
+            {type === "event" && (
               <>
+                {/* Event Type Pill */}
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className={cn(
-                      "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-colors text-xs",
-                      currentPriority.color,
-                      "border-transparent hover:border-current"
-                    )}>
-                      <currentPriority.icon className="size-3.5" />
-                      {currentPriority.label}
+                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-all text-xs font-medium text-secondary-foreground capitalize focus:outline-none focus:ring-0 cursor-pointer">
+                      <Layout className="size-3.5 text-muted-foreground/60" />
+                      <span>{eventType}</span>
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="p-1 w-32 bg-background border-border">
-                    {PRIORITY_LEVELS.map((p) => (
-                      <PopoverClose asChild key={p.value}>
+                  <PopoverContent className="p-1 w-32 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                    {["meeting", "call", "birthday", "workshop", "other"].map((t) => (
+                      <PopoverClose asChild key={t}>
                         <button
-                          onClick={() => setPriority(p.value)}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+                          onClick={() => setEventType(t)}
+                          className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors capitalize text-left cursor-pointer"
                         >
-                          <p.icon className={cn("size-3", p.color.split(' ')[0])} />
-                          {p.label}
+                          {t}
                         </button>
                       </PopoverClose>
                     ))}
                   </PopoverContent>
                 </Popover>
 
-                {/* Story Points */}
+                {/* Location Toggle Pill */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocation(location !== undefined ? location : "");
+                  }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                    location ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
+                  )}
+                >
+                  <MapPin className="size-3.5" />
+                  <span>Location</span>
+                </button>
+
+                {/* Meet link Toggle Pill */}
+                <button
+                  type="button"
+                  onClick={() => setCreateMeetLink(!createMeetLink)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                    createMeetLink ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
+                  )}
+                >
+                  <Video className="size-3.5" />
+                  <span>Google Meet</span>
+                </button>
+
+                {/* Agenda Toggle Pill */}
+                <button
+                  type="button"
+                  onClick={() => setShowAgenda(!showAgenda)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                    showAgenda ? "text-indigo-400 font-semibold" : "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="size-3.5" />
+                  <span>Agenda</span>
+                </button>
+
+                {/* Story Points Pill */}
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground">
-                      <Zap className="size-3.5 text-yellow-500" />
-                      {storyPoints ? `${storyPoints} pts` : "Points"}
+                    <button className={cn(
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                      storyPoints ? "text-secondary-foreground" : "text-muted-foreground"
+                    )}>
+                      <Zap className={cn("size-3.5", storyPoints ? "text-yellow-500 animate-pulse" : "text-muted-foreground/60")} />
+                      <span>{storyPoints ? `${storyPoints} pts` : "Story points"}</span>
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="p-2 w-32 bg-background border-border">
+                  <PopoverContent className="p-2 w-36 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
                     <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Story Points</div>
                     <div className="grid grid-cols-3 gap-1">
                       {[1, 2, 3, 5, 8].map(pts => (
@@ -734,8 +1048,8 @@ export function CreateTaskDialog({
                           <button
                             onClick={() => setStoryPoints(pts)}
                             className={cn(
-                              "h-7 rounded flex items-center justify-center text-xs transition-colors",
-                              storyPoints === pts ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                              "h-7 rounded flex items-center justify-center text-xs transition-colors cursor-pointer",
+                              storyPoints === pts ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"
                             )}
                           >
                             {pts}
@@ -745,208 +1059,120 @@ export function CreateTaskDialog({
                       <PopoverClose asChild>
                         <button
                           onClick={() => setStoryPoints(undefined)}
-                          className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground"
+                          className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground cursor-pointer"
                         >
-                          -
+                          Clear
                         </button>
                       </PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>
 
-                {/* Time Estimate */}
+                {/* Time Estimate Pill */}
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground">
-                      <Timer className="size-3.5 text-blue-500" />
-                      {timeEstimate ? `${timeEstimate}m` : "Estimate"}
+                    <button className={cn(
+                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                      timeEstimate ? "text-secondary-foreground" : "text-muted-foreground"
+                    )}>
+                      <Timer className={cn("size-3.5", timeEstimate ? "text-blue-500" : "text-muted-foreground/60")} />
+                      <span>{timeEstimate ? `${timeEstimate}m` : "Estimate"}</span>
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="p-3 w-40 bg-background border-border">
+                  <PopoverContent className="p-3 w-44 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
                     <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Estimate (mins)</div>
                     <Input
                       type="number"
                       value={timeEstimate || ""}
                       onChange={(e) => setTimeEstimate(parseInt(e.target.value) || undefined)}
                       placeholder="e.g. 60"
-                      className="h-8 text-xs bg-muted/30"
+                      className="h-8 text-xs bg-background border-border text-foreground focus-visible:ring-primary/20 placeholder:text-muted-foreground/60"
                     />
                   </PopoverContent>
                 </Popover>
+
+                {/* Clarity Toggle Pill */}
+                <button
+                  type="button"
+                  onClick={() => setShowClarity(!showClarity)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                    showClarity ? "text-indigo-400 font-semibold" : "text-muted-foreground"
+                  )}
+                >
+                  <Target className="size-3.5" />
+                  <span>Clarity</span>
+                </button>
               </>
             )}
 
-            {/* Assignee */}
+            {/* Triple Dot Menu Popover */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="inline-flex items-center gap-1.5 px-1 py-1 rounded-full bg-muted/50 border border-border hover:border-accent transition-colors text-xs text-muted-foreground min-w-[32px]">
-                  {assigneeIds.length > 0 ? (
-                    <div className="flex -space-x-1 ml-1">
-                      {assigneeIds.map(id => {
-                        const user = resolvedUsers.find(u => u.id === id);
-                        return (
-                          <Avatar key={id} className="size-5 border border-background">
-                            <AvatarImage src={user?.avatarUrl} />
-                            <AvatarFallback className="text-[8px] bg-muted">{user?.name[0]}</AvatarFallback>
-                          </Avatar>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 px-1.5">
-                      <Users className="size-3.5" />
-                      Assign
-                    </div>
-                  )}
+                <button className="size-7 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-0 cursor-pointer">
+                  <span className="text-[10px] leading-none mb-1.5 font-bold">...</span>
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="p-0 w-64 bg-background border-border overflow-hidden">
-                <Command className="bg-transparent">
-                  <CommandInput placeholder="Assign to..." className="border-none focus:ring-0" />
-                  <CommandList>
-                    <CommandEmpty>No members found.</CommandEmpty>
-                    <CommandGroup>
-                      {resolvedUsers.map((user) => (
-                        <CommandItem
-                          key={user.id}
-                          onSelect={() => {
-                            setAssigneeIds(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]);
-                          }}
-                          className="flex items-center gap-2 px-3 py-2 cursor-pointer aria-selected:bg-muted"
-                        >
-                          <Avatar className="size-6">
-                            <AvatarImage src={user.avatarUrl} />
-                            <AvatarFallback>{user.name[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 flex flex-col">
-                            <span className="text-sm font-medium">{user.name}</span>
-                          </div>
-                          {assigneeIds.includes(user.id) && <CheckCircle2 className="size-4 text-primary" />}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+              <PopoverContent className="p-1 w-44 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                {type === "task" ? (
+                  <>
+                    <button
+                      onClick={() => setShowClarity(!showClarity)}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors text-left cursor-pointer"
+                    >
+                      <span>Toggle Clarity Fields</span>
+                      <span className="text-[9px] text-muted-foreground/50">{showClarity ? "ON" : "OFF"}</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowAgenda(!showAgenda)}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors text-left cursor-pointer"
+                    >
+                      <span>Toggle Agenda Field</span>
+                      <span className="text-[9px] text-muted-foreground/50">{showAgenda ? "ON" : "OFF"}</span>
+                    </button>
+                  </>
+                )}
               </PopoverContent>
             </Popover>
           </div>
-
-          {/* Progressive Disclosure Sections */}
-          <div className="space-y-3 pt-2">
-            {/* Details / Description */}
-            <Collapsible open={showDetails} onOpenChange={setShowDetails}>
-              <CollapsibleTrigger asChild>
-                <button className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1">
-                  <Plus className={cn("size-3 transition-transform", showDetails && "rotate-45")} />
-                  {description ? "Description added" : "Add details"}
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2">
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add context, links, or instructions..."
-                  className="bg-muted/30 border-border text-sm min-h-[100px] focus-visible:ring-primary/20"
-                />
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Clarity / Strategy (Task only) */}
-            {type === "task" && (
-              <Collapsible open={showClarity} onOpenChange={setShowClarity}>
-                <CollapsibleTrigger asChild>
-                  <button className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1">
-                    <Plus className={cn("size-3 transition-transform", showClarity && "rotate-45")} />
-                    {objective || successCriteria ? "Clarity defined" : "Add clarity (Objective & Success Criteria)"}
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="mt-2 space-y-3">
-                  <div className="relative">
-                    <Target className="absolute left-3 top-2.5 size-3.5 text-muted-foreground/60" />
-                    <Input
-                      value={objective}
-                      onChange={(e) => setObjective(e.target.value)}
-                      placeholder="What is the high-level objective?"
-                      className="bg-muted/30 border-border pl-9 text-sm h-9 focus-visible:ring-primary/20"
-                    />
-                  </div>
-                  <div className="relative">
-                    <CheckCircle2 className="absolute left-3 top-2.5 size-3.5 text-muted-foreground/60" />
-                    <Input
-                      value={successCriteria}
-                      onChange={(e) => setSuccessCriteria(e.target.value)}
-                      placeholder="How do we measure success?"
-                      className="bg-muted/30 border-border pl-9 text-sm h-9 focus-visible:ring-primary/20"
-                    />
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
-
-            {/* Location & Agenda (Event only) */}
-            {type === "event" && (
-              <div className="space-y-3">
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-2.5 size-3.5 text-muted-foreground/60" />
-                  <Input
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Add location or meeting link"
-                    className="bg-muted/30 border-border pl-9 text-sm h-9 focus-visible:ring-primary/20"
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/10 px-3 py-2 animate-in fade-in duration-200">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="create-meet-link" className="text-xs font-semibold text-foreground cursor-pointer">
-                      Schedule Google Meet
-                    </Label>
-                    <p className="text-[10px] text-muted-foreground">
-                      Automatically generate a Google Meet video conference
-                    </p>
-                  </div>
-                  <Switch
-                    id="create-meet-link"
-                    checked={createMeetLink}
-                    onCheckedChange={setCreateMeetLink}
-                  />
-                </div>
-
-                <Collapsible open={showAgenda} onOpenChange={setShowAgenda}>
-                  <CollapsibleTrigger asChild>
-                    <button className="flex items-center gap-2 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1">
-                      <Plus className={cn("size-3 transition-transform", showAgenda && "rotate-45")} />
-                      Add agenda
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2">
-                    <Textarea
-                      placeholder="List agenda items..."
-                      className="bg-muted/30 border-border text-sm min-h-[80px] focus-visible:ring-primary/20"
-                    />
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Action Row */}
-        <div className="px-6 py-4 bg-muted/20 border-t border-border flex items-center justify-between">
-          <div className="flex items-center gap-4 text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
-            <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">ENTER</kbd> TO CREATE</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-foreground">
-              Cancel
-            </Button>
+        {/* Action Row Footer */}
+        <div className="px-6 py-4 bg-background flex items-center justify-between select-none">
+          {/* Left: Attachment trigger */}
+          <button
+            type="button"
+            className="p-2 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all focus:outline-none cursor-pointer"
+            title="Attach file"
+            onClick={() => toast.info("Attachments are appended to description")}
+          >
+            <Paperclip className="size-3.5" />
+          </button>
+
+          {/* Right: Switch and Create buttons */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="footer-create-subtask"
+                checked={createMore}
+                onCheckedChange={setCreateMore}
+                className="scale-75 data-[state=checked]:bg-primary"
+              />
+              <Label htmlFor="footer-create-subtask" className="text-xs text-muted-foreground cursor-pointer select-none">
+                Create subtask
+              </Label>
+            </div>
+
             <Button
-              size="sm"
+              type="button"
               onClick={() => handleSubmit()}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 h-8 font-medium"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md px-4 h-8 font-semibold text-xs transition-all shadow-md active:scale-95 border-none cursor-pointer"
               disabled={!title.trim()}
             >
-              {mode === "edit" ? "Save Changes" : `Create ${type === 'task' ? 'Task' : 'Event'}`}
+              {mode === "edit" ? "Save changes" : `Create ${type === 'task' ? 'task' : 'event'}`}
             </Button>
           </div>
         </div>
