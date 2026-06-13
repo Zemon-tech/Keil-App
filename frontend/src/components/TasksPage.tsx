@@ -675,6 +675,7 @@ export function TasksPage() {
                     navigate("/tasks");
                     setParentTaskStack([]);
                   }}
+                  onOpenSidebar={!listPaneVisible ? () => setListPaneVisible(true) : undefined}
                 />
               ) : (
                 <TaskDetailPane
@@ -691,6 +692,7 @@ export function TasksPage() {
                   onNavigateToSubtask={handleNavigateToSubtask}
                   onNavigateToParent={handleNavigateToParent}
                   parentTask={parentTask}
+                  onOpenSidebar={!listPaneVisible ? () => setListPaneVisible(true) : undefined}
                 />
               )
             ) : (

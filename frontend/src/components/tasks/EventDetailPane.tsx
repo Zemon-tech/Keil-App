@@ -26,6 +26,7 @@ type Props = {
   onUpdateEvent?: (id: string, updates: any) => void;
   onEventDeleted?: (id: string) => void;
   onClose?: () => void;
+  onOpenSidebar?: () => void;
 };
 
 const TAB_HEADERS = {
@@ -47,6 +48,7 @@ export function EventDetailPane({
   event,
   onEventDeleted,
   onClose,
+  onOpenSidebar,
 }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -128,6 +130,7 @@ export function EventDetailPane({
         onDelete={handleDelete}
         onClose={onClose}
         onEditTask={() => setEditDialogOpen(true)}
+        onOpenSidebar={onOpenSidebar}
       />
 
       <CreateTaskDialog

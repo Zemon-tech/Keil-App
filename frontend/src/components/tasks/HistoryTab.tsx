@@ -124,11 +124,12 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
   };
 
   return (
-    <div className="flex h-full flex-1 min-h-0 flex-col md:flex-row md:divide-x md:divide-border/40 w-full min-w-0 bg-background text-foreground overflow-hidden">
-      {/* LEFT: Main History List */}
+    <div className="@container w-full h-full flex flex-col">
+      <div className="flex h-full flex-1 min-h-0 flex-col @3xl:flex-row @3xl:divide-x @3xl:divide-border/40 w-full min-w-0 bg-background text-foreground overflow-hidden">
+        {/* LEFT: Main History List */}
       <div className="flex flex-1 flex-col min-h-0 min-w-0">
         {/* Top Filter Bar */}
-        <div className="px-6 py-4 border-b border-border/40 shrink-0 flex items-center justify-between gap-4">
+        <div className="px-6 py-4 border-b border-border/40 shrink-0 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
             {["All changes", "Status", "Fields", "People"].map((f) => {
               const fKey = f.split(" ")[0].toLowerCase();
@@ -277,7 +278,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
       </div>
 
       {/* RIGHT: Sidebar Summary */}
-      <ScrollArea className="size-full shrink-0 md:w-[280px] lg:w-[320px] bg-background border-l border-border/40">
+      <ScrollArea className="w-full h-auto @3xl:h-full shrink-0 @3xl:w-[280px] @4xl:w-[320px] bg-background border-t @3xl:border-t-0 @3xl:border-l border-border/40">
         <div className="space-y-10 p-8">
 
           {/* Summary Section */}
@@ -349,6 +350,7 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
 
         </div>
       </ScrollArea>
+      </div>
     </div>
   );
 }
