@@ -330,6 +330,25 @@ export const updateTask = async (
     if (input.status !== undefined && input.status !== existingTask.status) {
       await logSpaceActivity(context, userId, LogEntityType.TASK, taskId, LogActionType.STATUS_CHANGED, { status: existingTask.status }, { status: input.status }, client);
 
+      if (input.status === TaskStatus.DONE) {
+        const subtasks = await orgTaskRepository.findSubtasks(taskId, client);
+        for (const subtask of subtasks) {
+          if (subtask.status !== TaskStatus.DONE) {
+            await orgTaskRepository.updateStatus(subtask.id, TaskStatus.DONE, client);
+            await logSpaceActivity(
+              context,
+              userId,
+              LogEntityType.TASK,
+              subtask.id,
+              LogActionType.STATUS_CHANGED,
+              { status: subtask.status },
+              { status: TaskStatus.DONE },
+              client,
+            );
+          }
+        }
+      }
+
       // Trigger task_status_changed outbox job
       const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
       const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
@@ -428,6 +447,25 @@ export const changeTaskStatus = async (
       { status },
       client,
     );
+
+    if (status === TaskStatus.DONE) {
+      const subtasks = await orgTaskRepository.findSubtasks(taskId, client);
+      for (const subtask of subtasks) {
+        if (subtask.status !== TaskStatus.DONE) {
+          await orgTaskRepository.updateStatus(subtask.id, TaskStatus.DONE, client);
+          await logSpaceActivity(
+            context,
+            userId,
+            LogEntityType.TASK,
+            subtask.id,
+            LogActionType.STATUS_CHANGED,
+            { status: subtask.status },
+            { status: TaskStatus.DONE },
+            client,
+          );
+        }
+      }
+    }
 
     // Trigger task_status_changed outbox job
     const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);

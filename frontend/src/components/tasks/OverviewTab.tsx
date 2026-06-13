@@ -153,13 +153,17 @@ export const OverviewTab = ({
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                   Subtasks
                 </span>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {completedCount}/{subtasks.length} complete
-                </span>
+                {subtasks.length > 0 && (
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {completedCount}/{subtasks.length} complete
+                  </span>
+                )}
               </div>
 
               {/* Progress bar */}
-              <Progress value={progressPercent} className="mb-3 h-1" />
+              {subtasks.length > 0 && (
+                <Progress value={progressPercent} className="mb-3 h-1" />
+              )}
 
               <div className="space-y-px">
                 {subtasksLoading && (
@@ -220,12 +224,6 @@ export const OverviewTab = ({
                     </div>
                   );
                 })}
-
-                {!subtasksLoading && subtasks.length === 0 && (
-                  <p className="px-2 py-1.5 text-xs italic text-muted-foreground">
-                    No subtasks yet
-                  </p>
-                )}
 
                 {canCreateTask && (
                   <button
