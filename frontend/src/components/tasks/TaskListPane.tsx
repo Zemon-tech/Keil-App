@@ -1627,11 +1627,11 @@ export function TaskListPane({
 
       {/* ── Task list ──────────────────────────────────────────── */}
       <ScrollArea className="flex-1 min-h-0">
-        <div ref={containerRef} className="pl-0 pr-0 py-2 space-y-1 pb-20">
+        <div ref={containerRef} className="px-2 py-2 space-y-1 pb-20">
 
           {/* Loading skeleton */}
           {isLoading && (
-            <div className="space-y-px pl-0 pr-0 py-2">
+            <div className="space-y-px px-2 py-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
