@@ -320,6 +320,19 @@ export function useUpdateOrgTask(orgId: string | null, spaceId: string | null) {
       queryClient.invalidateQueries({
         queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
       });
+      if (data.parent_task_id) {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.parent_task_id),
+        });
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.detail(orgId, spaceId, data.parent_task_id),
+        });
+      }
+      if (data.status === 'done' || data.status === 'completed') {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.id),
+        });
+      }
     },
     onError: (error: any) => {
       const serverMessage = error?.response?.data?.message;
@@ -385,12 +398,21 @@ export function useDeleteOrgTask(orgId: string | null, spaceId: string | null) {
         });
       });
     },
-    onSuccess: (_data, { id: taskId }) => {
+    onSuccess: (_data, { id: taskId }, context) => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       queryClient.removeQueries({
         queryKey: orgTaskKeys.detail(orgId, spaceId, taskId),
       });
+      const parentId = context?.previousDetail?.parent_task_id;
+      if (parentId) {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, parentId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.detail(orgId, spaceId, parentId),
+        });
+      }
     },
     onError: (err, { id: taskId }, context) => {
       if (context?.previousTasksQueries) {
@@ -438,6 +460,19 @@ export function useChangeOrgTaskStatus(
         queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
       });
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      if (data.parent_task_id) {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.parent_task_id),
+        });
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.detail(orgId, spaceId, data.parent_task_id),
+        });
+      }
+      if (data.status === 'done' || data.status === 'completed') {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.id),
+        });
+      }
     },
     onError: (error, { id }) => {
       const httpStatus = error?.response?.status;
