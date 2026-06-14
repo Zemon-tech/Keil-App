@@ -47,7 +47,7 @@ export class MotionPageRepository extends BaseRepository<MotionPage> {
   ): Promise<Omit<MotionPage, 'content'>[]> {
     const deletedClause = includeDeleted ? '' : 'AND deleted_at IS NULL';
     const query = `
-      SELECT id, org_id, space_id, created_by, updated_by, parent_id, title, icon, cover_image, cover_position, position, small_text, full_width, created_at, updated_at, deleted_at
+      SELECT id, org_id, space_id, created_by, updated_by, parent_id, title, icon, cover_image, cover_position, position, small_text, full_width, created_at, updated_at, deleted_at, notion_page_id, notion_last_synced_at
       FROM public.motion_pages
       WHERE org_id = $1
         AND space_id = $2

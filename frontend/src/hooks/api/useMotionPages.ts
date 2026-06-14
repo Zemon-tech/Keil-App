@@ -27,6 +27,8 @@ export interface MotionPageDTO {
   updated_at: string;
   deleted_at: string | null;
   share_permission?: MotionPermission;
+  notion_page_id?: string | null;
+  notion_last_synced_at?: string | null;
 }
 
 export type MotionShareType = "public_link" | "space";

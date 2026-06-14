@@ -20,6 +20,10 @@ export const config = {
     githubClientId: process.env.GITHUB_CLIENT_ID || "",
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "",
     githubRedirectUri: process.env.GITHUB_REDIRECT_URI || "",
+    // Notion Integration OAuth
+    notionClientId: process.env.NOTION_CLIENT_ID || "",
+    notionClientSecret: process.env.NOTION_CLIENT_SECRET || "",
+    notionRedirectUri: process.env.NOTION_REDIRECT_URI || "",
     frontendUrl: process.env.FRONTEND_URL,
     // Backend public URL — used to construct the Google Calendar webhook address
     // Must be publicly reachable by Google (e.g. https://api.yourdomain.com)

@@ -176,6 +176,8 @@ export interface MotionPage {
   updated_at: Date;
   deleted_at: Date | null;
   share_permission?: MotionPermission;
+  notion_page_id?: string | null;
+  notion_last_synced_at?: Date | null;
 }
 
 export interface MotionPageShare {
