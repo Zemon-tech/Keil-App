@@ -516,10 +516,6 @@ export function AiAssistant() {
             return `The user is on the Calendar/Schedule page.`;
         }
 
-        if (pathname === "/inbox") {
-            return `The user is on the Inbox/Messages page.`;
-        }
-
         // /motion/:pageId (skip /motion/profile)
         const motionPageMatch = pathname.match(/^\/motion\/([^/]+)$/);
         if (motionPageMatch && motionPageMatch[1] !== "profile") {

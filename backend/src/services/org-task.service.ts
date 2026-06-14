@@ -42,6 +42,7 @@ export interface OrgTaskDTO {
   location?: string | null;
   is_all_day?: boolean;
   meet_link?: string | null;
+  guests?: string[] | null;
   user_space_role?: string;
   org_name?: string;
   space_name?: string;
@@ -74,6 +75,7 @@ export interface CreateOrgTaskInput {
   time_estimate?: number | null;
   meet_link?: string | null;
   create_meet_link?: boolean;
+  guests?: string[];
 }
 
 export interface UpdateOrgTaskInput {
@@ -92,6 +94,8 @@ export interface UpdateOrgTaskInput {
   story_points?: number | null;
   time_estimate?: number | null;
   meet_link?: string | null;
+  create_meet_link?: boolean;
+  guests?: string[];
 }
 
 const toISO = (value: Date | string | null | undefined): string | null => {
@@ -124,6 +128,7 @@ const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string; crea
   location: task.location,
   is_all_day: task.is_all_day,
   meet_link: task.meet_link ?? null,
+  guests: task.guests ?? null,
   user_space_role: task.user_space_role,
   org_name: (task as any).org_name,
   space_name: (task as any).space_name,
@@ -220,7 +225,7 @@ export const createTask = async (
   }
 
   // Auto-generate Google Meet space if requested
-  if (input.type === "event" && create_meet_link) {
+  if (create_meet_link) {
     try {
       const meetLink = await createGoogleMeetSpace(input.created_by);
       (taskData as any).meet_link = meetLink;
@@ -311,8 +316,19 @@ export const updateTask = async (
     input.due_date !== undefined ? input.due_date : existingTask.due_date,
   );
 
+  // Auto-generate Google Meet space if requested on update
+  if (input.create_meet_link && !existingTask.meet_link) {
+    try {
+      const meetLink = await createGoogleMeetSpace(userId);
+      input.meet_link = meetLink;
+    } catch (meetErr) {
+      log.error({ err: meetErr, userId }, "Failed to auto-create Google Meet space on task update");
+    }
+  }
+
   const result = await orgTaskRepository.executeInTransaction(async (client) => {
-    const updated = await orgTaskRepository.update(taskId, input as Partial<Task>, client);
+    const { create_meet_link, ...updates } = input;
+    const updated = await orgTaskRepository.update(taskId, updates as Partial<Task>, client);
     if (!updated) return null;
 
     if (input.title !== undefined && input.title !== existingTask.title) {
@@ -329,6 +345,25 @@ export const updateTask = async (
     }
     if (input.status !== undefined && input.status !== existingTask.status) {
       await logSpaceActivity(context, userId, LogEntityType.TASK, taskId, LogActionType.STATUS_CHANGED, { status: existingTask.status }, { status: input.status }, client);
+
+      if (input.status === TaskStatus.DONE) {
+        const subtasks = await orgTaskRepository.findSubtasks(taskId, client);
+        for (const subtask of subtasks) {
+          if (subtask.status !== TaskStatus.DONE) {
+            await orgTaskRepository.updateStatus(subtask.id, TaskStatus.DONE, client);
+            await logSpaceActivity(
+              context,
+              userId,
+              LogEntityType.TASK,
+              subtask.id,
+              LogActionType.STATUS_CHANGED,
+              { status: subtask.status },
+              { status: TaskStatus.DONE },
+              client,
+            );
+          }
+        }
+      }
 
       // Trigger task_status_changed outbox job
       const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
@@ -428,6 +463,25 @@ export const changeTaskStatus = async (
       { status },
       client,
     );
+
+    if (status === TaskStatus.DONE) {
+      const subtasks = await orgTaskRepository.findSubtasks(taskId, client);
+      for (const subtask of subtasks) {
+        if (subtask.status !== TaskStatus.DONE) {
+          await orgTaskRepository.updateStatus(subtask.id, TaskStatus.DONE, client);
+          await logSpaceActivity(
+            context,
+            userId,
+            LogEntityType.TASK,
+            subtask.id,
+            LogActionType.STATUS_CHANGED,
+            { status: subtask.status },
+            { status: TaskStatus.DONE },
+            client,
+          );
+        }
+      }
+    }
 
     // Trigger task_status_changed outbox job
     const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);

@@ -5,22 +5,11 @@ import { useAppContext } from "@/contexts/AppContext";
 import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
-import { X, Maximize2, ArrowLeft, Users, Trash2 } from "lucide-react";
+import { X, Maximize2, ArrowLeft, Users } from "lucide-react";
 
-import { useChatChannels, useDeleteChannel } from "@/hooks/api/useChat";
+import { useChatChannels } from "@/hooks/api/useChat";
 import { useMe } from "@/hooks/api/useMe";
 import { GroupSettingsDialog } from "./GroupSettingsDialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 
 export function ChatDrawer() {
   const { isChatOpen, activeChannelId, closeChat, openChatDialog, setActiveChannel } =
@@ -32,7 +21,6 @@ export function ChatDrawer() {
   const { data: channels = [] } = useChatChannels(activeOrgId, activeSpaceId);
   const currentChannel = channels.find((c) => c.id === activeChannelId);
   const { data: me } = useMe();
-  const deleteChannel = useDeleteChannel(activeOrgId, activeSpaceId);
 
   const channelName = currentChannel?.type === "direct"
     ? currentChannel.members.find((m) => m.id !== me?.id)?.name ?? "Unknown"
@@ -88,38 +76,13 @@ export function ChatDrawer() {
                     spaceId={activeSpaceId}
                   />
                 ) : (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <button
-                        className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        aria-label="Delete chat"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete this direct message? This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          onClick={() => {
-                            if (activeChannelId) {
-                              deleteChannel.mutate(activeChannelId);
-                              setActiveChannel(null);
-                            }
-                          }}
-                        >
-                          Delete Chat
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <button
+                    onClick={handleExpandClick}
+                    className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    aria-label="Maximize chat"
+                  >
+                    <Maximize2 className="size-4" />
+                  </button>
                 )}
               </div>
             </>

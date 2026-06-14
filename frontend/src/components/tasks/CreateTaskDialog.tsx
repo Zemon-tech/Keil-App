@@ -206,6 +206,8 @@ export function CreateTaskDialog({
   const [isAllDay, setIsAllDay] = useState(true);
   const [eventType, setEventType] = useState<string>("meeting");
   const [createMeetLink, setCreateMeetLink] = useState(false);
+  const [guests, setGuests] = useState<string[]>([]);
+  const [guestInput, setGuestInput] = useState("");
 
   // Date range drag-to-select states
   const [isDragging, setIsDragging] = useState(false);
@@ -302,6 +304,26 @@ export function CreateTaskDialog({
     });
   }, [title, resolvedUsers, mode, open]);
 
+  const handleAddGuest = () => {
+    const email = guestInput.trim().toLowerCase();
+    if (!email) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Invalid email address");
+      return;
+    }
+    if (guests.includes(email)) {
+      toast.error("Guest already added");
+      return;
+    }
+    setGuests(prev => [...prev, email]);
+    setGuestInput("");
+  };
+
+  const handleRemoveGuest = (emailToRemove: string) => {
+    setGuests(prev => prev.filter(email => email !== emailToRemove));
+  };
+
   // ── Pre-fill Mode ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (open && initialValues) {
@@ -344,6 +366,8 @@ export function CreateTaskDialog({
 
       setStoryPoints(initialValues.story_points || undefined);
       setTimeEstimate((initialValues as any).time_estimate || undefined);
+      setGuests(initialValues.guests ?? []);
+      setCreateMeetLink(!!initialValues.meet_link || !!(initialValues as any).create_meet_link);
     } else if (open && mode === "create") {
       // Reset
       setTitle("");
@@ -371,6 +395,8 @@ export function CreateTaskDialog({
       setIsAllDay(true);
       setEventType("meeting");
       setCreateMeetLink(false);
+      setGuests([]);
+      setGuestInput("");
     }
   }, [open, mode, initialValues]);
 
@@ -441,9 +467,9 @@ export function CreateTaskDialog({
       parent_task_id: parentTaskId,
       story_points: storyPoints,
       time_estimate: timeEstimate,
-      is_all_day: isAllDay,
       event_type: type === 'event' ? eventType : undefined,
-      create_meet_link: type === 'event' ? createMeetLink : undefined,
+      create_meet_link: createMeetLink,
+      guests: guests.length > 0 ? guests : undefined,
     };
 
     const options = {
@@ -963,6 +989,82 @@ export function CreateTaskDialog({
               </PopoverContent>
             </Popover>
 
+            {/* Google Meet Toggle Pill */}
+            <button
+              type="button"
+              onClick={() => setCreateMeetLink(!createMeetLink)}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                createMeetLink ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
+              )}
+            >
+              <Video className="size-3.5" />
+              <span>Google Meet</span>
+            </button>
+
+            {/* Invite Guests Pill & Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
+                  guests.length > 0 ? "text-indigo-400 font-semibold" : "text-muted-foreground"
+                )}>
+                  <Users className={cn("size-3.5", guests.length > 0 ? "text-indigo-400" : "text-muted-foreground/60")} />
+                  <span>
+                    {guests.length > 0
+                      ? `${guests.length} ${guests.length === 1 ? "Guest" : "Guests"}`
+                      : "Invite guests"}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-3 w-72 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invite Guests</div>
+                <div className="flex gap-1.5 mb-3">
+                  <Input
+                    type="email"
+                    placeholder="guest@example.com"
+                    value={guestInput}
+                    onChange={(e) => setGuestInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddGuest();
+                      }
+                    }}
+                    className="h-8 text-xs bg-background border-border text-foreground focus-visible:ring-primary/20 placeholder:text-muted-foreground/60 flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleAddGuest}
+                    className="h-8 px-2 text-xs bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
+                  >
+                    Add
+                  </Button>
+                </div>
+                
+                {guests.length > 0 ? (
+                  <div className="max-h-32 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+                    {guests.map((email) => (
+                      <div key={email} className="flex items-center justify-between bg-muted/40 hover:bg-muted/60 px-2 py-1 rounded text-xs transition-colors">
+                        <span className="truncate max-w-[200px] text-muted-foreground">{email}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveGuest(email)}
+                          className="text-muted-foreground hover:text-foreground hover:bg-secondary rounded p-0.5"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground/60 text-center py-2">
+                    Enter email addresses of workspace users or external guests.
+                  </p>
+                )}
+              </PopoverContent>
+            </Popover>
+
             {/* Event Specific Pills */}
             {type === "event" && (
               <>
@@ -1001,19 +1103,6 @@ export function CreateTaskDialog({
                 >
                   <MapPin className="size-3.5" />
                   <span>Location</span>
-                </button>
-
-                {/* Meet link Toggle Pill */}
-                <button
-                  type="button"
-                  onClick={() => setCreateMeetLink(!createMeetLink)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                    createMeetLink ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
-                  )}
-                >
-                  <Video className="size-3.5" />
-                  <span>Google Meet</span>
                 </button>
 
                 {/* Agenda Toggle Pill */}

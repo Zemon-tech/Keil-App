@@ -50,7 +50,6 @@ import {
   Mic,
   Search,
   Bell,
-  Mail,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
@@ -78,7 +77,6 @@ const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Motion", url: "/motion", icon: Image },
-  { title: "Inbox", url: "/inbox", icon: Mail },
   { title: "Notifications", action: "notifications", icon: Bell },
 ];
 
@@ -160,8 +158,8 @@ function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManag
           <button
             onClick={() => setTab("create")}
             className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${tab === "create"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+              ? "bg-background shadow-sm text-foreground"
+              : "text-muted-foreground hover:text-foreground"
               }`}
           >
             Create
@@ -169,8 +167,8 @@ function OrgManageDialog({ open, onOpenChange, initialTab = "create" }: OrgManag
           <button
             onClick={() => setTab("join")}
             className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${tab === "join"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+              ? "bg-background shadow-sm text-foreground"
+              : "text-muted-foreground hover:text-foreground"
               }`}
           >
             Join
@@ -411,7 +409,7 @@ export function AppSidebar({
       };
     }) => {
       console.log("[AppSidebar] WebSocket member_joined event received:", payload);
-      
+
       // 1. Invalidate members query cache to trigger immediate settings/spaces list refresh
       queryClient.invalidateQueries({
         queryKey: orgKeys.members(payload.orgId),

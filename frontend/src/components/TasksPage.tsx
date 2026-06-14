@@ -322,6 +322,19 @@ export function TasksPage() {
       queryClient.invalidateQueries({
         queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
       });
+      if (data.parent_task_id) {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.parent_task_id),
+        });
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.detail(orgId, spaceId, data.parent_task_id),
+        });
+      }
+      if (data.status === 'done' || data.status === 'completed') {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.id),
+        });
+      }
       if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
         queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
       }
@@ -398,13 +411,24 @@ export function TasksPage() {
         });
       });
     },
-    onSuccess: (_data, { id: taskId }) => {
+    onSuccess: (_data, { id: taskId }, context) => {
       const { orgId, spaceId } = getTaskCoordinates(taskId);
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       queryClient.removeQueries({
         queryKey: orgTaskKeys.detail(orgId, spaceId, taskId),
       });
+      
+      const parentId = context?.previousDetail?.parent_task_id;
+      if (parentId) {
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.subtasks(orgId, spaceId, parentId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: orgTaskKeys.detail(orgId, spaceId, parentId),
+        });
+      }
+
       if (orgId !== activeOrgId || spaceId !== activeSpaceId) {
         queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId!, activeSpaceId!) });
       }
@@ -675,6 +699,7 @@ export function TasksPage() {
                     navigate("/tasks");
                     setParentTaskStack([]);
                   }}
+                  onOpenSidebar={!listPaneVisible ? () => setListPaneVisible(true) : undefined}
                 />
               ) : (
                 <TaskDetailPane
@@ -691,6 +716,7 @@ export function TasksPage() {
                   onNavigateToSubtask={handleNavigateToSubtask}
                   onNavigateToParent={handleNavigateToParent}
                   parentTask={parentTask}
+                  onOpenSidebar={!listPaneVisible ? () => setListPaneVisible(true) : undefined}
                 />
               )
             ) : (

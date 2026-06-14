@@ -2256,7 +2256,6 @@ function ShortcutsTab() {
           { keys: [mod, "G"], description: "Go to Dashboard", implemented: true },
           { keys: [mod, "Q"], description: "Go to Tasks", implemented: true },
           { keys: [mod, "P"], description: "Go to Motion (Pages)", implemented: true },
-          { keys: [mod, "I"], description: "Go to Inbox", implemented: true },
           { keys: [mod, "K"], description: "Open command palette", implemented: true },
         ],
       },

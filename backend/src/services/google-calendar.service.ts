@@ -296,8 +296,46 @@ export async function syncTaskToCalendar(
 
   const calendar = google.calendar({ version: 'v3', auth: authClient, timeout: 10000 } as any);
 
+  // Query all assignees' emails for the task (if it's a workspace task)
+  let attendeeEmails: string[] = [];
+  if (task.source === 'tasks') {
+    const assigneesRes = await pool.query(
+      `SELECT u.email FROM public.task_assignees ta
+       JOIN public.users u ON ta.user_id = u.id
+       WHERE ta.task_id = $1`,
+      [task.id]
+    );
+    attendeeEmails = assigneesRes.rows.map((r: any) => r.email);
+  } else {
+    const ownerRes = await pool.query(
+      `SELECT email FROM public.users WHERE id = $1`,
+      [userId]
+    );
+    if (ownerRes.rows[0]?.email) {
+      attendeeEmails = [ownerRes.rows[0].email];
+    }
+  }
+
+  // Query guests from database
+  const guestsRes = await pool.query(
+    `SELECT guests FROM public.${task.source} WHERE id = $1`,
+    [task.id]
+  );
+  const guests: string[] | null = guestsRes.rows[0]?.guests;
+  if (guests && Array.isArray(guests)) {
+    attendeeEmails = [...attendeeEmails, ...guests];
+  }
+
+  // Unique and valid email addresses
+  const uniqueEmails = Array.from(new Set(attendeeEmails.map(e => e.trim().toLowerCase())))
+    .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+
   // Build the event body (includes extendedProperties tagging for loop prevention)
-  const eventBody = buildEventBody(task);
+  const baseEventBody = buildEventBody(task);
+  const eventBody = {
+    ...baseEventBody,
+    attendees: uniqueEmails.map(email => ({ email })),
+  };
 
   try {
     if (task.google_event_id) {
@@ -306,12 +344,14 @@ export async function syncTaskToCalendar(
         calendarId,
         eventId: task.google_event_id,
         requestBody: eventBody,
+        sendUpdates: 'all',
       });
     } else {
       // Create new event
       const response = await calendar.events.insert({
         calendarId,
         requestBody: eventBody,
+        sendUpdates: 'all',
       });
 
       const newEventId = response.data.id;
@@ -592,6 +632,22 @@ export async function processIncomingGoogleEvent(
     ? new Date(new Date(event.end!.date!).getTime() - 24 * 60 * 60 * 1000)
     : new Date(event.end!.dateTime!);
 
+  const attendeeEmails = (event.attendees ?? [])
+    .map(a => a.email)
+    .filter((email): email is string => !!email);
+    
+  let registeredUserIds: string[] = [];
+  let guestEmails: string[] = [];
+  if (attendeeEmails.length > 0) {
+    const usersRes = await pool.query(
+      `SELECT id, email FROM public.users WHERE email = ANY($1)`,
+      [attendeeEmails]
+    );
+    const registeredEmails = new Set(usersRes.rows.map(r => r.email.toLowerCase()));
+    registeredUserIds = usersRes.rows.map(r => r.id);
+    guestEmails = attendeeEmails.filter(email => !registeredEmails.has(email.toLowerCase()));
+  }
+
   // --- NO MATCHING TASK: create new org task in user's default workspace ---
   if (!matchingTask) {
     try {
@@ -603,8 +659,8 @@ export async function processIncomingGoogleEvent(
         const taskRes = await pool.query(
           `INSERT INTO public.tasks
              (org_id, space_id, title, start_date, due_date,
-              google_event_id, ical_uid, status, priority, created_by, type, event_type, location, meet_link, is_all_day)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'event', 'meeting', $11, $12, $13)
+              google_event_id, ical_uid, status, priority, created_by, type, event_type, location, meet_link, is_all_day, guests)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'event', 'meeting', $11, $12, $13, $14)
            RETURNING id`,
           [
             resolvedOrgSpace.orgId,
@@ -620,17 +676,21 @@ export async function processIncomingGoogleEvent(
             event.location || null,
             event.hangoutLink || null,
             isAllDay,
+            guestEmails,
           ]
         );
         const newTaskId = taskRes.rows[0].id;
         
-        // Auto assign the task to the user who connected Google Calendar
-        await pool.query(
-          `INSERT INTO public.task_assignees (task_id, user_id)
-           VALUES ($1, $2)
-           ON CONFLICT DO NOTHING`,
-          [newTaskId, userId]
-        );
+        // Auto assign the task to all registered user attendees + user who connected
+        const allAssignees = new Set([userId, ...registeredUserIds]);
+        for (const assigneeId of allAssignees) {
+          await pool.query(
+            `INSERT INTO public.task_assignees (task_id, user_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING`,
+            [newTaskId, assigneeId]
+          );
+        }
         
         log.info({ eventId: googleEventId, userId, spaceId: resolvedOrgSpace.spaceId, taskId: newTaskId }, 'Created org event from Google Calendar meeting');
       } else {
@@ -646,6 +706,7 @@ export async function processIncomingGoogleEvent(
           priority: TaskPriority.MEDIUM,
           location: event.location || null,
           meet_link: event.hangoutLink || null,
+          guests: guestEmails,
         });
         log.info({ eventId: googleEventId, userId }, 'Created personal task (fallback) from Google event');
       }
@@ -669,6 +730,35 @@ export async function processIncomingGoogleEvent(
 
   const newTitle = event.summary ?? matchingTask.title;
 
+  // Query current guests and assignees for conflict comparison
+  const currentTaskRes = await pool.query(
+    `SELECT guests FROM public.${matchingTask.source} WHERE id = $1`,
+    [matchingTask.id]
+  );
+  const currentGuests = currentTaskRes.rows[0]?.guests || [];
+  
+  const arraysEqual = (a: any[], b: any[]) => {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    const s = new Set(a.map(x => String(x).toLowerCase()));
+    return b.every(x => s.has(String(x).toLowerCase()));
+  };
+  
+  const guestsEqual = arraysEqual(currentGuests, guestEmails);
+  
+  let assigneesEqual = true;
+  let currentAssigneeIds: Set<string> = new Set();
+  if (matchingTask.source === 'tasks') {
+    const currentAssigneesRes = await pool.query(
+      `SELECT user_id FROM public.task_assignees WHERE task_id = $1`,
+      [matchingTask.id]
+    );
+    currentAssigneeIds = new Set(currentAssigneesRes.rows.map(r => r.user_id));
+    const expectedAssigneeIds = new Set([userId, ...registeredUserIds]);
+    assigneesEqual = arraysEqual(Array.from(currentAssigneeIds), Array.from(expectedAssigneeIds));
+  }
+
   // Skip if values are identical (prevent pointless writes and timestamp update wars)
   const sameDates = (d1: Date | string | null, d2: Date | null) => {
     if (!d1 && !d2) return true;
@@ -681,7 +771,9 @@ export async function processIncomingGoogleEvent(
     sameDates(matchingTask.due_date, dueDate) &&
     matchingTask.location === (event.location || null) &&
     matchingTask.meet_link === (event.hangoutLink || null) &&
-    (matchingTask.source !== 'tasks' || matchingTask.is_all_day === isAllDay)
+    (matchingTask.source !== 'tasks' || matchingTask.is_all_day === isAllDay) &&
+    guestsEqual &&
+    assigneesEqual
   ) {
     log.debug({ taskId: matchingTask.id, reason: 'up-to-date' }, 'Task already up-to-date — skipping write');
     return;
@@ -709,15 +801,37 @@ export async function processIncomingGoogleEvent(
       due_date: dueDate,
       location: event.location || null,
       meet_link: event.hangoutLink || null,
+      guests: guestEmails,
     });
   } else {
     // Update org task directly via pool query to avoid circular import with task.service.
     await pool.query(
       `UPDATE public.tasks
-       SET title = $1, start_date = $2, due_date = $3, location = $4, meet_link = $5, is_all_day = $6
-       WHERE id = $7 AND deleted_at IS NULL`,
-      [newTitle, startDate, dueDate, event.location || null, event.hangoutLink || null, isAllDay, matchingTask.id]
+       SET title = $1, start_date = $2, due_date = $3, location = $4, meet_link = $5, is_all_day = $6, guests = $7
+       WHERE id = $8 AND deleted_at IS NULL`,
+      [newTitle, startDate, dueDate, event.location || null, event.hangoutLink || null, isAllDay, guestEmails, matchingTask.id]
     );
+
+    // Sync task_assignees to match registeredUserIds (+ userId who connected)
+    const targetAssignees = new Set([userId, ...registeredUserIds]);
+    // Remove old ones that are not in target
+    for (const currentId of currentAssigneeIds) {
+      if (!targetAssignees.has(currentId)) {
+        await pool.query(
+          `DELETE FROM public.task_assignees WHERE task_id = $1 AND user_id = $2`,
+          [matchingTask.id, currentId]
+        );
+      }
+    }
+    // Add new ones
+    for (const targetId of targetAssignees) {
+      if (!currentAssigneeIds.has(targetId)) {
+        await pool.query(
+          `INSERT INTO public.task_assignees (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [matchingTask.id, targetId]
+        );
+      }
+    }
   }
 
   // Notify frontend to refresh tasks

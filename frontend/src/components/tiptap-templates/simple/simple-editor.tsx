@@ -370,19 +370,19 @@ export function SimpleEditor({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const activeItemRef = useRef<HTMLDivElement>(null)
   const [slashOpen, setSlashOpen] = useState(false)
-  
+
   // --- Motion AI Integration ---
   const { pageId } = useParams<{ pageId: string }>();
   const { activeOrgId, activeSpaceId } = useAppContext();
   const { stream, isStreaming } = useMotionAi(activeOrgId, activeSpaceId, pageId ?? null);
-  
+
   const [aiCommandOpen, setAiCommandOpen] = useState(false);
   const [aiCommandPos, setAiCommandPos] = useState<any>(null);
   const [aiCommandDeleteRange, setAiCommandDeleteRange] = useState<{ from: number; to: number } | null>(null);
-  
+
   const [aiBubbleOpen, setAiBubbleOpen] = useState(false);
   const [showAiToolbar, setShowAiToolbar] = useState(false);
-  
+
   const originalRangeRef = useRef<{ from: number; to: number; text: string } | null>(null);
   const streamRangeRef = useRef<{ from: number; to: number } | null>(null);
   const savedParamsRef = useRef<any>(null);
@@ -559,7 +559,7 @@ export function SimpleEditor({
           const { selection } = e.state;
           const $from = selection.$from;
           const parent = $from.parent;
-          
+
           if (parent.type.name === "paragraph" && parent.content.size === 0) {
             event.preventDefault();
             // Insert the inline AI block pill directly at the cursor position
@@ -574,22 +574,22 @@ export function SimpleEditor({
           const parser = new DOMParser()
           const doc = parser.parseFromString(html, "text/html")
           const cells = doc.querySelectorAll("td, th")
-          
+
           if (cells.length > 0) {
             const allowedInlineTags = ["span", "strong", "em", "code", "a", "br", "img"]
-            
+
             cells.forEach((cell) => {
               const blockElements = cell.querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, pre, blockquote")
               if (blockElements.length > 0) {
                 const newContent = doc.createDocumentFragment()
-                
+
                 const extractInline = (node: Node) => {
                   if (node.nodeType === Node.TEXT_NODE) {
                     newContent.appendChild(node.cloneNode(true))
                   } else if (node.nodeType === Node.ELEMENT_NODE) {
                     const el = node as HTMLElement
                     const tagName = el.tagName.toLowerCase()
-                    
+
                     if (allowedInlineTags.includes(tagName)) {
                       const newEl = el.cloneNode(false)
                       el.childNodes.forEach(child => {
@@ -606,16 +606,16 @@ export function SimpleEditor({
                     }
                   }
                 }
-                
+
                 cell.childNodes.forEach(child => {
                   extractInline(child)
                 })
-                
+
                 cell.innerHTML = ""
                 cell.appendChild(newContent)
               }
             })
-            
+
             return doc.body.innerHTML
           }
         } catch (e) {
@@ -1109,7 +1109,7 @@ export function SimpleEditor({
           const coords = editor.view.coordsAtPos(from)
           const wrapperRect = wrapperRef.current?.getBoundingClientRect()
           if (!wrapperRect) return
-          
+
           setEditorEmojiPicker({
             left: coords.left,
             top: coords.bottom + 8,
@@ -1411,7 +1411,7 @@ export function SimpleEditor({
     <div ref={wrapperRef} className="simple-editor-wrapper relative" onClick={handleWrapperClick}>
       <EditorContext.Provider value={{ editor }}>
         {/* Custom Table handles are handled natively inside TableNodeView */}
-        
+
         {/* Text Formatting Bubble Menu */}
         {editor && (
           <BubbleMenu
@@ -1419,7 +1419,7 @@ export function SimpleEditor({
             shouldShow={({ editor, state }: { editor: Editor; state: EditorState }) => {
               const { selection } = state
               const { empty } = selection
-              
+
               if (empty || selection instanceof NodeSelection || editor.isActive("image") || editor.isActive("codeBlock") || showAiToolbar) {
                 return false
               }
@@ -1439,145 +1439,145 @@ export function SimpleEditor({
                   <Sparkles className="size-3.5 animate-pulse" />
                 </Button>
                 <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('bold') ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().toggleBold().run()}
-              >
-                <Bold className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('italic') ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-              >
-                <Italic className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('underline') ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().toggleUnderline().run()}
-              >
-                <UnderlineIcon className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('strike') ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().toggleStrike().run()}
-              >
-                <Strikethrough className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('code') ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().toggleCode().run()}
-              >
-                <Code className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('subscript') ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().toggleSubscript().run()}
-              >
-                <SubscriptIcon className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('superscript') ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().toggleSuperscript().run()}
-              >
-                <SuperscriptIcon className="size-3.5" />
-              </Button>
-              <div className="w-px h-4 bg-border mx-1" />
-              
-              {/* Font Family Selector (Simple) */}
-              <select 
-                className="bg-transparent text-[11px] outline-none cursor-pointer px-1 hover:bg-muted rounded"
-                onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
-                value={editor.getAttributes('textStyle').fontFamily || ''}
-              >
-                <option value="">Default</option>
-                <option value="Inter">Inter</option>
-                <option value="DM Sans">DM Sans</option>
-                <option value="monospace">Monospace</option>
-                <option value="serif">Serif</option>
-              </select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('bold') ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().toggleBold().run()}
+                >
+                  <Bold className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('italic') ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().toggleItalic().run()}
+                >
+                  <Italic className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('underline') ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().toggleUnderline().run()}
+                >
+                  <UnderlineIcon className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('strike') ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().toggleStrike().run()}
+                >
+                  <Strikethrough className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('code') ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().toggleCode().run()}
+                >
+                  <Code className="size-3.5" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('subscript') ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().toggleSubscript().run()}
+                >
+                  <SubscriptIcon className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('superscript') ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().toggleSuperscript().run()}
+                >
+                  <SuperscriptIcon className="size-3.5" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1" />
 
-              <div className="w-px h-4 bg-border mx-1" />
-              
-              {/* Color Selection (Simplified) */}
-              <div className="flex items-center gap-0.5 px-1">
-                {['inherit', '#ff0000', '#00ff00', '#0000ff', '#f59e0b', '#8b5cf6', '#ec4899'].map(c => (
-                  <button
-                    key={c}
-                    className="size-3.5 rounded-full border border-border/50 transition-transform hover:scale-125"
-                    style={{ backgroundColor: c === 'inherit' ? 'transparent' : c }}
-                    onClick={() => editor.chain().focus().setColor(c === 'inherit' ? '' : c).run()}
-                    title={c === 'inherit' ? 'Default' : c}
+                {/* Font Family Selector (Simple) */}
+                <select
+                  className="bg-transparent text-[11px] outline-none cursor-pointer px-1 hover:bg-muted rounded"
+                  onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+                  value={editor.getAttributes('textStyle').fontFamily || ''}
+                >
+                  <option value="">Default</option>
+                  <option value="Inter">Inter</option>
+                  <option value="DM Sans">DM Sans</option>
+                  <option value="monospace">Monospace</option>
+                  <option value="serif">Serif</option>
+                </select>
+
+                <div className="w-px h-4 bg-border mx-1" />
+
+                {/* Color Selection (Simplified) */}
+                <div className="flex items-center gap-0.5 px-1">
+                  {['inherit', '#ff0000', '#00ff00', '#0000ff', '#f59e0b', '#8b5cf6', '#ec4899'].map(c => (
+                    <button
+                      key={c}
+                      className="size-3.5 rounded-full border border-border/50 transition-transform hover:scale-125"
+                      style={{ backgroundColor: c === 'inherit' ? 'transparent' : c }}
+                      onClick={() => editor.chain().focus().setColor(c === 'inherit' ? '' : c).run()}
+                      title={c === 'inherit' ? 'Default' : c}
+                    />
+                  ))}
+                </div>
+
+                <div className="w-px h-4 bg-border mx-1" />
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive('highlight') ? 'bg-muted text-primary' : ''}`}
+                  onClick={() => {
+                    const current = editor.getAttributes('highlight').color
+                    if (current) editor.chain().focus().unsetHighlight().run()
+                    else editor.chain().focus().setHighlight({ color: '#fef08a' }).run()
+                  }}
+                  title="Highlight"
+                >
+                  <Palette className="size-3.5" />
+                </Button>
+
+                <div className="w-px h-4 bg-border mx-1" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive({ textAlign: 'left' }) ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().setTextAlign('left').run()}
+                >
+                  <AlignLeft className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive({ textAlign: 'center' }) ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().setTextAlign('center').run()}
+                >
+                  <AlignCenter className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`size-7 ${editor.isActive({ textAlign: 'right' }) ? 'bg-muted' : ''}`}
+                  onClick={() => editor.chain().focus().setTextAlign('right').run()}
+                >
+                  <AlignRight className="size-3.5" />
+                </Button>
+              </div>
+              {aiBubbleOpen && (
+                <div className="z-[110] relative mt-1">
+                  <AiBubbleMenu
+                    isOpen={aiBubbleOpen}
+                    onClose={() => setAiBubbleOpen(false)}
+                    onSubmit={handleAiBubbleSubmit}
                   />
-                ))}
-              </div>
-              
-              <div className="w-px h-4 bg-border mx-1" />
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive('highlight') ? 'bg-muted text-primary' : ''}`}
-                onClick={() => {
-                  const current = editor.getAttributes('highlight').color
-                  if (current) editor.chain().focus().unsetHighlight().run()
-                  else editor.chain().focus().setHighlight({ color: '#fef08a' }).run()
-                }}
-                title="Highlight"
-              >
-                <Palette className="size-3.5" />
-              </Button>
-
-              <div className="w-px h-4 bg-border mx-1" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive({ textAlign: 'left' }) ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().setTextAlign('left').run()}
-              >
-                <AlignLeft className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive({ textAlign: 'center' }) ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().setTextAlign('center').run()}
-              >
-                <AlignCenter className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`size-7 ${editor.isActive({ textAlign: 'right' }) ? 'bg-muted' : ''}`}
-                onClick={() => editor.chain().focus().setTextAlign('right').run()}
-              >
-                <AlignRight className="size-3.5" />
-              </Button>
+                </div>
+              )}
             </div>
-            {aiBubbleOpen && (
-              <div className="z-[110] relative mt-1">
-                <AiBubbleMenu
-                  isOpen={aiBubbleOpen}
-                  onClose={() => setAiBubbleOpen(false)}
-                  onSubmit={handleAiBubbleSubmit}
-                />
-              </div>
-            )}
-          </div>
           </BubbleMenu>
         )}
 
@@ -1641,11 +1641,10 @@ export function SimpleEditor({
                     ref={index === slashSelectedIndex ? activeItemRef : null}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => runSlashItem(item)}
-                    className={`px-2.5 py-1.5 flex items-center justify-between cursor-pointer rounded select-none outline-none transition-colors ${
-                      index === slashSelectedIndex
+                    className={`px-2.5 py-1.5 flex items-center justify-between cursor-pointer rounded select-none outline-none transition-colors ${index === slashSelectedIndex
                         ? "bg-accent text-accent-foreground"
                         : "text-foreground hover:bg-accent/40"
-                    }`}
+                      }`}
                     onMouseEnter={() => setSlashSelectedIndex(index)}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -1689,8 +1688,8 @@ export function SimpleEditor({
               <div className="p-3 flex flex-col max-h-[320px]">
                 <div className="flex gap-2 items-center bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/50 mb-3 focus-within:border-primary/50 transition-colors">
                   <Search className="size-3.5 text-muted-foreground" />
-                  <input 
-                    placeholder="Search emojis..." 
+                  <input
+                    placeholder="Search emojis..."
                     className="bg-transparent border-none outline-none text-[13px] w-full"
                     value={editorEmojiSearch}
                     onChange={(e) => setEditorEmojiSearch(e.target.value)}
@@ -1698,19 +1697,19 @@ export function SimpleEditor({
                 </div>
                 <div className="grid grid-cols-8 gap-1 overflow-y-auto custom-scrollbar pr-1">
                   {["✨", "🚀", "📝", "🎨", "🌈", "🏔️", "💡", "⚡", "🔥", "🍀", "📖", "📓", "📒", "📚", "📔", "📕", "📗", "📘", "📙", "💼", "📁", "📂", "📅", "📆", "🗓️", "📊", "📈", "📉", "🔍", "🕵️", "🏠", "🏡", "🏘️", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪", "🏫", "🏬", "🏭", "🏰", "🏯", "🗼", "🗽", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌆", "🌇", "🌉", "🌌", "🎠", "🎡", "🎢", "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾", "👋", "🤚", "🖐", "✋", "🖖", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾", "🦵", "🦿", "🦶", "👣", "👂", "🦻", "👃", "🫀", "🫁", "🧠", "🦷", "🦴", "👀", "👁", "👅", "👄", "💋", "🩸"]
-                  .filter(e => e.includes(editorEmojiSearch) || editorEmojiSearch === "").map(emoji => (
-                    <button
-                      key={emoji}
-                      className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
-                      onClick={() => {
-                        editor.chain().focus().insertContent(emoji).run()
-                        setEditorEmojiPicker(null)
-                        setEditorEmojiSearch("")
-                      }}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+                    .filter(e => e.includes(editorEmojiSearch) || editorEmojiSearch === "").map(emoji => (
+                      <button
+                        key={emoji}
+                        className="size-8 flex items-center justify-center hover:bg-muted rounded-md transition-colors text-xl"
+                        onClick={() => {
+                          editor.chain().focus().insertContent(emoji).run()
+                          setEditorEmojiPicker(null)
+                          setEditorEmojiSearch("")
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
                 </div>
               </div>
             </div>

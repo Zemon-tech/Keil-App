@@ -5,6 +5,7 @@ import {
   Flag,
   MoreVertical,
   PanelRightClose,
+  PanelLeftOpen,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -267,6 +268,7 @@ export function TaskDetailHeader({
   onEditTask,
   parentTask,
   onNavigateToParent,
+  onOpenSidebar,
 }: {
   task: TaskDTO;
   onUpdateField?: (updates: UpdateTaskInput) => void;
@@ -275,6 +277,7 @@ export function TaskDetailHeader({
   onEditTask?: () => void;
   parentTask?: { id: string; title: string } | null;
   onNavigateToParent?: (parentTaskId: string) => void;
+  onOpenSidebar?: () => void;
 }) {
   const { activeOrgId, activeSpaceId } = useAppContext();
   const taskOrgId = task.org_id ?? activeOrgId;
@@ -317,6 +320,19 @@ export function TaskDetailHeader({
       {/* Breadcrumb + Actions row */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0 pr-4">
+          {/* Open task list button */}
+          {onOpenSidebar && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-6 p-0 text-muted-foreground hover:text-foreground"
+              onClick={onOpenSidebar}
+              title="Open task list"
+            >
+              <PanelLeftOpen className="size-3.5" />
+            </Button>
+          )}
+
           {/* Close detail pane button */}
           {onClose && (
             <Button

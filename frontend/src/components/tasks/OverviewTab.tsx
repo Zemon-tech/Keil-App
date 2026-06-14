@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   ChevronRight,
   Flag,
@@ -55,6 +56,26 @@ export const OverviewTab = ({
   const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const [createSubtaskOpen, setCreateSubtaskOpen] = useState(false);
+  const [isGuestPickerOpen, setIsGuestPickerOpen] = useState(false);
+  const [guestEmailInput, setGuestEmailInput] = useState("");
+
+  const handleAddGuestInline = () => {
+    const email = guestEmailInput.trim().toLowerCase();
+    if (!email) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Invalid email address");
+      return;
+    }
+    const currentGuests = task.guests ?? [];
+    if (currentGuests.includes(email)) {
+      toast.error("Guest already added");
+      return;
+    }
+    onUpdateField?.({ guests: [...currentGuests, email] });
+    setGuestEmailInput("");
+    setIsGuestPickerOpen(false);
+  };
 
   const { activeOrgId, activeSpaceId } = useAppContext();
   const { canEditTask, canAssignTask, canCreateTask } = useSpaceRole();
@@ -153,13 +174,17 @@ export const OverviewTab = ({
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                   Subtasks
                 </span>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {completedCount}/{subtasks.length} complete
-                </span>
+                {subtasks.length > 0 && (
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {completedCount}/{subtasks.length} complete
+                  </span>
+                )}
               </div>
 
               {/* Progress bar */}
-              <Progress value={progressPercent} className="mb-3 h-1" />
+              {subtasks.length > 0 && (
+                <Progress value={progressPercent} className="mb-3 h-1" />
+              )}
 
               <div className="space-y-px">
                 {subtasksLoading && (
@@ -220,12 +245,6 @@ export const OverviewTab = ({
                     </div>
                   );
                 })}
-
-                {!subtasksLoading && subtasks.length === 0 && (
-                  <p className="px-2 py-1.5 text-xs italic text-muted-foreground">
-                    No subtasks yet
-                  </p>
-                )}
 
                 {canCreateTask && (
                   <button
@@ -426,6 +445,81 @@ export const OverviewTab = ({
                         }
                         return elements;
                       })()}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Guests */}
+          <div>
+            <span className="mb-2 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Meet Guests
+            </span>
+            <div className="space-y-1.5">
+              <div className="max-h-[130px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
+                {(task.guests ?? []).map((email) => {
+                  return (
+                    <div key={email} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 py-0.5">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="size-6">
+                          <AvatarFallback className="text-[10px] font-semibold bg-accent">
+                            {email.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs truncate max-w-[170px] text-muted-foreground" title={email}>{email}</span>
+                      </div>
+                      {canEditTask && (
+                        <button
+                          onClick={() => {
+                            const newGuests = (task.guests ?? []).filter(g => g !== email);
+                            onUpdateField?.({ guests: newGuests });
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-500 transition-all rounded-md"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add Guest inline popover */}
+              {canEditTask && (
+                <Popover open={isGuestPickerOpen} onOpenChange={setIsGuestPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+                      <Plus className="size-3" />
+                      Add guest
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3" align="start">
+                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invite Guest</div>
+                    <div className="flex gap-1.5">
+                      <Input
+                        type="email"
+                        placeholder="guest@example.com"
+                        value={guestEmailInput}
+                        onChange={(e) => setGuestEmailInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddGuestInline();
+                          }
+                        }}
+                        className="h-8 text-xs bg-background border-border text-foreground focus-visible:ring-primary/20 placeholder:text-muted-foreground/60 flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddGuestInline}
+                        className="h-8 px-2.5 rounded text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                      >
+                        Add
+                      </button>
                     </div>
                   </PopoverContent>
                 </Popover>

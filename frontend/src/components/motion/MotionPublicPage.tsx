@@ -126,7 +126,7 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
   const isDark = resolvedTheme === "dark";
 
   return (
-    <div className="min-h-dvh w-full bg-background text-foreground relative">
+    <div className="h-dvh w-full bg-background text-foreground relative overflow-y-auto">
       {/* Floating theme toggle */}
       <div className="absolute top-4 right-4 z-50">
         <Button
@@ -179,7 +179,7 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
           key={page.id}
           content={page.content}
           editable={false}
-          // No onContentChange — read-only mode
+        // No onContentChange — read-only mode
         />
       </main>
 

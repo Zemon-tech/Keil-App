@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useChatMessages, useSendMessage, useChatChannels, useDeleteChannel } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
-import { ArrowLeft, Send, Check, Trash2, Users, Paperclip, File, Download, Loader2, X } from "lucide-react";
+import { ArrowLeft, Send, Check, Trash2, Users, Paperclip, File, Download, Loader2, X, Smile } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { EmojiPicker } from "./EmojiPicker";
 import { getSocket } from "@/lib/socket";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMe } from "@/hooks/api/useMe";
@@ -23,6 +25,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+import { MessageContent } from "./MessageContent";
 
 interface MessageViewProps {
   channelId: string;
@@ -44,6 +48,25 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ messageId: string; senderName: string; text: string } | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleSelectEmoji = (emoji: string) => {
+    const input = inputRef.current;
+    if (input) {
+      const start = input.selectionStart ?? text.length;
+      const end = input.selectionEnd ?? text.length;
+      const newText = text.substring(0, start) + emoji + text.substring(end);
+      setText(newText);
+      
+      const newCursorPos = start + emoji.length;
+      setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    } else {
+      setText(prev => prev + emoji);
+    }
+  };
 
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -322,7 +345,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                   <div className={`flex flex-col gap-1.5 ${isMine ? "items-end" : "items-start"}`}>
                     {(msg.reply_to || msg.content) && (
                       <div
-                        className={`relative text-[13px] rounded-2xl px-4 py-2 w-fit leading-relaxed shadow-sm transition-all duration-300 ${
+                        className={`relative text-[13px] rounded-2xl px-4 py-2 w-fit leading-relaxed shadow-sm transition-all duration-300 break-all ${
                           isMine 
                             ? "bg-primary text-primary-foreground rounded-tr-sm" 
                             : "bg-card text-card-foreground border border-border/50 rounded-tl-sm"
@@ -351,7 +374,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                             </div>
                           </div>
                         )}
-                        {msg.content && <div>{msg.content}</div>}
+                        {msg.content && <MessageContent content={msg.content} isMine={isMine} />}
                       </div>
                     )}
 
@@ -512,12 +535,32 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             <Paperclip className="size-5" />
           </button>
           <input
+            ref={inputRef}
             value={text}
             onChange={handleInputChange}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Message..."
             className="flex-1 text-sm bg-muted rounded-full px-5 py-2.5 outline-none placeholder:text-muted-foreground border border-transparent focus:border-primary/20 transition-colors"
           />
+          <Popover>
+            <PopoverTrigger asChild>
+              <button 
+                type="button"
+                className="flex items-center justify-center size-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0 cursor-pointer"
+                title="Choose emoji"
+              >
+                <Smile className="size-5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent 
+              side="top" 
+              align="end" 
+              sideOffset={12} 
+              className="w-auto p-0 bg-transparent border-0 shadow-none"
+            >
+              <EmojiPicker onSelect={handleSelectEmoji} />
+            </PopoverContent>
+          </Popover>
           <button
             onClick={handleSend}
             disabled={isUploading || (!text.trim() && !uploadedAttachment)}

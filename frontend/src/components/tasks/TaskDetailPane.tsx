@@ -37,6 +37,7 @@ type Props = {
   onNavigateToParent?: (parentTaskId: string) => void;
   /** Parent task info for breadcrumb trail */
   parentTask?: { id: string; title: string } | null;
+  onOpenSidebar?: () => void;
 };
 
 // ─── Tab header metadata ──────────────────────────────────────────────────────
@@ -69,6 +70,7 @@ export function TaskDetailPane({
   onNavigateToSubtask,
   onNavigateToParent,
   parentTask,
+  onOpenSidebar,
 }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -170,6 +172,7 @@ export function TaskDetailPane({
         onEditTask={() => setEditDialogOpen(true)}
         parentTask={parentTask}
         onNavigateToParent={onNavigateToParent}
+        onOpenSidebar={onOpenSidebar}
       />
 
       {/* Edit task dialog */}

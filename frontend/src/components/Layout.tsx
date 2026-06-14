@@ -166,13 +166,6 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         return;
       }
 
-      // ⌘I — Go to Inbox
-      if (mod && e.key === "i") {
-        e.preventDefault();
-        navigate("/inbox");
-        return;
-      }
-
       // ⌘D — Toggle theme
       if (mod && e.key === "d") {
         e.preventDefault();
@@ -223,7 +216,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
             />
             <main
               className={cn(
-                "flex-1 transition-all duration-300",
+                "flex-1 min-w-0 transition-all duration-300",
                 (isChatOpen || notificationDrawerOpen) && "pr-[400px]",
                 className
               )}
