@@ -4,7 +4,6 @@ import { Layout } from "./components/Layout";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Dashboard } from "./components/Dashboard";
 import { TasksPage } from "./components/TasksPage";
-import { InboxPage } from "./components/inbox/InboxPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
 import { InvitePage } from "./components/workspace/InvitePage";
@@ -83,10 +82,6 @@ function App() {
           <Route
             path="/tasks"
             element={<TasksPage />}
-          />
-          <Route
-            path="/inbox"
-            element={<InboxPage />}
           />
           <Route
             path="/events"

@@ -14,6 +14,7 @@ export interface TaskDTO {
   location?: string | null;
   is_all_day?: boolean;
   meet_link?: string | null;
+  guests?: string[] | null;
   description?: string;
   objective?: string;
   success_criteria?: string;
@@ -80,6 +81,7 @@ export interface CreateTaskInput {
   is_all_day?: boolean;
   meet_link?: string | null;
   create_meet_link?: boolean;
+  guests?: string[];
   description?: string;
   objective?: string;
   success_criteria?: string;
@@ -100,6 +102,8 @@ export interface UpdateTaskInput {
   location?: string | null;
   is_all_day?: boolean;
   meet_link?: string | null;
+  create_meet_link?: boolean;
+  guests?: string[];
   description?: string;
   objective?: string;
   success_criteria?: string;

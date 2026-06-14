@@ -166,13 +166,6 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
         return;
       }
 
-      // ⌘I — Go to Inbox
-      if (mod && e.key === "i") {
-        e.preventDefault();
-        navigate("/inbox");
-        return;
-      }
-
       // ⌘D — Toggle theme
       if (mod && e.key === "d") {
         e.preventDefault();
