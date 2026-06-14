@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, X, Video, Users } from "lucide-react";
+import { Plus, Search, X, Video } from "lucide-react";
 import { format, subDays, startOfDay } from "date-fns";
 import { toast } from "sonner";
 
@@ -177,51 +177,51 @@ export const EventOverviewTab = ({
 
               {/* Attendee picker */}
               {true && (
-              <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
-                <PopoverTrigger asChild>
-                  <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
-                    <Plus className="size-3" />
-                    Add attendee
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-56 p-2" align="start">
-                  <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
-                    <Search className="size-4 text-muted-foreground shrink-0" />
-                    <Input
-                      placeholder="Search members..."
-                      value={assigneeSearch}
-                      onChange={(e) => setAssigneeSearch(e.target.value)}
-                      className="h-7 border-none shadow-none focus-visible:ring-0 px-0 outline-none"
-                    />
-                  </div>
-                  <div className="max-h-40 overflow-y-auto space-y-1">
-                    {members
-                      .filter(m => !(event.assignees ?? []).some(a => a.id === m.user_id))
-                      .filter(m => (m.name || m.email).toLowerCase().includes(assigneeSearch.toLowerCase()))
-                      .map((m) => {
-                        const mName = m.name || m.email;
-                        return (
-                          <button
-                            key={m.user_id}
-                            onClick={() => {
-                              handleAssignUser(m.user_id);
-                              setIsAssigneePickerOpen(false);
-                            }}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
-                          >
-                            <Avatar className="size-5 shrink-0">
-                              <AvatarFallback className="text-[9px] bg-accent">
-                                {mName.charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="truncate">{mName}</span>
-                          </button>
-                        );
-                      })
-                    }
-                  </div>
-                </PopoverContent>
-               </Popover>
+                <Popover open={isAssigneePickerOpen} onOpenChange={setIsAssigneePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground">
+                      <Plus className="size-3" />
+                      Add attendee
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2" align="start">
+                    <div className="flex items-center gap-2 border-b border-border pb-2 mb-2 px-1">
+                      <Search className="size-4 text-muted-foreground shrink-0" />
+                      <Input
+                        placeholder="Search members..."
+                        value={assigneeSearch}
+                        onChange={(e) => setAssigneeSearch(e.target.value)}
+                        className="h-7 border-none shadow-none focus-visible:ring-0 px-0 outline-none"
+                      />
+                    </div>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {members
+                        .filter(m => !(event.assignees ?? []).some(a => a.id === m.user_id))
+                        .filter(m => (m.name || m.email).toLowerCase().includes(assigneeSearch.toLowerCase()))
+                        .map((m) => {
+                          const mName = m.name || m.email;
+                          return (
+                            <button
+                              key={m.user_id}
+                              onClick={() => {
+                                handleAssignUser(m.user_id);
+                                setIsAssigneePickerOpen(false);
+                              }}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
+                            >
+                              <Avatar className="size-5 shrink-0">
+                                <AvatarFallback className="text-[9px] bg-accent">
+                                  {mName.charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="truncate">{mName}</span>
+                            </button>
+                          );
+                        })
+                      }
+                    </div>
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
           </div>
@@ -308,21 +308,21 @@ export const EventOverviewTab = ({
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Start</span>
                 <span className="font-medium">
-                  {event.start_date || event.plannedStartISO 
-                    ? format(new Date(event.start_date || event.plannedStartISO!), event.is_all_day ? "d MMM" : "d MMM, h:mm a") 
+                  {event.start_date || event.plannedStartISO
+                    ? format(new Date(event.start_date || event.plannedStartISO!), event.is_all_day ? "d MMM" : "d MMM, h:mm a")
                     : "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">End</span>
                 <span className="font-medium">
-                  {event.due_date || event.dueDateISO 
+                  {event.due_date || event.dueDateISO
                     ? format(
-                        event.is_all_day
-                          ? subDays(startOfDay(new Date(event.due_date || event.dueDateISO!)), 1)
-                          : new Date(event.due_date || event.dueDateISO!),
-                        event.is_all_day ? "d MMM" : "d MMM, h:mm a"
-                      )
+                      event.is_all_day
+                        ? subDays(startOfDay(new Date(event.due_date || event.dueDateISO!)), 1)
+                        : new Date(event.due_date || event.dueDateISO!),
+                      event.is_all_day ? "d MMM" : "d MMM, h:mm a"
+                    )
                     : "—"}
                 </span>
               </div>

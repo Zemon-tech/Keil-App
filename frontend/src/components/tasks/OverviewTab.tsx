@@ -11,7 +11,6 @@ import {
   MapPin,
   Building2,
   Video,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
