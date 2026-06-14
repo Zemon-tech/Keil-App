@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, Lock, Undo2
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, Lock, Undo2, Loader2, RefreshCw
 } from "lucide-react";
+import {
+  useNotionStatus,
+  useExportNotionPage,
+  useSyncNotionPage,
+  useUnlinkNotionPage,
+} from "@/hooks/api/useNotion";
 import { MotionSharePanel } from "./MotionShareModal";
 import {
   Dialog,
@@ -75,6 +81,16 @@ export function MotionPage() {
   const [pageEditor, setPageEditor] = useState<any>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [editorKey, setEditorKey] = useState<string>(pageId ?? "");
+
+  // Notion integration hooks & state
+  const { data: notionStatus } = useNotionStatus();
+  const syncNotion = useSyncNotionPage();
+  const exportNotion = useExportNotionPage();
+  const unlinkNotion = useUnlinkNotionPage();
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<'create' | 'append'>('create');
+  const [parentNotionPageId, setParentNotionPageId] = useState("");
+  const [targetNotionPageId, setTargetNotionPageId] = useState("");
 
   // Refs for exponential backoff retries
   const retryCountRef = useRef<number>(0);
@@ -711,6 +727,76 @@ export function MotionPage() {
                     </>
                   )}
 
+                  {/* Section 5.5 — Notion Integration */}
+                  {!isPageReadOnly && (matchesSearch("Notion") || matchesSearch("Sync") || matchesSearch("Export")) && (
+                    <>
+                      <div className="py-1">
+                        {notionStatus?.connected ? (
+                          displayPage.notion_page_id ? (
+                            <div
+                              className="flex flex-col px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors group"
+                              onClick={() => syncNotion.mutate({ motionPageId: pageId! })}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <RefreshCw className={cn("size-4 text-muted-foreground group-hover:text-foreground transition-colors", syncNotion.isPending && "animate-spin")} />
+                                  <span className="text-xs font-medium">Sync with Notion</span>
+                                </div>
+                                {displayPage.notion_last_synced_at && (
+                                  <span className="text-[9px] text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                    Synced
+                                  </span>
+                                )}
+                              </div>
+                              {displayPage.notion_last_synced_at && (
+                                <span className="text-[9px] text-muted-foreground/60 mt-1 pl-[26px]">
+                                  Last: {new Date(displayPage.notion_last_synced_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                </span>
+                              )}
+                              <a
+                                href={`https://notion.so/${displayPage.notion_page_id.replace(/-/g, "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[9px] text-primary hover:underline mt-1 pl-[26px] block"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Open in Notion ↗
+                              </a>
+                              <button
+                                className="text-[9px] text-destructive hover:underline mt-1.5 pl-[26px] block text-left font-medium"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm("Unlink this page from Notion? This will allow you to export it to another workspace.")) {
+                                    unlinkNotion.mutate({ motionPageId: pageId! });
+                                  }
+                                }}
+                                disabled={unlinkNotion.isPending}
+                              >
+                                {unlinkNotion.isPending ? "Unlinking..." : "Unlink from Notion"}
+                              </button>
+                            </div>
+                          ) : (
+                            <div
+                              className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors group"
+                              onClick={() => setExportDialogOpen(true)}
+                            >
+                              <Share2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <span className="text-xs font-medium">Export to Notion</span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="px-3 py-2 text-center space-y-1 bg-muted/10 rounded-lg mx-2 my-1">
+                            <p className="text-[10px] font-semibold text-muted-foreground">Notion Integration</p>
+                            <p className="text-[9px] text-muted-foreground/60 leading-normal">
+                              Connect Notion in settings to sync pages.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="h-px bg-border/50 w-full" />
+                    </>
+                  )}
+
                   {/* Section 6 — Advanced */}
                   {matchesSearch("Updates & analytics") && (
                     <>
@@ -1331,6 +1417,141 @@ export function MotionPage() {
         `,
         }}
       />
+
+      {/* Export to Notion Dialog */}
+      <Dialog open={exportDialogOpen} onOpenChange={(open) => {
+        setExportDialogOpen(open);
+        if (!open) {
+          setParentNotionPageId("");
+          setTargetNotionPageId("");
+          setExportMode('create');
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl border border-border/80 shadow-2xl bg-background/95 backdrop-blur-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground font-semibold text-base">
+              <img src="/integrations/notion.png" alt="Notion" className="size-5 object-contain" />
+              <span>Export to Notion</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Segmented Control */}
+            <div className="flex border border-border/50 rounded-lg p-0.5 bg-muted/30">
+              <button
+                className={cn(
+                  "flex-1 text-center py-1.5 text-xs font-semibold rounded-md transition-all",
+                  exportMode === 'create'
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setExportMode('create')}
+              >
+                New Page (Default)
+              </button>
+              <button
+                className={cn(
+                  "flex-1 text-center py-1.5 text-xs font-semibold rounded-md transition-all",
+                  exportMode === 'append'
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setExportMode('append')}
+              >
+                Link & Append
+              </button>
+            </div>
+
+            {exportMode === 'create' ? (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground leading-normal">
+                  Creates a new page in Notion. By default, it will auto-discover a page/database shared with your integration.
+                </p>
+                <div className="space-y-1.5">
+                  <label htmlFor="parent-notion-page" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                    Parent Page ID (Optional)
+                  </label>
+                  <input
+                    id="parent-notion-page"
+                    type="text"
+                    placeholder="Auto-discover workspace root..."
+                    value={parentNotionPageId}
+                    onChange={(e) => setParentNotionPageId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg border border-border/60 bg-muted/20 text-xs text-foreground outline-none focus:border-primary/50 focus:bg-background transition-colors placeholder:text-muted-foreground/30 font-mono"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground leading-normal">
+                  Link this page to an already existing Notion page and overwrite its content.
+                </p>
+                <div className="space-y-1.5">
+                  <label htmlFor="target-notion-page" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                    Notion Page ID (Required)
+                  </label>
+                  <input
+                    id="target-notion-page"
+                    type="text"
+                    placeholder="e.g. 1a2b3c4d5e6f7g8h9i0j..."
+                    value={targetNotionPageId}
+                    onChange={(e) => setTargetNotionPageId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg border border-border/60 bg-muted/20 text-xs text-foreground outline-none focus:border-primary/50 focus:bg-background transition-colors placeholder:text-muted-foreground/30 font-mono"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs rounded-lg"
+                onClick={() => {
+                  setExportDialogOpen(false);
+                  setParentNotionPageId("");
+                  setTargetNotionPageId("");
+                  setExportMode('create');
+                }}
+                disabled={exportNotion.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs rounded-lg shadow-md shadow-primary/10"
+                disabled={
+                  exportNotion.isPending ||
+                  (exportMode === 'append' && !targetNotionPageId.trim())
+                }
+                onClick={() => {
+                  exportNotion.mutate(
+                    {
+                      motionPageId: pageId!,
+                      parentNotionPageId: parentNotionPageId.trim() || undefined,
+                      targetNotionPageId: exportMode === 'append' ? targetNotionPageId.trim() : undefined,
+                      mode: exportMode,
+                    },
+                    {
+                      onSuccess: () => {
+                        setExportDialogOpen(false);
+                        setParentNotionPageId("");
+                        setTargetNotionPageId("");
+                        setExportMode('create');
+                      },
+                    }
+                  );
+                }}
+              >
+                {exportNotion.isPending && (
+                  <Loader2 className="size-3 animate-spin mr-1.5" />
+                )}
+                Export
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

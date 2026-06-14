@@ -30,6 +30,8 @@ export interface MotionPageDTO {
   updated_at: string;
   deleted_at: string | null;
   share_permission?: MotionPermission;
+  notion_page_id?: string | null;
+  notion_last_synced_at?: string | null;
 }
 
 export interface MotionPageShareDTO {
@@ -106,6 +108,8 @@ const toPageDTO = (page: any): MotionPageDTO => ({
   updated_at: toISO(page.updated_at)!,
   deleted_at: toISO(page.deleted_at),
   share_permission: page.share_permission,
+  notion_page_id: page.notion_page_id ?? null,
+  notion_last_synced_at: toISO(page.notion_last_synced_at),
 });
 
 const toShareDTO = (share: any): MotionPageShareDTO => ({
@@ -361,6 +365,32 @@ export const updatePage = async (
 
   const updated = await motionPageRepository.update(pageId, updates);
   if (updated) {
+    if (updated.notion_page_id) {
+      import('../services/notion.service')
+        .then(({ updateNotionPageMarkdown, updateNotionPageProperties, tiptapToMarkdown }) => {
+          const contentPromise = input.content !== undefined
+            ? updateNotionPageMarkdown(userId, updated.notion_page_id!, tiptapToMarkdown(updated.content))
+            : Promise.resolve();
+
+          const propertiesPromise = (input.title !== undefined || input.icon !== undefined || input.cover_image !== undefined)
+            ? updateNotionPageProperties(userId, updated.notion_page_id!, updated.title, updated.icon, updated.cover_image)
+            : Promise.resolve();
+
+          Promise.all([contentPromise, propertiesPromise])
+            .then(() => {
+              motionPageRepository.update(pageId, { notion_last_synced_at: new Date() }).catch(err => {
+                log.error({ err, pageId }, 'Failed to update notion_last_synced_at');
+              });
+            })
+            .catch(err => {
+              log.error({ err, pageId }, 'Failed to background sync to Notion');
+            });
+        })
+        .catch(err => {
+          log.error({ err }, 'Failed to lazy load Notion service for background sync');
+        });
+    }
+
     const dto = toPageDTO(updated);
     await broadcastToAllAccessSpaces(pageId, spaceId, { type: 'update', pageId, page: dto, userId });
     return dto;

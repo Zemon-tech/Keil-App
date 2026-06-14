@@ -2,8 +2,11 @@
 
 import { useChatChannels, useReadChannel } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { useMe } from "@/hooks/api/useMe";
 
 interface ChannelListProps {
   orgId: string | null;
@@ -14,6 +17,7 @@ export function ChannelList({ orgId, spaceId }: ChannelListProps) {
   const { data: channels = [], isLoading } = useChatChannels(orgId, spaceId);
   const { setActiveChannel } = useChatStore();
   const readChannel = useReadChannel(orgId, spaceId);
+  const { data: me } = useMe();
 
   const handleOpenChannel = (channelId: string) => {
     setActiveChannel(channelId);
@@ -48,9 +52,13 @@ export function ChannelList({ orgId, spaceId }: ChannelListProps) {
   return (
     <ul className="flex-1 overflow-y-auto divide-y divide-border">
       {channels.map((channel) => {
+        const otherMember = channel.type === "direct"
+          ? channel.members.find((m) => m.id !== me?.id) || channel.members[0]
+          : undefined;
+
         const displayName =
           channel.type === "direct"
-            ? channel.members[0]?.name ?? "Unknown"
+            ? otherMember?.name ?? "Unknown"
             : channel.name ?? "Group";
 
         return (
@@ -59,9 +67,18 @@ export function ChannelList({ orgId, spaceId }: ChannelListProps) {
               onClick={() => handleOpenChannel(channel.id)}
               className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
             >
-              <span className="shrink-0 size-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-semibold uppercase">
-                {displayName.charAt(0)}
-              </span>
+              {channel.type === "group" ? (
+                <div className="shrink-0 size-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">
+                  <Users className="size-4" />
+                </div>
+              ) : (
+                <Avatar className="shrink-0 size-8">
+                  <AvatarImage src={getOptimizedImageUrl(otherMember?.avatar_url, { width: 96, height: 96 })} alt={displayName} />
+                  <AvatarFallback className="text-xs font-semibold bg-primary/20 text-primary uppercase">
+                    {displayName.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{displayName}</p>
                 {channel.last_message_at && (

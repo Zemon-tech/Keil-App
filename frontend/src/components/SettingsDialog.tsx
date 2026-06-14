@@ -117,6 +117,12 @@ import {
   useConnectGitHub,
   useDisconnectGitHub,
 } from "@/hooks/api/useGitHub";
+import {
+  useNotionStatus,
+  useConnectNotion,
+  useConnectNotionManual,
+  useDisconnectNotion,
+} from "@/hooks/api/useNotion";
 import { toast } from "sonner";
 import { usePreferences, useUpdateSttProvider, type SttProvider } from "@/hooks/api/usePreferences";
 import { useOpenDM } from "@/hooks/api/useChat";
@@ -3039,6 +3045,16 @@ function ConnectorsTab() {
   const connectGithub = useConnectGitHub();
   const disconnectGithub = useDisconnectGitHub();
 
+  const { data: notionStatus, isLoading: notionLoading } =
+    useNotionStatus();
+  const connectNotion = useConnectNotion();
+  const disconnectNotion = useDisconnectNotion();
+  const connectNotionManual = useConnectNotionManual();
+
+  const [showManualNotion, setShowManualNotion] = useState(false);
+  const [manualNotionToken, setManualNotionToken] = useState("");
+  const [manualNotionWorkspace, setManualNotionWorkspace] = useState("");
+
   // Google suite services — connected status inherits from Google Calendar OAuth
   const googleSuiteServices = [
     {
@@ -3080,11 +3096,6 @@ function ConnectorsTab() {
   ];
 
   const staticConnectors = [
-    {
-      name: "Notion",
-      description: "Import pages, wikis, and databases into Motion",
-      logo: "/integrations/notion.png",
-    },
     {
       name: "Linear",
       description: "Sync project issues and engineering tasks automatically",
@@ -3228,6 +3239,146 @@ function ConnectorsTab() {
       {/* ── Other Integrations ── */}
       <div className="space-y-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Other Integrations</p>
+
+        {/* Notion — live integration */}
+        <div className={cn(
+          "rounded-xl border border-border bg-card transition-colors overflow-hidden",
+          notionStatus?.connected ? "border-emerald-500/30 bg-emerald-500/5" : ""
+        )}>
+          <div className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
+                <img src="/integrations/notion.png" alt="Notion" className="size-6 object-contain" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Notion
+                  </p>
+                  {!notionLoading && (
+                    <span
+                      className={cn(
+                        "inline-block size-2 rounded-full",
+                        notionStatus?.connected
+                          ? "bg-emerald-500"
+                          : "bg-muted-foreground/40",
+                      )}
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {notionStatus?.connected
+                    ? `Connected to workspace: ${notionStatus.workspace_name || "Notion Workspace"}`
+                    : "Import Notion pages, export pages, and sync content bidirectionally"}
+                </p>
+              </div>
+            </div>
+            {notionStatus?.connected ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs rounded-lg"
+                disabled={disconnectNotion.isPending}
+                onClick={() => disconnectNotion.mutate()}
+              >
+                {disconnectNotion.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  "Disconnect"
+                )}
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs rounded-lg"
+                  onClick={() => setShowManualNotion(!showManualNotion)}
+                >
+                  {showManualNotion ? "Cancel" : "Use Token"}
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="text-xs rounded-lg"
+                  disabled={notionLoading}
+                  onClick={connectNotion}
+                >
+                  {notionLoading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    "Connect"
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Manual Token connection form */}
+          {!notionStatus?.connected && showManualNotion && (
+            <div className="px-4 pb-4 pt-2 border-t border-border/50 bg-muted/20 space-y-4 animate-in slide-in-from-top-2 duration-200">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-foreground">Connect via Notion Internal Integration Token</p>
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  Create an Internal Integration in your Notion Workspace, copy the token (starts with <code className="text-xs font-mono bg-muted/80 px-1 rounded">secret_</code>), and share the target Notion pages with your Integration.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="notion-token" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Integration Token (secret_...)
+                  </Label>
+                  <Input
+                    id="notion-token"
+                    type="password"
+                    placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    value={manualNotionToken}
+                    onChange={(e) => setManualNotionToken(e.target.value)}
+                    className="h-9 text-xs rounded-lg bg-background"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="notion-workspace" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Workspace Name (Optional)
+                  </Label>
+                  <Input
+                    id="notion-workspace"
+                    type="text"
+                    placeholder="My Notion Workspace"
+                    value={manualNotionWorkspace}
+                    onChange={(e) => setManualNotionWorkspace(e.target.value)}
+                    className="h-9 text-xs rounded-lg bg-background"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="text-xs rounded-lg px-4 h-9 shadow-md shadow-primary/10"
+                  disabled={!manualNotionToken.trim() || connectNotionManual.isPending}
+                  onClick={() => {
+                    connectNotionManual.mutate(
+                      { token: manualNotionToken.trim(), workspaceName: manualNotionWorkspace.trim() || undefined },
+                      {
+                        onSuccess: () => {
+                          setManualNotionToken("");
+                          setManualNotionWorkspace("");
+                          setShowManualNotion(false);
+                        }
+                      }
+                    );
+                  }}
+                >
+                  {connectNotionManual.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                  ) : null}
+                  Link Account
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* GitHub — live integration */}
         <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">

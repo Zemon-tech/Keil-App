@@ -161,8 +161,13 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typingUsers]);
+    const scrollToBottom = () => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+    scrollToBottom();
+    const timeout = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timeout);
+  }, [messages, typingUsers, channelId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setText(e.target.value);
@@ -369,7 +374,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                             <div className="font-bold text-[10px] truncate">
                               {msg.reply_to.senderName}
                             </div>
-                            <div className="truncate text-[11px] leading-tight opacity-90">
+                            <div className="line-clamp-3 text-[11px] leading-tight opacity-90 break-words">
                               {msg.reply_to.text}
                             </div>
                           </div>
