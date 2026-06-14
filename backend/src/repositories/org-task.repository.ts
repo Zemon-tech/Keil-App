@@ -152,18 +152,20 @@ export class OrgTaskRepository extends BaseRepository<Task> {
     return result.rows as Task[];
   }
 
-  async findWithAssignees(taskId: string, client?: PoolClient): Promise<(Task & { assignees: User[]; creator_name?: string | null; creator_email?: string | null }) | null> {
+  async findWithAssignees(taskId: string, client?: PoolClient): Promise<(Task & { assignees: User[]; creator_name?: string | null; creator_email?: string | null; creator_avatar_url?: string | null }) | null> {
     const query = `
       SELECT
         t.*,
         creator.name as creator_name,
         creator.email as creator_email,
+        creator.avatar_url as creator_avatar_url,
         COALESCE(
           json_agg(
             json_build_object(
               'id', u.id,
               'email', u.email,
               'name', u.name,
+              'avatar_url', u.avatar_url,
               'created_at', u.created_at
             )
           ) FILTER (WHERE u.id IS NOT NULL),
@@ -178,7 +180,7 @@ export class OrgTaskRepository extends BaseRepository<Task> {
         ON u.id = ta.user_id
       WHERE t.id = $1
         AND t.deleted_at IS NULL
-      GROUP BY t.id, creator.name, creator.email
+      GROUP BY t.id, creator.name, creator.email, creator.avatar_url
     `;
 
     const executor = client || this.pool;

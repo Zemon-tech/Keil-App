@@ -38,6 +38,7 @@ export class TaskRepository extends BaseRepository<Task> {
               'id', u.id,
               'email', u.email,
               'name', u.name,
+              'avatar_url', u.avatar_url,
               'created_at', u.created_at
             )
           ) FILTER (WHERE u.id IS NOT NULL),

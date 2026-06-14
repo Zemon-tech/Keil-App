@@ -1627,6 +1627,34 @@ function PreferencesTab() {
     window.dispatchEvent(new Event("time_format_changed"));
   };
 
+  const [calendarDetailsView, setCalendarDetailsView] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("default_calendar_details_view") || "sidebar";
+    }
+    return "sidebar";
+  });
+
+  const handleCalendarDetailsViewChange = (view: "sidebar" | "dialog") => {
+    setCalendarDetailsView(view);
+    localStorage.setItem("default_calendar_details_view", view);
+    toast.success(`Default calendar detail view set to ${view === "sidebar" ? "Sidebar" : "Dialog"}`);
+    window.dispatchEvent(new Event("calendar_details_view_changed"));
+  };
+
+  const [hideCalendarDayHeaders, setHideCalendarDayHeaders] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("hide_calendar_day_headers") === "true";
+    }
+    return false;
+  });
+
+  const handleHideCalendarDayHeadersChange = (hide: boolean) => {
+    setHideCalendarDayHeaders(hide);
+    localStorage.setItem("hide_calendar_day_headers", hide ? "true" : "false");
+    toast.success(hide ? "Calendar day headers hidden" : "Calendar day headers shown");
+    window.dispatchEvent(new Event("calendar_day_headers_preference_changed"));
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -1799,6 +1827,90 @@ function PreferencesTab() {
               Example: 14:30
             </span>
           </button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Calendar Details View */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <PanelRight className="size-4 text-muted-foreground" />
+          Default Calendar Details View
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Choose where task or event details are shown when clicked in the calendar.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleCalendarDetailsViewChange("sidebar")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              calendarDetailsView === "sidebar"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <PanelRight className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Right Sidebar</span>
+              </div>
+              {calendarDetailsView === "sidebar" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Shows task or event details in the right-hand panel of the calendar.
+            </span>
+          </button>
+          <button
+            onClick={() => handleCalendarDetailsViewChange("dialog")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              calendarDetailsView === "dialog"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <Monitor className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Centered Dialog</span>
+              </div>
+              {calendarDetailsView === "dialog" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Shows details in a focused popup modal overlay.
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Hide Calendar Day Headers */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <CalendarDays className="size-4 text-muted-foreground" />
+          Calendar Headers
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Choose whether to display day names (Mon, Tue, etc.) at the top of the calendar grid.
+        </p>
+        <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+          <div>
+            <p className="text-xs font-semibold text-foreground">Show Calendar Day Headers</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+              Toggle day name headers visible/hidden on all calendar views.
+            </p>
+          </div>
+          <Switch
+            checked={!hideCalendarDayHeaders}
+            onCheckedChange={(checked) => handleHideCalendarDayHeadersChange(!checked)}
+          />
         </div>
       </div>
 
@@ -2927,37 +3039,43 @@ function ConnectorsTab() {
   const connectGithub = useConnectGitHub();
   const disconnectGithub = useDisconnectGitHub();
 
-  // Static placeholder connectors (as requested)
-  const googleConnectors = [
+  // Google suite services — connected status inherits from Google Calendar OAuth
+  const googleSuiteServices = [
     {
       name: "Google Mail",
       description: "Sync contacts and import task items from emails",
       logo: "/integrations/gmail.png",
+      activeDescription: "Email contacts and task imports are available",
     },
     {
       name: "Google Meet",
       description: "Schedule and join video calls directly from events",
       logo: "/integrations/gmeet.png",
-    },
-    {
-      name: "Google Docs",
-      description: "Create, view, and sync document content inline",
-      logo: "/integrations/gdocs.png",
-    },
-    {
-      name: "Google Sheets",
-      description: "Link spreadsheet metrics and tables directly",
-      logo: "/integrations/gsheets.png",
-    },
-    {
-      name: "Google Slides",
-      description: "Embed presentations and presentation details",
-      logo: "/integrations/gslides.png",
+      activeDescription: "Video call links auto-generated on events",
     },
     {
       name: "Google Drive",
       description: "Browse and reference workspace files from your chats",
       logo: "/integrations/gdrive.png",
+      activeDescription: "Drive files accessible across your workspace",
+    },
+    {
+      name: "Google Docs",
+      description: "Create, view, and sync document content inline",
+      logo: "/integrations/gdocs.png",
+      activeDescription: "Docs can be linked and previewed in tasks",
+    },
+    {
+      name: "Google Sheets",
+      description: "Link spreadsheet metrics and tables directly",
+      logo: "/integrations/gsheets.png",
+      activeDescription: "Sheets data available for task context",
+    },
+    {
+      name: "Google Slides",
+      description: "Embed presentations and presentation details",
+      logo: "/integrations/gslides.png",
+      activeDescription: "Presentations can be linked to events",
     },
   ];
 
@@ -3000,33 +3118,46 @@ function ConnectorsTab() {
 
       <Separator />
 
-      <div className="space-y-3">
-        {/* Google Calendar — live integration */}
-        <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
+      <div className="space-y-6">
+      {/* ── Google Suite ── */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 mb-3">
+          <img src="/integrations/google.png" alt="Google" className="size-4 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Google Suite</p>
+          {gcalStatus?.connected && (
+            <span className="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+              Connected
+            </span>
+          )}
+        </div>
+
+        {/* Google Calendar — primary OAuth connector */}
+        <div className={cn(
+          "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
+          gcalStatus?.connected ? "border-emerald-500/30 bg-emerald-500/5" : "border-border",
+        )}>
           <div className="flex items-center gap-3">
             <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
               <img src="/integrations/gcalendar.png" alt="Google Calendar" className="size-6 object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">
-                  Google Calendar
-                </p>
-                {!gcalLoading && (
-                  <span
-                    className={cn(
-                      "inline-block size-2 rounded-full",
-                      gcalStatus?.connected
-                        ? "bg-emerald-500"
-                        : "bg-muted-foreground/40",
-                    )}
-                  />
+                <p className="text-sm font-medium text-foreground">Google Calendar</p>
+                {gcalLoading ? (
+                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                ) : gcalStatus?.connected ? (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-500">
+                    <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+                    Active
+                  </span>
+                ) : (
+                  <span className="size-2 rounded-full bg-muted-foreground/40 inline-block" />
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
                 {gcalStatus?.connected
-                  ? "Scheduled tasks sync automatically"
-                  : "Sync scheduled tasks to your calendar"}
+                  ? "Scheduled tasks sync automatically · Authorises all Google services below"
+                  : "Connect to enable Calendar sync and all Google services"}
               </p>
             </div>
           </div>
@@ -3038,11 +3169,7 @@ function ConnectorsTab() {
               disabled={disconnectGcal.isPending}
               onClick={() => disconnectGcal.mutate()}
             >
-              {disconnectGcal.isPending ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                "Disconnect"
-              )}
+              {disconnectGcal.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Disconnect"}
             </Button>
           ) : (
             <Button
@@ -3052,44 +3179,55 @@ function ConnectorsTab() {
               disabled={gcalLoading}
               onClick={connectGcal}
             >
-              {gcalLoading ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                "Connect"
-              )}
+              {gcalLoading ? <Loader2 className="size-3.5 animate-spin" /> : "Connect"}
             </Button>
           )}
         </div>
 
-        {/* Other Google Suite Integrations (Mail, Meet, Docs/Sheets/Slides) */}
-        {googleConnectors.map((connector, i) => (
-          <div
-            key={`google-${i}`}
-            className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-                <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {connector.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {connector.description}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled
+        {/* Google sub-services — status inherits from Calendar OAuth */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-0">
+          {googleSuiteServices.map((svc) => (
+            <div
+              key={svc.name}
+              className={cn(
+                "flex items-center justify-between p-3.5 rounded-xl border transition-colors",
+                gcalStatus?.connected
+                  ? "border-emerald-500/20 bg-emerald-500/5"
+                  : "border-border/60 bg-card opacity-60",
+              )}
             >
-              Coming soon
-            </Button>
-          </div>
-        ))}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="size-8 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
+                  <img src={svc.logo} alt={svc.name} className="size-5 object-contain" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-medium text-foreground truncate">{svc.name}</p>
+                    {gcalStatus?.connected && (
+                      <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 line-clamp-1">
+                    {gcalStatus?.connected ? svc.activeDescription : svc.description}
+                  </p>
+                </div>
+              </div>
+              <span className={cn(
+                "text-[10px] font-semibold shrink-0 ml-2 px-2 py-0.5 rounded-full border",
+                gcalStatus?.connected
+                  ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
+                  : "text-muted-foreground/50 bg-muted/30 border-border/40",
+              )}>
+                {gcalStatus?.connected ? "Connected" : "Pending"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Other Integrations ── */}
+      <div className="space-y-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Other Integrations</p>
 
         {/* GitHub — live integration */}
         <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
@@ -3180,6 +3318,7 @@ function ConnectorsTab() {
             </Button>
           </div>
         ))}
+      </div>
       </div>
     </div>
   );

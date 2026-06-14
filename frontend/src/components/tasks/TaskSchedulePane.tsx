@@ -16,6 +16,7 @@ import {
   isPast,
   addMinutes,
 } from "date-fns";
+import { CalendarSidebar } from "./CalendarSidebar";
 import {
   isAllDayRangeLocal,
   normalizeAllDayRangeLocal,
@@ -45,7 +46,7 @@ import { CreateTaskDialog } from "./CreateTaskDialog";
 import { QuickNavPopover } from "./QuickNavPopover";
 import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType, AnyStatus } from "@/types/task";
-import { getThemeForTask } from "@/lib/calendarTheme";
+import { getThemeForTask, blockTypeThemeMap } from "@/lib/calendarTheme";
 import type { TaskDTO } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 
@@ -176,6 +177,7 @@ function renderEventContent(arg: EventContentArg) {
   const type = arg.event.extendedProps.type as CalendarBlockType;
   const isScheduledTask = arg.event.extendedProps.isScheduledTask;
   const isMonthView = arg.view.type === "dayGridMonth";
+  const isAllDay = arg.event.allDay;
   const isBacklog = arg.event.extendedProps.taskStatus === "backlog";
 
   const BacklogDot = () => (
@@ -185,100 +187,93 @@ function renderEventContent(arg: EventContentArg) {
     />
   );
 
-  if (isMonthView) {
-    const taskType = arg.event.extendedProps.taskType;
+  const start = arg.event.start;
+  let formattedTime = "";
+  if (start) {
+    formattedTime = format(start, "h:mm a").toLowerCase();
+  }
+
+  if (isMonthView || isAllDay) {
     const isDone =
       arg.event.extendedProps.taskStatus === "done" ||
       arg.event.extendedProps.taskStatus === "completed";
+    const taskType = arg.event.extendedProps.taskType;
+
+    let IconComponent: any = null;
+    if (isScheduledTask) {
+      if (taskType === "event") {
+        IconComponent = <CalendarClock className="size-3 shrink-0 opacity-70" />;
+      } else {
+        IconComponent = (
+          <StatusIcon
+            status={arg.event.extendedProps.taskStatus}
+            type="task"
+            className="size-3 shrink-0 opacity-70"
+          />
+        );
+      }
+    } else if (type && typeMeta[type]) {
+      const BlockIcon = typeMeta[type].icon;
+      IconComponent = <BlockIcon className="size-3 shrink-0 opacity-70" />;
+    }
+
     return (
-      <div className="relative size-full overflow-visible">
+      <div className="relative size-full overflow-hidden flex items-center justify-between px-2.5 py-0.5">
         {isBacklog && <BacklogDot />}
-        <div
-          className="w-full truncate text-[12px] font-medium px-1.5 py-0.5 flex items-center gap-1.5"
-          style={{ color: arg.textColor || "inherit" }}
-        >
-          {isScheduledTask && (
-            taskType === "event" ? (
-              <CalendarClock className="size-3 shrink-0 opacity-70" />
-            ) : (
-              <StatusIcon
-                status={arg.event.extendedProps.taskStatus}
-                type="task"
-                className="size-3 shrink-0 opacity-70"
-              />
-            )
-          )}
+        <div className="flex items-center min-w-0 flex-1 pr-2 gap-1.5">
+          {IconComponent}
           <span
             className={cn(
-              "truncate",
+              "truncate font-medium text-[11px]",
               isDone && "line-through italic opacity-70",
             )}
           >
             {arg.event.title}
           </span>
         </div>
+        {formattedTime && (
+          <span className="shrink-0 text-[10px] opacity-60 font-normal ml-1">
+            {formattedTime}
+          </span>
+        )}
       </div>
     );
   }
 
-  // Handle scheduled tasks (no type metadata)
+  // timed views (Week/Day)
+  const isDone =
+    arg.event.extendedProps.taskStatus === "done" ||
+    arg.event.extendedProps.taskStatus === "completed";
+  
+  let blockTitle = arg.event.title;
+  let labelText = "";
+  let themeBg = "bg-muted/30";
+  let themeBorder = "border-border";
+  
   if (isScheduledTask) {
-    const taskType = arg.event.extendedProps.taskType;
-    const isDone =
-      arg.event.extendedProps.taskStatus === "done" ||
-      arg.event.extendedProps.taskStatus === "completed";
-    return (
-      <div className="relative size-full overflow-visible">
-        {isBacklog && <BacklogDot />}
-        <div
-          className="size-full p-2 overflow-hidden flex items-center gap-1.5"
-          style={{ color: arg.textColor || "inherit" }}
-        >
-          {taskType === "event" ? (
-            <CalendarClock className="size-3.5 shrink-0 opacity-70" />
-          ) : (
-            <StatusIcon
-              status={arg.event.extendedProps.taskStatus}
-              type="task"
-              className="size-3.5 shrink-0 opacity-70"
-            />
-          )}
-          <div
-            className={cn(
-              "text-[11px] font-bold leading-tight truncate flex-1",
-              isDone && "line-through italic opacity-70",
-            )}
-          >
-            {arg.event.title}
-          </div>
-        </div>
-      </div>
-    );
+    themeBg = ""; // set via inline styles below
+    themeBorder = "";
+  } else if (type && typeMeta[type]) {
+    const meta = typeMeta[type];
+    themeBg = meta.bg;
+    themeBorder = meta.border;
+    if (type !== "meeting") {
+      labelText = meta.label;
+    }
   }
 
-  // Handle calendar blocks with type metadata
-  if (!type || !typeMeta[type]) {
-    return (
-      <div className="relative size-full overflow-visible">
-        {isBacklog && <BacklogDot />}
-        <div className="p-2 text-xs overflow-hidden">{arg.event.title}</div>
-      </div>
-    );
-  }
-
-  const meta = typeMeta[type];
-  const Icon = meta.icon;
   const isBg = arg.event.display === "background";
 
   if (isBg) {
+    const Icon = type && typeMeta[type] ? typeMeta[type].icon : Focus;
     return (
       <div className="relative size-full overflow-visible">
         {isBacklog && <BacklogDot />}
-        <div className="size-full px-2 py-1.5 opacity-40 overflow-hidden">
+        <div className="size-full px-3 py-2 opacity-30 overflow-hidden">
           <div className="flex items-center gap-2">
-            <Icon className="size-3" />
+            <Icon className="size-3.5" />
             <span className="text-[10px] font-bold uppercase tracking-wider truncate">
-              {arg.event.title}
+              {blockTitle}
             </span>
           </div>
         </div>
@@ -286,29 +281,75 @@ function renderEventContent(arg: EventContentArg) {
     );
   }
 
+  const inlineStyles: React.CSSProperties = {};
+  if (isScheduledTask) {
+    const chipStyles = getThemeForTask(
+      arg.event.extendedProps.taskType,
+      arg.event.extendedProps.taskPriority,
+      arg.event.extendedProps.taskStatus
+    );
+    inlineStyles.backgroundColor = chipStyles.background;
+    inlineStyles.borderColor = chipStyles.border;
+    inlineStyles.color = chipStyles.text;
+  } else if (type && blockTypeThemeMap[type]) {
+    const chipStyles = blockTypeThemeMap[type];
+    inlineStyles.backgroundColor = chipStyles.background;
+    inlineStyles.borderColor = chipStyles.border;
+    inlineStyles.color = chipStyles.text;
+    themeBg = "";
+    themeBorder = "";
+  }
+
   return (
-    <div className="relative size-full overflow-visible">
+    <div className="relative size-full overflow-visible" style={inlineStyles}>
       {isBacklog && <BacklogDot />}
       <div
         className={cn(
-          "size-full p-2 border-l-4 overflow-hidden",
-          meta.bg,
-          meta.border.replace("border-", "border-l-"),
+          "size-full p-3 border rounded-xl overflow-hidden flex flex-col justify-start relative",
+          themeBg,
+          themeBorder
         )}
+        style={{
+          color: inlineStyles.color || "inherit",
+          borderColor: inlineStyles.borderColor || undefined,
+          backgroundColor: inlineStyles.backgroundColor || undefined,
+        }}
       >
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold leading-tight truncate">
-              {arg.event.title}
+        <div className="min-w-0 flex flex-col justify-start gap-0.5">
+          <div
+            className={cn(
+              "text-xs font-semibold leading-snug break-words pr-4",
+              isDone && "line-through italic opacity-70"
+            )}
+          >
+            {blockTitle}
+          </div>
+          
+          {formattedTime && (
+            <div className="text-[10px] font-medium opacity-75">
+              {formattedTime}
             </div>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">
-                {meta.label}
+          )}
+          
+          {labelText && (
+            <div className="mt-1">
+              <span className="text-[8px] font-bold uppercase tracking-widest opacity-60">
+                {labelText}
               </span>
             </div>
-          </div>
-          <Icon className="size-3.5 opacity-40" />
+          )}
         </div>
+
+        {/* Small top-right status dot — only for meetings and events */}
+        {((isScheduledTask && arg.event.extendedProps.taskType === "event") || type === "meeting") && (
+          <span
+            className="absolute top-2.5 right-2.5 size-1.5 rounded-full shrink-0"
+            style={{
+              backgroundColor: inlineStyles.color || "currentColor",
+              opacity: 0.9,
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -329,6 +370,47 @@ export function TaskSchedulePane({
   onOpenSidebar,
 }: Props) {
   const { activeOrgId, activeSpaceId } = useAppContext();
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const [calendarDetailsView, setCalendarDetailsView] = useState<"sidebar" | "dialog">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("default_calendar_details_view") as "sidebar" | "dialog") || "sidebar";
+    }
+    return "sidebar";
+  });
+
+  const [hideCalendarDayHeaders, setHideCalendarDayHeaders] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("hide_calendar_day_headers") === "true";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleViewPreferenceChange = () => {
+      const stored = localStorage.getItem("default_calendar_details_view") as "sidebar" | "dialog" | null;
+      if (stored) {
+        setCalendarDetailsView(stored);
+      }
+    };
+    const handleHeadersPreferenceChange = () => {
+      const stored = localStorage.getItem("hide_calendar_day_headers") === "true";
+      setHideCalendarDayHeaders(stored);
+    };
+    window.addEventListener("calendar_details_view_changed", handleViewPreferenceChange);
+    window.addEventListener("calendar_day_headers_preference_changed", handleHeadersPreferenceChange);
+    return () => {
+      window.removeEventListener("calendar_details_view_changed", handleViewPreferenceChange);
+      window.removeEventListener("calendar_day_headers_preference_changed", handleHeadersPreferenceChange);
+    };
+  }, []);
+
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [selectedTaskOrgId, setSelectedTaskOrgId] = useState<string>("");
   const [selectedTaskSpaceId, setSelectedTaskSpaceId] = useState<string>("");
@@ -974,253 +1056,309 @@ export function TaskSchedulePane({
           </div>
         </div>
 
-        <div className="flex-1 min-h-0">
-          <div
-            ref={calendarContainerRef}
-            className="task-schedule-calendar h-full min-h-0"
-          >
-            <FullCalendar
-              ref={calendarRef}
-              plugins={[
-                timeGridPlugin,
-                dayGridPlugin,
-                listPlugin,
-                interactionPlugin,
-              ]}
-              initialView={currentViewType}
-              initialDate={initialDate}
-              height="100%"
-              nowIndicator
-              editable
-              selectable
-              droppable
-              weekends
-              navLinks={true}
-              slotLabelFormat={{
-                hour: "numeric",
-                minute: "2-digit",
-                omitZeroMinute: true,
-                hour12: true,
-              }}
-              views={{
-                dayGridMonth: {
-                  dayHeaderFormat: { weekday: "short" },
-                  eventResizableFromStart: true,
-                },
-                timeGridWeek: {
-                  dayHeaderFormat: {
-                    weekday: "short",
-                    day: "numeric",
-                    omitCommas: true,
-                  },
-                },
-                timeGridDay: {
-                  dayHeaderFormat: {
-                    weekday: "short",
-                    day: "numeric",
-                    omitCommas: true,
-                  },
-                },
-              }}
-              scrollTime={scrollTime}
-              scrollTimeReset={false}
-              headerToolbar={false}
-              dayMaxEvents={2}
-              moreLinkContent={(args) => `${args.num} more`}
-              moreLinkClick={(info) => {
-                // Prevent FullCalendar's built-in popover — use our own portalled one
-                const rect = (info.jsEvent.target as HTMLElement).getBoundingClientRect();
-                const dayEvents = info.allSegs.map((seg) => ({
-                  id: seg.event.id,
-                  title: seg.event.title,
-                  status: seg.event.extendedProps.taskStatus as string || "",
-                  priority: seg.event.extendedProps.taskPriority as string || "",
-                  type: seg.event.extendedProps.taskType as string || "",
-                  taskId: seg.event.extendedProps.taskId as string || seg.event.id,
-                  orgId: (seg.event.extendedProps.orgId as string) || activeOrgId || "",
-                  spaceId: (seg.event.extendedProps.spaceId as string) || activeSpaceId || "",
-                }));
+        <div className="flex-1 min-h-0 flex flex-row relative overflow-hidden">
+          {/* Left: Main calendar */}
+          <div className="flex-1 min-w-0 h-full flex flex-col">
+            <div
+              ref={calendarContainerRef}
+              className="task-schedule-calendar h-full min-h-0"
+            >
+              <FullCalendar
+                ref={calendarRef}
+                plugins={[
+                  timeGridPlugin,
+                  dayGridPlugin,
+                  listPlugin,
+                  interactionPlugin,
+                ]}
+                initialView={currentViewType}
+                initialDate={initialDate}
+                height="100%"
+                nowIndicator
+                editable
+                selectable
+                droppable
+                weekends
+                navLinks={true}
+                dayHeaders={!hideCalendarDayHeaders}
+                slotLabelFormat={{
+                  hour: "numeric",
+                  minute: "2-digit",
+                  omitZeroMinute: true,
+                  hour12: true,
+                }}
+                dayHeaderContent={(arg) => {
+                  const dayName = format(arg.date, "E");
+                  const dayNumber = format(arg.date, "d");
+                  const isToday = arg.isToday;
 
-                // Position: align to the "more" link, ensure it stays within viewport
-                const popoverWidth = 280;
-                const popoverMaxHeight = 300;
-                let x = rect.left;
-                let y = rect.bottom + 6;
-
-                // Keep within horizontal bounds
-                if (x + popoverWidth > window.innerWidth - 16) {
-                  x = window.innerWidth - popoverWidth - 16;
-                }
-                // If it would clip at the bottom, open upward
-                if (y + popoverMaxHeight > window.innerHeight - 16) {
-                  y = rect.top - popoverMaxHeight - 6;
-                  if (y < 16) y = 16;
-                }
-
-                setMorePopover({
-                  date: info.date,
-                  events: dayEvents,
-                  position: { x, y },
-                });
-                return "none"; // suppress FullCalendar's built-in popover
-              }}
-              events={events}
-              eventOrder={(a: any, b: any) => {
-                const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-                const priorityA = a.extendedProps.taskPriority
-                  ? (priorityOrder[
-                      a.extendedProps.taskPriority as keyof typeof priorityOrder
-                    ] ?? 4)
-                  : 4;
-                const priorityB = b.extendedProps.taskPriority
-                  ? (priorityOrder[
-                      b.extendedProps.taskPriority as keyof typeof priorityOrder
-                    ] ?? 4)
-                  : 4;
-                return priorityA - priorityB;
-              }}
-              eventContent={renderEventContent}
-              eventClassNames={(arg: any) => {
-                const type = arg.event.extendedProps.type as CalendarBlockType;
-                if (arg.event.extendedProps.isScheduledTask) {
-                  const status = arg.event.extendedProps.taskStatus as string;
-                  const isDone = status === "done" || status === "completed";
-                  return [
-                    "task-event",
-                    "scheduled-task",
-                    status ? `task-status-${status}` : "",
-                    isDone ? "is-done" : "",
-                  ].filter(Boolean);
-                }
-                if (!type) return ["task-event"];
-                return [`fc-type-${type}`, "task-event"];
-              }}
-              eventClick={(arg) => {
-                const isScheduledTask = arg.event.extendedProps.isScheduledTask;
-                if (isScheduledTask) {
-                  const taskId = arg.event.extendedProps.taskId;
-                  // Capture position for dialog relative to the date cell if possible, fallback to event pill
-                  const cellEl = (arg.el as HTMLElement).closest(
-                    ".fc-daygrid-day, .fc-timegrid-col",
-                  ) as HTMLElement | null;
-                  const rect = (cellEl || arg.el).getBoundingClientRect();
-
-                  const screenWidth = window.innerWidth;
-                  const screenHeight = window.innerHeight;
-                  const dialogWidth = 340; // match new max-w-[340px]
-                  const dialogHeight = 200; // approximate compact height
-
-                  // Calculate x position: show on right of cell if there's space, otherwise left
-                  let x = rect.right + 10;
-                  if (x + dialogWidth > screenWidth) {
-                    x = rect.left - dialogWidth - 10;
+                  if (currentViewType === "dayGridMonth") {
+                    return (
+                      <span className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase">
+                        {dayName}
+                      </span>
+                    );
                   }
-                  // Ensure x is within bounds
-                  x = Math.max(10, Math.min(x, screenWidth - dialogWidth - 10));
 
-                  // Calculate y position: align with top of the cell
-                  let y = rect.top;
-                  if (y + dialogHeight > screenHeight) {
-                    y = screenHeight - dialogHeight - 10;
+                  return (
+                    <div className="flex items-center justify-center gap-1.5 py-0.5 select-none font-medium">
+                      <span className="text-xs text-muted-foreground font-semibold">
+                        {dayName}
+                      </span>
+                      {isToday ? (
+                        <span className="size-6 rounded-full bg-[#6366F1] text-white flex items-center justify-center text-[10px] font-bold shadow-sm shrink-0">
+                          {dayNumber}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold text-foreground">
+                          {dayNumber}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }}
+                views={{
+                  dayGridMonth: {
+                    dayHeaderFormat: { weekday: "short" },
+                    eventResizableFromStart: true,
+                  },
+                  timeGridWeek: {
+                    dayHeaderFormat: {
+                      weekday: "short",
+                      day: "numeric",
+                      omitCommas: true,
+                    },
+                    dayMaxEvents: 2,
+                  },
+                  timeGridDay: {
+                    dayHeaderFormat: {
+                      weekday: "short",
+                      day: "numeric",
+                      omitCommas: true,
+                    },
+                    dayMaxEvents: 2,
+                  },
+                }}
+                scrollTime={scrollTime}
+                scrollTimeReset={false}
+                headerToolbar={false}
+                dayMaxEvents={2}
+                moreLinkContent={(args) => `${args.num} more`}
+                moreLinkClick={(info) => {
+                  // Prevent FullCalendar's built-in popover — use our own portalled one
+                  const rect = (info.jsEvent.target as HTMLElement).getBoundingClientRect();
+                  const dayEvents = info.allSegs.map((seg) => ({
+                    id: seg.event.id,
+                    title: seg.event.title,
+                    status: seg.event.extendedProps.taskStatus as string || "",
+                    priority: seg.event.extendedProps.taskPriority as string || "",
+                    type: seg.event.extendedProps.taskType as string || "",
+                    taskId: seg.event.extendedProps.taskId as string || seg.event.id,
+                    orgId: (seg.event.extendedProps.orgId as string) || activeOrgId || "",
+                    spaceId: (seg.event.extendedProps.spaceId as string) || activeSpaceId || "",
+                  }));
+
+                  // Position: align to the "more" link, ensure it stays within viewport
+                  const popoverWidth = 280;
+                  const popoverMaxHeight = 300;
+                  let x = rect.left;
+                  let y = rect.bottom + 6;
+
+                  // Keep within horizontal bounds
+                  if (x + popoverWidth > window.innerWidth - 16) {
+                    x = window.innerWidth - popoverWidth - 16;
                   }
-                  // Ensure y is within bounds
-                  y = Math.max(
-                    10,
-                    Math.min(y, screenHeight - dialogHeight - 10),
-                  );
+                  // If it would clip at the bottom, open upward
+                  if (y + popoverMaxHeight > window.innerHeight - 16) {
+                    y = rect.top - popoverMaxHeight - 6;
+                    if (y < 16) y = 16;
+                  }
 
-                  setDialogPosition({ x, y });
-                  setSelectedTaskId(taskId);
-                  setSelectedTaskOrgId(arg.event.extendedProps.orgId || activeOrgId);
-                  setSelectedTaskSpaceId(arg.event.extendedProps.spaceId || activeSpaceId);
-                }
-              }}
-              dateClick={(arg) => {
-                const clickedDate = arg.date;
-                // Compute a default due_date so the created task is visible on the calendar.
-                // The calendar filter requires BOTH start_date AND due_date to render an event.
-                let defaultDueDate: Date;
-                if (arg.allDay) {
-                  // Month view or all-day row click → schedule as a full-day event (exclusive end = next midnight)
-                  const { end: allDayEnd } =
-                    normalizeAllDayRangeLocal(clickedDate);
-                  defaultDueDate = allDayEnd;
-                } else {
-                  // Timed view click → default to 1-hour slot (matches DEFAULT_TIMED_DURATION_MINUTES)
-                  defaultDueDate = addMinutes(
-                    clickedDate,
-                    DEFAULT_TIMED_DURATION_MINUTES,
-                  );
-                }
-                // Respect the active filter: if the user is viewing Events, default to creating an event
-                const defaultType: "task" | "event" =
-                  statusFilter === "Event" ||
-                  EVENT_STATUS_OPTIONS.includes(statusFilter as any)
-                    ? "event"
-                    : "task";
-                setCreateInitialValues({
-                  type: defaultType,
-                  start_date: clickedDate.toISOString(),
-                  due_date: defaultDueDate.toISOString(),
-                  is_all_day: arg.allDay,
-                } as Partial<TaskDTO>);
-                setCreateDialogOpen(true);
-              }}
-              selectMirror
-              select={(arg) => {
-                // User dragged to select a time range — open create dialog with exact start/end.
-                // Uses the same normalisation helpers as drop/resize to stay consistent.
-                let startISO: string;
-                let endISO: string;
-                if (arg.allDay) {
-                  // All-day selection (month view or all-day row drag)
-                  const { start, end } = normalizeAllDayRangeLocal(
-                    arg.start,
-                    arg.end,
-                  );
-                  startISO = start.toISOString();
-                  endISO = end.toISOString();
-                } else {
-                  // Timed selection (day/week view drag)
-                  const { start, end } = normalizeTimedRange(
-                    arg.start,
-                    arg.end,
-                  );
-                  startISO = start.toISOString();
-                  endISO = end.toISOString();
-                }
-                // Respect the active filter: if the user is viewing Events, default to creating an event
-                const defaultType: "task" | "event" =
-                  statusFilter === "Event" ||
-                  EVENT_STATUS_OPTIONS.includes(statusFilter as any)
-                    ? "event"
-                    : "task";
-                setCreateInitialValues({
-                  type: defaultType,
-                  start_date: startISO,
-                  due_date: endISO,
-                  is_all_day: arg.allDay,
-                } as Partial<TaskDTO>);
-                setCreateDialogOpen(true);
-              }}
-              datesSet={(dateInfo) => {
-                const view = dateInfo.view.type as CalendarView;
-                setCurrentViewType(view);
-                setCurrentViewDate(dateInfo.view.currentStart);
-                localStorage.setItem(STORAGE_CALENDAR_VIEW, view);
-                localStorage.setItem(STORAGE_CALENDAR_DATE, dateInfo.view.currentStart.toISOString());
-                if (onViewChange) onViewChange(view);
-                if (onDateChange) onDateChange(dateInfo.view.currentStart);
-              }}
-              eventReceive={handleEventReceive}
-              eventResize={handleEventResize}
-              eventDrop={handleEventDrop}
-            />
+                  setMorePopover({
+                    date: info.date,
+                    events: dayEvents,
+                    position: { x, y },
+                  });
+                  return "none"; // suppress FullCalendar's built-in popover
+                }}
+                events={events}
+                eventOrder={(a: any, b: any) => {
+                  const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+                  const priorityA = a.extendedProps.taskPriority
+                    ? (priorityOrder[
+                        a.extendedProps.taskPriority as keyof typeof priorityOrder
+                      ] ?? 4)
+                    : 4;
+                  const priorityB = b.extendedProps.taskPriority
+                    ? (priorityOrder[
+                        b.extendedProps.taskPriority as keyof typeof priorityOrder
+                      ] ?? 4)
+                    : 4;
+                  return priorityA - priorityB;
+                }}
+                eventContent={renderEventContent}
+                eventClassNames={(arg: any) => {
+                  const type = arg.event.extendedProps.type as CalendarBlockType;
+                  if (arg.event.extendedProps.isScheduledTask) {
+                    const status = arg.event.extendedProps.taskStatus as string;
+                    const isDone = status === "done" || status === "completed";
+                    return [
+                      "task-event",
+                      "scheduled-task",
+                      status ? `task-status-${status}` : "",
+                      isDone ? "is-done" : "",
+                    ].filter(Boolean);
+                  }
+                  if (!type) return ["task-event"];
+                  return [`fc-type-${type}`, "task-event"];
+                }}
+                eventClick={(arg) => {
+                  const isScheduledTask = arg.event.extendedProps.isScheduledTask;
+                  if (isScheduledTask) {
+                    const taskId = arg.event.extendedProps.taskId;
+                    // Capture position for dialog relative to the date cell if possible, fallback to event pill
+                    const cellEl = (arg.el as HTMLElement).closest(
+                      ".fc-daygrid-day, .fc-timegrid-col",
+                    ) as HTMLElement | null;
+                    const rect = (cellEl || arg.el).getBoundingClientRect();
+
+                    const screenWidth = window.innerWidth;
+                    const screenHeight = window.innerHeight;
+                    const dialogWidth = 340; // match new max-w-[340px]
+                    const dialogHeight = 200; // approximate compact height
+
+                    // Calculate x position: show on right of cell if there's space, otherwise left
+                    let x = rect.right + 10;
+                    if (x + dialogWidth > screenWidth) {
+                      x = rect.left - dialogWidth - 10;
+                    }
+                    // Ensure x is within bounds
+                    x = Math.max(10, Math.min(x, screenWidth - dialogWidth - 10));
+
+                    // Calculate y position: align with top of the cell
+                    let y = rect.top;
+                    if (y + dialogHeight > screenHeight) {
+                      y = screenHeight - dialogHeight - 10;
+                    }
+                    // Ensure y is within bounds
+                    y = Math.max(
+                      10,
+                      Math.min(y, screenHeight - dialogHeight - 10),
+                    );
+
+                    setDialogPosition({ x, y });
+                    setSelectedTaskId(taskId);
+                    setSelectedTaskOrgId(arg.event.extendedProps.orgId || activeOrgId);
+                    setSelectedTaskSpaceId(arg.event.extendedProps.spaceId || activeSpaceId);
+                  }
+                }}
+                dateClick={(arg) => {
+                  const clickedDate = arg.date;
+                  // Compute a default due_date so the created task is visible on the calendar.
+                  // The calendar filter requires BOTH start_date AND due_date to render an event.
+                  let defaultDueDate: Date;
+                  if (arg.allDay) {
+                    // Month view or all-day row click → schedule as a full-day event (exclusive end = next midnight)
+                    const { end: allDayEnd } =
+                      normalizeAllDayRangeLocal(clickedDate);
+                    defaultDueDate = allDayEnd;
+                  } else {
+                    // Timed view click → default to 1-hour slot (matches DEFAULT_TIMED_DURATION_MINUTES)
+                    defaultDueDate = addMinutes(
+                      clickedDate,
+                      DEFAULT_TIMED_DURATION_MINUTES,
+                    );
+                  }
+                  // Respect the active filter: if the user is viewing Events, default to creating an event
+                  const defaultType: "task" | "event" =
+                    statusFilter === "Event" ||
+                    EVENT_STATUS_OPTIONS.includes(statusFilter as any)
+                      ? "event"
+                      : "task";
+                  setCreateInitialValues({
+                    type: defaultType,
+                    start_date: clickedDate.toISOString(),
+                    due_date: defaultDueDate.toISOString(),
+                    is_all_day: arg.allDay,
+                  } as Partial<TaskDTO>);
+                  setCreateDialogOpen(true);
+                }}
+                selectMirror
+                select={(arg) => {
+                  // User dragged to select a time range — open create dialog with exact start/end.
+                  // Uses the same normalisation helpers as drop/resize to stay consistent.
+                  let startISO: string;
+                  let endISO: string;
+                  if (arg.allDay) {
+                    // All-day selection (month view or all-day row drag)
+                    const { start, end } = normalizeAllDayRangeLocal(
+                      arg.start,
+                      arg.end,
+                    );
+                    startISO = start.toISOString();
+                    endISO = end.toISOString();
+                  } else {
+                    // Timed selection (day/week view drag)
+                    const { start, end } = normalizeTimedRange(
+                      arg.start,
+                      arg.end,
+                    );
+                    startISO = start.toISOString();
+                    endISO = end.toISOString();
+                  }
+                  // Respect the active filter: if the user is viewing Events, default to creating an event
+                  const defaultType: "task" | "event" =
+                    statusFilter === "Event" ||
+                    EVENT_STATUS_OPTIONS.includes(statusFilter as any)
+                      ? "event"
+                      : "task";
+                  setCreateInitialValues({
+                    type: defaultType,
+                    start_date: startISO,
+                    due_date: endISO,
+                    is_all_day: arg.allDay,
+                  } as Partial<TaskDTO>);
+                  setCreateDialogOpen(true);
+                }}
+                datesSet={(dateInfo) => {
+                  const view = dateInfo.view.type as CalendarView;
+                  setCurrentViewType(view);
+                  setCurrentViewDate(dateInfo.view.currentStart);
+                  localStorage.setItem(STORAGE_CALENDAR_VIEW, view);
+                  localStorage.setItem(STORAGE_CALENDAR_DATE, dateInfo.view.currentStart.toISOString());
+                  if (onViewChange) onViewChange(view);
+                  if (onDateChange) onDateChange(dateInfo.view.currentStart);
+                }}
+                eventReceive={handleEventReceive}
+                eventResize={handleEventResize}
+                eventDrop={handleEventDrop}
+              />
+            </div>
           </div>
+
+          {/* Right column: Sidebar panel */}
+          {!isMobile && calendarDetailsView === "sidebar" && !!selectedTaskId && (
+            <CalendarSidebar
+              taskId={selectedTaskId}
+              orgId={selectedTaskOrgId}
+              spaceId={selectedTaskSpaceId}
+              onClose={() => {
+                setSelectedTaskId("");
+                setSelectedTaskOrgId("");
+                setSelectedTaskSpaceId("");
+                setDialogPosition(null);
+              }}
+              tasks={tasks}
+              blocks={blocks}
+              onUnschedule={handleTaskUnschedule}
+              onStatusChange={handleStatusChange}
+            />
+          )}
         </div>
       </div>
 
-      <TaskPreviewDialog
+      {(isMobile || calendarDetailsView === "dialog") && (
+        <TaskPreviewDialog
           taskId={selectedTaskId}
           orgId={selectedTaskOrgId}
           spaceId={selectedTaskSpaceId}
@@ -1237,6 +1375,7 @@ export function TaskSchedulePane({
           onStatusChange={handleStatusChange}
           position={dialogPosition}
         />
+      )}
 
       <CreateTaskDialog
         open={createDialogOpen}

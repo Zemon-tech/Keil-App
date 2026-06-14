@@ -14,7 +14,8 @@ import {
   Users,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
@@ -383,6 +384,7 @@ export function PublicTaskView({ isLoading, isNotFound, task }: PublicTaskViewPr
                     return (
                       <div key={a.id} className="flex items-center gap-2.5">
                         <Avatar className="size-7 shrink-0">
+                          <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 56, height: 56 })} alt={displayName} />
                           <AvatarFallback className="text-[11px] font-semibold bg-accent">
                             {displayName.charAt(0).toUpperCase()}
                           </AvatarFallback>

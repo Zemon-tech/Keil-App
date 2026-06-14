@@ -47,6 +47,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { toast } from "sonner";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -162,6 +163,7 @@ export function CreateTaskDialog({
     return spaceMembers.map(m => ({
       id: m.user_id,
       name: m.name || m.email,
+      avatarUrl: m.avatar_url || m.avatarUrl || undefined,
     }));
   }, [allUsers, spaceMembers]);
 
@@ -939,7 +941,7 @@ export function CreateTaskDialog({
                           const user = resolvedUsers.find(u => u.id === id);
                           return (
                             <Avatar key={id} className="size-4.5 border border-background shrink-0">
-                              <AvatarImage src={user?.avatarUrl} />
+                              <AvatarImage src={getOptimizedImageUrl(user?.avatarUrl, { width: 32, height: 32 })} />
                               <AvatarFallback className="text-[7px] bg-secondary text-secondary-foreground font-bold">{(user?.name || "?")[0].toUpperCase()}</AvatarFallback>
                             </Avatar>
                           );
@@ -974,7 +976,7 @@ export function CreateTaskDialog({
                           className="flex items-center gap-2 px-3 py-2 cursor-pointer text-muted-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
                         >
                           <Avatar className="size-6">
-                            <AvatarImage src={user.avatarUrl} />
+                            <AvatarImage src={getOptimizedImageUrl(user.avatarUrl, { width: 48, height: 48 })} />
                             <AvatarFallback className="bg-muted text-muted-foreground font-bold">{user.name[0].toUpperCase()}</AvatarFallback>
                           </Avatar>
                           <div className="flex-1 flex flex-col">

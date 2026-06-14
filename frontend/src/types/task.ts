@@ -57,7 +57,7 @@ export type Comment = {
     content: string;
     parent_comment_id: string | null;
     created_at: string;
-    user: { id: string; email: string; name: string | null };
+    user: { id: string; email: string; name: string | null; avatar_url?: string | null; avatarUrl?: string | null };
     replies: Comment[];
 };
 
@@ -70,7 +70,7 @@ export type ActivityLogEntry = {
     old_value: Record<string, any> | null;
     new_value: Record<string, any> | null;
     created_at: string;
-    user: { id: string; email: string; name: string | null } | null;
+    user: { id: string; email: string; name: string | null; avatar_url?: string | null; avatarUrl?: string | null } | null;
 };
 
 
@@ -79,6 +79,8 @@ export type AssigneeUser = {
     id: string;
     email: string;
     name: string | null;
+    avatar_url?: string | null;
+    avatarUrl?: string | null;
 };
 
 export type Task = {

@@ -30,6 +30,8 @@ export interface SpaceMember {
   role: "admin" | "manager" | "member";
   name: string | null;
   email: string;
+  avatar_url?: string | null;
+  avatarUrl?: string | null;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
