@@ -15,7 +15,8 @@ import {
   DollarSign,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -117,6 +118,7 @@ function CommentNode({
     <div className="group relative flex items-start gap-2.5 px-4 py-1 hover:bg-black/5 dark:hover:bg-accent/40 transition-colors -mx-4 rounded-md">
       {/* Author Avatar — small, like WhatsApp */}
       <Avatar className="size-6 shrink-0 rounded-full mt-0.5">
+        <AvatarImage src={getOptimizedImageUrl(comment.user?.avatar_url || comment.user?.avatarUrl, { width: 48, height: 48 })} alt={authorName} />
         <AvatarFallback className="text-[10px] font-semibold bg-indigo-500 text-white">
           {authorName.charAt(0).toUpperCase()}
         </AvatarFallback>
@@ -377,6 +379,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                         className="w-full flex items-center gap-2 p-1.5 hover:bg-accent rounded-md text-left transition-colors"
                       >
                         <Avatar className="size-6">
+                          <AvatarImage src={getOptimizedImageUrl(m.avatar_url || m.avatarUrl, { width: 48, height: 48 })} alt={name} />
                           <AvatarFallback className="text-[10px] bg-indigo-500/10 text-indigo-500 font-semibold">{name.charAt(0).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm truncate font-medium">{name}</span>

@@ -62,18 +62,11 @@
 
 .fc-theme-standard td,
 .fc-theme-standard th {
-    border-color: rgba(255, 255, 255, 0.045) !important;
+    border-color: var(--border) !important;
 
     transition:
         background-color 180ms ease,
         border-color 180ms ease;
-}
-
-/* LIGHT MODE GRID */
-
-:root .fc-theme-standard td,
-:root .fc-theme-standard th {
-    border-color: rgba(0, 0, 0, 0.05) !important;
 }
 
 /* Day Hover */
@@ -172,8 +165,7 @@
 /* ───────────────────────────────────────────── */
 
 .fc-col-header-cell {
-    padding: 10px 0 !important;
-
+    padding: 4px 0 !important;
     background: transparent !important;
 }
 
@@ -257,14 +249,34 @@
 
 .fc .fc-timegrid-slot-label {
     border-right: 1px solid var(--border) !important;
+    border-top: 1px solid transparent !important;
+    border-bottom: 1px solid transparent !important;
+    vertical-align: top !important;
+    padding: 0 !important;
+    overflow: visible !important;
 }
 
 .fc .fc-timegrid-slot-label-cushion {
-    font-size: 0.68rem !important;
-
+    font-size: 0.72rem !important;
     color: var(--muted-foreground);
+    opacity: 0.85;
+    display: block !important;
+    transform: translateY(-50%);
+    padding: 0 12px 0 0 !important;
+    text-align: right;
+    text-transform: lowercase;
+}
 
-    opacity: 0.75;
+.fc-timegrid-slot-label-frame {
+    display: block !important;
+    text-align: right !important;
+    overflow: visible !important;
+}
+
+.fc-timegrid-axis {
+    overflow: visible !important;
+    border-top: 1px solid transparent !important;
+    border-bottom: 1px solid transparent !important;
 }
 
 /* Current Time Indicator */
@@ -295,13 +307,17 @@
 
 /* Event Base */
 
+.fc-timegrid-event.task-event {
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
 .task-event {
     border-radius: 10px !important;
-
     border: 1px solid rgba(255, 255, 255, 0.06) !important;
-
     padding: 2px 8px !important;
-
     overflow: hidden;
 
     backdrop-filter: blur(8px);
@@ -327,21 +343,30 @@
 /* Month View */
 
 .fc-dayGridMonth-view .task-event {
-    min-height: 28px;
+    min-height: 26px;
 
     display: flex;
 
     align-items: center;
 
-    border-radius: 10px !important;
+    border-radius: 6px !important;
 
     margin: 2px 6px !important;
 
-    padding: 4px 8px !important;
+    padding: 0 !important;
 
     font-size: 0.75rem !important;
 
     font-weight: 500 !important;
+}
+
+.fc-event-main {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    overflow: hidden !important;
 }
 
 /* Done */
@@ -370,16 +395,30 @@
    MORE LINK
 /* ───────────────────────────────────────────── */
 
+.fc-dayGridMonth-view .fc-daygrid-day-events {
+    position: absolute !important;
+    top: 38px !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-day-bottom {
+    position: absolute !important;
+    bottom: 6px !important;
+    left: 0 !important;
+    right: 0 !important;
+    padding: 0 6px !important;
+}
+
 .fc-more-link {
     font-size: 0.72rem !important;
-
     font-weight: 650 !important;
-
     color: var(--muted-foreground);
-
     opacity: 0.8;
-
     text-decoration: none !important;
+    margin-top: 1px !important;
+    display: inline-block !important;
 }
 
 .fc-more-link:hover {
@@ -449,162 +488,106 @@
 }
 
 /* ─────────────────────────────────────────────
-   PRIORITIES (dark mode)
-/* ───────────────────────────────────────────── */
+   DAY / CELL ALIGNMENT
+   ───────────────────────────────────────────── */
+
+.fc-daygrid-day-top {
+    flex-direction: row !important; /* Move date number to left */
+}
+
+/* Today circle badge */
+.fc-dayGridMonth-view .fc-day-today .fc-daygrid-day-number {
+    background: #6366F1 !important;
+    color: #ffffff !important;
+    border-radius: 50% !important;
+    width: 24px !important;
+    height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    font-weight: 600 !important;
+    margin: 4px 6px !important;
+    opacity: 1 !important;
+}
+
+.fc-day-today {
+    background: transparent !important;
+}
+
+/* ─────────────────────────────────────────────
+   PRIORITIES & STATUS STYLES (FLAT & MINIMAL)
+   ───────────────────────────────────────────── */
 
 .task-priority-urgent {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(220, 38, 38, 0.12) 100%);
-
-    color: rgba(255, 255, 255, 0.92);
-
-    border-color: rgba(239, 68, 68, 0.28) !important;
+    background: var(--priority-urgent-bg) !important;
+    color: var(--priority-urgent-text) !important;
+    border-color: var(--priority-urgent-border) !important;
 }
 
 .task-priority-high {
-    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.1) 100%);
-
-    color: rgba(255, 255, 255, 0.9);
-
-    border-color: rgba(249, 115, 22, 0.25) !important;
+    background: var(--priority-high-bg) !important;
+    color: var(--priority-high-text) !important;
+    border-color: var(--priority-high-border) !important;
 }
 
 .task-priority-medium {
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.18) 0%, rgba(202, 138, 4, 0.08) 100%);
-
-    color: rgba(255, 255, 255, 0.88);
-
-    border-color: rgba(234, 179, 8, 0.22) !important;
+    background: var(--priority-medium-bg) !important;
+    color: var(--priority-medium-text) !important;
+    border-color: var(--priority-medium-border) !important;
 }
 
 .task-priority-low {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(79, 70, 229, 0.06) 100%);
-
-    color: rgba(255, 255, 255, 0.78);
-
-    border-color: rgba(99, 102, 241, 0.18) !important;
+    background: var(--priority-low-bg) !important;
+    color: var(--priority-low-text) !important;
+    border-color: var(--priority-low-border) !important;
 }
 
-/* ─────────────────────────────────────────────
-   STATUS GRADIENTS (dark mode)
-/* ───────────────────────────────────────────── */
-
-/* todo — soft violet */
+/* Status styles override */
 .task-event.task-status-todo {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.22) 0%, rgba(109, 40, 217, 0.1) 100%) !important;
-
-    border-color: rgba(139, 92, 246, 0.3) !important;
-
-    color: rgba(255, 255, 255, 0.9) !important;
+    background: var(--event-task-bg) !important;
+    border-color: var(--event-task-border) !important;
+    color: var(--event-task-text) !important;
 }
 
-/* in-progress — vivid blue */
 .task-event.task-status-in-progress {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.24) 0%, rgba(37, 99, 235, 0.12) 100%) !important;
-
-    border-color: rgba(59, 130, 246, 0.32) !important;
-
-    color: rgba(255, 255, 255, 0.92) !important;
+    background: var(--event-generic-bg) !important;
+    border-color: var(--event-generic-border) !important;
+    color: var(--event-generic-text) !important;
 }
 
-/* done / completed — emerald green */
 .task-event.task-status-done,
 .task-event.task-status-completed {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.08) 100%) !important;
-
-    border-color: rgba(16, 185, 129, 0.24) !important;
-
-    color: rgba(255, 255, 255, 0.7) !important;
+    background: var(--priority-done-bg) !important;
+    border-color: var(--priority-done-border) !important;
+    color: var(--priority-done-text) !important;
 }
 
-/* backlog — warm red */
 .task-event.task-status-backlog {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(185, 28, 28, 0.08) 100%) !important;
-
-    border-color: rgba(239, 68, 68, 0.24) !important;
-
-    color: rgba(255, 255, 255, 0.82) !important;
+    background: var(--priority-urgent-bg) !important;
+    border-color: var(--priority-urgent-border) !important;
+    color: var(--priority-urgent-text) !important;
 }
 
-/* done/completed strikethrough */
-.task-event.is-done {
-    opacity: 0.68 !important;
+/* All day multi-day event bar */
+.fc-event-all-day,
+.fc-daygrid-block-event {
+    border-radius: 4px !important;
+    padding: 1.5px 6px !important;
+    font-weight: 550 !important;
+    font-size: 0.7rem !important;
+    line-height: 1.2 !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
 }
 
-/* ─────────────────────────────────────────────
-   LIGHT MODE PRIORITIES
-/* ───────────────────────────────────────────── */
-
-:root .task-priority-urgent {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(220, 38, 38, 0.06) 100%);
-
-    color: rgba(0, 0, 0, 0.88);
-
-    border-color: rgba(239, 68, 68, 0.22) !important;
-}
-
-:root .task-priority-high {
-    background: linear-gradient(135deg, rgba(249, 115, 22, 0.13) 0%, rgba(234, 88, 12, 0.06) 100%);
-
-    color: rgba(0, 0, 0, 0.84);
-
-    border-color: rgba(249, 115, 22, 0.2) !important;
-}
-
-:root .task-priority-medium {
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(202, 138, 4, 0.05) 100%);
-
-    color: rgba(0, 0, 0, 0.78);
-
-    border-color: rgba(234, 179, 8, 0.18) !important;
-}
-
-:root .task-priority-low {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.04) 100%);
-
-    color: rgba(0, 0, 0, 0.65);
-
-    border-color: rgba(99, 102, 241, 0.14) !important;
-}
-
-/* ─────────────────────────────────────────────
-   LIGHT MODE STATUS GRADIENTS
-/* ───────────────────────────────────────────── */
-
-:root .task-event.task-status-todo {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.14) 0%, rgba(109, 40, 217, 0.06) 100%) !important;
-
-    border-color: rgba(139, 92, 246, 0.22) !important;
-
-    color: rgba(0, 0, 0, 0.82) !important;
-}
-
-:root .task-event.task-status-in-progress {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.07) 100%) !important;
-
-    border-color: rgba(59, 130, 246, 0.24) !important;
-
-    color: rgba(0, 0, 0, 0.84) !important;
-}
-
-:root .task-event.task-status-done,
-:root .task-event.task-status-completed {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.05) 100%) !important;
-
-    border-color: rgba(16, 185, 129, 0.18) !important;
-
-    color: rgba(0, 0, 0, 0.55) !important;
-}
-
-:root .task-event.task-status-backlog {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.05) 100%) !important;
-
-    border-color: rgba(239, 68, 68, 0.18) !important;
-
-    color: rgba(0, 0, 0, 0.72) !important;
-}
-
-:root .task-event.is-done {
-    opacity: 0.62 !important;
+.fc-timegrid-allday .task-event {
+    margin-top: 1px !important;
+    margin-bottom: 1px !important;
+    min-height: 22px !important;
+    padding: 0 !important;
+    border-radius: 4px !important;
+    display: flex !important;
+    align-items: center !important;
 }
 
 /* ─────────────────────────────────────────────

@@ -9,7 +9,8 @@ import {
 import { format, isToday, isYesterday, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -110,10 +111,16 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
     const u = entry.user;
     if (!u) return acc;
     const name = u.name || u.email;
-    if (!acc[name]) acc[name] = { count: 0, initials: name.charAt(0).toUpperCase() };
+    if (!acc[name]) {
+      acc[name] = {
+        count: 0,
+        initials: name.charAt(0).toUpperCase(),
+        avatarUrl: u.avatar_url || u.avatarUrl,
+      };
+    }
     acc[name].count++;
     return acc;
-  }, {} as Record<string, { count: number; initials: string }>);
+  }, {} as Record<string, { count: number; initials: string; avatarUrl?: string | null }>);
   const mostActive = Object.entries(userCounts).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
 
   // Field change log summary
@@ -240,6 +247,12 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
 
                             {/* Node Avatar Icon */}
                             <Avatar className="size-9 shrink-0 border border-border/20 relative z-10 shadow-sm mt-0.5">
+                              {(entry.user?.avatar_url || entry.user?.avatarUrl) && (
+                                <AvatarImage
+                                  src={getOptimizedImageUrl(entry.user.avatar_url || entry.user.avatarUrl, { width: 72, height: 72 })}
+                                  alt={actor}
+                                />
+                              )}
                               <AvatarFallback className={cn("text-xs font-semibold text-white", colorCode)}>
                                 {initials}
                               </AvatarFallback>
@@ -313,6 +326,9 @@ export function HistoryTab({ task }: { task: TaskDTO }) {
                 return (
                   <div key={name} className="flex items-center gap-3.5">
                     <Avatar className="size-8 shrink-0">
+                      {data.avatarUrl && (
+                        <AvatarImage src={getOptimizedImageUrl(data.avatarUrl, { width: 64, height: 64 })} alt={name} />
+                      )}
                       <AvatarFallback className={cn("text-[10px] font-semibold text-white shadow-sm", colorCode)}>
                         {data.initials}
                       </AvatarFallback>

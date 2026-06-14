@@ -1627,6 +1627,34 @@ function PreferencesTab() {
     window.dispatchEvent(new Event("time_format_changed"));
   };
 
+  const [calendarDetailsView, setCalendarDetailsView] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("default_calendar_details_view") || "sidebar";
+    }
+    return "sidebar";
+  });
+
+  const handleCalendarDetailsViewChange = (view: "sidebar" | "dialog") => {
+    setCalendarDetailsView(view);
+    localStorage.setItem("default_calendar_details_view", view);
+    toast.success(`Default calendar detail view set to ${view === "sidebar" ? "Sidebar" : "Dialog"}`);
+    window.dispatchEvent(new Event("calendar_details_view_changed"));
+  };
+
+  const [hideCalendarDayHeaders, setHideCalendarDayHeaders] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("hide_calendar_day_headers") === "true";
+    }
+    return false;
+  });
+
+  const handleHideCalendarDayHeadersChange = (hide: boolean) => {
+    setHideCalendarDayHeaders(hide);
+    localStorage.setItem("hide_calendar_day_headers", hide ? "true" : "false");
+    toast.success(hide ? "Calendar day headers hidden" : "Calendar day headers shown");
+    window.dispatchEvent(new Event("calendar_day_headers_preference_changed"));
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -1799,6 +1827,90 @@ function PreferencesTab() {
               Example: 14:30
             </span>
           </button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Calendar Details View */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <PanelRight className="size-4 text-muted-foreground" />
+          Default Calendar Details View
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Choose where task or event details are shown when clicked in the calendar.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => handleCalendarDetailsViewChange("sidebar")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              calendarDetailsView === "sidebar"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <PanelRight className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Right Sidebar</span>
+              </div>
+              {calendarDetailsView === "sidebar" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Shows task or event details in the right-hand panel of the calendar.
+            </span>
+          </button>
+          <button
+            onClick={() => handleCalendarDetailsViewChange("dialog")}
+            className={cn(
+              "flex flex-col items-start gap-2.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left w-full",
+              calendarDetailsView === "dialog"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <Monitor className="size-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-foreground">Centered Dialog</span>
+              </div>
+              {calendarDetailsView === "dialog" && (
+                <Check className="size-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Shows details in a focused popup modal overlay.
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Hide Calendar Day Headers */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <CalendarDays className="size-4 text-muted-foreground" />
+          Calendar Headers
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 mb-4">
+          Choose whether to display day names (Mon, Tue, etc.) at the top of the calendar grid.
+        </p>
+        <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+          <div>
+            <p className="text-xs font-semibold text-foreground">Show Calendar Day Headers</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+              Toggle day name headers visible/hidden on all calendar views.
+            </p>
+          </div>
+          <Switch
+            checked={!hideCalendarDayHeaders}
+            onCheckedChange={(checked) => handleHideCalendarDayHeadersChange(!checked)}
+          />
         </div>
       </div>
 

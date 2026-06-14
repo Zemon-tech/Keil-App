@@ -6,7 +6,6 @@ import {
   Plus,
   Search,
   X,
-  User,
   Clock,
   MapPin,
   Building2,
@@ -14,7 +13,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -307,9 +307,16 @@ export const OverviewTab = ({
               {/* Creator */}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Creator</span>
-                <span className="font-medium text-right flex items-center gap-1">
-                  <User className="size-3 text-muted-foreground/60 shrink-0" />
-                  <span className="truncate max-w-[130px]" title={creatorName}>{creatorName}</span>
+                <span className="font-medium text-right flex items-center gap-1.5">
+                  <Avatar className="size-5 shrink-0">
+                    {(task.creator_avatar_url || creatorMember) && (
+                      <AvatarImage src={getOptimizedImageUrl(task.creator_avatar_url || creatorMember?.avatar_url || creatorMember?.avatarUrl, { width: 40, height: 40 })} alt={creatorName} />
+                    )}
+                    <AvatarFallback className="text-[9px] bg-accent font-semibold">
+                      {creatorName.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="truncate max-w-[110px]" title={creatorName}>{creatorName}</span>
                 </span>
               </div>
 
@@ -375,6 +382,7 @@ export const OverviewTab = ({
                     <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 py-0.5">
                       <div className="flex items-center gap-2">
                         <Avatar className="size-6">
+                          <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 48, height: 48 })} alt={name} />
                           <AvatarFallback className="text-[10px] font-semibold bg-accent">
                             {name.charAt(0).toUpperCase()}
                           </AvatarFallback>
@@ -435,6 +443,7 @@ export const OverviewTab = ({
                               className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent transition-colors text-left"
                             >
                               <Avatar className="size-5 shrink-0">
+                                <AvatarImage src={getOptimizedImageUrl(m.avatar_url || m.avatarUrl, { width: 40, height: 40 })} alt={mName} />
                                 <AvatarFallback className="text-[9px] bg-accent">
                                   {mName.charAt(0).toUpperCase()}
                                 </AvatarFallback>
@@ -466,6 +475,12 @@ export const OverviewTab = ({
                     <div key={email} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 py-0.5">
                       <div className="flex items-center gap-2">
                         <Avatar className="size-6">
+                          {(() => {
+                            const guestMember = members.find((m) => m.email === email);
+                            return guestMember ? (
+                              <AvatarImage src={getOptimizedImageUrl(guestMember.avatar_url || guestMember.avatarUrl, { width: 48, height: 48 })} alt={email} />
+                            ) : null;
+                          })()}
                           <AvatarFallback className="text-[10px] font-semibold bg-accent">
                             {email.charAt(0).toUpperCase()}
                           </AvatarFallback>

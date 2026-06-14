@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -185,7 +187,7 @@ function PriorityBadge({
 function AssigneesChip({
   assignees,
 }: {
-  assignees: { id: string; name: string | null; email: string }[];
+  assignees: { id: string; name: string | null; email: string; avatar_url?: string | null; avatarUrl?: string | null }[];
 }) {
   return (
     <TooltipProvider delayDuration={300}>
@@ -194,6 +196,7 @@ function AssigneesChip({
           <Tooltip key={a.id}>
             <TooltipTrigger asChild>
               <Avatar className="size-5 cursor-default ring-1 ring-background">
+                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.name || a.email} />
                 <AvatarFallback className="text-[9px] font-semibold bg-accent">
                   {(a.name || a.email).charAt(0).toUpperCase()}
                 </AvatarFallback>
@@ -223,10 +226,12 @@ function CreatedByChip({
   name,
   email,
   createdAt,
+  avatarUrl,
 }: {
   name?: string | null;
   email?: string | null;
   createdAt: string;
+  avatarUrl?: string | null;
 }) {
   const displayName = name || email || "Unknown";
   const initial = displayName.charAt(0).toUpperCase();
@@ -238,6 +243,9 @@ function CreatedByChip({
         <TooltipTrigger asChild>
           <div className="flex items-center gap-1.5 h-5 px-1.5 rounded-md border border-border/60 bg-muted/30 cursor-default">
             <Avatar className="size-4 ring-1 ring-background">
+              {avatarUrl && (
+                <AvatarImage src={getOptimizedImageUrl(avatarUrl, { width: 32, height: 32 })} alt={displayName} />
+              )}
               <AvatarFallback className="text-[8px] font-semibold bg-accent">
                 {initial}
               </AvatarFallback>
@@ -284,6 +292,8 @@ export function TaskDetailHeader({
   const taskSpaceId = task.space_id ?? activeSpaceId;
   const changeStatus = useChangeOrgTaskStatus(taskOrgId, taskSpaceId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const { data: members = [] } = useSpaceMembers(taskOrgId, taskSpaceId);
+  const creatorMember = members.find((m) => m.email === task.creator_email || m.user_id === task.created_by);
 
   const { user } = useAuth();
   const currentUserId = user?.id;
@@ -481,6 +491,7 @@ export function TaskDetailHeader({
           name={task.creator_name}
           email={task.creator_email}
           createdAt={task.created_at}
+          avatarUrl={task.creator_avatar_url || creatorMember?.avatar_url || creatorMember?.avatarUrl}
         />
       </div>
 

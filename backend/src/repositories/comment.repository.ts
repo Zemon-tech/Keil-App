@@ -23,6 +23,7 @@ export class CommentRepository extends BaseRepository<Comment> {
           'id', u.id,
           'email', u.email,
           'name', u.name,
+          'avatar_url', u.avatar_url,
           'created_at', u.created_at
         ) as user
       FROM ${this.tableName} c
@@ -65,6 +66,7 @@ export class CommentRepository extends BaseRepository<Comment> {
           'id', u.id,
           'email', u.email,
           'name', u.name,
+          'avatar_url', u.avatar_url,
           'created_at', u.created_at
         ) as user
       FROM ${this.tableName} c
@@ -116,6 +118,7 @@ export class CommentRepository extends BaseRepository<Comment> {
           'id', u.id,
           'email', u.email,
           'name', u.name,
+          'avatar_url', u.avatar_url,
           'created_at', u.created_at
         ) as user
       FROM ${this.tableName} c

@@ -16,6 +16,7 @@ export interface SpaceActivityLogDTO {
     id: string;
     email: string;
     name: string | null;
+    avatar_url?: string | null;
     created_at: string;
   } | null;
 }
@@ -36,6 +37,7 @@ const mapRow = (row: any): SpaceActivityLogDTO => ({
         id: row.user.id,
         email: row.user.email,
         name: row.user.name,
+        avatar_url: row.user.avatar_url || null,
         created_at: new Date(row.user.created_at).toISOString(),
       }
     : null,
@@ -56,6 +58,7 @@ export const getSpaceActivityFeed = async (
             'id', u.id,
             'email', u.email,
             'name', u.name,
+            'avatar_url', u.avatar_url,
             'created_at', u.created_at
           )
           ELSE NULL
@@ -89,6 +92,7 @@ export const getSpaceEntityActivity = async (
             'id', u.id,
             'email', u.email,
             'name', u.name,
+            'avatar_url', u.avatar_url,
             'created_at', u.created_at
           )
           ELSE NULL
@@ -122,6 +126,7 @@ export const getSpaceTaskActivity = async (
             'id', u.id,
             'email', u.email,
             'name', u.name,
+            'avatar_url', u.avatar_url,
             'created_at', u.created_at
           )
           ELSE NULL

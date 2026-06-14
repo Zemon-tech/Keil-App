@@ -24,7 +24,7 @@ export interface PublicTaskDTO {
   parent_task_title?: string | null;
   subtask_count?: number;
   subtasks?: Array<{ id: string; title: string; status: string }>;
-  assignees?: Array<{ id: string; name: string | null }>;
+  assignees?: Array<{ id: string; name: string | null; avatar_url?: string | null; avatarUrl?: string | null }>;
 }
 
 // ─── Bare axios instance ──────────────────────────────────────────────────────

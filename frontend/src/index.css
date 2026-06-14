@@ -121,51 +121,51 @@ body {
 
     /* Calendar Block Types */
 
-    --event-meeting-bg: #f1f3f9;
-    --event-meeting-text: #334155;
-    --event-meeting-border: rgba(51, 65, 85, 0.08);
+    --event-meeting-bg: #f0fdf4;
+    --event-meeting-text: #16a34a;
+    --event-meeting-border: rgba(22, 163, 74, 0.12);
 
-    --event-focus-bg: #f0f4f1;
-    --event-focus-text: #3f4e41;
-    --event-focus-border: rgba(63, 78, 65, 0.08);
+    --event-focus-bg: #f0fdfa;
+    --event-focus-text: #0d9488;
+    --event-focus-border: rgba(13, 148, 136, 0.08);
 
     --event-task-bg: #f2f2f7;
     --event-task-text: #535370;
     --event-task-border: rgba(83, 83, 112, 0.08);
 
-    --event-deadline-bg: #f7f3f0;
-    --event-deadline-text: #78350f;
-    --event-deadline-border: rgba(120, 53, 15, 0.08);
+    --event-deadline-bg: #fdf2f8;
+    --event-deadline-text: #db2777;
+    --event-deadline-border: rgba(219, 39, 119, 0.08);
 
-    --event-reminder-bg: #f6f1f4;
-    --event-reminder-text: #831843;
-    --event-reminder-border: rgba(131, 24, 67, 0.08);
+    --event-reminder-bg: #fff1f2;
+    --event-reminder-text: #e11d48;
+    --event-reminder-border: rgba(225, 29, 72, 0.08);
 
     /* Priorities & States */
 
     --priority-urgent-bg: #fff1f2;
-    --priority-urgent-text: #9f1239;
-    --priority-urgent-border: rgba(159, 18, 57, 0.12);
+    --priority-urgent-text: #e11d48;
+    --priority-urgent-border: rgba(225, 29, 72, 0.12);
 
     --priority-high-bg: #fffbeb;
-    --priority-high-text: #92400e;
-    --priority-high-border: rgba(146, 64, 14, 0.1);
+    --priority-high-text: #ea580c;
+    --priority-high-border: rgba(234, 88, 12, 0.12);
 
-    --priority-medium-bg: #f9f9f8;
-    --priority-medium-text: #44403c;
-    --priority-medium-border: rgba(68, 64, 60, 0.1);
+    --priority-medium-bg: #eff6ff;
+    --priority-medium-text: #2563eb;
+    --priority-medium-border: rgba(37, 99, 237, 0.12);
 
-    --priority-low-bg: #f5f5f5;
-    --priority-low-text: #737373;
-    --priority-low-border: rgba(115, 115, 115, 0.1);
+    --priority-low-bg: #f9fafb;
+    --priority-low-text: #4b5563;
+    --priority-low-border: rgba(75, 85, 99, 0.1);
 
     --priority-done-bg: #f0fdf4;
     --priority-done-text: #166534;
     --priority-done-border: rgba(22, 101, 52, 0.1);
 
-    --event-generic-bg: #f0f9ff;
-    --event-generic-text: #0369a1;
-    --event-generic-border: rgba(3, 105, 161, 0.1);
+    --event-generic-bg: #faf5ff;
+    --event-generic-text: #9333ea;
+    --event-generic-border: rgba(147, 51, 234, 0.12);
 
     /* Shadows */
 
@@ -274,9 +274,9 @@ body {
 
     /* Calendar Block Types */
 
-    --event-meeting-bg: rgba(148, 163, 184, 0.1);
-    --event-meeting-text: #cbd5e1;
-    --event-meeting-border: rgba(148, 163, 184, 0.15);
+    --event-meeting-bg: rgba(34, 197, 94, 0.08);
+    --event-meeting-text: #86efac;
+    --event-meeting-border: rgba(34, 197, 94, 0.15);
 
     --event-focus-bg: rgba(74, 222, 128, 0.08);
     --event-focus-text: #86efac;
@@ -304,9 +304,9 @@ body {
     --priority-high-text: #fcd34d;
     --priority-high-border: rgba(245, 158, 11, 0.2);
 
-    --priority-medium-bg: rgba(120, 113, 108, 0.1);
-    --priority-medium-text: #d6d3d1;
-    --priority-medium-border: rgba(120, 113, 108, 0.2);
+    --priority-medium-bg: rgba(59, 130, 246, 0.08);
+    --priority-medium-text: #93c5fd;
+    --priority-medium-border: rgba(59, 130, 246, 0.15);
 
     --priority-low-bg: rgba(82, 82, 82, 0.1);
     --priority-low-text: #a3a3a3;
@@ -316,9 +316,9 @@ body {
     --priority-done-text: #86efac;
     --priority-done-border: rgba(34, 197, 94, 0.2);
 
-    --event-generic-bg: rgba(14, 165, 233, 0.1);
-    --event-generic-text: #7dd3fc;
-    --event-generic-border: rgba(14, 165, 233, 0.2);
+    --event-generic-bg: rgba(168, 85, 247, 0.08);
+    --event-generic-text: #c084fc;
+    --event-generic-border: rgba(168, 85, 247, 0.15);
 
     /* Shadows */
 

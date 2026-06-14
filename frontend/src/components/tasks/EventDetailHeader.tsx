@@ -10,7 +10,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
@@ -92,7 +93,7 @@ function StatusBadge({
 
 // ─── AttendeesChip ────────────────────────────────────────────────────────────
 
-function AttendeesChip({ assignees }: { assignees: { id: string, name: string | null, email: string }[] }) {
+function AttendeesChip({ assignees }: { assignees: { id: string, name: string | null, email: string, avatar_url?: string | null, avatarUrl?: string | null }[] }) {
   if (assignees.length === 0) return null;
   return (
     <TooltipProvider delayDuration={300}>
@@ -101,6 +102,7 @@ function AttendeesChip({ assignees }: { assignees: { id: string, name: string | 
           <Tooltip key={a.id}>
             <TooltipTrigger asChild>
               <Avatar className="size-5 cursor-default ring-1 ring-background">
+                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.name || a.email} />
                 <AvatarFallback className="text-[9px] font-semibold bg-accent">
                   {(a.name || a.email).charAt(0).toUpperCase()}
                 </AvatarFallback>

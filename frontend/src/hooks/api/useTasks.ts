@@ -28,9 +28,10 @@ export interface TaskDTO {
   created_by: string;
   creator_name?: string | null;
   creator_email?: string | null;
+  creator_avatar_url?: string | null;
   created_at: string;
   updated_at: string;
-  assignees?: Array<{ id: string; name: string | null; email: string }>;
+  assignees?: Array<{ id: string; name: string | null; email: string; avatar_url?: string | null; avatarUrl?: string | null }>;
   story_points?: number;
   time_estimate?: number;
   user_space_role?: string;
