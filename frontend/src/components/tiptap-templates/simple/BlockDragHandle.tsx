@@ -525,8 +525,8 @@ export function BlockDragHandle({
 
       setBlockMenu({
         left: Math.max(16, clampedLeft),
-        ...(openUpwards 
-          ? { bottom: window.innerHeight - handlePos.top - 24 } 
+        ...(openUpwards
+          ? { bottom: window.innerHeight - handlePos.top - 24 }
           : { top: handlePos.top - 8 }
         ),
         target: isTargetInSelection
@@ -662,7 +662,7 @@ export function BlockDragHandle({
       { id: "codeBlock", title: "Code", icon: <Code className="size-4" />, run: () => editor?.chain().focus().toggleCodeBlock().run() },
       { id: "blockquote", title: "Quote", icon: <Quote className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
       { id: "callout", title: "Callout", icon: <SquareTerminal className="size-4" />, run: () => editor?.chain().focus().toggleBlockquote().run() },
-      { id: "equation", title: "Block equation", icon: <Sigma className="size-4" />, run: () => {} },
+      { id: "equation", title: "Block equation", icon: <Sigma className="size-4" />, run: () => { } },
     ],
     [editor, onAddSubpage]
   )
@@ -760,7 +760,7 @@ export function BlockDragHandle({
               if (nodeDom instanceof HTMLElement) {
                 e.dataTransfer.setDragImage(nodeDom, 0, 0)
               }
-              
+
               // Required for HTML5 drag to work properly
               e.dataTransfer.effectAllowed = "copyMove"
               e.dataTransfer.setData("text/html", "")
@@ -785,8 +785,8 @@ export function BlockDragHandle({
       {blockMenu && (
         <div
           className="fixed z-[100] flex gap-1"
-          style={{ 
-            left: blockMenu.left, 
+          style={{
+            left: blockMenu.left,
             ...(blockMenu.top !== undefined ? { top: blockMenu.top } : {}),
             ...(blockMenu.bottom !== undefined ? { bottom: blockMenu.bottom } : {})
           }}

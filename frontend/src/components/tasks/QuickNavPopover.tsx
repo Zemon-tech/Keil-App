@@ -12,13 +12,13 @@ import { cn } from "@/lib/utils";
 
 interface QuickNavPopoverProps {
   currentViewDate: Date;
-  calendarApi: any;
+  calendarRef: React.RefObject<any>;
   children: React.ReactNode;
 }
 
 export function QuickNavPopover({
   currentViewDate,
-  calendarApi,
+  calendarRef,
   children,
 }: QuickNavPopoverProps) {
   const [navDate, setNavDate] = useState(currentViewDate);
@@ -40,9 +40,10 @@ export function QuickNavPopover({
   }, [isOpen, currentViewDate]);
 
   const handleOpenChange = (open: boolean) => {
+    const calendarApi = calendarRef.current?.getApi();
     if (!open && !isCancelledRef.current && calendarApi) {
       if (selectedDateRef.current) {
-        calendarApi.gotoDate(selectedDateRef.current);
+        calendarApi.changeView("timeGridDay", selectedDateRef.current);
       } else {
         // If the user browsed to a different month/year but didn't pick a day,
         // still navigate to that period on close.
@@ -54,6 +55,10 @@ export function QuickNavPopover({
 
   const handleDaySelect = (date: Date | undefined) => {
     if (date) {
+      const calendarApi = calendarRef.current?.getApi();
+      if (calendarApi) {
+        calendarApi.changeView("timeGridDay", date);
+      }
       setSelectedDate(date);
       selectedDateRef.current = date;
       setIsOpen(false);
@@ -159,7 +164,7 @@ export function QuickNavPopover({
             </div>
             <CalendarUI
               mode="single"
-              selected={selectedDate || currentViewDate}
+              selected={selectedDate}
               onSelect={handleDaySelect}
               month={navDate}
               onMonthChange={setNavDate}
