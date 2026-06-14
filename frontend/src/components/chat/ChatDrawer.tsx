@@ -6,6 +6,8 @@ import { ChannelList } from "./ChannelList";
 import { MessageView } from "./MessageView";
 import { NewChatDialog } from "./NewChatDialog";
 import { X, Maximize2, ArrowLeft, Users } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 import { useChatChannels } from "@/hooks/api/useChat";
 import { useMe } from "@/hooks/api/useMe";
@@ -22,8 +24,12 @@ export function ChatDrawer() {
   const currentChannel = channels.find((c) => c.id === activeChannelId);
   const { data: me } = useMe();
 
+  const otherMember = currentChannel?.type === "direct"
+    ? currentChannel.members.find((m) => m.id !== me?.id) || currentChannel.members[0]
+    : undefined;
+
   const channelName = currentChannel?.type === "direct"
-    ? currentChannel.members.find((m) => m.id !== me?.id)?.name ?? "Unknown"
+    ? otherMember?.name ?? "Unknown"
     : currentChannel?.name ?? "Group Chat";
 
   const handleExpandClick = () => {
@@ -56,9 +62,18 @@ export function ChatDrawer() {
                 </button>
                 
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs shrink-0">
-                    {currentChannel?.type === "group" ? <Users className="size-4" /> : channelName.charAt(0).toUpperCase()}
-                  </div>
+                  {currentChannel?.type === "group" ? (
+                    <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs shrink-0">
+                      <Users className="size-4" />
+                    </div>
+                  ) : (
+                    <Avatar className="size-8 shrink-0">
+                      <AvatarImage src={getOptimizedImageUrl(otherMember?.avatar_url, { width: 96, height: 96 })} alt={channelName} />
+                      <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                        {channelName.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
                   <div className="flex flex-col min-w-0">
                     <span className="text-sm font-semibold text-foreground leading-none truncate">{channelName}</span>
                     <span className="text-[10px] text-muted-foreground mt-1 truncate">
