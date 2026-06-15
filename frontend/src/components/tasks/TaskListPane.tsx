@@ -1289,7 +1289,7 @@ export function TaskListPane({
 
         {/* Private checklist items for active task */}
         {active && t.type === "task" && (
-          <TaskChecklistsSection taskId={t.id} taskTitle={t.title} />
+          <TaskChecklistsSection taskId={t.id} />
         )}
       </div>
     );
@@ -2122,7 +2122,7 @@ export function TaskListPane({
   );
 }
 
-function TaskChecklistsSection({ taskId, taskTitle }: { taskId: string; taskTitle: string }) {
+function TaskChecklistsSection({ taskId }: { taskId: string }) {
   const { activeOrgId, activeSpaceId } = useAppContext();
   const { data: checklists = [] } = useTaskChecklists(activeOrgId, activeSpaceId, taskId);
 
