@@ -6,11 +6,12 @@ export async function emitActivity(
     status: "running" | "complete" | "error";
   }
 ) {
-  const activityData = {
-    type: "data-agent-activity",
+  const activityPayload = {
     agent: payload.agentLabel,
     action: payload.action,
     status: payload.status,
+    tool: context?.activeToolId,
+    executionId: context?.toolExecutionId,
     timestamp: new Date().toISOString(),
   };
 
@@ -22,7 +23,10 @@ export async function emitActivity(
   const uiWriter = context?.requestContext?.get("uiWriter");
   if (uiWriter) {
     try {
-      uiWriter.write(activityData as any);
+      uiWriter.write({
+        type: "data-agent-activity",
+        data: activityPayload,
+      } as any);
       if (process.env.NODE_ENV === "development") {
         console.log(
           `[Debug] Activity emitted (direct): [${payload.agentLabel}] ${payload.action} (${payload.status})`
@@ -41,7 +45,7 @@ export async function emitActivity(
     try {
       await context.writer.custom({
         type: "data-agent-activity",
-        data: activityData,
+        data: activityPayload,
       });
       if (process.env.NODE_ENV === "development") {
         console.log(

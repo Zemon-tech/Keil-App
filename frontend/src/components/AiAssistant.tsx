@@ -787,7 +787,7 @@ export function AiAssistant() {
                         const status = act.status === "running" ? "active" : "complete";
                         return (
                             <ChainOfThoughtStep
-                                key={`stream-${idx}-${act.agent}-${act.action}`}
+                                key={act.executionId || `stream-${idx}-${act.agent}-${act.action}`}
                                 icon={Icon}
                                 label={
                                     <span className="font-semibold text-foreground text-[11px] flex items-center gap-1.5 flex-wrap">
@@ -799,6 +799,11 @@ export function AiAssistant() {
                                                 <span className="text-muted-foreground/45 text-[9px]">•</span>
                                                 <span>{act.action}</span>
                                             </>
+                                        )}
+                                        {act.tool && (
+                                            <span className="text-[9px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
+                                                (calling: {act.tool})
+                                            </span>
                                         )}
                                     </span>
                                 }

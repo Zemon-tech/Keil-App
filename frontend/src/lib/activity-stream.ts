@@ -3,6 +3,8 @@ export interface StreamingActivity {
   action: string;
   status: "running" | "complete" | "error";
   timestamp: string;
+  tool?: string;
+  executionId?: string;
 }
 
 export function extractStreamingActivities(message: any): StreamingActivity[] {
@@ -27,12 +29,15 @@ export function extractStreamingActivities(message: any): StreamingActivity[] {
   const activityMap = new Map<string, StreamingActivity>();
 
   for (const part of activityParts) {
-    const agent = part.agent || part.agentLabel || "KeilHQ AI";
-    const action = part.action || "";
-    const status = part.status || "running";
-    const timestamp = part.timestamp || new Date().toISOString();
+    const data = part.data || part;
+    const agent = data.agent || data.agentLabel || "KeilHQ AI";
+    const action = data.action || "";
+    const status = data.status || "running";
+    const timestamp = data.timestamp || new Date().toISOString();
+    const tool = data.tool;
+    const executionId = data.executionId;
 
-    const key = `${agent}:${action}`;
+    const key = executionId || `${agent}:${tool || action}`;
     const existing = activityMap.get(key);
 
     // Keep the latest or complete/error status
@@ -42,6 +47,8 @@ export function extractStreamingActivities(message: any): StreamingActivity[] {
         action,
         status,
         timestamp,
+        tool,
+        executionId,
       });
     }
   }

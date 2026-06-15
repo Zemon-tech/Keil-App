@@ -888,7 +888,7 @@ export function Dashboard() {
                                     const status = act.status === "running" ? "active" : "complete";
                                     return (
                                       <ChainOfThoughtStep
-                                        key={`stream-${idx}-${act.agent}-${act.action}`}
+                                        key={act.executionId || `stream-${idx}-${act.agent}-${act.action}`}
                                         icon={Icon}
                                         label={
                                           <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
@@ -900,6 +900,11 @@ export function Dashboard() {
                                                 <span className="text-muted-foreground/40 text-[10px]">•</span>
                                                 <span>{act.action}</span>
                                               </>
+                                            )}
+                                            {act.tool && (
+                                              <span className="text-[10px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
+                                                (calling: {act.tool})
+                                              </span>
                                             )}
                                           </span>
                                         }
