@@ -49,13 +49,13 @@ export function ChatDrawer() {
 
       <div className="flex flex-col size-full relative">
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border h-14 shrink-0 bg-card">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 h-14 shrink-0 bg-card/50 backdrop-blur-md">
           {activeChannelId && currentChannel ? (
             <>
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   onClick={() => setActiveChannel(null)}
-                  className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                  className="flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-100 ease-out active:scale-90 shrink-0"
                   aria-label="Go back to chat list"
                 >
                   <ArrowLeft className="size-4" />
@@ -63,19 +63,19 @@ export function ChatDrawer() {
                 
                 <div className="flex items-center gap-2 min-w-0">
                   {currentChannel?.type === "group" ? (
-                    <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs shrink-0">
+                    <div className="size-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs shrink-0 border border-primary/20">
                       <Users className="size-4" />
                     </div>
                   ) : (
-                    <Avatar className="size-8 shrink-0">
+                    <Avatar className="size-8 shrink-0 rounded-xl">
                       <AvatarImage src={getOptimizedImageUrl(otherMember?.avatar_url, { width: 96, height: 96 })} alt={channelName} />
-                      <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                      <AvatarFallback className="text-xs font-semibold bg-primary/20 text-foreground uppercase rounded-xl">
                         {channelName.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                   )}
                   <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold text-foreground leading-none truncate">{channelName}</span>
+                    <span className="text-xs font-semibold text-foreground leading-none truncate">{channelName}</span>
                     <span className="text-[10px] text-muted-foreground mt-1 truncate">
                       {currentChannel?.type === "group" ? `${currentChannel.members.length} members` : "Direct Message"}
                     </span>
@@ -83,7 +83,7 @@ export function ChatDrawer() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 {currentChannel?.type === "group" ? (
                   <GroupSettingsDialog
                     channel={currentChannel}
@@ -93,7 +93,7 @@ export function ChatDrawer() {
                 ) : (
                   <button
                     onClick={handleExpandClick}
-                    className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    className="flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-100 ease-out active:scale-90"
                     aria-label="Maximize chat"
                   >
                     <Maximize2 className="size-4" />
@@ -110,14 +110,14 @@ export function ChatDrawer() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={handleExpandClick}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
                   aria-label="Open full chat page"
                 >
                   <Maximize2 className="size-4" />
                 </button>
                 <button
                   onClick={closeChat}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
                   aria-label="Close chat"
                 >
                   <X className="size-4" />

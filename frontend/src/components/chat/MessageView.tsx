@@ -350,15 +350,15 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                   <div className={`flex flex-col gap-1.5 ${isMine ? "items-end" : "items-start"}`}>
                     {(msg.reply_to || msg.content) && (
                       <div
-                        className={`relative text-[13px] rounded-2xl px-4 py-2 w-fit leading-relaxed shadow-sm transition-all duration-300 break-all ${
+                        className={`relative text-[13px] rounded-xl px-3.5 py-1.5 w-fit leading-relaxed shadow-xs transition-all duration-300 break-all ${
                           isMine 
-                            ? "bg-primary text-primary-foreground rounded-tr-sm" 
-                            : "bg-card text-card-foreground border border-border/50 rounded-tl-sm"
+                            ? "bg-primary text-primary-foreground rounded-tr-xs" 
+                            : "bg-card text-card-foreground border border-border/50 rounded-tl-xs"
                         } ${
                           highlightedMessageId === msg.id
                             ? isMine
-                              ? "ring-4 ring-primary/30 scale-102"
-                              : "bg-muted/80 ring-4 ring-muted-foreground/20 scale-102"
+                              ? "ring-4 ring-primary/30 scale-[1.02]"
+                              : "bg-muted/80 ring-4 ring-muted-foreground/20 scale-[1.02]"
                             : ""
                         }`}
                       >
@@ -470,7 +470,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
       </div>
 
       {/* ── Send input ── */}
-      <div className="flex flex-col gap-2 px-4 py-3 shrink-0 bg-card border-t border-border">
+      <div className="flex flex-col gap-2 px-4 py-3 shrink-0 bg-card/50 backdrop-blur-md border-t border-border/50">
         {replyingTo && (
           <div className="flex items-center justify-between bg-muted rounded-xl px-4 py-2.5 text-xs border-l-4 border-foreground animate-in slide-in-from-bottom-2 duration-200">
             <div className="flex flex-col min-w-0 pr-4 text-left">
@@ -491,9 +491,9 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
           </div>
         )}
         {attachmentFile && (
-          <div className="flex items-center justify-between bg-muted/80 backdrop-blur-[2px] rounded-xl px-4 py-3 mb-1 text-xs border border-border animate-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center justify-between bg-muted/80 backdrop-blur-[2px] rounded-xl px-4 py-3 mb-1 text-xs border border-border/40 animate-in slide-in-from-bottom-2 duration-200">
             <div className="flex items-center gap-3 min-w-0 pr-4">
-              <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+              <div className="size-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
                 {isUploading ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
@@ -523,7 +523,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             </button>
           </div>
         )}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -534,10 +534,10 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading || !!attachmentFile}
-            className="flex items-center justify-center size-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0 disabled:opacity-40"
+            className="flex items-center justify-center size-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-100 ease-out active:scale-95 flex-shrink-0 disabled:opacity-40"
             title="Attach file"
           >
-            <Paperclip className="size-5" />
+            <Paperclip className="size-4.5" />
           </button>
           <input
             ref={inputRef}
@@ -545,23 +545,23 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             onChange={handleInputChange}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Message..."
-            className="flex-1 text-sm bg-muted rounded-full px-5 py-2.5 outline-none placeholder:text-muted-foreground border border-transparent focus:border-primary/20 transition-colors"
+            className="flex-1 text-sm bg-muted/65 hover:bg-muted/90 focus:bg-background rounded-xl px-3.5 py-2 outline-none placeholder:text-muted-foreground border border-border/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all duration-150 ease-out"
           />
           <Popover>
             <PopoverTrigger asChild>
               <button 
                 type="button"
-                className="flex items-center justify-center size-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex-shrink-0 cursor-pointer"
+                className="flex items-center justify-center size-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-100 ease-out active:scale-95 flex-shrink-0 cursor-pointer"
                 title="Choose emoji"
               >
-                <Smile className="size-5" />
+                <Smile className="size-4.5" />
               </button>
             </PopoverTrigger>
             <PopoverContent 
               side="top" 
               align="end" 
               sideOffset={12} 
-              className="w-auto p-0 bg-transparent border-0 shadow-none"
+              className="w-auto p-0 bg-transparent border-0 shadow-none animate-in fade-in-0 zoom-in-95 duration-100"
             >
               <EmojiPicker onSelect={handleSelectEmoji} />
             </PopoverContent>
@@ -569,10 +569,10 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
           <button
             onClick={handleSend}
             disabled={isUploading || (!text.trim() && !uploadedAttachment)}
-            className="flex items-center justify-center size-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:hover:bg-primary transition-all active:scale-95"
+            className="flex items-center justify-center size-9 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-all duration-100 ease-out active:scale-95 flex-shrink-0"
             aria-label="Send message"
           >
-            <Send className="size-4 ml-0.5" />
+            <Send className="size-4" />
           </button>
         </div>
       </div>

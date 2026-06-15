@@ -40,6 +40,7 @@ export interface Notification {
   created_at: string;
   sender_name?: string | null;
   sender_email?: string | null;
+  sender_avatar?: string | null;
 }
 
 interface NotificationContextType {
