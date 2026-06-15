@@ -47,7 +47,13 @@ import { QuickNavPopover } from "./QuickNavPopover";
 import { STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon } from "./task-detail-shared";
 import type { CalendarBlock, CalendarBlockType, AnyStatus } from "@/types/task";
 import { getThemeForTask, blockTypeThemeMap } from "@/lib/calendarTheme";
-import type { TaskDTO } from "@/hooks/api/useTasks";
+import { 
+  useOrgTaskSlots, 
+  useCreateTaskSlot, 
+  useUpdateTaskSlot, 
+  useDeleteTaskSlot,
+  type TaskDTO 
+} from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 
 type Props = {
@@ -370,6 +376,12 @@ export function TaskSchedulePane({
   onOpenSidebar,
 }: Props) {
   const { activeOrgId, activeSpaceId } = useAppContext();
+  const [selectedSlotId, setSelectedSlotId] = useState<string>("");
+
+  const { data: slots } = useOrgTaskSlots(activeOrgId, activeSpaceId);
+  const createTaskSlot = useCreateTaskSlot(activeOrgId, activeSpaceId);
+  const updateTaskSlot = useUpdateTaskSlot(activeOrgId, activeSpaceId);
+  const deleteTaskSlot = useDeleteTaskSlot(activeOrgId, activeSpaceId);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -448,11 +460,12 @@ export function TaskSchedulePane({
   const calendarRef = useRef<FullCalendar>(null);
   const calendarContainerRef = useRef<HTMLDivElement>(null);
 
-  // Sync local events state with props (tasks and blocks)
+  // Sync local events state with props (tasks, slots and blocks)
   useEffect(() => {
     console.log("🔄 Syncing events state with props", {
       tasks: tasks.length,
       blocks: blocks.length,
+      slots: slots?.length ?? 0,
       unscheduledIds: unscheduledTaskIds.current.size,
     });
 
@@ -469,74 +482,113 @@ export function TaskSchedulePane({
       statusFilter === "Event" ||
       EVENT_STATUS_OPTIONS.includes(statusFilter as any);
 
-    const taskEvents = tasks
-      .filter((t) => {
-        if (
-          !t.start_date ||
-          !t.due_date ||
-          unscheduledTaskIds.current.has(t.id)
-        )
-          return false;
-        if (isTaskFiltered) return t.type === "task";
-        if (isEventFiltered) return t.type === "event";
-        return true;
-      })
-      .sort((a, b) => {
-        const priorityA = priorityOrder[a.priority] ?? 4;
-        const priorityB = priorityOrder[b.priority] ?? 4;
-        return priorityA - priorityB;
-      })
-      .map((t) => {
-        const startDate = new Date(t.start_date!);
-        const endDate = new Date(t.due_date!);
-        // All-day detection should match FullCalendar semantics:
-        // - allDay events use an *exclusive* end at the start of a day boundary.
-        // - timed events can cross midnight and should remain timed.
-        const isAllDay =
-          t.is_all_day !== undefined
-            ? t.is_all_day
-            : isAllDayRangeLocal(startDate, endDate);
+    let taskEvents: EventInput[] = [];
 
-        console.log("🔍 All-day detection:", {
-          taskId: t.id,
-          startDate: t.start_date,
-          endDate: t.due_date,
-          isAllDay,
+    if (activeOrgId && activeSpaceId && slots) {
+      taskEvents = slots
+        .filter((slot) => {
+          if (unscheduledTaskIds.current.has(slot.id)) return false;
+          if (isTaskFiltered) return (slot.task_type || 'task') === "task";
+          if (isEventFiltered) return (slot.task_type || 'task') === "event";
+          return true;
+        })
+        .map((slot) => {
+          const task = tasks.find((t) => t.id === slot.task_id);
+          const isDone = slot.task_status === "done" || slot.task_status === "completed";
+          const chipStyles = getChipStyles(slot.task_type || 'task', slot.task_priority || 'medium', slot.task_status || 'backlog');
+
+          return {
+            id: slot.id,
+            title: slot.checklist_title || slot.task_title || task?.title || "Untitled",
+            start: slot.start_date,
+            end: slot.due_date,
+            allDay: slot.is_all_day,
+            display: "block",
+            backgroundColor: chipStyles.background,
+            borderColor: chipStyles.border,
+            textColor: chipStyles.text,
+            classNames: [
+              slot.task_type === "event"
+                ? "task-event-block"
+                : `task-priority-${slot.task_priority || 'medium'}`,
+              slot.task_status === "backlog" ? "is-backlog" : "",
+            ].filter(Boolean),
+            extendedProps: {
+              slotId: slot.id,
+              taskId: slot.task_id,
+              checklistId: slot.checklist_id,
+              orgId: activeOrgId,
+              spaceId: activeSpaceId,
+              taskTitle: slot.task_title || task?.title || "Untitled",
+              projectTitle: task?.projectTitle,
+              taskStatus: slot.task_status || task?.status,
+              taskPriority: slot.task_priority || task?.priority,
+              taskType: slot.task_type || task?.type || 'task',
+              isScheduledTask: true,
+            },
+            editable: !isDone,
+          } satisfies EventInput;
         });
+    } else {
+      taskEvents = tasks
+        .filter((t) => {
+          if (
+            !t.start_date ||
+            !t.due_date ||
+            unscheduledTaskIds.current.has(t.id)
+          )
+            return false;
+          if (isTaskFiltered) return t.type === "task";
+          if (isEventFiltered) return t.type === "event";
+          return true;
+        })
+        .sort((a, b) => {
+          const priorityA = priorityOrder[a.priority] ?? 4;
+          const priorityB = priorityOrder[b.priority] ?? 4;
+          return priorityA - priorityB;
+        })
+        .map((t) => {
+          const startDate = new Date(t.start_date!);
+          const endDate = new Date(t.due_date!);
+          const isAllDay =
+            t.is_all_day !== undefined
+              ? t.is_all_day
+              : isAllDayRangeLocal(startDate, endDate);
 
-        const isDone = t.status === "done" || t.status === "completed";
-        const chipStyles = getChipStyles(t.type, t.priority, t.status);
+          const isDone = t.status === "done" || t.status === "completed";
+          const chipStyles = getChipStyles(t.type, t.priority, t.status);
 
-        return {
-          id: t.id,
-          title: t.title,
-          start: t.start_date!,
-          end: t.due_date!,
-          allDay: isAllDay,
-          display: "block",
-          backgroundColor: chipStyles.background,
-          borderColor: chipStyles.border,
-          textColor: chipStyles.text,
-          classNames: [
-            t.type === "event"
-              ? "task-event-block"
-              : `task-priority-${t.priority}`,
-            t.status === "backlog" ? "is-backlog" : "",
-          ].filter(Boolean),
-          extendedProps: {
-            taskId: t.id,
-            orgId: t.org_id ?? activeOrgId,
-            spaceId: t.space_id ?? activeSpaceId,
-            taskTitle: t.title,
-            projectTitle: t.projectTitle,
-            taskStatus: t.status,
-            taskPriority: t.priority,
-            taskType: t.type,
-            isScheduledTask: true,
-          },
-          editable: !isDone,
-        } satisfies EventInput;
-      });
+          return {
+            id: t.id,
+            title: t.title,
+            start: t.start_date!,
+            end: t.due_date!,
+            allDay: isAllDay,
+            display: "block",
+            backgroundColor: chipStyles.background,
+            borderColor: chipStyles.border,
+            textColor: chipStyles.text,
+            classNames: [
+              t.type === "event"
+                ? "task-event-block"
+                : `task-priority-${t.priority}`,
+              t.status === "backlog" ? "is-backlog" : "",
+            ].filter(Boolean),
+            extendedProps: {
+              taskId: t.id,
+              orgId: t.org_id ?? activeOrgId,
+              spaceId: t.space_id ?? activeSpaceId,
+              taskTitle: t.title,
+              projectTitle: t.projectTitle,
+              taskStatus: t.status,
+              taskPriority: t.priority,
+              taskType: t.type,
+              isScheduledTask: true,
+            },
+            editable: !isDone,
+          } satisfies EventInput;
+        });
+    }
 
     const allEvents = [...blockEvents, ...taskEvents];
     setEvents((prevEvents) => {
@@ -557,26 +609,23 @@ export function TaskSchedulePane({
       console.log("✅ Events state updated:", allEvents.length);
       return allEvents;
     });
-  }, [tasks, blocks, statusFilter]);
+  }, [tasks, blocks, slots, statusFilter, activeOrgId, activeSpaceId]);
 
   // Handle unschedule - remove task from local events state
   const handleTaskUnschedule = (taskId: string) => {
-    console.log("🗑️ Unschedule clicked:", taskId);
-    // Optimistic update: add to unscheduled ref immediately
-    unscheduledTaskIds.current.add(taskId);
-    console.log(
-      "📝 Added to unscheduled ref:",
-      taskId,
-      unscheduledTaskIds.current,
-    );
-    // Remove from events state
-    setEvents((prev) => prev.filter((e) => e.id !== taskId));
-    console.log("✅ Event removed from state:", taskId);
-    // Clear from ref after 5 seconds to allow backend to sync
-    setTimeout(() => {
-      unscheduledTaskIds.current.delete(taskId);
-      console.log("🗑️ Cleared from unscheduled ref:", taskId);
-    }, 5000);
+    console.log("🗑️ Unschedule clicked:", taskId, "selectedSlotId:", selectedSlotId);
+    if (activeOrgId && activeSpaceId && selectedSlotId) {
+      deleteTaskSlot.mutate({ slotId: selectedSlotId });
+      setSelectedSlotId("");
+      setSelectedTaskId("");
+    } else {
+      // Optimistic update for mock environment
+      unscheduledTaskIds.current.add(taskId);
+      setEvents((prev) => prev.filter((e) => e.id !== taskId));
+      setTimeout(() => {
+        unscheduledTaskIds.current.delete(taskId);
+      }, 5000);
+    }
   };
 
   // Handle status change - remove task from events if status becomes "done"
@@ -596,12 +645,14 @@ export function TaskSchedulePane({
   const handleEventReceive = (info: EventReceiveArg) => {
     try {
       const taskId = info.event.extendedProps.taskId;
+      const checklistId = info.event.extendedProps.checklistId;
       const startDate = info.event.start;
       const endDate = info.event.end;
       const viewType = info.view.type;
 
       console.log("🎯 Task dropped on calendar:", {
         taskId,
+        checklistId,
         start: startDate,
         end: endDate,
         viewType,
@@ -620,13 +671,24 @@ export function TaskSchedulePane({
       const isAllDayDrop = !!info.event.allDay || viewType === "dayGridMonth";
 
       if (isAllDayDrop) {
-        if (startDate && onTaskSchedule) {
+        if (startDate) {
           const { start: allDayStart, end: allDayEnd } =
             normalizeAllDayRangeLocal(startDate, endDate);
           const startISO = allDayStart.toISOString();
           const endISO = allDayEnd.toISOString();
 
-          onTaskSchedule(taskId, startISO, endISO, true);
+          if (activeOrgId && activeSpaceId) {
+            createTaskSlot.mutate({
+              task_id: taskId,
+              start_date: startISO,
+              due_date: endISO,
+              is_all_day: true,
+              checklist_id: checklistId || undefined,
+            });
+            info.revert(); // Revert local FC drop, because React Query refetch will draw it from the DB
+          } else if (onTaskSchedule) {
+            onTaskSchedule(taskId, startISO, endISO, true);
+          }
 
           const isMultiDay =
             allDayEnd.getTime() - allDayStart.getTime() > 24 * 60 * 60 * 1000;
@@ -645,17 +707,28 @@ export function TaskSchedulePane({
         }
       } else {
         // Handle day/week view drop: use the dropped time directly
-        if (startDate && endDate && onTaskSchedule) {
+        if (startDate && endDate) {
           const { start: timedStart, end: timedEnd } = normalizeTimedRange(
             startDate,
             endDate,
           );
-          onTaskSchedule(
-            taskId,
-            timedStart.toISOString(),
-            timedEnd.toISOString(),
-            false,
-          );
+          if (activeOrgId && activeSpaceId) {
+            createTaskSlot.mutate({
+              task_id: taskId,
+              start_date: timedStart.toISOString(),
+              due_date: timedEnd.toISOString(),
+              is_all_day: false,
+              checklist_id: checklistId || undefined,
+            });
+            info.revert(); // Revert local FC drop, because React Query refetch will draw it from the DB
+          } else if (onTaskSchedule) {
+            onTaskSchedule(
+              taskId,
+              timedStart.toISOString(),
+              timedEnd.toISOString(),
+              false,
+            );
+          }
 
           toast.success("Task scheduled", {
             description: `${info.event.title} scheduled for ${format(startDate, "MMM dd, h:mm a")}`,
@@ -673,6 +746,7 @@ export function TaskSchedulePane({
   const handleEventResize = (info: EventResizeDoneArg) => {
     try {
       const taskId = info.event.extendedProps.taskId;
+      const slotId = info.event.id;
       const startDate = info.event.start;
       const endDate = info.event.end;
       const viewType = info.view.type;
@@ -684,26 +758,47 @@ export function TaskSchedulePane({
 
       console.log("📏 Task duration resized:", {
         taskId,
+        slotId,
         viewType,
         newDuration: `${Math.round((endDate.getTime() - startDate.getTime()) / 60000)} minutes`,
       });
 
-      if (onTaskSchedule) {
-        const isAllDay = !!(info.event as any).allDay;
-        if (isAllDay) {
-          const { start: allDayStart, end: allDayEnd } =
-            normalizeAllDayRangeLocal(startDate, endDate);
+      const isAllDay = !!(info.event as any).allDay;
+      if (isAllDay) {
+        const { start: allDayStart, end: allDayEnd } =
+          normalizeAllDayRangeLocal(startDate, endDate);
+        if (activeOrgId && activeSpaceId) {
+          updateTaskSlot.mutate({
+            slotId,
+            updates: {
+              start_date: allDayStart.toISOString(),
+              due_date: allDayEnd.toISOString(),
+              is_all_day: true,
+            }
+          });
+        } else if (onTaskSchedule) {
           onTaskSchedule(
             taskId,
             allDayStart.toISOString(),
             allDayEnd.toISOString(),
             true,
           );
-        } else {
-          const { start: timedStart, end: timedEnd } = normalizeTimedRange(
-            startDate,
-            endDate,
-          );
+        }
+      } else {
+        const { start: timedStart, end: timedEnd } = normalizeTimedRange(
+          startDate,
+          endDate,
+        );
+        if (activeOrgId && activeSpaceId) {
+          updateTaskSlot.mutate({
+            slotId,
+            updates: {
+              start_date: timedStart.toISOString(),
+              due_date: timedEnd.toISOString(),
+              is_all_day: false,
+            }
+          });
+        } else if (onTaskSchedule) {
           onTaskSchedule(
             taskId,
             timedStart.toISOString(),
@@ -711,8 +806,8 @@ export function TaskSchedulePane({
             false,
           );
         }
-        toast.success("Task duration updated");
       }
+      toast.success("Task duration updated");
     } catch (error) {
       console.error("❌ Error in handleEventResize:", error);
       toast.error("Failed to resize task");
@@ -723,6 +818,7 @@ export function TaskSchedulePane({
   const handleEventDrop = (info: any) => {
     try {
       const taskId = info.event.extendedProps.taskId;
+      const slotId = info.event.id;
       const startDate = info.event.start;
       const endDate = info.event.end;
       const viewType = info.view.type;
@@ -731,6 +827,7 @@ export function TaskSchedulePane({
 
       console.log("🔄 Task moved:", {
         taskId,
+        slotId,
         newStart: startDate,
         newEnd: endDate,
         viewType,
@@ -751,25 +848,43 @@ export function TaskSchedulePane({
         const safeEndDate = ensureAllDayDropEndDate(startDate, endDate);
         const range = normalizeAllDayRangeLocal(startDate, safeEndDate.end);
         const { startISO, endISO } = normalizeAllDayRangeForUpdate(range);
-        if (onTaskSchedule) {
+        if (activeOrgId && activeSpaceId) {
+          updateTaskSlot.mutate({
+            slotId,
+            updates: {
+              start_date: startISO,
+              due_date: endISO,
+              is_all_day: true,
+            }
+          });
+        } else if (onTaskSchedule) {
           onTaskSchedule(taskId, startISO, endISO, true);
-          toast.success("Task rescheduled");
         }
+        toast.success("Task rescheduled");
       } else {
         const clampedRange = clampTimedRange(startDate, endDate);
         const { start: timedStart, end: timedEnd } = normalizeTimedRange(
           clampedRange.start,
           clampedRange.end,
         );
-        if (onTaskSchedule) {
+        if (activeOrgId && activeSpaceId) {
+          updateTaskSlot.mutate({
+            slotId,
+            updates: {
+              start_date: timedStart.toISOString(),
+              due_date: timedEnd.toISOString(),
+              is_all_day: false,
+            }
+          });
+        } else if (onTaskSchedule) {
           onTaskSchedule(
             taskId,
             timedStart.toISOString(),
             timedEnd.toISOString(),
             false,
           );
-          toast.success("Task rescheduled");
         }
+        toast.success("Task rescheduled");
       }
     } catch (error) {
       console.error("❌ Error in handleEventDrop:", error);
@@ -1248,6 +1363,7 @@ export function TaskSchedulePane({
 
                     setDialogPosition({ x, y });
                     setSelectedTaskId(taskId);
+                    setSelectedSlotId(arg.event.id);
                     setSelectedTaskOrgId(arg.event.extendedProps.orgId || activeOrgId);
                     setSelectedTaskSpaceId(arg.event.extendedProps.spaceId || activeSpaceId);
                   }
@@ -1344,6 +1460,7 @@ export function TaskSchedulePane({
               spaceId={selectedTaskSpaceId}
               onClose={() => {
                 setSelectedTaskId("");
+                setSelectedSlotId("");
                 setSelectedTaskOrgId("");
                 setSelectedTaskSpaceId("");
                 setDialogPosition(null);
@@ -1366,6 +1483,7 @@ export function TaskSchedulePane({
           onOpenChange={(open) => {
             if (!open) {
               setSelectedTaskId("");
+              setSelectedSlotId("");
               setSelectedTaskOrgId("");
               setSelectedTaskSpaceId("");
               setDialogPosition(null);

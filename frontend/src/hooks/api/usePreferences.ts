@@ -8,6 +8,7 @@ export type SttProvider = "elevenlabs" | "sarvam";
 export interface UserAppPreferences {
   user_id: string;
   stt_provider: SttProvider;
+  delete_slots_on_complete: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +41,26 @@ export function useUpdateSttProvider() {
       const res = await api.patch<{ data: UserAppPreferences }>(
         "v1/preferences/stt-provider",
         { provider }
+      );
+      return res.data.data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["user-preferences"], data);
+    },
+  });
+}
+
+/**
+ * Mutation to update the user's delete_slots_on_complete preference.
+ */
+export function useUpdateDeleteSlotsOnComplete() {
+  const queryClient = useQueryClient();
+
+  return useMutation<UserAppPreferences, Error, boolean>({
+    mutationFn: async (deleteSlotsOnComplete: boolean) => {
+      const res = await api.patch<{ data: UserAppPreferences }>(
+        "v1/preferences/delete-slots-on-complete",
+        { deleteSlotsOnComplete }
       );
       return res.data.data;
     },

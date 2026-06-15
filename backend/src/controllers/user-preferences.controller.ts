@@ -47,3 +47,29 @@ export const updateSttProvider = catchAsync(async (req: Request, res: Response) 
         new ApiResponse(200, updated, "STT provider updated successfully")
     );
 });
+
+/**
+ * PATCH /api/v1/preferences/delete-slots-on-complete
+ * Update the user's slot deletion setting on task completion.
+ * Body: { deleteSlotsOnComplete: boolean }
+ */
+export const updateDeleteSlotsOnComplete = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const { deleteSlotsOnComplete } = req.body;
+
+    if (typeof deleteSlotsOnComplete !== "boolean") {
+        return res.status(400).json({
+            error: "deleteSlotsOnComplete must be a boolean",
+        });
+    }
+
+    const updated = await userPreferencesService.updateDeleteSlotsOnComplete(user.id, deleteSlotsOnComplete);
+
+    return res.status(200).json(
+        new ApiResponse(200, updated, "Slot deletion preference updated successfully")
+    );
+});

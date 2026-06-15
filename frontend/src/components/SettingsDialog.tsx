@@ -124,7 +124,7 @@ import {
   useDisconnectNotion,
 } from "@/hooks/api/useNotion";
 import { toast } from "sonner";
-import { usePreferences, useUpdateSttProvider, type SttProvider } from "@/hooks/api/usePreferences";
+import { usePreferences, useUpdateSttProvider, useUpdateDeleteSlotsOnComplete, type SttProvider } from "@/hooks/api/usePreferences";
 import { useOpenDM } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
@@ -1969,8 +1969,71 @@ function PreferencesTab() {
 
       <Separator />
 
+      {/* Calendar Slots Preference */}
+      <CalendarPreferenceSection />
+
+      <Separator />
+
       {/* Speech-to-Text Provider */}
       <SttProviderSelector />
+    </div>
+  );
+}
+
+function CalendarPreferenceSection() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateDeleteSlots = useUpdateDeleteSlotsOnComplete();
+
+  const deleteSlotsOnComplete = prefs?.delete_slots_on_complete || false;
+
+  const handleToggle = (checked: boolean) => {
+    updateDeleteSlots.mutate(checked, {
+      onSuccess: () => {
+        toast.success(
+          checked
+            ? "Calendar slots will be deleted when task is completed"
+            : "Calendar slots will be kept when task is completed"
+        );
+      },
+      onError: () => {
+        toast.error("Failed to update calendar preference");
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading calendar preference...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <CalendarDays className="size-4 text-muted-foreground" />
+        Calendar Slots
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose how calendar slots behave when tasks are completed.
+      </p>
+      <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+        <div>
+          <p className="text-xs font-semibold text-foreground">
+            Delete Slots on Completion
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+            Automatically delete calendar slots associated with a task when it is marked completed.
+          </p>
+        </div>
+        <Switch
+          checked={deleteSlotsOnComplete}
+          onCheckedChange={handleToggle}
+          disabled={updateDeleteSlots.isPending}
+        />
+      </div>
     </div>
   );
 }
