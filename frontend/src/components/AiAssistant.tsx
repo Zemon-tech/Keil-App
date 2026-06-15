@@ -571,7 +571,17 @@ export function AiAssistant() {
     const isAssistantThinking =
         isLoading && messages[messages.length - 1]?.role === "user";
 
-    const getActiveAgentAndStatus = useCallback(() => {
+    const assistantLoadingText = useMemo(() => {
+        return [
+            "Fetching the output",
+            "Be ready",
+            "Forging a response",
+        ][messages.length % 3] || "Forging a response";
+    }, [messages.length]);
+
+    // useMemo instead of useCallback+call — avoids running filtering/extraction
+    // on every render tick during streaming.
+    const activeStatus = useMemo(() => {
         if (!isLoading) return null;
 
         const assistantMessages = messages.filter((m) => m.role === "assistant");
@@ -583,7 +593,7 @@ export function AiAssistant() {
 
         // First check live activity stream
         const streamingActivities = extractStreamingActivities(lastAssistantMsg);
-        const runningActivity = streamingActivities.find(act => act.status === "running");
+        const runningActivity = streamingActivities.find((act) => act.status === "running");
         if (runningActivity) {
             return { agent: runningActivity.agent, status: `${runningActivity.action}...` };
         }
@@ -608,15 +618,6 @@ export function AiAssistant() {
         return { agent: activity.agent, status: `${activity.action}...` };
     }, [messages, isLoading]);
 
-    const assistantLoadingText = useMemo(() => {
-        return [
-            "Fetching the output",
-            "Be ready",
-            "Forging a response",
-        ][messages.length % 3] || "Forging a response";
-    }, [messages.length]);
-
-    const activeStatus = getActiveAgentAndStatus();
     const loadingText = activeStatus
         ? `[${activeStatus.agent}] ${activeStatus.status}`
         : assistantLoadingText;
@@ -688,9 +689,12 @@ export function AiAssistant() {
     }, [threadId, handleNewChat]);
 
     // ─── Effects ───────────────────────────────────────────────────────
+    // Only scroll when a NEW message appears (ID change), not on every
+    // streaming chunk — avoids continuous scroll animation cancellation.
+    const lastMessageId = messages[messages.length - 1]?.id;
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages, isStreaming]);
+    }, [lastMessageId]);
 
     useEffect(() => {
         if (mode !== "hidden") {
@@ -772,6 +776,8 @@ export function AiAssistant() {
                 <ChainOfThoughtHeader className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider py-1 hover:text-foreground">
                     {hasToolInvocations
                         ? `${toolInvocations.length} ${toolInvocations.length === 1 ? "action" : "actions"} taken`
+                        : streamingActivities.every((a: any) => a.status !== "running")
+                        ? `${streamingActivities.length} ${streamingActivities.length === 1 ? "action" : "actions"} taken`
                         : `${streamingActivities.length} ${streamingActivities.length === 1 ? "step" : "steps"} in progress`}
                 </ChainOfThoughtHeader>
                 <ChainOfThoughtContent className="border-l border-border/60 pl-3 ml-2 mt-1.5 space-y-2.5">
@@ -786,10 +792,14 @@ export function AiAssistant() {
                                 label={
                                     <span className="font-semibold text-foreground text-[11px] flex items-center gap-1.5 flex-wrap">
                                         <span className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-wider">
-                                            {act.agent}
+                                            {act.agent || "KeilHQ AI"}
                                         </span>
-                                        <span className="text-muted-foreground/45 text-[9px]">•</span>
-                                        <span>{act.action}</span>
+                                        {act.action && (
+                                            <>
+                                                <span className="text-muted-foreground/45 text-[9px]">•</span>
+                                                <span>{act.action}</span>
+                                            </>
+                                        )}
                                     </span>
                                 }
                                 status={status}

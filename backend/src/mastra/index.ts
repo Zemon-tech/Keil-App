@@ -188,7 +188,13 @@ export const mastra = new Mastra({
           const uiStream = createUIMessageStream({
             originalMessages: messages,
             execute: async ({ writer }) => {
-              // Wrap agentStream.fullStream to intercept custom data-agent-activity events
+              // Store the UI writer in requestContext so ALL tools — including those
+              // inside sub-agents (taskAgent, chatAgent, etc.) — can emit activity
+              // events directly. requestContext is the same Map object shared across
+              // the entire supervisor → sub-agent → tool call chain.
+              requestContext.set("uiWriter", writer);
+
+              // Wrap agentStream.fullStream to intercept any remaining custom events
               const originalFullStream = agentStream.fullStream;
               const reader = originalFullStream.getReader();
               const wrappedFullStream = new ReadableStream({

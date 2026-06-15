@@ -19,7 +19,10 @@ export function extractStreamingActivities(message: any): StreamingActivity[] {
     return [];
   }
 
+  // Early exit — avoid building the Map when no activity parts exist,
+  // which is the common case for plain text messages during streaming.
   const activityParts = parts.filter((p: any) => p.type === "data-agent-activity");
+  if (activityParts.length === 0) return [];
 
   const activityMap = new Map<string, StreamingActivity>();
 
