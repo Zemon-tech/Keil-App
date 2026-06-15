@@ -126,18 +126,18 @@ export const ChainOfThoughtStep = memo(
   }: ChainOfThoughtStepProps) => (
     <div
       className={cn(
-        "flex gap-2 text-sm",
+        "relative flex gap-3 text-sm pb-4 group",
         stepStatusStyles[status],
         "fade-in-0 slide-in-from-top-2 animate-in",
         className
       )}
       {...props}
     >
-      <div className="relative mt-0.5">
+      <div className="absolute top-6 bottom-0 left-[7.5px] w-px bg-border group-last:hidden" />
+      <div className="shrink-0 mt-0.5 relative z-10 bg-background flex items-center justify-center size-4">
         <Icon className="size-4" />
-        <div className="absolute top-7 bottom-0 left-1/2 -mx-px w-px bg-border" />
       </div>
-      <div className="flex-1 space-y-2 overflow-hidden">
+      <div className="flex-1 space-y-1.5 overflow-hidden">
         <div>{label}</div>
         {description && (
           <div className="text-muted-foreground text-xs">{description}</div>

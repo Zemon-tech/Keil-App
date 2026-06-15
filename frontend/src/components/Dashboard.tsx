@@ -36,6 +36,7 @@ import {
   GitPullRequest,
   Users,
   GitBranch,
+  BrainIcon,
 } from "lucide-react";
 import api from "@/lib/api";
 import {
@@ -55,18 +56,13 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import {
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
-} from "@/components/ai-elements/reasoning";
-import {
   ChainOfThought,
   ChainOfThoughtHeader,
   ChainOfThoughtContent,
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
 import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
-import { extractStreamingActivities } from "@/lib/activity-stream";
+import { extractStreamingActivities, buildChainOfThoughtTimeline } from "@/lib/activity-stream";
 import { useChat } from "@ai-sdk/react";
 import { supabase } from "@/lib/supabase";
 import { DefaultChatTransport } from "ai";
@@ -810,38 +806,15 @@ export function Dashboard() {
                     message.content ||
                     "";
 
-                  // Extract reasoning parts
-                  const reasoningParts = messageParts
-                    .filter((p: any) => p.type === "reasoning")
-                    .map((p: any) => {
-                      if (p.text) return p.text;
-                      if (p.reasoning) return p.reasoning;
-                      if (Array.isArray(p.details)) {
-                        return p.details
-                          .filter((d: any) => d.type === "text" && d.text)
-                          .map((d: any) => d.text)
-                          .join("");
-                      }
-                      return "";
-                    })
-                    .join("") || "";
-                  const reasoningText = reasoningParts || (message as any).reasoning || "";
-                  const hasReasoning = reasoningText.length > 0;
 
-                  // Extract tool invocations
-                  const toolInvocations = extractToolInvocations(message);
-                  const hasToolInvocations = toolInvocations.length > 0;
-                  const streamingActivities = extractStreamingActivities(message);
+                  const timeline = buildChainOfThoughtTimeline(message);
+                  const hasTimeline = timeline.length > 0;
 
                   const isLastMessage = messages[messages.length - 1]?.id === message.id;
-                  const lastPart = message.parts?.at(-1);
-                  // Reasoning is streaming only when the last part on the last message is still a reasoning part
-                  const isReasoningStreaming =
-                    isLoading && isLastMessage && lastPart?.type === "reasoning";
 
                   // Show shimmer if assistant is active but we have no content or activities at all yet
                   const showShimmer =
-                    isAssistant && isLoading && isLastMessage && !hasReasoning && !hasToolInvocations && streamingActivities.length === 0 && text.trim() === "";
+                    isAssistant && isLoading && isLastMessage && !hasTimeline && text.trim() === "";
 
                   return (
                     <Message
@@ -863,98 +836,83 @@ export function Dashboard() {
                           </div>
                         ) : isAssistant ? (
                           <div className="space-y-4">
-                            {/* 1. Reasoning Component */}
-                            {hasReasoning && (
-                              <Reasoning isStreaming={isReasoningStreaming}>
-                                <ReasoningTrigger />
-                                <ReasoningContent>{reasoningText}</ReasoningContent>
-                              </Reasoning>
-                            )}
-
-                            {/* 2. Chain of Thought Component */}
-                            {(hasToolInvocations || streamingActivities.length > 0) && (
+                            {/* 1. Chain of Thought Component */}
+                            {hasTimeline && (
                               <ChainOfThought defaultOpen={true}>
                                 <ChainOfThoughtHeader className="text-xs uppercase tracking-wider font-semibold py-1">
-                                  {hasToolInvocations
-                                    ? `${toolInvocations.length} ${toolInvocations.length === 1 ? "action" : "actions"} taken`
-                                    : streamingActivities.every((a: any) => a.status !== "running")
-                                    ? `${streamingActivities.length} ${streamingActivities.length === 1 ? "action" : "actions"} taken`
-                                    : `${streamingActivities.length} ${streamingActivities.length === 1 ? "step" : "steps"} in progress`}
+                                  {timeline.filter(t => t.status === "active").length === 0
+                                    ? `${timeline.length} ${timeline.length === 1 ? "action" : "actions"} taken`
+                                    : `${timeline.length} ${timeline.length === 1 ? "step" : "steps"} in progress`}
                                 </ChainOfThoughtHeader>
-                                <ChainOfThoughtContent className="border-l border-border/60 pl-3 ml-2 space-y-3">
-                                  {/* Render live streaming activities */}
-                                  {streamingActivities.map((act: any, idx: number) => {
-                                    const Icon = getAgentIcon(act.agent);
-                                    const status = act.status === "running" ? "active" : "complete";
-                                    return (
-                                      <ChainOfThoughtStep
-                                        key={act.executionId || `stream-${idx}-${act.agent}-${act.action}`}
-                                        icon={Icon}
-                                        label={
-                                          <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-[10px] text-muted-foreground/80 uppercase font-bold tracking-wider">
-                                              {act.agent || "KeilHQ AI"}
-                                            </span>
-                                            {(act.action) && (
-                                              <>
-                                                <span className="text-muted-foreground/40 text-[10px]">•</span>
-                                                <span>{act.action}</span>
-                                              </>
-                                            )}
-                                            {act.tool && (
-                                              <span className="text-[10px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
-                                                (calling: {act.tool})
-                                              </span>
-                                            )}
-                                          </span>
-                                        }
-                                        status={status}
-                                      />
-                                    );
-                                  })}
+                                <ChainOfThoughtContent className="mt-1.5 space-y-0">
+                                  {timeline.map((item, idx) => {
+                                    if (item.type === "thinking") {
+                                      return (
+                                        <ChainOfThoughtStep
+                                          key={item.id}
+                                          icon={BrainIcon}
+                                          label="Thinking"
+                                          status={item.status}
+                                        >
+                                          {item.text && (
+                                            <div className="text-[12px] text-muted-foreground/90 pl-2 leading-relaxed whitespace-pre-line border-l border-border/40 ml-[7.5px] py-1">
+                                              {item.text}
+                                            </div>
+                                          )}
+                                        </ChainOfThoughtStep>
+                                      );
+                                    }
 
-                                  {/* Render tool invocations */}
-                                  {toolInvocations.map((inv: any) => {
-                                    const status = inv.state === "result" ? "complete" : "active";
-                                    const Icon = getToolIcon(inv.toolName, inv.result);
-                                    const label = getToolLabel(inv.toolName, inv.args, inv.result);
-                                    const description = getToolDescription(inv.toolName, inv.args, inv.result);
+                                    const Icon = item.agent 
+                                      ? getAgentIcon(item.agent) 
+                                      : getToolIcon(item.tool || "", item.result);
 
-                                    // Resolve agent name
-                                    let agentName = inv.result?.activity?.agentLabel || inv.result?.activity?.agent;
-                                    if (!agentName) {
-                                      if (inv.toolName.includes("task") || inv.toolName.includes("org") || inv.toolName.includes("workspace")) {
-                                        agentName = "Task Manager";
-                                      } else if (inv.toolName.includes("chat") || inv.toolName.includes("message") || inv.toolName.includes("channel")) {
-                                        agentName = "Chat";
-                                      } else if (inv.toolName.includes("motion") || inv.toolName.includes("page") || inv.toolName.includes("note")) {
-                                        agentName = "Notes";
-                                      } else if (inv.toolName.includes("schedule") || inv.toolName.includes("calendar")) {
-                                        agentName = "Scheduler";
-                                      } else if (inv.toolName.includes("github")) {
-                                        agentName = "GitHub";
+                                    const label = getToolLabel(item.tool || "", item.args, item.result) || item.action || `Running: ${item.tool}`;
+                                    const description = getToolDescription(item.tool || "", item.args, item.result);
+
+                                    let agentDisplay = item.agent;
+                                    if (!agentDisplay && item.tool) {
+                                      if (item.tool.includes("task") || item.tool.includes("org") || item.tool.includes("workspace")) {
+                                        agentDisplay = "Task Manager";
+                                      } else if (item.tool.includes("chat") || item.tool.includes("message") || item.tool.includes("channel")) {
+                                        agentDisplay = "Chat";
+                                      } else if (item.tool.includes("motion") || item.tool.includes("page") || item.tool.includes("note")) {
+                                        agentDisplay = "Notes";
+                                      } else if (item.tool.includes("schedule") || item.tool.includes("calendar")) {
+                                        agentDisplay = "Scheduler";
+                                      } else if (item.tool.includes("github")) {
+                                        agentDisplay = "GitHub";
                                       } else {
-                                        agentName = "KeilHQ AI";
+                                        agentDisplay = "KeilHQ AI";
                                       }
                                     }
-                                    if (agentName === "keilhq-task-agent") agentName = "Task Manager";
-                                    if (agentName === "keilhq-chat-agent") agentName = "Chat";
-                                    if (agentName === "keilhq-motion-agent") agentName = "Notes";
-                                    if (agentName === "keilhq-scheduler-agent") agentName = "Scheduler";
-                                    if (agentName === "keilhq-github-agent") agentName = "GitHub";
-                                    if (agentName === "keilhq-ai") agentName = "KeilHQ AI";
+                                    if (!agentDisplay) agentDisplay = "KeilHQ AI";
+
+                                    if (agentDisplay === "keilhq-task-agent") agentDisplay = "Task Manager";
+                                    if (agentDisplay === "keilhq-chat-agent") agentDisplay = "Chat";
+                                    if (agentDisplay === "keilhq-motion-agent") agentDisplay = "Notes";
+                                    if (agentDisplay === "keilhq-scheduler-agent") agentDisplay = "Scheduler";
+                                    if (agentDisplay === "keilhq-github-agent") agentDisplay = "GitHub";
+                                    if (agentDisplay === "keilhq-ai") agentDisplay = "KeilHQ AI";
+
+                                    const status = item.status;
 
                                     return (
                                       <ChainOfThoughtStep
-                                        key={inv.toolCallId}
+                                        key={item.id || `act-${idx}`}
                                         icon={Icon}
                                         label={
                                           <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
                                             <span className="text-[10px] text-muted-foreground/80 uppercase font-bold tracking-wider">
-                                              {agentName}
+                                              {agentDisplay}
                                             </span>
                                             <span className="text-muted-foreground/40 text-[10px]">•</span>
                                             <span>{label}</span>
+                                            {item.tool && !item.result && (
+                                              <span className="text-[10px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
+                                                (calling: {item.tool})
+                                              </span>
+                                            )}
                                           </span>
                                         }
                                         description={
@@ -966,9 +924,9 @@ export function Dashboard() {
                                         }
                                         status={status}
                                       >
-                                        {inv.state === "result" && inv.result && (
+                                        {item.result && (
                                           <div className="mt-1 max-w-full text-[11px] bg-muted/40 p-2 rounded-lg border border-border/40 font-mono overflow-auto max-h-36 no-scrollbar leading-relaxed">
-                                            {formatToolResult(inv.toolName, inv.result)}
+                                            {formatToolResult(item.tool || "", item.result)}
                                           </div>
                                         )}
                                       </ChainOfThoughtStep>
