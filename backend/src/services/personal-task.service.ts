@@ -5,6 +5,10 @@ import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
 import { syncTaskToCalendar, deleteCalendarEvent } from "./google-calendar.service";
 import { createServiceLogger } from "../lib/logger";
+import { getS3Client } from "../lib/s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { config } from "../config";
 
 const log = createServiceLogger("gcal");
 
@@ -24,6 +28,7 @@ export interface PersonalTaskDTO {
   updated_at: string;
   location?: string | null;
   meet_link?: string | null;
+  context?: any[] | null;
 }
 
 export interface CreatePersonalTaskInput {
@@ -39,6 +44,7 @@ export interface CreatePersonalTaskInput {
   due_date?: Date | null;
   location?: string | null;
   meet_link?: string | null;
+  context?: any[] | null;
 }
 
 export interface UpdatePersonalTaskInput {
@@ -52,6 +58,7 @@ export interface UpdatePersonalTaskInput {
   due_date?: Date | null;
   location?: string | null;
   meet_link?: string | null;
+  context?: any[] | null;
 }
 
 const toDTO = (task: PersonalTask): PersonalTaskDTO => ({
@@ -70,7 +77,33 @@ const toDTO = (task: PersonalTask): PersonalTaskDTO => ({
   updated_at: task.updated_at.toISOString(),
   location: task.location,
   meet_link: task.meet_link ?? null,
+  context: task.context ?? [],
 });
+
+export const signPersonalTaskContextAttachments = async (dto: PersonalTaskDTO | null): Promise<PersonalTaskDTO | null> => {
+  if (!dto) return null;
+  if (dto.context && Array.isArray(dto.context)) {
+    for (const item of dto.context) {
+      if (item.type === "file" && item.s3Key) {
+        try {
+          const command = new GetObjectCommand({
+            Bucket: config.awsS3BucketName,
+            Key: item.s3Key,
+          });
+          item.url = await getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
+        } catch (err) {
+          console.error("Failed to sign S3 attachment key for personal task:", item.s3Key, err);
+        }
+      }
+    }
+  }
+  return dto;
+};
+
+export const signPersonalTasksContextAttachments = async (dtos: PersonalTaskDTO[]): Promise<PersonalTaskDTO[]> => {
+  await Promise.all(dtos.map((dto) => signPersonalTaskContextAttachments(dto)));
+  return dtos;
+};
 
 const validateDateOrder = (startDate?: Date | null, dueDate?: Date | null): void => {
   if (startDate && dueDate && dueDate < startDate) {
@@ -83,7 +116,7 @@ export const getPersonalTasks = async (
   options: TaskQueryOptions = {},
 ): Promise<PersonalTaskDTO[]> => {
   const tasks = await personalTaskRepository.findByOwner(ownerUserId, options);
-  return tasks.map(toDTO);
+  return signPersonalTasksContextAttachments(tasks.map(toDTO));
 };
 
 export const getPersonalTaskById = async (
@@ -94,7 +127,7 @@ export const getPersonalTaskById = async (
   if (!task || task.owner_user_id !== ownerUserId) {
     return null;
   }
-  return toDTO(task);
+  return signPersonalTaskContextAttachments(toDTO(task));
 };
 
 export const createPersonalTask = async (
@@ -121,7 +154,7 @@ export const createPersonalTask = async (
     }).catch(err => log.error({ err }, 'Personal task create sync failed'));
   }
 
-  return toDTO(task);
+  return signPersonalTaskContextAttachments(toDTO(task)) as Promise<PersonalTaskDTO>;
 };
 
 export const updatePersonalTask = async (
@@ -160,7 +193,7 @@ export const updatePersonalTask = async (
     }).catch(err => log.error({ err }, 'Personal task sync failed'));
   }
 
-  return toDTO(updated);
+  return signPersonalTaskContextAttachments(toDTO(updated));
 };
 
 export const deletePersonalTask = async (taskId: string, ownerUserId: string): Promise<boolean> => {

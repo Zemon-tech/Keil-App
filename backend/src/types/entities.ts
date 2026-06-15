@@ -74,6 +74,7 @@ export interface Task {
   ical_uid?: string | null; // Added in migration 011 — stable Google iCalUID
   meet_link?: string | null;
   guests?: string[] | null;
+  context?: any[] | null;
 }
 
 export interface TaskAssignee {
@@ -133,6 +134,7 @@ export interface PersonalTask {
   location?: string | null;
   meet_link?: string | null;
   guests?: string[] | null;
+  context?: any[] | null;
 }
 
 export interface UserIntegration {

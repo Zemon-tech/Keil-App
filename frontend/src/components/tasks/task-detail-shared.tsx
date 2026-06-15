@@ -134,6 +134,7 @@ export const ContextIcon = ({ type, className }: { type: string; className?: str
     github: <Github className={className} />,
     notion: <FileText className={className} />,
     link: <Link2 className={className} />,
+    file: <FileText className={className} />,
   };
   return <>{icons[type] ?? <Link2 className={className} />}</>;
 };

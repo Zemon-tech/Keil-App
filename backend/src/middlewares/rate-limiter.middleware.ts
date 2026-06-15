@@ -120,3 +120,20 @@ export const publicAuthRateLimiter = rateLimiter({
   isPublic: true,
   message: 'Too many authentication attempts. Please try again after a minute.',
 });
+
+// S3 Upload Rate Limiters
+export const taskUploadMinRateLimiter = rateLimiter({
+  windowSeconds: 60,
+  limit: 10,
+  keyPrefix: 'rl:task-upload:min',
+  isPublic: false,
+  message: 'Upload limit exceeded. You can only upload 10 files per minute.',
+});
+
+export const taskUploadDayRateLimiter = rateLimiter({
+  windowSeconds: 86400, // 24 hours
+  limit: 150,
+  keyPrefix: 'rl:task-upload:day',
+  isPublic: false,
+  message: 'Daily upload limit exceeded. You can only upload 150 files per day.',
+});

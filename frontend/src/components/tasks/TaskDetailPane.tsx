@@ -119,11 +119,7 @@ export function TaskDetailPane({
       setMockContext(updates.context);
     }
 
-    // Filter out mock-only fields before sending to server
-    const { context: _c, ...serverUpdates } = updates;
-    if (Object.keys(serverUpdates).length > 0) {
-      handleUpdateField(serverUpdates as UpdateTaskInput);
-    }
+    handleUpdateField(updates as UpdateTaskInput);
   };
 
   // Centralized field-update handler

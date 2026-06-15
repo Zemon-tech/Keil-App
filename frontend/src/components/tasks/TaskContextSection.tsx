@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link2, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Link2, Pencil, Trash2, Loader2, Paperclip } from "lucide-react";
 
 
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,11 @@ interface TaskContextItem {
   title: string;
   url: string;
   description: string;
-  type: "doc" | "link" | "figma" | "github" | "notion";
+  type: "doc" | "link" | "figma" | "github" | "notion" | "file";
   favicon?: string;
+  s3Key?: string;
+  fileSize?: number;
+  mimeType?: string;
 }
 
 function parseUrlMetadata(urlStr: string): { title: string; description: string; type: "github" | "notion" | "figma" | "doc" | "link" } {
@@ -91,9 +94,15 @@ function parseUrlMetadata(urlStr: string): { title: string; description: string;
 export function TaskContextSection({
   task,
   onUpdateTask,
+  onChangeContext,
+  spaceId,
+  triggerUploadRef,
 }: {
-  task: TaskDTO;
+  task: Partial<TaskDTO>;
   onUpdateTask?: (id: string, updates: any) => void;
+  onChangeContext?: (context: any[]) => void;
+  spaceId?: string;
+  triggerUploadRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newUrl, setNewUrl] = useState("");
@@ -106,10 +115,26 @@ export function TaskContextSection({
   const [editUrl, setEditUrl] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const addFormRef = useRef<HTMLDivElement>(null);
   const editFormRef = useRef<HTMLDivElement>(null);
   const addUrlRef = useRef<HTMLInputElement>(null);
   const editUrlRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (triggerUploadRef) {
+      triggerUploadRef.current = () => fileInputRef.current?.click();
+    }
+    return () => {
+      if (triggerUploadRef) {
+        triggerUploadRef.current = null;
+      }
+    };
+  }, [triggerUploadRef]);
 
   // Focus the add input when opening
   useEffect(() => {
@@ -132,6 +157,9 @@ export function TaskContextSection({
     description: item.description || "",
     type: item.type || "link",
     favicon: item.favicon || undefined,
+    s3Key: item.s3Key || undefined,
+    fileSize: item.fileSize || undefined,
+    mimeType: item.mimeType || undefined,
   }));
 
   // Close add form on outside click
@@ -183,6 +211,106 @@ export function TaskContextSection({
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+    if (file.size > MAX_SIZE) {
+      alert("File size exceeds the 20MB limit.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const resolvedSpaceId = spaceId || task.space_id;
+    if (!resolvedSpaceId) {
+      alert("Cannot upload file: space context is missing.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadError(null);
+
+    try {
+      const res = await api.post("v1/s3-upload/task/upload", {
+        spaceId: resolvedSpaceId,
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream"
+      });
+
+      const { uploadUrl, s3Key } = res.data.data;
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl, true);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percent);
+        }
+      };
+
+      xhr.onload = async () => {
+        if (xhr.status === 200) {
+          let downloadUrl = "";
+          try {
+            const dlRes = await api.post("v1/s3-upload/task/download", { s3Key });
+            downloadUrl = dlRes.data.data.downloadUrl;
+          } catch (dlErr) {
+            console.error("Failed to pre-fetch task download URL:", dlErr);
+          }
+
+          const newItem = {
+            id: crypto.randomUUID(),
+            title: file.name,
+            url: downloadUrl,
+            s3Key,
+            fileSize: file.size,
+            mimeType: file.type || "application/octet-stream",
+            type: "file" as const,
+            description: `Uploaded file: ${file.name}`
+          };
+
+          const updatedContext = [
+            ...(task.context ?? []),
+            newItem,
+          ];
+
+          if (onChangeContext) {
+            onChangeContext(updatedContext);
+          } else if (task.id) {
+            onUpdateTask?.(task.id, { context: updatedContext });
+          }
+
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        } else {
+          console.error("Task S3 upload failed with status:", xhr.status);
+          setUploadError("Failed to upload file. Please try again.");
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+      };
+
+      xhr.onerror = () => {
+        console.error("Task S3 upload network error");
+        setUploadError("Attachment upload network error.");
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      };
+
+      xhr.send(file);
+    } catch (err) {
+      console.error("Failed to initiate task file upload:", err);
+      setUploadError("Failed to initiate file upload.");
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleAdd = async () => {
     if (!newUrl.trim()) return;
 
@@ -218,7 +346,11 @@ export function TaskContextSection({
       newItem,
     ];
 
-    onUpdateTask?.(task.id, { context: updatedContext });
+    if (onChangeContext) {
+      onChangeContext(updatedContext);
+    } else if (task.id) {
+      onUpdateTask?.(task.id, { context: updatedContext });
+    }
 
     setNewUrl("");
     setNewTitle("");
@@ -228,7 +360,11 @@ export function TaskContextSection({
 
   const handleDelete = (id: string) => {
     const updatedContext = (task.context ?? []).filter((item: any) => item.id !== id);
-    onUpdateTask?.(task.id, { context: updatedContext as any });
+    if (onChangeContext) {
+      onChangeContext(updatedContext);
+    } else if (task.id) {
+      onUpdateTask?.(task.id, { context: updatedContext as any });
+    }
   };
 
   const handleStartEdit = (item: TaskContextItem) => {
@@ -239,40 +375,63 @@ export function TaskContextSection({
   };
 
   const handleSaveEdit = async () => {
-    if (!editUrl.trim() || !editingId) return;
+    if (!editingId) return;
 
-    let title = editTitle.trim();
-    let description = editDescription.trim();
-    let favicon = "";
+    const originalItem = (task.context ?? []).find((item: any) => item.id === editingId);
+    if (!originalItem) return;
 
-    const meta = await fetchMetadata(editUrl);
-    if (meta) {
-      if (!title) title = meta.title;
-      if (!description) description = meta.description;
-      favicon = meta.favicon;
-    }
+    let updatedContext;
 
-    if (!title) {
+    if (originalItem.type === "file") {
+      updatedContext = (task.context ?? []).map((item: any) =>
+        item.id === editingId
+          ? {
+              ...item,
+              title: editTitle.trim() || item.title,
+              description: editDescription.trim(),
+            }
+          : item
+      );
+    } else {
+      if (!editUrl.trim()) return;
+
+      let title = editTitle.trim();
+      let description = editDescription.trim();
+      let favicon = "";
+
+      const meta = await fetchMetadata(editUrl);
+      if (meta) {
+        if (!title) title = meta.title;
+        if (!description) description = meta.description;
+        favicon = meta.favicon;
+      }
+
+      if (!title) {
+        const parsed = parseUrlMetadata(editUrl);
+        title = parsed.title;
+        if (!description) description = parsed.description;
+      }
+
       const parsed = parseUrlMetadata(editUrl);
-      title = parsed.title;
-      if (!description) description = parsed.description;
+      updatedContext = (task.context ?? []).map((item: any) =>
+        item.id === editingId
+          ? {
+              ...item,
+              title: title || editUrl,
+              url: editUrl.trim(),
+              description,
+              type: parsed.type,
+              favicon: favicon || item.favicon,
+            }
+          : item
+      );
     }
 
-    const parsed = parseUrlMetadata(editUrl);
-    const updatedContext = (task.context ?? []).map((item: any) =>
-      item.id === editingId
-        ? {
-            ...item,
-            title: title || editUrl,
-            url: editUrl.trim(),
-            description,
-            type: parsed.type,
-            favicon: favicon || item.favicon,
-          }
-        : item
-    );
-
-    onUpdateTask?.(task.id, { context: updatedContext });
+    if (onChangeContext) {
+      onChangeContext(updatedContext);
+    } else if (task.id) {
+      onUpdateTask?.(task.id, { context: updatedContext });
+    }
 
     setEditingId(null);
     setEditTitle("");
@@ -358,14 +517,47 @@ export function TaskContextSection({
           </div>
         </div>
       ) : (
-        /* Add Link Trigger button */
-        <button
-          onClick={() => setIsAdding(true)}
-          className="mb-3 w-full text-left text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1 flex items-center gap-1.5"
-        >
-          <Link2 className="size-3.5" />
-          Add context link...
-        </button>
+        /* Add Link / Upload File Trigger buttons */
+        <div className="flex items-center gap-3 mb-3">
+          <button
+            onClick={() => setIsAdding(true)}
+            className="text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Link2 className="size-3.5" />
+            Add link
+          </button>
+          <span className="text-muted-foreground/35 select-none font-light">|</span>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors py-1 flex items-center gap-1.5 cursor-pointer"
+            disabled={isUploading}
+          >
+            <Paperclip className="size-3.5" />
+            Upload file
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.zip"
+          />
+        </div>
+      )}
+
+      {/* Uploading progress indicator */}
+      {isUploading && (
+        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground bg-muted/20 border border-border/40 rounded-md p-2">
+          <Loader2 className="size-3.5 animate-spin text-primary" />
+          <span>Uploading file... {uploadProgress}%</span>
+        </div>
+      )}
+
+      {/* Upload error message */}
+      {uploadError && (
+        <div className="mb-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md p-2">
+          {uploadError}
+        </div>
       )}
 
       {/* Context Links List */}
@@ -377,18 +569,19 @@ export function TaskContextSection({
               className="group rounded-md border border-border p-3 transition-colors hover:bg-accent/30"
             >
               {editingId === item.id ? (
-                // Edit Mode
                 <div ref={editFormRef} className="space-y-2.5">
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Link URL</label>
-                    <Input
-                      ref={editUrlRef}
-                      value={editUrl}
-                      onChange={(e) => setEditUrl(e.target.value)}
-                      className="h-8 text-sm"
-                      placeholder="https://..."
-                    />
-                  </div>
+                  {item.type !== "file" && (
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Link URL</label>
+                      <Input
+                        ref={editUrlRef}
+                        value={editUrl}
+                        onChange={(e) => setEditUrl(e.target.value)}
+                        className="h-8 text-sm"
+                        placeholder="https://..."
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Title (Optional)</label>
                     <Input
@@ -408,7 +601,12 @@ export function TaskContextSection({
                     />
                   </div>
                   <div className="flex justify-end">
-                    <Button size="sm" className="h-7 text-xs px-4" onClick={handleSaveEdit} disabled={!editUrl.trim() || isFetchingMeta}>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs px-4"
+                      onClick={handleSaveEdit}
+                      disabled={(item.type !== "file" && !editUrl.trim()) || isFetchingMeta}
+                    >
                       Save Changes
                     </Button>
                   </div>

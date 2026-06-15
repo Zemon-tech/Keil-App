@@ -53,7 +53,7 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
     description, objective, success_criteria,
     type, event_type, location, is_all_day, assignee_ids,
     story_points, time_estimate, meet_link,
-    create_meet_link, guests,
+    create_meet_link, guests, context: taskContext,
   } = req.body;
 
   if (!title || typeof title !== "string" || title.trim() === "") {
@@ -95,6 +95,7 @@ export const createTask = catchAsync(async (req: Request, res: Response) => {
     meet_link: meet_link ?? null,
     create_meet_link,
     guests: Array.isArray(guests) ? guests : undefined,
+    context: Array.isArray(taskContext) ? taskContext : undefined,
   });
 
   res.status(201).json(new ApiResponse(201, task, "Task created successfully"));
@@ -177,7 +178,7 @@ export const updateTask = catchAsync(async (req: Request, res: Response) => {
   const allowedFields = [
     "title", "description", "objective", "success_criteria",
     "status", "priority", "type", "event_type", "location", "is_all_day", "meet_link",
-    "create_meet_link", "guests",
+    "create_meet_link", "guests", "context",
   ];
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {

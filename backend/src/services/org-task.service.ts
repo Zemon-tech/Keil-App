@@ -11,6 +11,10 @@ import { TaskQueryOptions } from "../types/repository";
 import { ApiError } from "../utils/ApiError";
 import { syncTaskToCalendar, deleteCalendarEvent, createGoogleMeetSpace } from "./google-calendar.service";
 import { createServiceLogger } from "../lib/logger";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getS3Client } from "../lib/s3";
+import { config } from "../config";
 
 const log = createServiceLogger("gcal");
 
@@ -47,6 +51,7 @@ export interface OrgTaskDTO {
   user_space_role?: string;
   org_name?: string;
   space_name?: string;
+  context?: any[] | null;
 }
 
 export interface OrgTaskContext {
@@ -77,6 +82,7 @@ export interface CreateOrgTaskInput {
   meet_link?: string | null;
   create_meet_link?: boolean;
   guests?: string[];
+  context?: any[] | null;
 }
 
 export interface UpdateOrgTaskInput {
@@ -97,6 +103,7 @@ export interface UpdateOrgTaskInput {
   meet_link?: string | null;
   create_meet_link?: boolean;
   guests?: string[];
+  context?: any[] | null;
 }
 
 const toISO = (value: Date | string | null | undefined): string | null => {
@@ -134,7 +141,33 @@ const toDTO = (task: Task & { assignees?: User[]; user_space_role?: string; crea
   user_space_role: task.user_space_role,
   org_name: (task as any).org_name,
   space_name: (task as any).space_name,
+  context: task.context ?? [],
 });
+
+export const signTaskContextAttachments = async (dto: OrgTaskDTO | null): Promise<OrgTaskDTO | null> => {
+  if (!dto) return null;
+  if (dto.context && Array.isArray(dto.context)) {
+    for (const item of dto.context) {
+      if (item.type === "file" && item.s3Key) {
+        try {
+          const command = new GetObjectCommand({
+            Bucket: config.awsS3BucketName,
+            Key: item.s3Key,
+          });
+          item.url = await getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
+        } catch (err) {
+          console.error("Failed to sign S3 attachment key:", item.s3Key, err);
+        }
+      }
+    }
+  }
+  return dto;
+};
+
+export const signTasksContextAttachments = async (dtos: OrgTaskDTO[]): Promise<OrgTaskDTO[]> => {
+  await Promise.all(dtos.map((dto) => signTaskContextAttachments(dto)));
+  return dtos;
+};
 
 const validateDateOrder = (startDate?: Date | null, dueDate?: Date | null): void => {
   if (startDate && dueDate && dueDate < startDate) {
@@ -173,7 +206,7 @@ export const getTasksBySpace = async (
   options: TaskQueryOptions = {},
 ): Promise<OrgTaskDTO[]> => {
   const tasks = await orgTaskRepository.findBySpace(orgId, spaceId, options);
-  return tasks.map((task) => toDTO(task));
+  return signTasksContextAttachments(tasks.map((task) => toDTO(task)));
 };
 
 export const getTaskById = async (taskId: string): Promise<OrgTaskDTO | null> => {
@@ -196,13 +229,13 @@ export const getTaskById = async (taskId: string): Promise<OrgTaskDTO | null> =>
       ? (await orgTaskRepository.findById(task.parent_task_id))?.title
       : undefined;
 
-  return {
+  return signTaskContextAttachments({
     ...toDTO(task),
     dependencies,
     blocked_by_count: dependencies.filter((dep) => dep.status !== TaskStatus.DONE).length,
     subtask_count: subtasks.length,
     parent_task_title: parentTaskTitle,
-  };
+  });
 };
 
 export const getSubtasks = async (taskId: string): Promise<OrgTaskDTO[]> => {
@@ -298,7 +331,11 @@ export const createTask = async (
     }).catch(err => log.error({ err }, 'Org task create sync failed'));
   }
 
-  return toDTO(task);
+  const signed = await signTaskContextAttachments(toDTO(task));
+  if (!signed) {
+    throw new ApiError(500, "Failed to sign task attachments");
+  }
+  return signed;
 };
 
 export const updateTask = async (
@@ -425,7 +462,7 @@ export const updateTask = async (
     }).catch(err => log.error({ err }, 'Org task update sync failed'));
   }
 
-  return result ? toDTO(result) : null;
+  return result ? signTaskContextAttachments(toDTO(result)) : null;
 };
 
 export const changeTaskStatus = async (

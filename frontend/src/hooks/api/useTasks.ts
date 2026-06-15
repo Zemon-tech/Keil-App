@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import type { Task, AnyStatus, TaskPriority, EventType } from "@/types/task";
+import type { Task, AnyStatus, TaskPriority, EventType, ContextItem } from "@/types/task";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +94,7 @@ export interface CreateTaskInput {
   story_points?: number;
   time_estimate?: number;
   assignee_ids?: string[];
+  context?: ContextItem[];
 }
 
 export interface UpdateTaskInput {
@@ -113,6 +114,7 @@ export interface UpdateTaskInput {
   due_date?: string | null;
   story_points?: number;
   time_estimate?: number;
+  context?: ContextItem[];
 }
 
 const EVENT_STATUSES = new Set<AnyStatus>([

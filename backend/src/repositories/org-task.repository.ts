@@ -9,6 +9,22 @@ export class OrgTaskRepository extends BaseRepository<Task> {
     super("tasks");
   }
 
+  override async create(data: Partial<Task>, client?: PoolClient): Promise<Task> {
+    const serialized = {
+      ...data,
+      context: data.context ? (Array.isArray(data.context) ? JSON.stringify(data.context) : data.context) as any : undefined,
+    };
+    return super.create(serialized, client);
+  }
+
+  override async update(id: string, data: Partial<Task>, client?: PoolClient): Promise<Task | null> {
+    const serialized = {
+      ...data,
+      context: data.context ? (Array.isArray(data.context) ? JSON.stringify(data.context) : data.context) as any : undefined,
+    };
+    return super.update(id, serialized, client);
+  }
+
   async findBySpace(
     orgId: string,
     spaceId: string,
@@ -30,7 +46,7 @@ export class OrgTaskRepository extends BaseRepository<Task> {
       SELECT
         t.id, t.org_id, t.space_id, t.parent_task_id, t.type, t.event_type, t.location, t.is_all_day, 
         t.title, t.status, t.priority, t.start_date, t.due_date, t.created_by, t.created_at, t.updated_at, 
-        t.google_event_id, t.ical_uid, t.meet_link, t.objective,
+        t.google_event_id, t.ical_uid, t.meet_link, t.objective, t.success_criteria, t.context,
         o.name as org_name,
         s.name as space_name,
         (

@@ -160,3 +160,85 @@ export async function getMotionAssetUploadUrl(
 
     return { uploadUrl, publicUrl, s3Key };
 }
+
+/**
+ * Checks if a user is a member of a given space.
+ */
+export async function isSpaceMember(userId: string, spaceId: string): Promise<boolean> {
+    const query = `
+        SELECT 1 FROM public.space_members 
+        WHERE space_id = $1 AND user_id = $2
+    `;
+    const result = await pool.query(query, [spaceId, userId]);
+    return result.rows.length > 0;
+}
+
+/**
+ * Parses space ID from S3 key to authorize retrieval.
+ * Key format: tasks/${spaceId}/${userId}/${timestamp}-${fileName}
+ */
+export function getSpaceIdFromTaskKey(s3Key: string): string | null {
+    const parts = s3Key.split("/");
+    if (parts.length >= 3 && parts[0] === "tasks") {
+        return parts[1];
+    }
+    return null;
+}
+
+/**
+ * Generates presigned PUT URL for a secure task context attachment.
+ */
+export async function getTaskAttachmentUploadUrl(
+    userId: string,
+    spaceId: string,
+    fileName: string,
+    contentType: string
+): Promise<{ uploadUrl: string; s3Key: string }> {
+    const isMember = await isSpaceMember(userId, spaceId);
+    if (!isMember) {
+        throw new Error("Unauthorized: User is not a member of this space.");
+    }
+
+    const safeName = sanitizeFileName(fileName || "file");
+    const timestamp = Date.now();
+    const s3Key = `tasks/${spaceId}/${userId}/${timestamp}-${safeName}`;
+
+    log.debug({ s3Key, bucket: config.awsS3BucketName }, "Generating presigned PUT URL for task attachment");
+
+    const command = new PutObjectCommand({
+        Bucket: config.awsS3BucketName,
+        Key: s3Key,
+        ContentType: contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
+    return { uploadUrl, s3Key };
+}
+
+/**
+ * Generates presigned GET URL for a secure task context attachment.
+ */
+export async function getTaskAttachmentDownloadUrl(
+    userId: string,
+    s3Key: string
+): Promise<string> {
+    const spaceId = getSpaceIdFromTaskKey(s3Key);
+    if (!spaceId) {
+        throw new Error("Invalid s3Key format for task attachment.");
+    }
+
+    const isMember = await isSpaceMember(userId, spaceId);
+    if (!isMember) {
+        throw new Error("Unauthorized: User is not a member of this space.");
+    }
+
+    log.debug({ s3Key, bucket: config.awsS3BucketName }, "Generating presigned GET URL for task attachment");
+
+    const command = new GetObjectCommand({
+        Bucket: config.awsS3BucketName,
+        Key: s3Key,
+    });
+
+    return await getSignedUrl(getS3Client(), command, { expiresIn: 3600 }); // Valid for 1 hour
+}
+

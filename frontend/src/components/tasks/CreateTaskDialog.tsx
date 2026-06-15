@@ -63,6 +63,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import type { AnyStatus } from "@/types/task";
 import { StatusIcon, STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
+import { TaskContextSection } from "./TaskContextSection";
 
 type SimpleAssigneeOption = {
   id: string;
@@ -210,6 +211,8 @@ export function CreateTaskDialog({
   const [createMeetLink, setCreateMeetLink] = useState(false);
   const [guests, setGuests] = useState<string[]>([]);
   const [guestInput, setGuestInput] = useState("");
+  const [context, setContext] = useState<any[]>([]);
+  const triggerUploadRef = useRef<(() => void) | null>(null);
 
   // Date range drag-to-select states
   const [isDragging, setIsDragging] = useState(false);
@@ -370,6 +373,7 @@ export function CreateTaskDialog({
       setTimeEstimate((initialValues as any).time_estimate || undefined);
       setGuests(initialValues.guests ?? []);
       setCreateMeetLink(!!initialValues.meet_link || !!(initialValues as any).create_meet_link);
+      setContext(initialValues.context ?? []);
     } else if (open && mode === "create") {
       // Reset
       setTitle("");
@@ -399,6 +403,7 @@ export function CreateTaskDialog({
       setCreateMeetLink(false);
       setGuests([]);
       setGuestInput("");
+      setContext([]);
     }
   }, [open, mode, initialValues]);
 
@@ -472,6 +477,7 @@ export function CreateTaskDialog({
       event_type: type === 'event' ? eventType : undefined,
       create_meet_link: createMeetLink,
       guests: guests.length > 0 ? guests : undefined,
+      context: context.length > 0 ? context : undefined,
     };
 
     const options = {
@@ -721,6 +727,16 @@ export function CreateTaskDialog({
                 </Collapsible>
               </div>
             )}
+
+            {/* Context Files/Links Section */}
+            <div className="pt-3 border-t border-border/40 mt-4">
+              <TaskContextSection
+                task={{ context, space_id: selectedSpaceId ?? activeSpaceId ?? undefined }}
+                onChangeContext={setContext}
+                spaceId={selectedSpaceId ?? activeSpaceId ?? undefined}
+                triggerUploadRef={triggerUploadRef}
+              />
+            </div>
           </div>
 
           {/* Metadata Inline Pills Row (Always pinned to bottom of dialog canvas) */}
@@ -1238,7 +1254,13 @@ export function CreateTaskDialog({
             type="button"
             className="p-2 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all focus:outline-none cursor-pointer"
             title="Attach file"
-            onClick={() => toast.info("Attachments are appended to description")}
+            onClick={() => {
+              if (triggerUploadRef.current) {
+                triggerUploadRef.current();
+              } else {
+                toast.error("File upload is not ready");
+              }
+            }}
           >
             <Paperclip className="size-3.5" />
           </button>
