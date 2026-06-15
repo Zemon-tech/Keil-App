@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -396,50 +396,58 @@ export function Dashboard() {
     };
   }, []);
 
-  const { messages, sendMessage, setMessages, status, stop } = useChat({
-    id: threadId,
-    transport: new DefaultChatTransport({
-      api: `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}/chat`,
-      headers: async (): Promise<Record<string, string>> => {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session?.access_token)
-          return { Authorization: `Bearer ${session.access_token}` };
-        return {};
-      },
-      prepareSendMessagesRequest: ({ messages: msgs }) => {
-        // threadId is always set here: either from the URL param (existing thread)
-        // or because sendInitialMessage only fires after threadId is available.
-        const tid = threadId || crypto.randomUUID();
+  // Memoized transport — avoids recreating the object on every render which
+  // can cause useChat to reset or drop streaming state mid-response.
+  const chatTransport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}/chat`,
+        headers: async (): Promise<Record<string, string>> => {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session?.access_token)
+            return { Authorization: `Bearer ${session.access_token}` };
+          return {};
+        },
+        prepareSendMessagesRequest: ({ messages: msgs }) => {
+          // threadId is always set here: either from the URL param (existing thread)
+          // or because sendInitialMessage only fires after threadId is available.
+          const tid = threadId || crypto.randomUUID();
 
-        return {
-          body: {
-            messages: [msgs[msgs.length - 1]],
-            modelSelection:
-              modelSelection || "gemini",
-            ...(modelSelection === "local" && {
-              localAiBaseUrl:
-                localStorage.getItem("local_ai_base_url") ||
-                "http://localhost:8080/v1",
-              localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
-            }),
-            ...(modelSelection === "openrouter" && {
-              openRouterModel:
-                localStorage.getItem("openrouter_model") ||
-                "openai/gpt-4o-mini",
-            }),
-            ...(activeOrgId && { orgId: activeOrgId }),
-            ...(activeSpaceId && { spaceId: activeSpaceId }),
-            memory: {
-              thread: {
-                id: tid,
+          return {
+            body: {
+              messages: [msgs[msgs.length - 1]],
+              modelSelection: modelSelection || "gemini",
+              ...(modelSelection === "local" && {
+                localAiBaseUrl:
+                  localStorage.getItem("local_ai_base_url") ||
+                  "http://localhost:8080/v1",
+                localAiModel: localStorage.getItem("local_ai_model") || "gemma-4",
+              }),
+              ...(modelSelection === "openrouter" && {
+                openRouterModel:
+                  localStorage.getItem("openrouter_model") ||
+                  "openai/gpt-4o-mini",
+              }),
+              ...(activeOrgId && { orgId: activeOrgId }),
+              ...(activeSpaceId && { spaceId: activeSpaceId }),
+              memory: {
+                thread: {
+                  id: tid,
+                },
               },
             },
-          },
-        };
-      },
-    }),
+          };
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [threadId, modelSelection, activeOrgId, activeSpaceId]
+  );
+
+  const { messages, sendMessage, setMessages, status, stop } = useChat({
+    id: threadId,
+    transport: chatTransport,
     onError: (error: Error) => {
       console.error("AI request failed:", error);
       setMessages((current: any[]) => [
@@ -492,7 +500,15 @@ export function Dashboard() {
 
   const isCollapsed = state === "collapsed";
   const hasChatStarted = messages.length > 0 || isAssistantThinking;
-  const getActiveAgentAndStatus = useCallback(() => {
+  const assistantLoadingText = [
+    "Fetching the output",
+    "Be ready",
+    "Forging a response",
+  ][messages.length % 3];
+
+  // useMemo instead of useCallback+call — avoids running filtering/extraction
+  // on every render tick during streaming.
+  const activeStatus = useMemo(() => {
     if (!isLoading) return null;
 
     const assistantMessages = messages.filter((m) => m.role === "assistant");
@@ -504,7 +520,7 @@ export function Dashboard() {
 
     // First check live activity stream
     const streamingActivities = extractStreamingActivities(lastAssistantMsg);
-    const runningActivity = streamingActivities.find(act => act.status === "running");
+    const runningActivity = streamingActivities.find((act) => act.status === "running");
     if (runningActivity) {
       return { agent: runningActivity.agent, status: `${runningActivity.action}...` };
     }
@@ -529,13 +545,6 @@ export function Dashboard() {
     return { agent: activity.agent, status: `${activity.action}...` };
   }, [messages, isLoading]);
 
-  const assistantLoadingText = [
-    "Fetching the output",
-    "Be ready",
-    "Forging a response",
-  ][messages.length % 3];
-
-  const activeStatus = getActiveAgentAndStatus();
   const loadingText = activeStatus
     ? `[${activeStatus.agent}] ${activeStatus.status}`
     : assistantLoadingText;
@@ -868,6 +877,8 @@ export function Dashboard() {
                                 <ChainOfThoughtHeader className="text-xs uppercase tracking-wider font-semibold py-1">
                                   {hasToolInvocations
                                     ? `${toolInvocations.length} ${toolInvocations.length === 1 ? "action" : "actions"} taken`
+                                    : streamingActivities.every((a: any) => a.status !== "running")
+                                    ? `${streamingActivities.length} ${streamingActivities.length === 1 ? "action" : "actions"} taken`
                                     : `${streamingActivities.length} ${streamingActivities.length === 1 ? "step" : "steps"} in progress`}
                                 </ChainOfThoughtHeader>
                                 <ChainOfThoughtContent className="border-l border-border/60 pl-3 ml-2 space-y-3">
@@ -877,15 +888,24 @@ export function Dashboard() {
                                     const status = act.status === "running" ? "active" : "complete";
                                     return (
                                       <ChainOfThoughtStep
-                                        key={`stream-${idx}-${act.agent}-${act.action}`}
+                                        key={act.executionId || `stream-${idx}-${act.agent}-${act.action}`}
                                         icon={Icon}
                                         label={
                                           <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
                                             <span className="text-[10px] text-muted-foreground/80 uppercase font-bold tracking-wider">
-                                              {act.agent}
+                                              {act.agent || "KeilHQ AI"}
                                             </span>
-                                            <span className="text-muted-foreground/40 text-[10px]">•</span>
-                                            <span>{act.action}</span>
+                                            {(act.action) && (
+                                              <>
+                                                <span className="text-muted-foreground/40 text-[10px]">•</span>
+                                                <span>{act.action}</span>
+                                              </>
+                                            )}
+                                            {act.tool && (
+                                              <span className="text-[10px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
+                                                (calling: {act.tool})
+                                              </span>
+                                            )}
                                           </span>
                                         }
                                         status={status}
@@ -963,20 +983,22 @@ export function Dashboard() {
                               <MessageResponse>{text}</MessageResponse>
                             )}
 
-                            {/* 4. Actions */}
-                            <MessageActions className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              <LikeAction
-                                isLiked={liked[message.id] ?? false}
-                                messageKey={message.id}
-                                onToggle={handleToggleLike}
-                              />
-                              <DislikeAction
-                                isDisliked={disliked[message.id] ?? false}
-                                messageKey={message.id}
-                                onToggle={handleToggleDislike}
-                              />
-                              <CopyAction content={text} />
-                            </MessageActions>
+                            {/* 4. Actions — only shown when streaming is complete and there is text */}
+                            {!isLoading && text.trim() !== "" && (
+                              <MessageActions className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <LikeAction
+                                  isLiked={liked[message.id] ?? false}
+                                  messageKey={message.id}
+                                  onToggle={handleToggleLike}
+                                />
+                                <DislikeAction
+                                  isDisliked={disliked[message.id] ?? false}
+                                  messageKey={message.id}
+                                  onToggle={handleToggleDislike}
+                                />
+                                <CopyAction content={text} />
+                              </MessageActions>
+                            )}
                           </div>
                         ) : (
                           <MessageResponse>{text}</MessageResponse>

@@ -170,25 +170,31 @@ export const mastra = new Mastra({
             .filter(Boolean)
             .join("\n\n");
 
-          const agentStream = await agent.stream(messages, {
-            requestContext,
-            instructions: instructionsOverride,
-            memory: {
-              ...body.memory,
-              resource: authResult.userId,
-            },
-            abortSignal: c.req.raw.signal,
-          });
-
-          console.log(
-            `[Chat] agent.stream() started in ${Date.now() - startTime}ms`,
-          );
-
           // ── Convert to AI SDK v6 format and return ────────────────
           const uiStream = createUIMessageStream({
             originalMessages: messages,
             execute: async ({ writer }) => {
-              // Wrap agentStream.fullStream to intercept custom data-agent-activity events
+              // Store the UI writer in requestContext so ALL tools — including those
+              // inside sub-agents (taskAgent, chatAgent, etc.) — can emit activity
+              // events directly. requestContext is the same Map object shared across
+              // the entire supervisor → sub-agent → tool call chain.
+              requestContext.set("uiWriter", writer);
+
+              const agentStream = await agent.stream(messages, {
+                requestContext,
+                instructions: instructionsOverride,
+                memory: {
+                  ...body.memory,
+                  resource: authResult.userId,
+                },
+                abortSignal: c.req.raw.signal,
+              });
+
+              console.log(
+                `[Chat] agent.stream() started in ${Date.now() - startTime}ms`,
+              );
+
+              // Wrap agentStream.fullStream to intercept any remaining custom events
               const originalFullStream = agentStream.fullStream;
               const reader = originalFullStream.getReader();
               const wrappedFullStream = new ReadableStream({
@@ -209,7 +215,7 @@ export const mastra = new Mastra({
                     // Write directly to Hono's writer as an AI SDK message part
                     writer.write({
                       type: "data-agent-activity",
-                      ...val.payload.data,
+                      data: val.payload.data,
                     } as any);
                   }
                   controller.enqueue(value);
@@ -244,3 +250,35 @@ export const mastra = new Mastra({
     ],
   },
 });
+
+function initializeActivityStreaming(mastraInstance: any) {
+  const allTools = mastraInstance.listTools();
+  if (allTools) {
+    for (const [key, tool] of Object.entries(allTools)) {
+      if (!tool || typeof (tool as any).execute !== "function") continue;
+
+      const originalExecute = (tool as any).execute;
+
+      // Prevent double wrapping
+      if ((originalExecute as any).__wrapped) continue;
+
+      const wrappedExecute = async function (this: any, inputData: any, context: any) {
+        const executionId = `${(tool as any).id || key}_${Math.random().toString(36).substring(2, 11)}`;
+
+        if (context) {
+          context.activeToolId = (tool as any).id || key;
+          context.toolExecutionId = executionId;
+        }
+
+        return originalExecute.call(this, inputData, context);
+      };
+
+      (wrappedExecute as any).__wrapped = true;
+      (tool as any).execute = wrappedExecute;
+    }
+  }
+}
+
+// Initialize activity streaming tool decoration
+initializeActivityStreaming(mastra);
+

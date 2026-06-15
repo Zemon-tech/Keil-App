@@ -84,27 +84,28 @@ export const Reasoning = memo(
     const [hasAutoClosed, setHasAutoClosed] = useState(false);
     const startTimeRef = useRef<number | null>(null);
 
-    // Track when streaming starts and compute duration
+    // Combined effect: track streaming duration AND auto-open when streaming
+    // starts. Merging these prevents two separate effects from firing in the
+    // same React batch (which caused open→close→reopen flicker).
     useEffect(() => {
       if (isStreaming) {
         hasEverStreamedRef.current = true;
         if (startTimeRef.current === null) {
           startTimeRef.current = Date.now();
         }
-      } else if (startTimeRef.current !== null) {
-        setDuration(Math.ceil((Date.now() - startTimeRef.current) / MS_IN_S));
-        startTimeRef.current = null;
+        // Auto-open when streaming starts (unless explicitly closed by the caller)
+        if (!isExplicitlyClosed && !isOpen) {
+          setIsOpen(true);
+        }
+      } else {
+        if (startTimeRef.current !== null) {
+          setDuration(Math.ceil((Date.now() - startTimeRef.current) / MS_IN_S));
+          startTimeRef.current = null;
+        }
       }
-    }, [isStreaming, setDuration]);
+    }, [isStreaming, isOpen, isExplicitlyClosed, setIsOpen, setDuration]);
 
-    // Auto-open when streaming starts (unless explicitly closed)
-    useEffect(() => {
-      if (isStreaming && !isOpen && !isExplicitlyClosed) {
-        setIsOpen(true);
-      }
-    }, [isStreaming, isOpen, setIsOpen, isExplicitlyClosed]);
-
-    // Auto-close when streaming ends (once only, and only if it ever streamed)
+    // Auto-close when streaming ends (fires once only)
     useEffect(() => {
       if (
         hasEverStreamedRef.current &&
