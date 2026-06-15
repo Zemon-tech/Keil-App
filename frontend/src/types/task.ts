@@ -47,7 +47,12 @@ export type ContextItem = {
     id: string;
     title: string;
     url: string;
-    type: "doc" | "link" | "figma" | "github" | "notion";
+    type: "doc" | "link" | "figma" | "github" | "notion" | "file";
+    favicon?: string;
+    s3Key?: string;
+    fileSize?: number;
+    mimeType?: string;
+    description?: string;
 };
 
 export type Comment = {

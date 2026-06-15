@@ -141,10 +141,18 @@ describe("Org Task Routes Integration Tests", () => {
             const createRes = await request(app)
                 .post(basePath)
                 .set("Authorization", `Bearer ${adminToken}`)
-                .send({ title: "Original Task" })
+                .send({
+                    title: "Original Task",
+                    context: [
+                        { id: "space-doc-1", title: "API Spec", type: "doc", url: "https://example.com/api" }
+                    ]
+                })
                 .expect(201);
 
             const taskId = createRes.body.data.id;
+            expect(createRes.body.data.context).toEqual([
+                { id: "space-doc-1", title: "API Spec", type: "doc", url: "https://example.com/api" }
+            ]);
 
             // 2. List tasks (accessible by admin, manager, member)
             const listRes = await request(app)
@@ -156,16 +164,30 @@ describe("Org Task Routes Integration Tests", () => {
             const found = listRes.body.data.find((t: any) => t.id === taskId);
             expect(found).toBeDefined();
             expect(found.title).toBe("Original Task");
+            expect(found.context).toEqual([
+                { id: "space-doc-1", title: "API Spec", type: "doc", url: "https://example.com/api" }
+            ]);
 
             // 3. Update task as manager
             const updateRes = await request(app)
                 .patch(`${basePath}/${taskId}`)
                 .set("Authorization", `Bearer ${managerToken}`)
-                .send({ title: "Updated Task Title", priority: "urgent" })
+                .send({
+                    title: "Updated Task Title",
+                    priority: "urgent",
+                    context: [
+                        { id: "space-doc-1", title: "API Spec", type: "doc", url: "https://example.com/api" },
+                        { id: "space-file-1", title: "design.png", type: "file", s3Key: "tasks/design.png" }
+                    ]
+                })
                 .expect(200);
 
             expect(updateRes.body.data.title).toBe("Updated Task Title");
             expect(updateRes.body.data.priority).toBe("urgent");
+            expect(updateRes.body.data.context).toEqual(expect.arrayContaining([
+                expect.objectContaining({ id: "space-doc-1", title: "API Spec", type: "doc" }),
+                expect.objectContaining({ id: "space-file-1", title: "design.png", type: "file", s3Key: "tasks/design.png" })
+            ]));
 
             // Members cannot update tasks
             await request(app)

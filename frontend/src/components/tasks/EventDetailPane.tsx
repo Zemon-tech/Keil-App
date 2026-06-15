@@ -83,10 +83,7 @@ export function EventDetailPane({
       setMockContext(updates.context);
     }
 
-    const { context: _c, ...serverUpdates } = updates;
-    if (Object.keys(serverUpdates).length > 0) {
-      handleUpdateField(serverUpdates as UpdateTaskInput);
-    }
+    handleUpdateField(updates as UpdateTaskInput);
   };
 
   const handleUpdateField = (updates: UpdateTaskInput) => {

@@ -35,6 +35,9 @@ describe("Personal Task Routes Integration Tests", () => {
                     description: "User A task description",
                     priority: "high",
                     status: "todo",
+                    context: [
+                        { id: "item-1", title: "Setup Doc", type: "doc", url: "https://example.com/setup" }
+                    ]
                 })
                 .expect(201);
 
@@ -45,6 +48,9 @@ describe("Personal Task Routes Integration Tests", () => {
                 status: "todo",
                 priority: "high",
                 parent_task_id: null,
+                context: [
+                    { id: "item-1", title: "Setup Doc", type: "doc", url: "https://example.com/setup" }
+                ]
             });
             expect(createRes.body.data.id).toBeDefined();
             const taskId = createRes.body.data.id;
@@ -56,6 +62,9 @@ describe("Personal Task Routes Integration Tests", () => {
                 .expect(200);
 
             expect(getRes.body.data.title).toBe("User A Task");
+            expect(getRes.body.data.context).toEqual([
+                { id: "item-1", title: "Setup Doc", type: "doc", url: "https://example.com/setup" }
+            ]);
 
             // 3. List personal tasks
             const listRes = await request(app)
@@ -66,6 +75,9 @@ describe("Personal Task Routes Integration Tests", () => {
             expect(listRes.body.data.length).toBeGreaterThanOrEqual(1);
             const foundTask = listRes.body.data.find((t: any) => t.id === taskId);
             expect(foundTask).toBeDefined();
+            expect(foundTask.context).toEqual([
+                { id: "item-1", title: "Setup Doc", type: "doc", url: "https://example.com/setup" }
+            ]);
 
             // 4. Update task details
             const updateRes = await request(app)
@@ -75,12 +87,20 @@ describe("Personal Task Routes Integration Tests", () => {
                     title: "User A Task Updated",
                     description: "Updated description",
                     priority: "urgent",
+                    context: [
+                        { id: "item-1", title: "Setup Doc", type: "doc", url: "https://example.com/setup" },
+                        { id: "item-2", title: "Figma Link", type: "figma", url: "https://figma.com/file/1" }
+                    ]
                 })
                 .expect(200);
 
             expect(updateRes.body.data.title).toBe("User A Task Updated");
             expect(updateRes.body.data.description).toBe("Updated description");
             expect(updateRes.body.data.priority).toBe("urgent");
+            expect(updateRes.body.data.context).toEqual([
+                { id: "item-1", title: "Setup Doc", type: "doc", url: "https://example.com/setup" },
+                { id: "item-2", title: "Figma Link", type: "figma", url: "https://figma.com/file/1" }
+            ]);
 
             // 5. Change task status separately
             const statusRes = await request(app)

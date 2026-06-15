@@ -8,6 +8,22 @@ export class PersonalTaskRepository extends BaseRepository<PersonalTask> {
     super("personal_tasks");
   }
 
+  override async create(data: Partial<PersonalTask>, client?: PoolClient): Promise<PersonalTask> {
+    const serialized = {
+      ...data,
+      context: data.context ? (Array.isArray(data.context) ? JSON.stringify(data.context) : data.context) as any : undefined,
+    };
+    return super.create(serialized, client);
+  }
+
+  override async update(id: string, data: Partial<PersonalTask>, client?: PoolClient): Promise<PersonalTask | null> {
+    const serialized = {
+      ...data,
+      context: data.context ? (Array.isArray(data.context) ? JSON.stringify(data.context) : data.context) as any : undefined,
+    };
+    return super.update(id, serialized, client);
+  }
+
   async findByOwner(
     ownerUserId: string,
     options: TaskQueryOptions = {},

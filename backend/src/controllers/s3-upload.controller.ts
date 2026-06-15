@@ -112,3 +112,60 @@ export const getMotionAssetUploadUrl = catchAsync(async (req: Request, res: Resp
         throw new ApiError(500, "Failed to generate upload URL");
     }
 });
+
+/**
+ * Controller to get a presigned S3 upload URL for a task context attachment.
+ */
+export const getTaskAttachmentUploadUrl = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const { spaceId, fileName, contentType } = req.body;
+    if (!spaceId || !fileName || !contentType) {
+        throw new ApiError(400, "Missing required parameters: spaceId, fileName, contentType");
+    }
+
+    try {
+        const data = await s3UploadService.getTaskAttachmentUploadUrl(user.id, spaceId, fileName, contentType);
+        return res.status(200).json(
+            new ApiResponse(200, data, "Task attachment upload URL generated successfully")
+        );
+    } catch (err: any) {
+        log.error({ err, userId: user.id, spaceId }, "Error generating task attachment upload URL");
+        if (err.message.includes("Unauthorized")) {
+            throw new ApiError(403, err.message);
+        }
+        throw new ApiError(500, "Failed to generate upload URL");
+    }
+});
+
+/**
+ * Controller to get a presigned S3 download URL for a task context attachment.
+ */
+export const getTaskAttachmentDownloadUrl = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const { s3Key } = req.body;
+    if (!s3Key) {
+        throw new ApiError(400, "Missing required parameter: s3Key");
+    }
+
+    try {
+        const downloadUrl = await s3UploadService.getTaskAttachmentDownloadUrl(user.id, s3Key);
+        return res.status(200).json(
+            new ApiResponse(200, { downloadUrl }, "Task attachment download URL generated successfully")
+        );
+    } catch (err: any) {
+        log.error({ err, userId: user.id, s3Key }, "Error generating task attachment download URL");
+        if (err.message.includes("Unauthorized")) {
+            throw new ApiError(403, err.message);
+        }
+        throw new ApiError(500, "Failed to generate download URL");
+    }
+});
+

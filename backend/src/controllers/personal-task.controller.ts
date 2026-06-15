@@ -57,7 +57,7 @@ export const getPersonalTasks = catchAsync(async (req: Request, res: Response) =
 
 export const createPersonalTask = catchAsync(async (req: Request, res: Response) => {
   const userId = (req as any).user?.id as string;
-  const { title, status, priority, start_date, due_date, parent_task_id, description, objective, success_criteria, location, meet_link } =
+  const { title, status, priority, start_date, due_date, parent_task_id, description, objective, success_criteria, location, meet_link, context } =
     req.body;
 
   if (!title || typeof title !== "string" || title.trim() === "") {
@@ -80,6 +80,7 @@ export const createPersonalTask = catchAsync(async (req: Request, res: Response)
     due_date: parseOptionalDate(due_date, "due_date"),
     location: location ?? null,
     meet_link: meet_link ?? null,
+    context: Array.isArray(context) ? context : undefined,
   });
 
   res.status(201).json(new ApiResponse(201, task, "Personal task created successfully"));
@@ -97,7 +98,7 @@ export const updatePersonalTask = catchAsync(async (req: Request, res: Response)
   const userId = (req as any).user?.id as string;
   // Explicitly whitelist allowed fields — unknown fields (e.g. is_all_day from the
   // calendar scheduler) are dropped here so they never reach the repository.
-  const { title, description, objective, success_criteria, status, priority, start_date, due_date, location, meet_link } = req.body;
+  const { title, description, objective, success_criteria, status, priority, start_date, due_date, location, meet_link, context } = req.body;
 
   if (status !== undefined && !validateStatus(status)) throw new ApiError(400, "Invalid status");
   if (priority !== undefined && !validatePriority(priority)) throw new ApiError(400, "Invalid priority");
@@ -113,6 +114,7 @@ export const updatePersonalTask = catchAsync(async (req: Request, res: Response)
     due_date: parseOptionalDate(due_date, "due_date"),
     location,
     meet_link,
+    context,
   });
 
   if (!task) throw new ApiError(404, "Personal task not found");

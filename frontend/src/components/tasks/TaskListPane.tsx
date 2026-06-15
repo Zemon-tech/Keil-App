@@ -425,6 +425,7 @@ export function TaskListPane({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(!!query);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
@@ -952,12 +953,79 @@ export function TaskListPane({
     return selectedTasks.some((t) => t.type === "task");
   }, [selectedTasks]);
 
+  const getVisibleTaskIds = (): string[] => {
+    if (isSearchOpen) {
+      return displayedTasks.map((t) => t.id);
+    }
+
+    const ids: string[] = [];
+
+    sectionsOrder.forEach((key) => {
+      const isVisible = key === "sprintDone"
+        ? (visibleSections.includes("currentSprint") || visibleSections.includes("sprintDone"))
+        : visibleSections.includes(key);
+
+      if (!isVisible) return;
+
+      if (key === "currentSprint") {
+        const isCollapsed = collapsedSections.currentSprint;
+        if (!isCollapsed) {
+          const tasksList = sections.currentSprintTasks || [];
+          const isTasksExpanded = expandedSectionsLimit.currentSprintTasks;
+          const displayedTasksList = isTasksExpanded ? tasksList : tasksList.slice(0, 3);
+          displayedTasksList.forEach((t) => ids.push(t.id));
+
+          const eventsList = sections.currentSprintEvents || [];
+          const isEventsExpanded = expandedSectionsLimit.currentSprintEvents;
+          const displayedEventsList = isEventsExpanded ? eventsList : eventsList.slice(0, 3);
+          displayedEventsList.forEach((t) => ids.push(t.id));
+        }
+      } else {
+        const isCollapsed = collapsedSections[key];
+        if (!isCollapsed) {
+          const sectionKey = key === "sprintDone" ? "currentSprintDone" : key;
+          const tasksList = sections[sectionKey as keyof typeof sections] || [];
+          const isExpanded = expandedSectionsLimit[key];
+          const displayedList = isExpanded ? tasksList : tasksList.slice(0, 5);
+          displayedList.forEach((t) => ids.push(t.id));
+        }
+      }
+    });
+
+    return ids;
+  };
+
   const toggleSelection = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const next = new Set(selectedTaskIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+
+    if (e.shiftKey && lastSelectedId) {
+      const visibleIds = getVisibleTaskIds();
+      const idx1 = visibleIds.indexOf(lastSelectedId);
+      const idx2 = visibleIds.indexOf(id);
+
+      if (idx1 !== -1 && idx2 !== -1) {
+        const start = Math.min(idx1, idx2);
+        const end = Math.max(idx1, idx2);
+        const rangeIds = visibleIds.slice(start, end + 1);
+
+        const wasChecked = selectedTaskIds.has(id);
+        if (wasChecked) {
+          rangeIds.forEach((rid) => next.delete(rid));
+        } else {
+          rangeIds.forEach((rid) => next.add(rid));
+        }
+      } else {
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+      }
+    } else {
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+    }
+
     setSelectedTaskIds(next);
+    setLastSelectedId(id);
   };
 
   const handleBulkStatusChange = (status: AnyStatus) => {
