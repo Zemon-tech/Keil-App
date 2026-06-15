@@ -89,6 +89,9 @@ import { useMeetingStore } from "@/store/useMeetingStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
+import { useNotionStatus } from "@/hooks/api/useNotion";
+import { NotionImportDialog } from "./NotionImportDialog";
+
 
 const mainTabs = [
   { id: "home", title: "Home", icon: Home, url: "/motion?home=true" },
@@ -459,7 +462,10 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const [trashOpen, setTrashOpen] = useState(false);
   const [sharedOpen, setSharedOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<"pages" | "meetings">("pages");
+  const { data: notionStatus } = useNotionStatus();
+
 
   const openDialog = useMeetingStore((s) => s.openDialog);
 
@@ -637,13 +643,47 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
               >
                 <Mic className="h-[18px] w-[18px] text-muted-foreground" />
               </Button>
+            ) : notionStatus?.connected ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={createPage.isPending}
+                    className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground active:scale-95 transition-transform"
+                    aria-label="New page options"
+                  >
+                    {createPage.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-[18px] w-[18px]" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 rounded-xl p-1">
+                  <DropdownMenuItem
+                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] active:scale-98 transition-transform"
+                    onClick={() => handleAddPage()}
+                  >
+                    <SquarePen className="size-3.5" />
+                    New Blank Page
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] active:scale-98 transition-transform"
+                    onClick={() => setImportDialogOpen(true)}
+                  >
+                    <img src="/integrations/notion.png" alt="Notion" className="size-3.5 object-contain" />
+                    Import from Notion
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => handleAddPage()}
                 disabled={createPage.isPending}
-                className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground active:scale-95 transition-transform"
                 aria-label="New page"
               >
                 {createPage.isPending ? (
@@ -1042,6 +1082,10 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         pages={apiPages as MotionPageDTO[]}
+      />
+      <NotionImportDialog
+        isOpen={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
       />
     </Sidebar>
   );

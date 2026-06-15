@@ -13,7 +13,7 @@ body {
   font-family: "Inter", sans-serif;
   color: var(--tt-theme-text);
   font-optical-sizing: auto;
-  font-weight: 400;
+  font-weight: 450;
   font-style: normal;
   padding: 0;
   overscroll-behavior-y: none;
@@ -61,7 +61,7 @@ body,
 }
 
 .simple-editor-content {
-  max-width: 900px;
+  max-width: 720px;
   width: 100%;
   margin: 0 auto;
   height: auto;
@@ -72,7 +72,7 @@ body,
 
 .tiptap.ProseMirror.simple-editor {
   flex: 1;
-  padding: 0.5rem 1rem 30vh 1rem;
+  padding: 0.5rem 0px 30vh 0px;
   font-size: 16px;
   line-height: 1.5;
 
@@ -81,20 +81,20 @@ body,
     color: var(--foreground);
     font-weight: 600;
     line-height: 1.3;
-    letter-spacing: -0.02em;
     padding: 3px 2px;
     margin-bottom: 4px;
   }
 
-  h1 { font-size: 1.875rem; margin-top: 2rem; }
-  h2 { font-size: 1.5rem; margin-top: 1.4rem; }
-  h3 { font-size: 1.25rem; margin-top: 1rem; }
-  h4 { font-size: 1.1rem; margin-top: 0.75rem; }
+  h1 { font-size: 1.875rem; margin-top: 2rem; letter-spacing: -0.02em; }
+  h2 { font-size: 1.4rem; margin-top: 1.4rem; letter-spacing: -0.015em; }
+  h3 { font-size: 1.2rem; margin-top: 1rem; letter-spacing: -0.01em; }
+  h4 { font-size: 1.05rem; margin-top: 0.75rem; letter-spacing: -0.005em; }
 
   p {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    padding: 3px 2px;
+    padding: 4px 2px;
+    margin: 2px 0;
   }
 
   /* Table Styles */
@@ -260,30 +260,30 @@ body,
       color: var(--foreground);
     }
     &[data-level="2"] {
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       font-weight: 600;
       line-height: 1.3;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.015em;
       margin-bottom: 4px;
       margin-top: 1.4rem;
       padding: 3px 2px;
       color: var(--foreground);
     }
     &[data-level="3"] {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       font-weight: 600;
       line-height: 1.3;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
       margin-bottom: 4px;
       margin-top: 1rem;
       padding: 3px 2px;
       color: var(--foreground);
     }
     &[data-level="4"] {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 600;
       line-height: 1.3;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.005em;
       margin-bottom: 4px;
       margin-top: 0.75rem;
       padding: 3px 2px;
@@ -391,6 +391,10 @@ body,
   pointer-events: auto;
   opacity: 1;
   transition: opacity 0.12s ease;
+
+  @media (max-width: 768px) {
+    display: none !important;
+  }
 }
 
 .block-drag-handle--hidden {

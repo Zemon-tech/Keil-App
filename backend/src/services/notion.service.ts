@@ -559,6 +559,129 @@ async function fetchNotion(
 
 // ─── Notion API Interactivity ───────────────────────────────────────────────────
 
+function richTextToMarkdown(richText: any[]): string {
+  if (!richText || richText.length === 0) return '';
+  return richText.map(chunk => {
+    let text = chunk.plain_text || '';
+    if (!text) return '';
+    
+    const { bold, italic, strikethrough, code } = chunk.annotations || {};
+    
+    if (code) text = `\`${text}\``;
+    if (bold) text = `**${text}**`;
+    if (italic) text = `*${text}*`;
+    if (strikethrough) text = `~~${text}~~`;
+    
+    if (chunk.href) {
+      text = `[${text}](${chunk.href})`;
+    }
+    
+    return text;
+  }).join('');
+}
+
+function markdownToNotionBlocks(markdown: string): any[] {
+  const lines = markdown.split(/\r?\n/);
+  const blocks: any[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '') continue;
+
+    // Headings
+    const headingMatch = line.match(/^(#{1,3})\s+(.*)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const text = headingMatch[2];
+      blocks.push({
+        object: 'block',
+        type: `heading_${level}`,
+        [`heading_${level}`]: {
+          rich_text: [{ type: 'text', text: { content: text } }]
+        }
+      });
+      continue;
+    }
+
+    // Divider
+    if (line.trim() === '---') {
+      blocks.push({
+        object: 'block',
+        type: 'divider',
+        divider: {}
+      });
+      continue;
+    }
+
+    // Bullet list
+    const bulletMatch = line.match(/^[-*]\s+(.*)$/);
+    if (bulletMatch) {
+      const text = bulletMatch[1];
+      // Check if it is a task list item
+      const taskMatch = text.match(/^\[([ xX])\]\s+(.*)$/);
+      if (taskMatch) {
+        const checked = taskMatch[1].toLowerCase() === 'x';
+        const taskText = taskMatch[2];
+        blocks.push({
+          object: 'block',
+          type: 'to_do',
+          to_do: {
+            rich_text: [{ type: 'text', text: { content: taskText } }],
+            checked
+          }
+        });
+      } else {
+        blocks.push({
+          object: 'block',
+          type: 'bulleted_list_item',
+          bulleted_list_item: {
+            rich_text: [{ type: 'text', text: { content: text } }]
+          }
+        });
+      }
+      continue;
+    }
+
+    // Numbered list
+    const numberedMatch = line.match(/^(\d+)\.\s+(.*)$/);
+    if (numberedMatch) {
+      const text = numberedMatch[2];
+      blocks.push({
+        object: 'block',
+        type: 'numbered_list_item',
+        numbered_list_item: {
+          rich_text: [{ type: 'text', text: { content: text } }]
+        }
+      });
+      continue;
+    }
+
+    // Quote
+    if (line.trim().startsWith('>')) {
+      const text = line.trim().substring(1).trim();
+      blocks.push({
+        object: 'block',
+        type: 'quote',
+        quote: {
+          rich_text: [{ type: 'text', text: { content: text } }]
+        }
+      });
+      continue;
+    }
+
+    // Paragraph
+    blocks.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [{ type: 'text', text: { content: line } }]
+      }
+    });
+  }
+
+  return blocks;
+}
+
 /**
  * Fetch a Notion page details (properties, title, icon, cover)
  */
@@ -578,34 +701,123 @@ export async function getNotionPage(userId: string, pageId: string): Promise<any
  * Fetch a Notion page content as Markdown
  */
 export async function getNotionPageMarkdown(userId: string, pageId: string): Promise<string> {
-  const response = await fetchNotion(userId, `https://api.notion.com/v1/pages/${pageId}/markdown`);
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    log.error({ pageId, status: response.status }, 'Failed to fetch Notion page markdown');
-    throw new ApiError(response.status, errorData.message || 'Failed to fetch Notion page markdown');
+  let markdownLines: string[] = [];
+  let hasMore = true;
+  let startCursor: string | undefined = undefined;
+
+  while (hasMore) {
+    let url = `https://api.notion.com/v1/blocks/${pageId}/children?page_size=100`;
+    if (startCursor) {
+      url += `&start_cursor=${startCursor}`;
+    }
+
+    const response = await fetchNotion(userId, url);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      log.error({ pageId, status: response.status }, 'Failed to fetch Notion block children');
+      throw new ApiError(response.status, errorData.message || 'Failed to fetch Notion block children');
+    }
+
+    const data = await response.json() as { results: any[]; has_more: boolean; next_cursor: string | null };
+    
+    for (const block of data.results) {
+      const type = block.type;
+      const blockData = block[type];
+      
+      if (!blockData) continue;
+
+      switch (type) {
+        case 'paragraph': {
+          markdownLines.push(richTextToMarkdown(blockData.rich_text));
+          break;
+        }
+        case 'heading_1': {
+          markdownLines.push(`# ${richTextToMarkdown(blockData.rich_text)}`);
+          break;
+        }
+        case 'heading_2': {
+          markdownLines.push(`## ${richTextToMarkdown(blockData.rich_text)}`);
+          break;
+        }
+        case 'heading_3': {
+          markdownLines.push(`### ${richTextToMarkdown(blockData.rich_text)}`);
+          break;
+        }
+        case 'bulleted_list_item': {
+          markdownLines.push(`- ${richTextToMarkdown(blockData.rich_text)}`);
+          break;
+        }
+        case 'numbered_list_item': {
+          markdownLines.push(`1. ${richTextToMarkdown(blockData.rich_text)}`);
+          break;
+        }
+        case 'to_do': {
+          const checked = blockData.checked ? 'x' : ' ';
+          markdownLines.push(`- [${checked}] ${richTextToMarkdown(blockData.rich_text)}`);
+          break;
+        }
+        case 'code': {
+          const lang = blockData.language || 'javascript';
+          const codeText = richTextToMarkdown(blockData.rich_text);
+          markdownLines.push(`\`\`\`${lang}\n${codeText}\n\`\`\``);
+          break;
+        }
+        case 'quote': {
+          markdownLines.push(`> ${richTextToMarkdown(blockData.rich_text)}`);
+          break;
+        }
+        case 'divider': {
+          markdownLines.push('---');
+          break;
+        }
+        case 'image': {
+          const imageUrl = blockData.type === 'external' ? blockData.external?.url : blockData.file?.url;
+          if (imageUrl) {
+            markdownLines.push(`![image](${imageUrl})`);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    hasMore = data.has_more;
+    startCursor = data.next_cursor || undefined;
   }
-  
-  const data = await response.json() as { page_markdown: string };
-  return data.page_markdown || '';
+
+  return markdownLines.join('\n');
 }
 
 /**
  * Replace the content of a Notion page with a markdown string
  */
 export async function updateNotionPageMarkdown(userId: string, pageId: string, markdown: string): Promise<void> {
-  const response = await fetchNotion(userId, `https://api.notion.com/v1/pages/${pageId}/markdown`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      command: 'replace_content',
-      markdown
-    })
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    log.error({ pageId, status: response.status, errorData }, 'Failed to update Notion page markdown');
-    throw new ApiError(response.status, errorData.message || 'Failed to update Notion page markdown');
+  // 1. Fetch children
+  const getChildrenResponse = await fetchNotion(userId, `https://api.notion.com/v1/blocks/${pageId}/children?page_size=100`);
+  if (getChildrenResponse.ok) {
+    const data = await getChildrenResponse.json() as { results: any[] };
+    for (const block of data.results) {
+      await fetchNotion(userId, `https://api.notion.com/v1/blocks/${block.id}`, {
+        method: 'DELETE'
+      });
+    }
+  }
+
+  // 2. Append new blocks
+  const blocks = markdownToNotionBlocks(markdown);
+  if (blocks.length > 0) {
+    const appendResponse = await fetchNotion(userId, `https://api.notion.com/v1/blocks/${pageId}/children`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        children: blocks
+      })
+    });
+    if (!appendResponse.ok) {
+      const errorData = await appendResponse.json().catch(() => ({}));
+      log.error({ pageId, status: appendResponse.status, errorData }, 'Failed to append Notion blocks');
+      throw new ApiError(appendResponse.status, errorData.message || 'Failed to append Notion blocks');
+    }
   }
 }
 
@@ -693,7 +905,7 @@ export async function createNotionPage(
   };
 
   if (markdownContent) {
-    body.markdown = markdownContent;
+    body.children = markdownToNotionBlocks(markdownContent);
   }
 
   const response = await fetchNotion(userId, 'https://api.notion.com/v1/pages', {
@@ -1008,3 +1220,42 @@ async function syncNotionToLocal(userId: string, localPage: any, notionMeta: any
   
   return updatedPage;
 }
+
+/**
+ * Search Notion pages shared with the integration.
+ */
+export async function searchNotion(
+  userId: string,
+  query?: string,
+  startCursor?: string,
+  pageSize = 50
+): Promise<any> {
+  const body: any = {
+    filter: {
+      property: 'object',
+      value: 'page',
+    },
+    page_size: Math.min(pageSize, 100),
+  };
+
+  if (query) {
+    body.query = query;
+  }
+  if (startCursor) {
+    body.start_cursor = startCursor;
+  }
+
+  const response = await fetchNotion(userId, 'https://api.notion.com/v1/search', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    log.error({ status: response.status, errorData }, 'Failed to search Notion workspace');
+    throw new ApiError(response.status, errorData.message || 'Failed to search Notion pages');
+  }
+
+  return response.json();
+}
+

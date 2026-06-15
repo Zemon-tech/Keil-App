@@ -52,8 +52,8 @@ type BlockMenu = {
 }
 
 // How far the handle sits to the left of the block text
-const DRAG_HANDLE_WIDTH = 56
-const DRAG_HANDLE_GAP = 24 // reduced for tighter layout
+const DRAG_HANDLE_WIDTH = 36
+const DRAG_HANDLE_GAP = 24 // increased for a slightly wider gap to match Notion
 
 const BLOCK_HOVER_SELECTOR = [
   "li",
@@ -213,7 +213,13 @@ export function BlockDragHandle({
           if (listItem && editorDom.contains(listItem)) return listItem
 
           const details = element.closest<HTMLElement>('[data-type="details"]')
-          if (details && editorDom.contains(details)) return details
+          if (details && editorDom.contains(details)) {
+            // ONLY return details if cursor is NOT inside the detailsContent wrapper (nested blocks)
+            const detailsContent = element.closest<HTMLElement>('[data-type="detailsContent"]')
+            if (!detailsContent) {
+              return details
+            }
+          }
 
           const block = element.closest<HTMLElement>(BLOCK_HOVER_SELECTOR)
           if (block && editorDom.contains(block)) return block
@@ -251,9 +257,12 @@ export function BlockDragHandle({
 
       const $pos = editor.state.doc.resolve(pos.pos)
 
+      const isDetailsElement = element.getAttribute("data-type") === "details" || element.closest('[data-type="detailsSummary"]')
+      const isTableElement = element.tagName.toLowerCase() === "table" || element.closest('table')
+
       for (let depth = $pos.depth; depth > 0; depth -= 1) {
         const node = $pos.node(depth)
-        if (node.type.name === "table" || node.type.name === "details") {
+        if ((node.type.name === "table" && isTableElement) || (node.type.name === "details" && isDetailsElement)) {
           return { from: $pos.before(depth), to: $pos.after(depth) }
         }
       }
@@ -285,7 +294,7 @@ export function BlockDragHandle({
         ? parsedLineHeight
         : parsedFontSize * 1.2
       const paddingTop = Number.parseFloat(style.paddingTop) || 0
-      const top = rect.top + paddingTop + (lineHeight - 20) / 2
+      const top = rect.top + paddingTop + (lineHeight - 24) / 2
       const left = rect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP
 
       setHandlePos({ left: Math.round(left), top: Math.round(top) })

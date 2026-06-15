@@ -12,6 +12,7 @@ import {
   importNotionPage,
   exportMotionPage,
   syncNotionAndMotion,
+  searchNotion,
 } from '../services/notion.service';
 
 const PROVIDER = 'notion';
@@ -177,3 +178,23 @@ export const unlinkPage = catchAsync(async (req: Request, res: Response) => {
 
   res.json(new ApiResponse(200, updatedPage, 'Page unlinked successfully'));
 });
+
+/**
+ * GET /api/v1/integrations/notion/search
+ * Searches the Notion workspace for pages.
+ */
+export const searchPages = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new ApiError(401, 'Unauthorized');
+
+  const { q, cursor, limit } = req.query;
+  const results = await searchNotion(
+    userId,
+    q ? String(q) : undefined,
+    cursor ? String(cursor) : undefined,
+    limit ? Number(limit) : undefined
+  );
+
+  res.json(new ApiResponse(200, results, 'Search results retrieved successfully'));
+});
+

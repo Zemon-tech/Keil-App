@@ -207,3 +207,39 @@ export function useUnlinkNotionPage() {
     },
   });
 }
+
+export interface NotionSearchPageResult {
+  id: string;
+  url: string;
+  properties?: Record<string, any>;
+  icon?: {
+    type: 'emoji' | 'external' | 'file';
+    emoji?: string;
+    external?: { url: string };
+    file?: { url: string };
+  } | null;
+}
+
+export interface NotionSearchResponse {
+  results: NotionSearchPageResult[];
+  next_cursor?: string | null;
+  has_more: boolean;
+}
+
+/**
+ * Searches user's Notion workspace pages.
+ */
+export function useSearchNotionPages(query: string) {
+  return useQuery<NotionSearchResponse>({
+    queryKey: ["integrations", "notion", "search", query],
+    queryFn: async () => {
+      const res = await api.get<{ data: NotionSearchResponse }>(
+        `v1/integrations/notion/search?q=${encodeURIComponent(query)}`
+      );
+      return res.data.data;
+    },
+    enabled: query.trim().length > 0,
+    staleTime: 5000,
+  });
+}
+
