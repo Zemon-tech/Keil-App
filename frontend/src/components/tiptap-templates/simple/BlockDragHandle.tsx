@@ -53,7 +53,7 @@ type BlockMenu = {
 
 // How far the handle sits to the left of the block text
 const DRAG_HANDLE_WIDTH = 36
-const DRAG_HANDLE_GAP = 24 // increased for a slightly wider gap to match Notion
+const DRAG_HANDLE_GAP = 32 // increased to prevent overlapping nested block outlines/borders (Notion spacing)
 
 const BLOCK_HOVER_SELECTOR = [
   "li",
@@ -70,6 +70,7 @@ const BLOCK_HOVER_SELECTOR = [
   "hr",
   "table",
   '[data-type="details"]',
+  '[data-type="horizontalRule"]',
 ].join(", ")
 
 const NOTION_COLORS = [
@@ -227,18 +228,30 @@ export function BlockDragHandle({
         return null
       }
 
-      const blockAtCursor = findCandidate(clientX, clientY)
-      if (blockAtCursor) return blockAtCursor
-
       const editorRect = editorDom.getBoundingClientRect()
       const inEditorRow = clientY >= editorRect.top && clientY <= editorRect.bottom
-      const inLeftGutter =
-        clientX >= editorRect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP - 16 &&
-        clientX < editorRect.left
+      const isLeftArea = clientX < editorRect.left + 200
 
-      if (inEditorRow && inLeftGutter) {
-        return findCandidate(editorRect.left + 8, clientY)
+      if (inEditorRow && isLeftArea) {
+        // Scan horizontally from right (inside content) to left (gutter edge)
+        // to resolve the deepest (most specific) nested block at this clientY.
+        // This handles indentation gaps for lists, toggles, blockquotes, and tables.
+        let bestCandidate: HTMLElement | null = null
+        for (let offset = 200; offset >= 8; offset -= 8) {
+          const candidate = findCandidate(editorRect.left + offset, clientY)
+          if (candidate) {
+            if (!bestCandidate) {
+              bestCandidate = candidate
+            } else if (bestCandidate.contains(candidate)) {
+              bestCandidate = candidate
+            }
+          }
+        }
+        if (bestCandidate) return bestCandidate
       }
+
+      const blockAtCursor = findCandidate(clientX, clientY)
+      if (blockAtCursor) return blockAtCursor
 
       return null
     },
@@ -287,14 +300,40 @@ export function BlockDragHandle({
   const positionHandleForBlock = useCallback(
     (block: HTMLElement) => {
       const rect = block.getBoundingClientRect()
-      const style = window.getComputedStyle(block)
+      
+      // Resolve the vertical reference element for complex blocks to target the first line/row
+      let verticalRef = block
+      const isDetails = block.getAttribute("data-type") === "details" || block.tagName.toLowerCase() === "details"
+      
+      if (isDetails) {
+        const summary = block.querySelector('summary, [data-type="detailsSummary"]')
+        if (summary instanceof HTMLElement) {
+          verticalRef = summary
+        }
+      } else if (block.tagName.toLowerCase() === "table") {
+        const firstRow = block.querySelector("tr")
+        if (firstRow instanceof HTMLElement) {
+          verticalRef = firstRow
+        }
+      }
+
+      const verticalRect = verticalRef.getBoundingClientRect()
+      const style = window.getComputedStyle(verticalRef)
       const parsedLineHeight = Number.parseFloat(style.lineHeight)
       const parsedFontSize = Number.parseFloat(style.fontSize)
       const lineHeight = Number.isFinite(parsedLineHeight)
         ? parsedLineHeight
         : parsedFontSize * 1.2
       const paddingTop = Number.parseFloat(style.paddingTop) || 0
-      const top = rect.top + paddingTop + (lineHeight - 24) / 2
+      
+      let top = verticalRect.top + paddingTop + (lineHeight - 24) / 2
+      
+      const isHorizontalRule = block.getAttribute("data-type") === "horizontalRule"
+      if (isHorizontalRule) {
+        // Center the drag handle vertically within the height of the divider block
+        top = verticalRect.top + (verticalRect.height - 24) / 2
+      }
+      
       const left = rect.left - DRAG_HANDLE_WIDTH - DRAG_HANDLE_GAP
 
       setHandlePos({ left: Math.round(left), top: Math.round(top) })

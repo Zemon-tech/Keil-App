@@ -367,9 +367,9 @@ export const updatePage = async (
   if (updated) {
     if (updated.notion_page_id) {
       import('../services/notion.service')
-        .then(({ updateNotionPageMarkdown, updateNotionPageProperties, tiptapToMarkdown }) => {
+        .then(({ updateNotionPageContent, updateNotionPageProperties, tiptapToNotionBlocks }) => {
           const contentPromise = input.content !== undefined
-            ? updateNotionPageMarkdown(userId, updated.notion_page_id!, tiptapToMarkdown(updated.content))
+            ? updateNotionPageContent(userId, updated.notion_page_id!, tiptapToNotionBlocks(updated.content?.content || []))
             : Promise.resolve();
 
           const propertiesPromise = (input.title !== undefined || input.icon !== undefined || input.cover_image !== undefined)
