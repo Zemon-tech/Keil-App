@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
-import { extractStreamingActivities } from "@/lib/activity-stream";
+import { extractStreamingActivities, buildChainOfThoughtTimeline } from "@/lib/activity-stream";
 
 import {
     Message,
@@ -44,11 +44,6 @@ import {
     ChainOfThoughtContent,
     ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
-import {
-    Reasoning,
-    ReasoningTrigger,
-    ReasoningContent,
-} from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
     Attachment,
@@ -89,6 +84,7 @@ import {
     PlusCircle,
     FilePenLine,
     Clock,
+    BrainIcon,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -763,97 +759,89 @@ export function AiAssistant() {
 
     // ─── Render: Chain of Thought Display ──────────────────────────────
     const renderToolInvocations = (msg: any) => {
-        const toolInvocations = extractToolInvocations(msg);
-        const streamingActivities = extractStreamingActivities(msg);
+        const timeline = buildChainOfThoughtTimeline(msg);
 
-        const hasToolInvocations = toolInvocations.length > 0;
-        const hasStreamingActivities = streamingActivities.length > 0;
+        if (timeline.length === 0) return null;
 
-        if (!hasToolInvocations && !hasStreamingActivities) return null;
+        const activeStepsCount = timeline.filter(t => t.status === "active").length;
+        const totalStepsCount = timeline.length;
 
         return (
             <ChainOfThought defaultOpen={true} className="mt-2 border-t border-border/40 pt-2 shrink-0">
                 <ChainOfThoughtHeader className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider py-1 hover:text-foreground">
-                    {hasToolInvocations
-                        ? `${toolInvocations.length} ${toolInvocations.length === 1 ? "action" : "actions"} taken`
-                        : streamingActivities.every((a: any) => a.status !== "running")
-                        ? `${streamingActivities.length} ${streamingActivities.length === 1 ? "action" : "actions"} taken`
-                        : `${streamingActivities.length} ${streamingActivities.length === 1 ? "step" : "steps"} in progress`}
+                    {activeStepsCount === 0
+                        ? `${totalStepsCount} ${totalStepsCount === 1 ? "action" : "actions"} taken`
+                        : `${totalStepsCount} ${totalStepsCount === 1 ? "step" : "steps"} in progress`}
                 </ChainOfThoughtHeader>
-                <ChainOfThoughtContent className="border-l border-border/60 pl-3 ml-2 mt-1.5 space-y-2.5">
-                    {/* Render live streaming activities */}
-                    {streamingActivities.map((act: any, idx: number) => {
-                        const Icon = getAgentIcon(act.agent);
-                        const status = act.status === "running" ? "active" : "complete";
-                        return (
-                            <ChainOfThoughtStep
-                                key={act.executionId || `stream-${idx}-${act.agent}-${act.action}`}
-                                icon={Icon}
-                                label={
-                                    <span className="font-semibold text-foreground text-[11px] flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-wider">
-                                            {act.agent || "KeilHQ AI"}
-                                        </span>
-                                        {act.action && (
-                                            <>
-                                                <span className="text-muted-foreground/45 text-[9px]">•</span>
-                                                <span>{act.action}</span>
-                                            </>
-                                        )}
-                                        {act.tool && (
-                                            <span className="text-[9px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
-                                                (calling: {act.tool})
-                                            </span>
-                                        )}
-                                    </span>
-                                }
-                                status={status}
-                            />
-                        );
-                    })}
+                <ChainOfThoughtContent className="mt-1.5 space-y-0">
+                    {timeline.map((item, idx) => {
+                        if (item.type === "thinking") {
+                            return (
+                                <ChainOfThoughtStep
+                                    key={item.id}
+                                    icon={BrainIcon}
+                                    label="Thinking"
+                                    status={item.status}
+                                >
+                                    {item.text && (
+                                        <div className="text-[11px] text-muted-foreground/90 pl-2 leading-relaxed whitespace-pre-line border-l border-border/40 ml-[7.5px] py-1">
+                                            {item.text}
+                                        </div>
+                                    )}
+                                </ChainOfThoughtStep>
+                            );
+                        }
 
-                    {/* Render tool invocations */}
-                    {toolInvocations.map((inv: any) => {
-                        const status = inv.state === "result" ? "complete" : "active";
-                        const Icon = getToolIcon(inv.toolName, inv.result);
-                        const label = getToolLabel(inv.toolName, inv.args, inv.result);
-                        const description = getToolDescription(inv.toolName, inv.args, inv.result);
+                        const Icon = item.agent 
+                            ? getAgentIcon(item.agent) 
+                            : getToolIcon(item.tool || "", item.result);
 
-                        // Resolve agent name
-                        let agentName = inv.result?.activity?.agentLabel || inv.result?.activity?.agent;
-                        if (!agentName) {
-                            if (inv.toolName.includes("task") || inv.toolName.includes("org") || inv.toolName.includes("workspace")) {
-                                agentName = "Task Manager";
-                            } else if (inv.toolName.includes("chat") || inv.toolName.includes("message") || inv.toolName.includes("channel")) {
-                                agentName = "Chat";
-                            } else if (inv.toolName.includes("motion") || inv.toolName.includes("page") || inv.toolName.includes("note")) {
-                                agentName = "Notes";
-                            } else if (inv.toolName.includes("schedule") || inv.toolName.includes("calendar")) {
-                                agentName = "Scheduler";
-                            } else if (inv.toolName.includes("github")) {
-                                agentName = "GitHub";
+                        const label = getToolLabel(item.tool || "", item.args, item.result) || item.action || `Running: ${item.tool}`;
+                        const description = getToolDescription(item.tool || "", item.args, item.result);
+
+                        let agentDisplay = item.agent;
+                        if (!agentDisplay && item.tool) {
+                            if (item.tool.includes("task") || item.tool.includes("org") || item.tool.includes("workspace")) {
+                                agentDisplay = "Task Manager";
+                            } else if (item.tool.includes("chat") || item.tool.includes("message") || item.tool.includes("channel")) {
+                                agentDisplay = "Chat";
+                            } else if (item.tool.includes("motion") || item.tool.includes("page") || item.tool.includes("note")) {
+                                agentDisplay = "Notes";
+                            } else if (item.tool.includes("schedule") || item.tool.includes("calendar")) {
+                                agentDisplay = "Scheduler";
+                            } else if (item.tool.includes("github")) {
+                                agentDisplay = "GitHub";
                             } else {
-                                agentName = "KeilHQ AI";
+                                agentDisplay = "KeilHQ AI";
                             }
                         }
-                        if (agentName === "keilhq-task-agent") agentName = "Task Manager";
-                        if (agentName === "keilhq-chat-agent") agentName = "Chat";
-                        if (agentName === "keilhq-motion-agent") agentName = "Notes";
-                        if (agentName === "keilhq-scheduler-agent") agentName = "Scheduler";
-                        if (agentName === "keilhq-github-agent") agentName = "GitHub";
-                        if (agentName === "keilhq-ai") agentName = "KeilHQ AI";
+                        if (!agentDisplay) agentDisplay = "KeilHQ AI";
+
+                        if (agentDisplay === "keilhq-task-agent") agentDisplay = "Task Manager";
+                        if (agentDisplay === "keilhq-chat-agent") agentDisplay = "Chat";
+                        if (agentDisplay === "keilhq-motion-agent") agentDisplay = "Notes";
+                        if (agentDisplay === "keilhq-scheduler-agent") agentDisplay = "Scheduler";
+                        if (agentDisplay === "keilhq-github-agent") agentDisplay = "GitHub";
+                        if (agentDisplay === "keilhq-ai") agentDisplay = "KeilHQ AI";
+
+                        const status = item.status;
 
                         return (
                             <ChainOfThoughtStep
-                                key={inv.toolCallId}
+                                key={item.id || `act-${idx}`}
                                 icon={Icon}
                                 label={
                                     <span className="font-semibold text-foreground text-[11px] flex items-center gap-1.5 flex-wrap">
                                         <span className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-wider">
-                                            {agentName}
+                                            {agentDisplay}
                                         </span>
                                         <span className="text-muted-foreground/45 text-[9px]">•</span>
                                         <span>{label}</span>
+                                        {item.tool && !item.result && (
+                                            <span className="text-[9px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
+                                                (calling: {item.tool})
+                                            </span>
+                                        )}
                                     </span>
                                 }
                                 description={
@@ -865,9 +853,9 @@ export function AiAssistant() {
                                 }
                                 status={status}
                             >
-                                {inv.state === "result" && inv.result && (
+                                {item.result && (
                                     <div className="mt-1 max-w-full text-[10px] bg-muted/40 p-2 rounded-lg border border-border/40 font-mono overflow-auto max-h-24 no-scrollbar leading-relaxed">
-                                        {formatToolResult(inv.toolName, inv.result)}
+                                        {formatToolResult(item.tool || "", item.result)}
                                     </div>
                                 )}
                             </ChainOfThoughtStep>
@@ -1047,38 +1035,15 @@ export function AiAssistant() {
                             msg.content ||
                             "";
 
-                        // Extract reasoning parts
-                        const reasoningParts = messageParts
-                            .filter((p: any) => p.type === "reasoning")
-                            .map((p: any) => {
-                                if (p.text) return p.text;
-                                if (p.reasoning) return p.reasoning;
-                                if (Array.isArray(p.details)) {
-                                    return p.details
-                                        .filter((d: any) => d.type === "text" && d.text)
-                                        .map((d: any) => d.text)
-                                        .join("");
-                                }
-                                return "";
-                            })
-                            .join("") || "";
-                        const reasoningText = reasoningParts || (msg as any).reasoning || "";
-                        const hasReasoning = reasoningText.length > 0;
 
-                        // Extract tool invocations
-                        const toolInvocations = extractToolInvocations(msg);
-                        const hasToolInvocations = toolInvocations.length > 0;
-                        const streamingActivities = extractStreamingActivities(msg);
+                        const timeline = buildChainOfThoughtTimeline(msg);
+                        const hasTimeline = timeline.length > 0;
 
                         const isLastMessage = messages[messages.length - 1]?.id === msg.id;
-                        const lastPart = msg.parts?.at(-1);
-                        // Reasoning is streaming only when the last part on the last message is still a reasoning part
-                        const isReasoningStreaming =
-                            isLoading && isLastMessage && lastPart?.type === "reasoning";
 
                         // Show shimmer if assistant is active but we have no content or activities at all yet
                         const showShimmer =
-                            isAssistant && isLoading && isLastMessage && !hasReasoning && !hasToolInvocations && streamingActivities.length === 0 && text.trim() === "";
+                            isAssistant && isLoading && isLastMessage && !hasTimeline && text.trim() === "";
 
                         return (
                             <div key={msg.id} className={cn("flex gap-2 items-start ai-message-appear", msg.role === "user" ? "justify-end" : "justify-start")}>
@@ -1095,18 +1060,10 @@ export function AiAssistant() {
                                             </div>
                                         ) : isAssistant ? (
                                             <div className="space-y-2.5 w-full">
-                                                {/* 1. Reasoning Component */}
-                                                {hasReasoning && (
-                                                    <Reasoning isStreaming={isReasoningStreaming} className="mb-1.5">
-                                                        <ReasoningTrigger className="text-[11px]" />
-                                                        <ReasoningContent className="text-[11px] mt-1.5">{reasoningText}</ReasoningContent>
-                                                    </Reasoning>
-                                                )}
-
-                                                {/* 2. Chain of Thought / Tools */}
+                                                {/* 1. Chain of Thought / Tools */}
                                                 {renderToolInvocations(msg)}
 
-                                                {/* 3. Final Text Response */}
+                                                {/* 2. Final Text Response */}
                                                 {text.trim() !== "" && (
                                                     <MessageResponse>{text}</MessageResponse>
                                                 )}

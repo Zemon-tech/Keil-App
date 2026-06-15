@@ -10,6 +10,7 @@ import {
   MapPin,
   Building2,
   Video,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,10 @@ import {
   useOrgSubtasks,
   useAssignOrgUser,
   useRemoveOrgAssignee,
+  useTaskChecklists,
+  useCreateChecklist,
+  useUpdateChecklist,
+  useDeleteChecklist,
 } from "@/hooks/api/useTasks";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
 import { useAppContext } from "@/contexts/AppContext";
@@ -85,6 +90,12 @@ export const OverviewTab = ({
   );
   const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
   const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
+
+  const { data: checklists = [] } = useTaskChecklists(activeOrgId, activeSpaceId, task.id);
+  const createChecklistMutation = useCreateChecklist(activeOrgId, activeSpaceId, task.id);
+  const updateChecklistMutation = useUpdateChecklist(activeOrgId, activeSpaceId, task.id);
+  const deleteChecklistMutation = useDeleteChecklist(activeOrgId, activeSpaceId, task.id);
+  const [newChecklistItemTitle, setNewChecklistItemTitle] = useState("");
 
 
 
@@ -265,6 +276,101 @@ export const OverviewTab = ({
                 parentTaskId={task.id}
                 parentTaskTitle={task.title}
               />
+            </div>
+          )}
+
+          {/* Personal Checklist (Private) */}
+          {task.type === "task" && (
+            <div className="border border-border/40 rounded-xl p-4 bg-muted/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Personal Checklist (Private to you)
+                </span>
+                {checklists.length > 0 && (
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {checklists.filter((c) => c.is_completed).length}/{checklists.length} complete
+                  </span>
+                )}
+              </div>
+
+              {checklists.length > 0 && (
+                <Progress 
+                  value={Math.round((checklists.filter((c) => c.is_completed).length / checklists.length) * 100)} 
+                  className="h-1 bg-muted" 
+                />
+              )}
+
+              <div className="space-y-1">
+                {checklists.map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="group flex items-center justify-between py-1 px-1.5 rounded-md hover:bg-accent/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={item.is_completed}
+                        onChange={() => {
+                          updateChecklistMutation.mutate({
+                            checklistId: item.id,
+                            updates: { is_completed: !item.is_completed }
+                          });
+                        }}
+                        className="rounded border-border text-primary focus:ring-ring focus:ring-offset-background size-3.5 cursor-pointer accent-primary"
+                      />
+                      <span 
+                        className={cn(
+                          "text-sm text-foreground/90 font-medium truncate",
+                          item.is_completed && "line-through text-muted-foreground/75"
+                        )}
+                      >
+                        {item.title}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => deleteChecklistMutation.mutate({ checklistId: item.id })}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all rounded text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 mt-2 pt-1">
+                <Input
+                  type="text"
+                  placeholder="Add private checklist item..."
+                  value={newChecklistItemTitle}
+                  onChange={(e) => setNewChecklistItemTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = newChecklistItemTitle.trim();
+                      if (val) {
+                        createChecklistMutation.mutate({ title: val });
+                        setNewChecklistItemTitle("");
+                      }
+                    }
+                  }}
+                  className="h-8 text-xs bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary/20 flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = newChecklistItemTitle.trim();
+                    if (val) {
+                      createChecklistMutation.mutate({ title: val });
+                      setNewChecklistItemTitle("");
+                    }
+                  }}
+                  className="h-8 px-3 rounded text-xs bg-primary hover:bg-primary/95 text-primary-foreground font-semibold flex items-center gap-1 shrink-0"
+                >
+                  <Plus className="size-3" />
+                  <span>Add</span>
+                </button>
+              </div>
             </div>
           )}
 

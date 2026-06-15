@@ -90,6 +90,18 @@ export class NotificationWorkerService {
 
             log.debug({ jobId: job.id, targets }, "[worker] Delivering to targets");
 
+            // Query sender info if present
+            let senderInfo: { name: string | null; email: string | null; avatar_url: string | null } | null = null;
+            if (actorId) {
+              const senderRes = await client.query(
+                `SELECT name, email, avatar_url FROM public.users WHERE id = $1`,
+                [actorId]
+              );
+              if (senderRes.rows.length > 0) {
+                senderInfo = senderRes.rows[0];
+              }
+            }
+
             for (const recipientId of targets) {
               // Fetch user preferences
               const prefs = await userNotificationPreferenceRepository.findByUserId(recipientId, client);
@@ -124,7 +136,10 @@ export class NotificationWorkerService {
                   io.to(`user:${recipientId}`).emit("new_notification", {
                     ...notification,
                     created_at: notification.created_at.toISOString(),
-                    read_at: null
+                    read_at: null,
+                    sender_name: senderInfo?.name || null,
+                    sender_email: senderInfo?.email || null,
+                    sender_avatar: senderInfo?.avatar_url || null
                   });
                   log.debug({ recipientId }, "[worker] WebSocket event emitted");
                 }

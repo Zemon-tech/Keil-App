@@ -15,6 +15,8 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getS3Client } from "../lib/s3";
 import { config } from "../config";
+import pool from "../config/pg";
+
 
 const log = createServiceLogger("gcal");
 
@@ -386,6 +388,7 @@ export const updateTask = async (
       await logSpaceActivity(context, userId, LogEntityType.TASK, taskId, LogActionType.STATUS_CHANGED, { status: existingTask.status }, { status: input.status }, client);
 
       if (input.status === TaskStatus.DONE) {
+        await deleteCompletedTaskSlots(client, taskId);
         const subtasks = await orgTaskRepository.findSubtasks(taskId, client);
         for (const subtask of subtasks) {
           if (subtask.status !== TaskStatus.DONE) {
@@ -504,6 +507,7 @@ export const changeTaskStatus = async (
     );
 
     if (status === TaskStatus.DONE) {
+      await deleteCompletedTaskSlots(client, taskId);
       const subtasks = await orgTaskRepository.findSubtasks(taskId, client);
       for (const subtask of subtasks) {
         if (subtask.status !== TaskStatus.DONE) {
@@ -574,6 +578,7 @@ export const deleteTask = async (
     }
 
     await orgTaskRepository.softDelete(taskId, client);
+    await client.query(`DELETE FROM public.task_slots WHERE task_id = $1`, [taskId]);
     await commentRepository.softDeleteByTaskId(taskId, client);
     await logSpaceActivity(
       context,
@@ -702,3 +707,254 @@ export const removeDependency = async (
     );
   });
 };
+
+// ─── Slot Deletion Preference Helper ───
+export const deleteCompletedTaskSlots = async (client: any, taskId: string): Promise<void> => {
+  await client.query(
+    `DELETE FROM public.task_slots 
+     WHERE task_id = $1 
+       AND user_id IN (
+         SELECT user_id FROM public.user_app_preferences WHERE delete_slots_on_complete = TRUE
+       )`,
+    [taskId]
+  );
+};
+
+// ─── Personal Checklist Service Methods ───
+
+export interface PersonalChecklist {
+  id: string;
+  task_id: string;
+  user_id: string;
+  title: string;
+  is_completed: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export const getChecklistsByTask = async (
+  taskId: string,
+  userId: string
+): Promise<PersonalChecklist[]> => {
+  const result = await pool.query(
+    `
+      SELECT * FROM public.personal_checklists
+      WHERE task_id = $1 AND user_id = $2
+      ORDER BY created_at ASC
+    `,
+    [taskId, userId]
+  );
+  return result.rows;
+};
+
+export const createChecklist = async (
+  taskId: string,
+  userId: string,
+  title: string
+): Promise<PersonalChecklist> => {
+  const result = await pool.query(
+    `
+      INSERT INTO public.personal_checklists (task_id, user_id, title)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `,
+    [taskId, userId, title]
+  );
+  return result.rows[0];
+};
+
+export const updateChecklist = async (
+  checklistId: string,
+  userId: string,
+  updates: { title?: string; is_completed?: boolean }
+): Promise<PersonalChecklist | null> => {
+  const fields: string[] = [];
+  const params: any[] = [checklistId, userId];
+
+  if (updates.title !== undefined) {
+    params.push(updates.title);
+    fields.push(`title = $${params.length}`);
+  }
+
+  if (updates.is_completed !== undefined) {
+    params.push(updates.is_completed);
+    fields.push(`is_completed = $${params.length}`);
+  }
+
+  if (fields.length === 0) return null;
+
+  params.push(new Date());
+  fields.push(`updated_at = $${params.length}`);
+
+  const query = `
+    UPDATE public.personal_checklists
+    SET ${fields.join(", ")}
+    WHERE id = $1 AND user_id = $2
+    RETURNING *
+  `;
+
+  const result = await pool.query(query, params);
+  return result.rows.length > 0 ? result.rows[0] : null;
+};
+
+export const deleteChecklist = async (
+  checklistId: string,
+  userId: string
+): Promise<boolean> => {
+  const result = await pool.query(
+    `
+      DELETE FROM public.personal_checklists
+      WHERE id = $1 AND user_id = $2
+      RETURNING id
+    `,
+    [checklistId, userId]
+  );
+  return result.rows.length > 0;
+};
+
+// ─── Task Slot Service Methods ───
+
+export interface TaskSlot {
+  id: string;
+  task_id: string;
+  checklist_id: string | null;
+  user_id: string;
+  start_date: Date;
+  due_date: Date;
+  is_all_day: boolean;
+  status: string;
+  notes: string | null;
+  created_at: Date;
+  updated_at: Date;
+  task_title?: string;
+  task_type?: string;
+  task_status?: string;
+  task_priority?: string;
+}
+
+export const getSlotsBySpace = async (
+  spaceId: string,
+  userId: string,
+  spaceRole: string
+): Promise<TaskSlot[]> => {
+  let query = `
+    SELECT 
+      ts.*, 
+      t.title as task_title, 
+      t.type as task_type, 
+      t.status as task_status, 
+      t.priority as task_priority,
+      pc.title as checklist_title,
+      u.name as user_name,
+      u.email as user_email
+    FROM public.task_slots ts
+    INNER JOIN public.tasks t ON t.id = ts.task_id
+    INNER JOIN public.users u ON u.id = ts.user_id
+    LEFT JOIN public.personal_checklists pc ON pc.id = ts.checklist_id
+    WHERE t.space_id = $1 AND t.deleted_at IS NULL
+  `;
+  const params: any[] = [spaceId];
+
+  // If role is member, restrict to only their slots
+  if (spaceRole !== "admin" && spaceRole !== "manager") {
+    params.push(userId);
+    query += ` AND ts.user_id = $2`;
+  }
+
+  query += ` ORDER BY ts.start_date ASC`;
+
+  const result = await pool.query(query, params);
+  return result.rows;
+};
+
+export const createSlot = async (
+  taskId: string,
+  userId: string,
+  input: { start_date: Date; due_date: Date; is_all_day?: boolean; checklist_id?: string | null; notes?: string }
+): Promise<TaskSlot> => {
+  const result = await pool.query(
+    `
+      INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day, checklist_id, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `,
+    [
+      taskId,
+      userId,
+      input.start_date,
+      input.due_date,
+      input.is_all_day ?? false,
+      input.checklist_id ?? null,
+      input.notes ?? null
+    ]
+  );
+  return result.rows[0];
+};
+
+export const updateSlot = async (
+  slotId: string,
+  userId: string,
+  spaceRole: string,
+  updates: { start_date?: Date; due_date?: Date; is_all_day?: boolean; notes?: string; status?: string }
+): Promise<TaskSlot | null> => {
+  const fields: string[] = [];
+  const params: any[] = [slotId];
+
+  if (updates.start_date !== undefined) {
+    params.push(updates.start_date);
+    fields.push(`start_date = $${params.length}`);
+  }
+  if (updates.due_date !== undefined) {
+    params.push(updates.due_date);
+    fields.push(`due_date = $${params.length}`);
+  }
+  if (updates.is_all_day !== undefined) {
+    params.push(updates.is_all_day);
+    fields.push(`is_all_day = $${params.length}`);
+  }
+  if (updates.notes !== undefined) {
+    params.push(updates.notes);
+    fields.push(`notes = $${params.length}`);
+  }
+  if (updates.status !== undefined) {
+    params.push(updates.status);
+    fields.push(`status = $${params.length}`);
+  }
+
+  if (fields.length === 0) return null;
+
+  params.push(new Date());
+  fields.push(`updated_at = $${params.length}`);
+
+  let query = `UPDATE public.task_slots SET ${fields.join(", ")} WHERE id = $1`;
+
+  // Members can only update their own slots
+  if (spaceRole !== "admin" && spaceRole !== "manager") {
+    params.push(userId);
+    query += ` AND user_id = $${params.length}`;
+  }
+
+  query += ` RETURNING *`;
+
+  const result = await pool.query(query, params);
+  return result.rows.length > 0 ? result.rows[0] : null;
+};
+
+export const deleteSlot = async (
+  slotId: string,
+  userId: string,
+  spaceRole: string
+): Promise<boolean> => {
+  let query = `DELETE FROM public.task_slots WHERE id = $1`;
+  const params: any[] = [slotId];
+
+  if (spaceRole !== "admin" && spaceRole !== "manager") {
+    params.push(userId);
+    query += ` AND user_id = $2`;
+  }
+  query += ` RETURNING id`;
+
+  const result = await pool.query(query, params);
+  return result.rows.length > 0;
+};
+

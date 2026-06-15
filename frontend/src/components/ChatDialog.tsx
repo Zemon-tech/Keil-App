@@ -73,7 +73,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
              <DialogContent
                 showCloseButton={true}
-                className="!flex !flex-col !max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border shadow-2xl overflow-hidden [&_[data-slot=dialog-close]]:!top-5 [&_[data-slot=dialog-close]]:text-red-500 hover:[&_[data-slot=dialog-close]]:text-red-600 [&_[data-slot=dialog-close]]:opacity-90 transition-colors"
+                className="!flex !flex-col !max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border/80 bg-background shadow-2xl overflow-hidden"
             >
                 <VisuallyHidden.Root>
                     <DialogTitle>Chat</DialogTitle>
@@ -82,26 +82,24 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                 {/* Minimize button — collapses back to the side drawer */}
                 <button
                     onClick={() => { closeChatDialog(); openChat(); }}
-                    className="absolute top-5 right-10 z-50 opacity-70 hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                    className="absolute top-4 right-11 z-50 flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
                     aria-label="Minimize chat to sidebar"
                 >
                     <Minimize2 className="size-4" />
-                </button>
-
-                <div className="flex flex-row h-full w-full overflow-hidden min-h-0">
+                </button>                 <div className="flex flex-row h-full w-full overflow-hidden min-h-0">
                     {/* ── Left Sidebar: Channels & Participants ── */}
-                    <div className="w-80 shrink-0 grow-0 bg-card border-r border-border flex flex-col h-full overflow-hidden">
+                    <div className="w-80 shrink-0 grow-0 bg-card/60 backdrop-blur-xs border-r border-border/50 flex flex-col h-full overflow-hidden">
                         {/* Sidebar Header */}
                         {searchOpen ? (
-                            <div className="flex items-center gap-2 px-3 py-2 shrink-0 border-b border-border h-14">
+                            <div className="flex items-center gap-2 px-3 py-2 shrink-0 border-b border-border/50 h-14">
                                 <div className="relative flex-1">
-                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                                     <Input
                                         autoFocus
                                         placeholder="Search messages or users..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-8 h-8 text-xs bg-muted/50 border-0 focus-visible:ring-1 w-full"
+                                        className="pl-8 h-8 text-xs bg-muted/65 hover:bg-muted/90 border border-border/40 focus-visible:ring-1 focus-visible:ring-primary/20 w-full rounded-xl"
                                     />
                                 </div>
                                 <Button
@@ -162,15 +160,15 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                             key={channel.id}
                                             onClick={() => handleOpenChannel(channel.id)}
                                             className={cn(
-                                                "w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-left transition-all duration-200 group",
+                                                "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-[transform,background-color] duration-150 ease-out active:scale-[0.98] group",
                                                 activeChannelId === channel.id
-                                                    ? "bg-primary/10 text-primary"
-                                                    : "hover:bg-muted text-foreground"
+                                                    ? "bg-primary/10 text-primary font-medium"
+                                                    : "hover:bg-muted/65 text-foreground/90"
                                             )}
                                         >
                                             <div className={cn(
-                                                "size-9 rounded-lg flex items-center justify-center flex-shrink-0",
-                                                activeChannelId === channel.id ? "bg-primary text-primary-foreground" : "bg-muted"
+                                                "size-8.5 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors",
+                                                activeChannelId === channel.id ? "bg-primary text-primary-foreground" : "bg-muted/80"
                                             )}>
                                                 <Hash className="size-4" />
                                             </div>
@@ -184,7 +182,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                     )}
                                                 </div>
                                                 {channel.last_message_at && (
-                                                    <span className="text-xs text-muted-foreground">
+                                                    <span className="text-xs text-muted-foreground/80">
                                                         {new Date(channel.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
                                                 )}
@@ -225,14 +223,14 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                 key={channel.id}
                                                 onClick={() => handleOpenChannel(channel.id)}
                                                 className={cn(
-                                                    "w-full flex items-center gap-3 px-2 py-2.5 rounded-lg text-left transition-all duration-200 group",
+                                                    "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-[transform,background-color] duration-150 ease-out active:scale-[0.98] group",
                                                     activeChannelId === channel.id
-                                                        ? "bg-primary/10 text-primary"
-                                                        : "hover:bg-muted text-foreground"
+                                                        ? "bg-primary/10 text-primary font-medium"
+                                                        : "hover:bg-muted/65 text-foreground/90"
                                                 )}
                                             >
                                                 <div className="relative flex-shrink-0">
-                                                    <Avatar className="size-9">
+                                                    <Avatar className="size-8.5 border border-border/10 shadow-2xs">
                                                         <AvatarImage src={getOptimizedImageUrl(channel.members[0]?.avatar_url, { width: 108, height: 108 })} alt={displayName} />
                                                         <AvatarFallback className="text-sm font-semibold bg-primary/20 text-foreground">
                                                             {displayName.charAt(0).toUpperCase()}
@@ -250,7 +248,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                         )}
                                                     </div>
                                                     {channel.last_message_at && (
-                                                        <span className="text-xs text-muted-foreground">
+                                                        <span className="text-xs text-muted-foreground/80">
                                                             {new Date(channel.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
                                                     )}

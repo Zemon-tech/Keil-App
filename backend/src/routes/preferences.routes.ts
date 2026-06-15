@@ -13,4 +13,7 @@ router.get("/", preferencesController.getPreferences);
 // PATCH /api/v1/preferences/stt-provider — update STT provider
 router.patch("/stt-provider", preferencesController.updateSttProvider);
 
+// PATCH /api/v1/preferences/delete-slots-on-complete — update slot deletion setting
+router.patch("/delete-slots-on-complete", preferencesController.updateDeleteSlotsOnComplete);
+
 export default router;

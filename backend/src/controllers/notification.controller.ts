@@ -19,7 +19,8 @@ export const getNotifications = catchAsync(async (req: Request, res: Response) =
     let query = `
         SELECT n.*, 
                u.name as sender_name, 
-               u.email as sender_email
+               u.email as sender_email,
+               u.avatar_url as sender_avatar
         FROM public.notifications n
         LEFT JOIN public.users u ON n.sender_id = u.id
         WHERE n.recipient_id = $1

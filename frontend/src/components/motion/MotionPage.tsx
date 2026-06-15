@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, Lock, Undo2, Loader2, RefreshCw
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, Lock, Undo2, Loader2, RefreshCw, ArrowUpRight, Link2Off
 } from "lucide-react";
 import {
   useNotionStatus,
@@ -733,59 +733,75 @@ export function MotionPage() {
                       <div className="py-1">
                         {notionStatus?.connected ? (
                           displayPage.notion_page_id ? (
-                            <div
-                              className="flex flex-col px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors group"
-                              onClick={() => syncNotion.mutate({ motionPageId: pageId! })}
-                            >
-                              <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                              {/* Sync Item */}
+                              <div
+                                className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
+                                onClick={() => syncNotion.mutate({ motionPageId: pageId! })}
+                              >
                                 <div className="flex items-center gap-2.5">
                                   <RefreshCw className={cn("size-4 text-muted-foreground group-hover:text-foreground transition-colors", syncNotion.isPending && "animate-spin")} />
-                                  <span className="text-xs font-medium">Sync with Notion</span>
+                                  <div className="flex flex-col text-left">
+                                    <span className="text-xs font-medium text-foreground">Sync with Notion</span>
+                                    {displayPage.notion_last_synced_at && (
+                                      <span className="text-[9px] text-muted-foreground font-normal">
+                                        Last: {new Date(displayPage.notion_last_synced_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                {displayPage.notion_last_synced_at && (
-                                  <span className="text-[9px] text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                {syncNotion.isPending ? (
+                                  <Loader2 className="size-3 text-muted-foreground animate-spin" />
+                                ) : displayPage.notion_last_synced_at ? (
+                                  <span className="text-[9px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
                                     Synced
                                   </span>
-                                )}
+                                ) : null}
                               </div>
-                              {displayPage.notion_last_synced_at && (
-                                <span className="text-[9px] text-muted-foreground/60 mt-1 pl-[26px]">
-                                  Last: {new Date(displayPage.notion_last_synced_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                                </span>
-                              )}
+
+                              {/* Open Item */}
                               <a
                                 href={`https://notion.so/${displayPage.notion_page_id.replace(/-/g, "")}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[9px] text-primary hover:underline mt-1 pl-[26px] block"
-                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
                               >
-                                Open in Notion ↗
+                                <div className="flex items-center gap-2.5">
+                                  <Share2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                                  <span className="text-xs font-medium text-foreground">Open in Notion</span>
+                                </div>
+                                <ArrowUpRight className="size-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
                               </a>
-                              <button
-                                className="text-[9px] text-destructive hover:underline mt-1.5 pl-[26px] block text-left font-medium"
-                                onClick={(e) => {
-                                  e.stopPropagation();
+
+                              {/* Unlink Item */}
+                              <div
+                                className="flex items-center justify-between px-3 py-1.5 hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors group text-muted-foreground"
+                                onClick={() => {
                                   if (confirm("Unlink this page from Notion? This will allow you to export it to another workspace.")) {
                                     unlinkNotion.mutate({ motionPageId: pageId! });
                                   }
                                 }}
-                                disabled={unlinkNotion.isPending}
                               >
-                                {unlinkNotion.isPending ? "Unlinking..." : "Unlink from Notion"}
-                              </button>
+                                <div className="flex items-center gap-2.5">
+                                  <Link2Off className="size-4 group-hover:text-destructive transition-colors" />
+                                  <span className="text-xs font-medium group-hover:text-destructive">Unlink from Notion</span>
+                                </div>
+                                {unlinkNotion.isPending && (
+                                  <Loader2 className="size-3 text-destructive animate-spin" />
+                                )}
+                              </div>
                             </div>
                           ) : (
                             <div
-                              className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors group"
+                              className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group"
                               onClick={() => setExportDialogOpen(true)}
                             >
                               <Share2 className="size-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                              <span className="text-xs font-medium">Export to Notion</span>
+                              <span className="text-xs font-medium text-foreground">Export to Notion</span>
                             </div>
                           )
                         ) : (
-                          <div className="px-3 py-2 text-center space-y-1 bg-muted/10 rounded-lg mx-2 my-1">
+                          <div className="px-3 py-2 text-center space-y-1 bg-muted/10 rounded-lg mx-2 my-1 border border-border/30">
                             <p className="text-[10px] font-semibold text-muted-foreground">Notion Integration</p>
                             <p className="text-[9px] text-muted-foreground/60 leading-normal">
                               Connect Notion in settings to sync pages.
@@ -1088,8 +1104,8 @@ export function MotionPage() {
 
             {/* Icon — straddles the cover/content boundary */}
             {(displayPage.icon || showEmojiPicker) && (
-              <div className="max-w-[900px] mx-auto w-full px-12 lg:px-16 motion-page-container">
-                <div className="relative group/icon pl-4" style={{ marginTop: displayPage.cover_image ? '-40px' : '16px', marginBottom: '12px', width: 'fit-content' }}>
+              <div className="motion-page-container mx-auto">
+                <div className="relative group/icon pl-0" style={{ marginTop: displayPage.cover_image ? '-40px' : '16px', marginBottom: '12px', width: 'fit-content' }}>
                   <div
                     className={cn(
                       "text-[78px] leading-none select-none flex items-center justify-center shrink-0",
@@ -1288,10 +1304,10 @@ export function MotionPage() {
               </div>
             )}
 
-            <main className="max-w-[900px] mx-auto w-full relative px-12 lg:px-16 motion-page-container">
+            <main className="motion-page-container mx-auto relative">
               <div className="group/title-area">
                 <div className={cn(
-                  "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-4",
+                  "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-0",
                   "mt-3 mb-2",
                   "opacity-0 group-hover/title-area:opacity-100"
                 )}>
@@ -1340,7 +1356,7 @@ export function MotionPage() {
                   onBlur={handleTitleBlur}
                   readOnly={isPageReadOnly}
                   className={cn(
-                    "w-full bg-transparent text-[44px] px-4 leading-[1.1] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25",
+                    "w-full bg-transparent text-[40px] px-0 leading-[1.2] font-bold tracking-tight text-foreground/90 outline-none placeholder:text-foreground/25 mb-2",
                     isPageReadOnly && "pointer-events-none"
                   )}
                   placeholder="Untitled"
@@ -1377,6 +1393,21 @@ export function MotionPage() {
           .custom-scrollbar-page::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
           .custom-scrollbar-page:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); }
 
+          /* Default Layout Spacing: 720px Content Area with Responsive Gutters */
+          .motion-page-container {
+            max-width: 768px !important; /* 720px + 24px + 24px padding */
+            padding-left: 1.5rem !important; /* 24px */
+            padding-right: 1.5rem !important; /* 24px */
+            width: 100% !important;
+          }
+          @media (min-width: 1024px) {
+            .motion-page-container {
+              max-width: 912px !important; /* 720px + 96px + 96px padding */
+              padding-left: 6rem !important; /* 96px */
+              padding-right: 6rem !important; /* 96px */
+            }
+          }
+
           /* Small Text Toggle Styles */
           .motion-page-small-text .tiptap.ProseMirror.simple-editor {
             font-size: 14px !important;
@@ -1399,7 +1430,7 @@ export function MotionPage() {
             font-size: 14px !important;
           }
 
-          /* Full Width Toggle Styles */
+          /* Full Width Toggle Styles Override */
           .motion-page-full-width .motion-page-container {
             max-width: none !important;
             padding-left: 1.5rem !important;
@@ -1410,8 +1441,8 @@ export function MotionPage() {
           }
           @media (min-width: 1024px) {
             .motion-page-full-width .motion-page-container {
-              padding-left: 3rem !important;
-              padding-right: 3rem !important;
+              padding-left: 6rem !important;
+              padding-right: 6rem !important;
             }
           }
         `,

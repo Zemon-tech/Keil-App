@@ -21,7 +21,9 @@ import {
   exportPage,
   syncPage,
   unlinkPage,
+  searchPages,
 } from '../controllers/notion.controller';
+
 
 const router = Router();
 
@@ -54,5 +56,6 @@ router.post('/notion/import', protect, importPage);
 router.post('/notion/export', protect, exportPage);
 router.post('/notion/sync', protect, syncPage);
 router.post('/notion/unlink', protect, unlinkPage);
+router.get('/notion/search', protect, searchPages);
 
 export default router;

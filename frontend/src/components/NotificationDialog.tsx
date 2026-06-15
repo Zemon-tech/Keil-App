@@ -16,8 +16,9 @@ import {
     Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 
 interface NotificationDialogProps {
     open: boolean;
@@ -107,22 +108,22 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                showCloseButton={false}
+                showCloseButton={true}
                 aria-describedby={undefined}
-                className="!h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !w-[calc(100vw-40px)] !max-w-[1180px] !gap-0 overflow-hidden !rounded-[2rem] border border-border/80 bg-background !p-0 shadow-[var(--shadow-lg)]"
+                className="!h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !w-[calc(100vw-40px)] !max-w-[1180px] !gap-0 overflow-hidden !rounded-2xl border border-border/80 bg-background !p-0 shadow-2xl"
             >
                 <VisuallyHidden.Root>
                     <DialogTitle>Notifications</DialogTitle>
                 </VisuallyHidden.Root>
 
                 <div className="flex h-full overflow-hidden">
-                    <aside className="hidden h-full w-72 shrink-0 flex-col border-r border-border/70 bg-card/70 md:flex">
-                        <div className="border-b border-border/70 px-5 py-5">
-                            <div className="flex items-center justify-between gap-3">
-                                <h2 className="text-xl font-semibold tracking-[-0.04em] text-foreground">Notification</h2>
+                    <aside className="hidden h-full w-80 shrink-0 flex-col border-r border-border/50 bg-card/60 backdrop-blur-xs md:flex">
+                        <div className="border-b border-border/50 px-4 py-3 h-14 flex items-center shrink-0">
+                            <div className="flex w-full items-center justify-between gap-3">
+                                <h2 className="text-sm font-semibold tracking-tight text-foreground">Notifications</h2>
                                 <button
                                     onClick={() => onOpenChange(false)}
-                                    className="flex size-8 items-center justify-center rounded-full border border-border/70 bg-background/70 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                    className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
                                     aria-label="Close notifications"
                                 >
                                     <X className="size-4" />
@@ -142,10 +143,10 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                             key={category.id}
                                             onClick={() => setFilter(category.id)}
                                             className={cn(
-                                                "group flex w-full items-center justify-between rounded-2xl border px-3 py-2.5 text-sm transition-all cursor-pointer",
+                                                "group flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm transition-[transform,background-color,border-color] duration-150 ease-out cursor-pointer active:scale-[0.98]",
                                                 isSelected
-                                                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                                    : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-background hover:text-foreground"
+                                                    ? "border-primary/20 bg-primary/10 text-primary font-medium shadow-xs"
+                                                    : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-background hover:text-foreground"
                                             )}
                                         >
                                             <span className="flex items-center gap-3 font-medium">
@@ -153,8 +154,10 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                                 {category.label}
                                             </span>
                                             <span className={cn(
-                                                "rounded-full px-2 py-0.5 text-xs",
-                                                isSelected ? "bg-primary-foreground/15 text-primary-foreground" : "bg-muted text-muted-foreground group-hover:text-foreground"
+                                                "rounded-md px-1.5 py-0.5 text-xs font-medium min-w-[20px] text-center transition-colors duration-150",
+                                                isSelected 
+                                                    ? "bg-primary text-primary-foreground" 
+                                                    : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/10 group-hover:text-foreground"
                                             )}>
                                                 {category.count}
                                             </span>
@@ -166,44 +169,42 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                     </aside>
 
                     <main className="flex min-w-0 flex-1 flex-col bg-background">
-                        <header className="border-b border-border/70 px-5 py-4 md:px-7 md:py-5">
-                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                                <div>
-                                    <div className="flex items-center gap-3">
-                                        <h2 className="text-2xl font-semibold tracking-[-0.04em] text-foreground md:text-3xl">
-                                            {filter === "All" ? "All Notifications" : `${filter} Notifications`}
-                                        </h2>
-                                        {unreadCount > 0 && (
-                                            <Badge className="h-6 border-border/70 bg-card px-2 text-xs text-foreground shadow-sm">
-                                                {unreadCount} unread
-                                            </Badge>
-                                        )}
-                                    </div>
+                        <header className="border-b border-border/50 px-5 py-3.5 md:px-7 md:py-0 md:h-14 md:flex md:flex-col md:justify-center shrink-0">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <h2 className="text-sm font-semibold tracking-tight text-foreground">
+                                        {filter === "All" ? "All Notifications" : `${filter} Notifications`}
+                                    </h2>
+                                    {unreadCount > 0 && (
+                                        <Badge className="h-5 border-border/50 bg-card px-2 text-[10px] text-foreground shadow-none">
+                                            {unreadCount} unread
+                                        </Badge>
+                                    )}
                                 </div>
 
                                 <div className="flex items-center gap-2">
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="rounded-full bg-card/80 text-muted-foreground hover:text-foreground" 
+                                        className="rounded-xl h-8 px-3 text-xs bg-card/85 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/50 transition-all duration-100 ease-out active:scale-95" 
                                         aria-label="Mark all as read"
                                         onClick={markAllAsRead}
                                     >
-                                        <CheckCheck className="size-4" />
+                                        <CheckCheck className="size-3.5" />
                                         Mark read
                                     </Button>
                                     <Button 
                                         variant="outline" 
                                         size="icon-sm" 
-                                        className="rounded-full bg-card/80 text-muted-foreground hover:text-destructive" 
+                                        className="rounded-xl size-8 bg-card/85 text-muted-foreground hover:bg-muted hover:text-destructive border border-border/50 transition-all duration-100 ease-out active:scale-95" 
                                         aria-label="Clear all notifications"
                                         onClick={clearAll}
                                     >
-                                        <Trash2 className="size-4" />
+                                        <Trash2 className="size-3.5" />
                                     </Button>
                                     <button
                                         onClick={() => onOpenChange(false)}
-                                        className="flex size-8 items-center justify-center rounded-full border border-border/70 bg-card/80 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
+                                        className="flex size-8 items-center justify-center rounded-xl bg-card/85 border border-border/50 text-muted-foreground transition-all duration-100 ease-out hover:bg-muted hover:text-foreground active:scale-90 md:hidden"
                                         aria-label="Close notifications"
                                     >
                                         <X className="size-4" />
@@ -211,16 +212,16 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                 </div>
                             </div>
 
-                            <div className="mt-4 flex gap-2 overflow-x-auto pb-1 md:hidden">
+                            <div className="mt-2 flex gap-2 overflow-x-auto pb-1 md:hidden">
                                 {categories.map((category) => (
                                     <button
                                         key={category.id}
                                         onClick={() => setFilter(category.id)}
                                         className={cn(
-                                            "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                                            "shrink-0 rounded-xl border px-3 py-1 text-xs font-medium transition-all duration-100 ease-out active:scale-95",
                                             filter === category.id
-                                                ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                                : "border-border/70 bg-card/70 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                ? "border-primary/20 bg-primary/10 text-primary font-medium shadow-xs"
+                                                : "border-border/50 bg-card/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                                         )}
                                     >
                                         {category.label}
@@ -237,12 +238,32 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                     <p className="mt-2 max-w-[320px] text-sm">You're all caught up. Important workspace updates will appear here.</p>
                                 </div>
                             ) : (
-                                <div className="mx-auto max-w-3xl space-y-1">
+                                <div className="mx-auto max-w-3xl space-y-2">
                                     {groupNotifications(filteredNotifications).map((item) => {
                                         const notification = item.main;
                                         const meta = getNotificationMeta(notification.event_type);
                                         const Icon = meta.icon;
                                         const isRead = !!notification.read_at;
+                                        const actor = notification.payload.sender_name || notification.sender_name || "Someone";
+                                        const hasSender = !!(notification.sender_name || notification.payload.sender_name);
+
+                                        // Custom formatted description to avoid duplicate snippets
+                                        let descriptionText = "";
+                                        let calloutText = "";
+
+                                        if (notification.event_type === "comment_created") {
+                                            descriptionText = `${actor} commented on "${notification.payload.task_title || 'Task'}"`;
+                                            calloutText = notification.payload.comment_snippet || "";
+                                        } else if (notification.event_type === "mention_in_comment") {
+                                            descriptionText = `${actor} mentioned you in a comment on "${notification.payload.task_title || 'Task'}"`;
+                                            calloutText = notification.payload.comment_snippet || "";
+                                        } else if (notification.event_type === "someone_messaged") {
+                                            const channelLabel = notification.payload.channel_name ? ` in #${notification.payload.channel_name}` : "";
+                                            descriptionText = `${actor} sent a message${channelLabel}`;
+                                            calloutText = notification.payload.message_snippet || "";
+                                        } else {
+                                            descriptionText = getNotificationSnippet(notification, organisations);
+                                        }
 
                                         return (
                                             <article
@@ -252,49 +273,71 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                                     onOpenChange(false);
                                                 }}
                                                 className={cn(
-                                                    "group relative overflow-hidden rounded-xl p-4 transition-all duration-200 cursor-pointer",
+                                                    "group relative flex gap-4 rounded-xl p-4 transition-[transform,background-color,border-color] duration-150 ease-out cursor-pointer border active:scale-[0.99]",
                                                     isRead
-                                                        ? "bg-transparent hover:bg-muted/40"
-                                                        : "bg-muted/20 hover:bg-muted/30"
+                                                        ? "bg-background border-transparent hover:bg-muted/40 hover:border-border/40"
+                                                        : "bg-muted/15 border-border/10 hover:bg-muted/25 hover:border-border/30 shadow-xs"
                                                 )}
                                             >
-                                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                                    <div className="flex min-w-0 flex-1 gap-4">
-                                                        <div className={cn("flex size-8.5 shrink-0 items-center justify-center rounded-lg", meta.className)}>
-                                                            <Icon className="size-4" />
-                                                        </div>
-
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <h3 className={cn(
-                                                                    "text-base tracking-[-0.03em]",
-                                                                    isRead ? "font-medium text-foreground/80" : "font-semibold text-foreground"
-                                                                )}>
-                                                                    {getNotificationTitle(notification)}
-                                                                </h3>
-                                                                {!isRead && <span className="size-1.5 rounded-full bg-primary" />}
-                                                                <Badge variant="outline" className="h-5 border-none bg-muted/60 px-2 text-[9px] font-medium text-muted-foreground shadow-none">
-                                                                    {meta.label}
-                                                                </Badge>
-                                                            </div>
-                                                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                                                                {getNotificationSnippet(notification, organisations)}
-                                                            </p>
-
-                                                            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                                                <span>{formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}</span>
-                                                                {notification.sender_name && (
-                                                                    <span className="flex items-center gap-2">
-                                                                        <Avatar className="size-6 border-none bg-muted shadow-none">
-                                                                            <AvatarFallback className="bg-secondary text-[10px] font-semibold text-secondary-foreground">
-                                                                                {notification.sender_name.charAt(0).toUpperCase()}
-                                                                            </AvatarFallback>
-                                                                        </Avatar>
-                                                                        {notification.sender_name}
-                                                                    </span>
-                                                                )}
+                                                {/* Left side: Avatar or Icon */}
+                                                <div className="relative shrink-0">
+                                                    {hasSender ? (
+                                                        <div className="relative">
+                                                            <Avatar className="size-10 border border-border/50 shadow-xs rounded-xl">
+                                                                <AvatarImage
+                                                                    src={getOptimizedImageUrl(notification.sender_avatar, { width: 80, height: 80 })}
+                                                                    alt={actor}
+                                                                />
+                                                                <AvatarFallback className="bg-primary/20 text-foreground text-sm font-semibold uppercase rounded-xl">
+                                                                    {actor.charAt(0).toUpperCase()}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className={cn(
+                                                                "absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full border-2 border-background shadow-xs",
+                                                                meta.className
+                                                            )}>
+                                                                <Icon className="size-2.5" />
                                                             </div>
                                                         </div>
+                                                    ) : (
+                                                        <div className={cn("flex size-10 items-center justify-center rounded-xl shadow-xs border border-border/20", meta.className)}>
+                                                            <Icon className="size-5" />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Right side: Content */}
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <h3 className={cn(
+                                                                "text-sm tracking-tight",
+                                                                isRead ? "font-medium text-foreground/80" : "font-semibold text-foreground"
+                                                            )}>
+                                                                {getNotificationTitle(notification)}
+                                                            </h3>
+                                                            {!isRead && <span className="size-2 rounded-full bg-primary" />}
+                                                        </div>
+                                                        <span className="text-[11px] text-muted-foreground/80">
+                                                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                                                        </span>
+                                                    </div>
+
+                                                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                                                        {descriptionText}
+                                                    </p>
+
+                                                    {/* Callout box for comments/messages */}
+                                                    {calloutText && (
+                                                        <div className="mt-2 rounded-lg border border-border/40 bg-muted/30 px-3.5 py-2 text-sm text-foreground/90 font-normal italic shadow-2xs leading-relaxed max-w-[70ch]">
+                                                            "{calloutText}"
+                                                        </div>
+                                                    )}
+
+                                                    <div className="mt-2.5 flex items-center gap-2">
+                                                        <Badge variant="outline" className="h-5 border-border/40 bg-card/50 px-1.5 text-[9px] font-medium text-muted-foreground shadow-none rounded-md">
+                                                            {meta.label}
+                                                        </Badge>
                                                     </div>
                                                 </div>
                                             </article>

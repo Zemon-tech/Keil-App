@@ -107,3 +107,58 @@ export const requireSpaceMember = async (
     next(error);
   }
 };
+
+export const requireParentTaskAssignee = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const taskId = asString(req.params.id);
+    const userId = (req as any).user?.id as string | undefined;
+    const spaceRole = (req as any).space?.membership_role as string | undefined;
+
+    if (!isUuid(taskId)) {
+      res.status(400).json({ success: false, message: "Invalid task id" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    // Admins and Managers have access automatically
+    if (spaceRole === "admin" || spaceRole === "manager") {
+      return next();
+    }
+
+    // Check if the user is assigned to the task OR is the creator of the task
+    const result = await pool.query(
+      `
+        SELECT 1 FROM public.tasks t
+        WHERE t.id = $1
+          AND (
+            t.created_by = $2
+            OR EXISTS (
+              SELECT 1 FROM public.task_assignees ta
+              WHERE ta.task_id = t.id AND ta.user_id = $2
+            )
+          )
+          AND t.deleted_at IS NULL
+        LIMIT 1
+      `,
+      [taskId, userId],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(403).json({ success: false, message: "Insufficient permissions. You must be assigned to this task." });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+

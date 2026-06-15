@@ -4,6 +4,7 @@ import { SttProvider } from "./transcription/types";
 export interface UserAppPreferences {
     user_id: string;
     stt_provider: SttProvider;
+    delete_slots_on_complete: boolean;
     created_at: Date;
     updated_at: Date;
 }
@@ -56,6 +57,24 @@ export const updateSttProvider = async (
          SET stt_provider = $2, updated_at = NOW()
          RETURNING *`,
         [userId, provider]
+    );
+    return result.rows[0];
+};
+
+/**
+ * Updates the user's delete_slots_on_complete preference.
+ */
+export const updateDeleteSlotsOnComplete = async (
+    userId: string,
+    deleteSlotsOnComplete: boolean
+): Promise<UserAppPreferences> => {
+    const result = await pool.query(
+        `INSERT INTO public.user_app_preferences (user_id, delete_slots_on_complete)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE
+         SET delete_slots_on_complete = $2, updated_at = NOW()
+         RETURNING *`,
+        [userId, deleteSlotsOnComplete]
     );
     return result.rows[0];
 };

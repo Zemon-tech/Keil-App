@@ -50,7 +50,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Task, AnyStatus, TaskPriority } from "@/types/task";
-import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks } from "@/hooks/api/useTasks";
+import { type TaskDTO, type SortBy, type SortOrder, useOrgSubtasks, useTaskChecklists } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { STATUS_OPTIONS as TASK_STATUS_OPTIONS, EVENT_STATUS_OPTIONS, StatusIcon, getStatusTextColor } from "./task-detail-shared";
@@ -912,22 +912,24 @@ export function TaskListPane({
     if (!containerRef.current) return;
 
     draggableRef.current = new Draggable(containerRef.current, {
-      itemSelector: ".draggable-task-card",
+      itemSelector: ".draggable-task-card, .draggable-checklist-card",
       eventData: (eventEl) => {
         const taskId = eventEl.getAttribute("data-task-id");
         const taskTitle = eventEl.getAttribute("data-task-title");
         const taskStatus = eventEl.getAttribute("data-task-status");
+        const checklistId = eventEl.getAttribute("data-checklist-id");
 
-        console.log("🎯 Dragging task:", { taskId, taskTitle, taskStatus });
+        console.log("🎯 Dragging task/checklist:", { taskId, taskTitle, taskStatus, checklistId });
 
         return {
-          id: taskId,
+          id: checklistId || taskId,
           title: taskTitle,
           duration: "01:00",
           extendedProps: {
             taskId,
             taskTitle,
             taskStatus,
+            checklistId,
             isDraggedTask: true,
           },
         };
@@ -1283,6 +1285,11 @@ export function TaskListPane({
             onSelectTask={onSelectTask}
             onUpdateTask={onUpdateTask}
           />
+        )}
+
+        {/* Private checklist items for active task */}
+        {active && t.type === "task" && (
+          <TaskChecklistsSection taskId={t.id} />
         )}
       </div>
     );
@@ -2111,6 +2118,36 @@ export function TaskListPane({
           spaceId={editingTask.space_id}
         />
       )}
+    </div>
+  );
+}
+
+function TaskChecklistsSection({ taskId }: { taskId: string }) {
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: checklists = [] } = useTaskChecklists(activeOrgId, activeSpaceId, taskId);
+
+  const unscheduledChecklists = checklists.filter((c) => !c.is_completed);
+
+  if (unscheduledChecklists.length === 0) return null;
+
+  return (
+    <div className="pl-8 pr-4 py-1.5 space-y-1 bg-muted/10 border-l-2 border-primary/20 ml-4 my-1 rounded-r-md">
+      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
+        Private Checklist
+      </p>
+      {unscheduledChecklists.map((item) => (
+        <div
+          key={item.id}
+          data-task-id={taskId}
+          data-checklist-id={item.id}
+          data-task-title={item.title}
+          data-task-status="todo"
+          className="draggable-checklist-card flex items-center gap-2 py-1 px-1.5 text-xs text-foreground/80 hover:text-foreground hover:bg-muted/40 rounded border border-border/30 cursor-grab active:cursor-grabbing select-none"
+        >
+          <GripVertical className="size-3 text-muted-foreground/30 shrink-0" />
+          <span className="truncate flex-1 font-medium">{item.title}</span>
+        </div>
+      ))}
     </div>
   );
 }

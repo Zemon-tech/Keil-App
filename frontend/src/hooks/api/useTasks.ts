@@ -163,6 +163,10 @@ export const orgTaskKeys = {
     [...orgTaskKeys.all, orgId, spaceId, "detail", id] as const,
   subtasks: (orgId: string, spaceId: string, parentId: string) =>
     [...orgTaskKeys.all, orgId, spaceId, "subtasks", parentId] as const,
+  slots: (orgId: string, spaceId: string) =>
+    [...orgTaskKeys.all, orgId, spaceId, "slots"] as const,
+  checklists: (orgId: string, spaceId: string, taskId: string) =>
+    [...orgTaskKeys.all, orgId, spaceId, "checklists", taskId] as const,
 };
 
 // ─── Helper: strip client-only filter fields before sending to backend ────────
@@ -623,3 +627,235 @@ export function useRemoveOrgDependency(
     },
   });
 }
+
+// ─── Task Slot types ───
+export interface TaskSlotDTO {
+  id: string;
+  task_id: string;
+  checklist_id: string | null;
+  checklist_title?: string | null;
+  user_id: string;
+  start_date: string;
+  due_date: string;
+  is_all_day: boolean;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  task_title?: string;
+  task_type?: string;
+  task_status?: string;
+  task_priority?: string;
+  user_name?: string;
+  user_email?: string;
+}
+
+export interface CreateTaskSlotInput {
+  task_id: string;
+  start_date: string;
+  due_date: string;
+  is_all_day?: boolean;
+  checklist_id?: string | null;
+  notes?: string;
+}
+
+export interface UpdateTaskSlotInput {
+  start_date?: string;
+  due_date?: string;
+  is_all_day?: boolean;
+  notes?: string;
+  status?: string;
+}
+
+// ─── useOrgTaskSlots ───
+export function useOrgTaskSlots(orgId: string | null, spaceId: string | null) {
+  return useQuery<TaskSlotDTO[]>({
+    queryKey: orgTaskKeys.slots(orgId ?? "", spaceId ?? ""),
+    queryFn: async () => {
+      const res = await api.get<{ data: TaskSlotDTO[] }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/slots`
+      );
+      return res.data.data;
+    },
+    enabled: !!orgId && !!spaceId,
+    retry: noRetryOn401,
+  });
+}
+
+// ─── useCreateTaskSlot ───
+export function useCreateTaskSlot(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<TaskSlotDTO, Error, CreateTaskSlotInput>({
+    mutationFn: async (input) => {
+      const res = await api.post<{ data: TaskSlotDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/slots`,
+        input
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+      toast.success("Task scheduled on calendar");
+    },
+    onError: () => {
+      toast.error("Failed to schedule task");
+    },
+  });
+}
+
+// ─── useUpdateTaskSlot ───
+export function useUpdateTaskSlot(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<TaskSlotDTO, Error, { slotId: string; updates: UpdateTaskSlotInput }>({
+    mutationFn: async ({ slotId, updates }) => {
+      const res = await api.patch<{ data: TaskSlotDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/slots/${slotId}`,
+        updates
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+      toast.success("Calendar slot updated");
+    },
+    onError: () => {
+      toast.error("Failed to update calendar slot");
+    },
+  });
+}
+
+// ─── useDeleteTaskSlot ───
+export function useDeleteTaskSlot(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { slotId: string }>({
+    mutationFn: async ({ slotId }) => {
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/slots/${slotId}`
+      );
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+      toast.success("Task unscheduled");
+    },
+    onError: () => {
+      toast.error("Failed to unschedule task");
+    },
+  });
+}
+
+// ─── Checklist types ───
+export interface PersonalChecklistDTO {
+  id: string;
+  task_id: string;
+  user_id: string;
+  title: string;
+  is_completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── useTaskChecklists ───
+export function useTaskChecklists(orgId: string | null, spaceId: string | null, taskId: string | null) {
+  return useQuery<PersonalChecklistDTO[]>({
+    queryKey: orgTaskKeys.checklists(orgId ?? "", spaceId ?? "", taskId ?? ""),
+    queryFn: async () => {
+      const res = await api.get<{ data: PersonalChecklistDTO[] }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}/checklists`
+      );
+      return res.data.data;
+    },
+    enabled: !!orgId && !!spaceId && !!taskId,
+    retry: noRetryOn401,
+  });
+}
+
+// ─── useCreateChecklist ───
+export function useCreateChecklist(orgId: string | null, spaceId: string | null, taskId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<PersonalChecklistDTO, Error, { title: string }>({
+    mutationFn: async ({ title }) => {
+      const res = await api.post<{ data: PersonalChecklistDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}/checklists`,
+        { title }
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId || !taskId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.checklists(orgId, spaceId, taskId) });
+      toast.success("Checklist item added");
+    },
+    onError: () => {
+      toast.error("Failed to add checklist item");
+    },
+  });
+}
+
+// ─── useUpdateChecklist ───
+export function useUpdateChecklist(orgId: string | null, spaceId: string | null, taskId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<PersonalChecklistDTO, Error, { checklistId: string; updates: { title?: string; is_completed?: boolean } }>({
+    mutationFn: async ({ checklistId, updates }) => {
+      const res = await api.patch<{ data: PersonalChecklistDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}/checklists/${checklistId}`,
+        updates
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId || !taskId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.checklists(orgId, spaceId, taskId) });
+    },
+    onError: () => {
+      toast.error("Failed to update checklist item");
+    },
+  });
+}
+
+// ─── useDeleteChecklist ───
+export function useDeleteChecklist(orgId: string | null, spaceId: string | null, taskId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { checklistId: string }>({
+    mutationFn: async ({ checklistId }) => {
+      await api.delete(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${taskId}/checklists/${checklistId}`
+      );
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId || !taskId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.checklists(orgId, spaceId, taskId) });
+      toast.success("Checklist item deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete checklist item");
+    },
+  });
+}
+
+// ─── useCreateOrgSubtask ───
+export function useCreateOrgSubtask(orgId: string | null, spaceId: string | null, parentTaskId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation<TaskDTO, Error, CreateTaskInput>({
+    mutationFn: async (input) => {
+      const res = await api.post<{ data: TaskDTO }>(
+        `v1/orgs/${orgId}/spaces/${spaceId}/tasks/${parentTaskId}/subtasks`,
+        input
+      );
+      return normalizeTaskDTO(res.data.data);
+    },
+    onSuccess: () => {
+      if (!orgId || !spaceId || !parentTaskId) return;
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.subtasks(orgId, spaceId, parentTaskId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, parentTaskId) });
+      toast.success("Subtask created successfully");
+    },
+    onError: () => {
+      toast.error("Failed to create subtask");
+    },
+  });
+}
+

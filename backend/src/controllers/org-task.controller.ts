@@ -7,6 +7,7 @@ import { doIncrementalSyncWithCooldown } from "../services/google-calendar.servi
 import { createComment, getThreadedComments, hardDeleteComment } from "../services/comment.service";
 import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
+import { taskAssigneeRepository, orgTaskRepository } from "../repositories";
 
 const validateStatus = (status: unknown): status is TaskStatus =>
   typeof status === "string" && Object.values(TaskStatus).includes(status as TaskStatus);
@@ -318,3 +319,222 @@ export const deleteTaskComment = catchAsync(async (req: Request, res: Response) 
 
   res.status(200).json(new ApiResponse(200, {}, "Comment deleted successfully"));
 });
+
+export const createSubtask = catchAsync(async (req: Request, res: Response) => {
+  const context = getTaskContext(req);
+  const userId = (req as any).user?.id as string;
+  const parent_task_id = asString(req.params.id);
+  const {
+    title, status, priority, start_date, due_date,
+    description, objective, success_criteria,
+    type, event_type, location, is_all_day, assignee_ids,
+    story_points, time_estimate, meet_link,
+    create_meet_link, guests, context: taskContext,
+  } = req.body;
+
+  if (!title || typeof title !== "string" || title.trim() === "") {
+    throw new ApiError(400, "Title is required");
+  }
+
+  // Ensure parent task is a top-level task (cannot have subtask of subtask)
+  const parentTask = await orgTaskRepository.findById(parent_task_id);
+  if (!parentTask) {
+    throw new ApiError(404, "Parent task not found");
+  }
+  if (parentTask.parent_task_id) {
+    throw new ApiError(400, "Subtasks cannot have their own subtasks");
+  }
+
+  const task = await orgTaskService.createTask(context, {
+    org_id: context.orgId,
+    space_id: context.spaceId,
+    created_by: userId,
+    parent_task_id,
+    title: title.trim(),
+    description,
+    objective,
+    success_criteria,
+    status,
+    priority,
+    start_date: parseOptionalDate(start_date, "start_date"),
+    due_date: parseOptionalDate(due_date, "due_date"),
+    type: type === "event" ? "event" : "task",
+    event_type: event_type ?? null,
+    location: location ?? null,
+    is_all_day: typeof is_all_day === "boolean" ? is_all_day : true,
+    assignee_ids: Array.isArray(assignee_ids) ? assignee_ids : undefined,
+    story_points: story_points ?? null,
+    time_estimate: time_estimate ?? null,
+    meet_link: meet_link ?? null,
+    create_meet_link,
+    guests: Array.isArray(guests) ? guests : undefined,
+    context: Array.isArray(taskContext) ? taskContext : undefined,
+  });
+
+  res.status(201).json(new ApiResponse(201, task, "Subtask created successfully"));
+});
+
+export const getSlots = catchAsync(async (req: Request, res: Response) => {
+  const context = getTaskContext(req);
+  const userId = (req as any).user?.id as string;
+  const spaceRole = (req as any).space?.membership_role as string;
+
+  const slots = await orgTaskService.getSlotsBySpace(context.spaceId, userId, spaceRole);
+  res.status(200).json(new ApiResponse(200, slots, "Calendar slots retrieved successfully"));
+});
+
+export const createSlot = catchAsync(async (req: Request, res: Response) => {
+  const context = getTaskContext(req);
+  const userId = (req as any).user?.id as string;
+  const spaceRole = (req as any).space?.membership_role as string;
+  const { task_id, start_date, due_date, is_all_day, checklist_id, notes } = req.body;
+
+  if (!task_id || !isUuid(task_id)) {
+    throw new ApiError(400, "Valid task_id is required");
+  }
+  if (!start_date || !due_date) {
+    throw new ApiError(400, "start_date and due_date are required");
+  }
+
+  // Ensure task is in this space
+  const task = await orgTaskRepository.findById(task_id);
+  if (!task || task.org_id !== context.orgId || task.space_id !== context.spaceId) {
+    throw new ApiError(404, "Task not found in this space");
+  }
+
+  // Members can only schedule tasks assigned to them (or created by them)
+  if (spaceRole === "member") {
+    const isAssigned = await taskAssigneeRepository.isAssigned(task_id, userId);
+    if (!isAssigned && task.created_by !== userId) {
+      throw new ApiError(403, "Members can only schedule tasks assigned to them");
+    }
+  }
+
+  const slot = await orgTaskService.createSlot(task_id, userId, {
+    start_date: new Date(start_date),
+    due_date: new Date(due_date),
+    is_all_day,
+    checklist_id,
+    notes,
+  });
+
+  res.status(201).json(new ApiResponse(201, slot, "Calendar slot created successfully"));
+});
+
+export const updateSlot = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const spaceRole = (req as any).space?.membership_role as string;
+  const slotId = asString(req.params.slotId);
+  const { start_date, due_date, is_all_day, notes, status } = req.body;
+
+  if (!slotId || !isUuid(slotId)) {
+    throw new ApiError(400, "Valid slotId is required");
+  }
+
+  const slot = await orgTaskService.updateSlot(slotId, userId, spaceRole, {
+    start_date: start_date ? new Date(start_date) : undefined,
+    due_date: due_date ? new Date(due_date) : undefined,
+    is_all_day,
+    notes,
+    status,
+  });
+
+  if (!slot) {
+    throw new ApiError(404, "Calendar slot not found or not authorized to update");
+  }
+
+  res.status(200).json(new ApiResponse(200, slot, "Calendar slot updated successfully"));
+});
+
+export const deleteSlot = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const spaceRole = (req as any).space?.membership_role as string;
+  const slotId = asString(req.params.slotId);
+
+  if (!slotId || !isUuid(slotId)) {
+    throw new ApiError(400, "Valid slotId is required");
+  }
+
+  const deleted = await orgTaskService.deleteSlot(slotId, userId, spaceRole);
+  if (!deleted) {
+    throw new ApiError(404, "Calendar slot not found or not authorized to delete");
+  }
+
+  res.status(200).json(new ApiResponse(200, {}, "Calendar slot deleted successfully"));
+});
+
+export const getChecklists = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const taskId = asString(req.params.id);
+
+  if (!taskId || !isUuid(taskId)) {
+    throw new ApiError(400, "Valid taskId is required");
+  }
+
+  await assertTaskInSpace(req, taskId);
+
+  const checklists = await orgTaskService.getChecklistsByTask(taskId, userId);
+  res.status(200).json(new ApiResponse(200, checklists, "Checklists retrieved successfully"));
+});
+
+export const createChecklist = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const taskId = asString(req.params.id);
+  const { title } = req.body;
+
+  if (!taskId || !isUuid(taskId)) {
+    throw new ApiError(400, "Valid taskId is required");
+  }
+  if (!title || typeof title !== "string" || title.trim() === "") {
+    throw new ApiError(400, "Checklist title is required");
+  }
+
+  await assertTaskInSpace(req, taskId);
+
+  const checklist = await orgTaskService.createChecklist(taskId, userId, title.trim());
+  res.status(201).json(new ApiResponse(201, checklist, "Checklist item created successfully"));
+});
+
+export const updateChecklist = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const taskId = asString(req.params.id);
+  const checklistId = asString(req.params.checklistId);
+  const { title, is_completed } = req.body;
+
+  if (!checklistId || !isUuid(checklistId)) {
+    throw new ApiError(400, "Valid checklistId is required");
+  }
+
+  await assertTaskInSpace(req, taskId);
+
+  const checklist = await orgTaskService.updateChecklist(checklistId, userId, {
+    title: title ? title.trim() : undefined,
+    is_completed,
+  });
+
+  if (!checklist) {
+    throw new ApiError(404, "Checklist item not found or not authorized to update");
+  }
+
+  res.status(200).json(new ApiResponse(200, checklist, "Checklist item updated successfully"));
+});
+
+export const deleteChecklist = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const taskId = asString(req.params.id);
+  const checklistId = asString(req.params.checklistId);
+
+  if (!checklistId || !isUuid(checklistId)) {
+    throw new ApiError(400, "Valid checklistId is required");
+  }
+
+  await assertTaskInSpace(req, taskId);
+
+  const deleted = await orgTaskService.deleteChecklist(checklistId, userId);
+  if (!deleted) {
+    throw new ApiError(404, "Checklist item not found or not authorized to delete");
+  }
+
+  res.status(200).json(new ApiResponse(200, {}, "Checklist item deleted successfully"));
+});
+
