@@ -68,7 +68,7 @@ export function NotionImportDialog({
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <DialogTitle className="text-lg font-bold tracking-tight text-foreground/90 flex items-center gap-2">
-                <img src="/integrations/notion.png" alt="Notion" className="size-5 object-contain" />
+                <img src="/integrations/Notion-logo.svg" alt="Notion" className="size-5 object-contain" />
                 Import from Notion
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground/85">

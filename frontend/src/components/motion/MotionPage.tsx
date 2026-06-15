@@ -1461,7 +1461,7 @@ export function MotionPage() {
         <DialogContent className="sm:max-w-[425px] rounded-2xl border border-border/80 shadow-2xl bg-background/95 backdrop-blur-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground font-semibold text-base">
-              <img src="/integrations/notion.png" alt="Notion" className="size-5 object-contain" />
+              <img src="/integrations/Notion-logo.svg" alt="Notion" className="size-5 object-contain" />
               <span>Export to Notion</span>
             </DialogTitle>
           </DialogHeader>

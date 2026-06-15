@@ -3311,7 +3311,7 @@ function ConnectorsTab() {
           <div className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors">
             <div className="flex items-center gap-3">
               <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
-                <img src="/integrations/notion.png" alt="Notion" className="size-6 object-contain" />
+                <img src="/integrations/Notion-logo.svg" alt="Notion" className="size-6 object-contain" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
