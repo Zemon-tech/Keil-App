@@ -6,6 +6,7 @@ import { HeroSection } from "./dashboard/HeroSection";
 import { DashboardPanel } from "./dashboard/DashboardPanel";
 import { HistorySidebar } from "./dashboard/HistorySidebar";
 import { useOrgDashboard } from "@/hooks/api/useDashboard";
+import { motion, AnimatePresence } from "motion/react";
 import { useAppContext } from "@/contexts/AppContext";
 import {
   AlertCircle,
@@ -37,6 +38,8 @@ import {
   Users,
   GitBranch,
   BrainIcon,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import api from "@/lib/api";
 import {
@@ -373,6 +376,25 @@ export function Dashboard() {
     isError,
   } = useOrgDashboard(activeOrgId, activeSpaceId);
 
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dashboard_expanded") === "true";
+    }
+    return false;
+  });
+
+  const handleToggleDashboard = useCallback(() => {
+    setIsDashboardExpanded((prev) => {
+      const next = !prev;
+      localStorage.setItem("dashboard_expanded", String(next));
+      return next;
+    });
+  }, []);
+
+  const urgentCount = data?.immediate?.length ?? 0;
+  const replyCount = data?.needsReply?.length ?? 0;
+  const queuedCount = data?.today?.length ?? 0;
+
   const [modelSelection, setModelSelection] = useState<string>(() => {
     return localStorage.getItem("ai_model_selection") || "gemini";
   });
@@ -666,7 +688,7 @@ export function Dashboard() {
     const msg = pendingInitialMessageRef.current;
     pendingInitialMessageRef.current = null;
     sendMessage({ text: msg });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]); // intentionally omit sendMessage — it's stable and we only want this to fire on threadId change
 
   // ── Load chat history for existing threads ────────────────────────────────
@@ -715,10 +737,27 @@ export function Dashboard() {
 
   if (!mounted) return null;
 
+  const showDashboardBackground = !hasChatStarted && !isLoadingHistory;
+
   return (
     <div className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none flex">
       {/* Main Viewport Container */}
-      <main className="flex-1 min-w-0 h-full flex flex-col items-center relative overflow-hidden overscroll-none transition-all duration-300">
+      <main
+        className={cn(
+          "flex-1 min-w-0 h-full flex flex-col items-center relative overflow-hidden overscroll-none transition-all duration-300",
+          showDashboardBackground && "bg-cover bg-center bg-no-repeat"
+        )}
+        style={
+          showDashboardBackground
+            ? {
+              backgroundImage: `url("/backgrounds/ChatGPT Image Jun 16, 2026, 10_12_39 AM.png")`,
+            }
+            : undefined
+        }
+      >
+        {showDashboardBackground && (
+          <div className="absolute inset-0 bg-gradient-to-b from-black/3 via-transparent to-background/12 dark:from-black/10 dark:to-background/40 z-0 pointer-events-none" />
+        )}
 
         {/* Top-Right Control Buttons */}
         <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5">
@@ -771,24 +810,106 @@ export function Dashboard() {
           <div
             className={cn(
               containerClassName,
-              "size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar",
+              "size-full flex flex-col items-center justify-center py-4 md:py-6 min-h-0 overflow-y-auto md:overflow-y-hidden no-scrollbar relative z-10",
             )}
           >
-            <div className="w-full flex flex-col items-center gap-1 sm:gap-2">
+            <div
+              className="w-full flex flex-col items-center max-w-[54rem]"
+              style={{
+                transform: isDashboardExpanded ? "translateY(0)" : "translateY(-56px)",
+                transition: "transform 550ms cubic-bezier(0.16, 1, 0.3, 1)",
+              }}
+            >
               {/* Hero: greeting + input area */}
-              <HeroSection
-                onSubmit={handlePromptSubmit}
-              />
+              <div className="w-full relative z-20">
+                <HeroSection
+                  onSubmit={handlePromptSubmit}
+                />
+              </div>
 
               {isError && (
-                <div className="w-full max-w-[54rem] mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20">
+                <div className="w-full max-w-[54rem] mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20 relative z-10">
                   <AlertCircle className="size-4" />
                   <span>Failed to load dashboard data. Please try again.</span>
                 </div>
               )}
 
-              {/* Dashboard Panel with 3D Wheels */}
-              <DashboardPanel data={data} isLoading={isDashboardLoading} />
+              {/* Attached Animating Dashboard Panel */}
+              <div className="w-full relative z-10 -mt-5 px-4">
+                <motion.div
+                  initial={{ height: 52, opacity: 0 }}
+                  animate={{ height: isDashboardExpanded ? "auto" : 52, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 170, damping: 24 }}
+                  className="w-full bg-background/88 backdrop-blur-xl border border-border/70 border-t-0 rounded-b-[1.25rem] overflow-hidden shadow-[0_20px_50px_-30px_rgba(0,0,0,0.35)]"
+                >
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    {isDashboardExpanded ? (
+                      <motion.div
+                        key="expanded"
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.15 }}
+                        className="w-full"
+                      >
+                        {/* Expanded Header control bar with padding shifting text below the prompt card */}
+                        <div className="flex items-center justify-between pt-8 pb-2 px-4 border-b border-border/40 text-[11px] text-muted-foreground select-none">
+                          <span className="font-mono uppercase tracking-[0.15em] text-[10px]">Workspace Dashboard</span>
+                          <button
+                            onClick={handleToggleDashboard}
+                            className="flex items-center gap-1 hover:text-foreground cursor-pointer transition-colors text-xs"
+                          >
+                            <span>Minimize</span>
+                            <ChevronUp className="size-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Expanded DashboardPanel */}
+                        <DashboardPanel data={data} isLoading={isDashboardLoading} isAttached />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="minimized"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 4 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex items-center justify-between w-full h-[52px] pt-7 pb-2 px-4 text-xs text-muted-foreground select-none"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </span>
+                          <span>
+                            {isDashboardLoading ? (
+                              "Loading workspace snapshot..."
+                            ) : (
+                              <>
+                                Workspace Status: <span className="text-foreground font-medium">{urgentCount} urgent</span> • <span className="text-foreground font-medium">{replyCount} replies</span> • <span className="text-foreground font-medium">{queuedCount} queued</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={handleToggleDashboard}
+                            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 cursor-pointer font-medium transition-colors"
+                          >
+                            View snapshot
+                          </button>
+                          <button
+                            onClick={handleToggleDashboard}
+                            className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors cursor-pointer"
+                          >
+                            <ChevronDown className="size-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              </div>
             </div>
           </div>
         ) : (
@@ -863,8 +984,8 @@ export function Dashboard() {
                                       );
                                     }
 
-                                    const Icon = item.agent 
-                                      ? getAgentIcon(item.agent) 
+                                    const Icon = item.agent
+                                      ? getAgentIcon(item.agent)
                                       : getToolIcon(item.tool || "", item.result);
 
                                     const label = getToolLabel(item.tool || "", item.args, item.result) || item.action || `Running: ${item.tool}`;
