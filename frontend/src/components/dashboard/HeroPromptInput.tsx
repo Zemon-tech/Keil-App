@@ -381,7 +381,7 @@ export function HeroPromptInput({
     >
       {!isChatStarted && (
         <div className="flex items-center gap-5 text-center">
-          <h1 className="text-4xl font-medium tracking-tight font-serif text-foreground sm:text-5xl md:text-6xl animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <h1 className="text-4xl font-medium tracking-tight font-serif text-white sm:text-5xl md:text-6xl animate-in fade-in slide-in-from-bottom-2 duration-500">
             {greeting || `Hey, ${userName.split(" ")[0]}`}
           </h1>
         </div>

@@ -10,7 +10,7 @@ export function NextEventCard({ isWheel }: NextEventCardProps) {
   return (
     <Card
       className={cn(
-        isWheel ? "size-full rounded-l-[1.45rem] rounded-r-none border-0 bg-background/92 shadow-none" : "bg-card/90 border border-border/60 rounded-2xl shadow-sm",
+        isWheel ? "size-full rounded-l-[1.45rem] rounded-r-none border-0 bg-transparent shadow-none" : "bg-card/90 border border-border/60 rounded-2xl shadow-sm",
         "p-4 gap-2 hover:bg-card transition-all duration-300 cursor-pointer group relative overflow-hidden",
       )}
     >

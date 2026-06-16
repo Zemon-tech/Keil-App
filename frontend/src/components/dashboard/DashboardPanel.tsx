@@ -23,10 +23,11 @@ import type { DashboardResponse } from "@/hooks/api/useDashboard";
 interface DashboardPanelProps {
   data: DashboardResponse | undefined;
   isLoading: boolean;
+  isAttached?: boolean;
 }
 
 
-export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
+export function DashboardPanel({ data, isLoading, isAttached = false }: DashboardPanelProps) {
   console.log("[DashboardPanel] Render", { isLoading, needsReply: data?.needsReply, needsReplyCount: data?.needsReply?.length ?? 0 });
 
   const [now, setNow] = useState(() => new Date());
@@ -148,16 +149,16 @@ export function DashboardPanel({ data, isLoading }: DashboardPanelProps) {
   ];
 
   return (
-    <div className="w-full max-w-[54rem] px-4 mt-4 sm:mt-5">
+    <div className={cn(isAttached ? "w-full" : "w-full max-w-[54rem] px-4 mt-4 sm:mt-5")}>
       <div
         className={cn(
-          "flex w-full flex-col overflow-hidden rounded-[1.45rem] border border-border/70 bg-background/92 backdrop-blur-xl no-scrollbar",
-          "shadow-[0_22px_70px_-54px_rgba(15,23,42,0.48)] transition-all duration-300 ease-in-out",
-          "sm:flex-row",
+          isAttached
+            ? "flex w-full flex-col overflow-hidden no-scrollbar sm:flex-row"
+            : "flex w-full flex-col overflow-hidden rounded-[1.45rem] border border-border/70 bg-background/92 backdrop-blur-xl no-scrollbar shadow-[0_22px_70px_-54px_rgba(15,23,42,0.48)] transition-all duration-300 ease-in-out sm:flex-row",
         )}
         style={{ height: dimensions.containerHeight }}
       >
-        <div className="relative size-full shrink-0 border-b border-border/60 bg-muted/15 sm:w-[31%] sm:border-b-0 sm:border-r no-scrollbar">
+        <div className="relative size-full shrink-0 border-b border-border/60 sm:w-[31%] sm:border-b-0 sm:border-r no-scrollbar">
           <WheelPicker
             items={wheelItems}
             containerHeight={dimensions.containerHeight}
