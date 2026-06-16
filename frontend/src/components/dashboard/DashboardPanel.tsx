@@ -23,11 +23,12 @@ import type { DashboardResponse } from "@/hooks/api/useDashboard";
 interface DashboardPanelProps {
   data: DashboardResponse | undefined;
   isLoading: boolean;
+  isError?: boolean;
   isAttached?: boolean;
 }
 
 
-export function DashboardPanel({ data, isLoading, isAttached = false }: DashboardPanelProps) {
+export function DashboardPanel({ data, isLoading, isError = false, isAttached = false }: DashboardPanelProps) {
   console.log("[DashboardPanel] Render", { isLoading, needsReply: data?.needsReply, needsReplyCount: data?.needsReply?.length ?? 0 });
 
   const [now, setNow] = useState(() => new Date());
@@ -217,7 +218,7 @@ export function DashboardPanel({ data, isLoading, isAttached = false }: Dashboar
                     </span>
                   </div>
                   <span className="shrink-0 text-sm font-semibold text-foreground">
-                    {isLoading ? "-" : value}
+                    {isLoading ? "-" : isError ? "Error" : value}
                   </span>
                 </div>
               ))}

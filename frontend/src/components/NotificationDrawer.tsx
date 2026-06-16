@@ -28,37 +28,37 @@ const notificationStyles = {
   task_assigned: {
     label: "Task Assigned",
     icon: CheckSquare,
-    className: "bg-[var(--event-task-bg)] text-[var(--event-task-text)] ring-[var(--event-task-border)]",
+    className: "bg-emerald-500 text-white border-emerald-600",
   },
   someone_messaged: {
     label: "Chat",
     icon: MessageCircle,
-    className: "bg-[var(--event-focus-bg)] text-[var(--event-focus-text)] ring-[var(--event-focus-border)]",
+    className: "bg-blue-500 text-white border-blue-600",
   },
   motion_shared: {
     label: "Motion",
     icon: User,
-    className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
+    className: "bg-purple-500 text-white border-purple-600",
   },
   task_status_changed: {
     label: "Task Update",
     icon: CheckSquare,
-    className: "bg-[var(--event-task-bg)] text-[var(--event-task-text)] ring-[var(--event-task-border)]",
+    className: "bg-amber-500 text-white border-amber-600",
   },
   membership_updates: {
     label: "System",
     icon: Settings,
-    className: "bg-[var(--event-deadline-bg)] text-[var(--event-deadline-text)] ring-[var(--event-deadline-border)]",
+    className: "bg-rose-500 text-white border-rose-600",
   },
   mention_in_comment: {
     label: "Mention",
     icon: User,
-    className: "bg-[var(--event-reminder-bg)] text-[var(--event-reminder-text)] ring-[var(--event-reminder-border)]",
+    className: "bg-indigo-500 text-white border-indigo-600",
   },
   comment_created: {
     label: "Comment",
     icon: MessageCircle,
-    className: "bg-[var(--event-focus-bg)] text-[var(--event-focus-text)] ring-[var(--event-focus-border)]",
+    className: "bg-pink-500 text-white border-pink-600",
   },
 } as const;
 
@@ -66,7 +66,7 @@ const getNotificationMeta = (eventType: string) =>
   notificationStyles[eventType as keyof typeof notificationStyles] ?? {
     label: "Update",
     icon: Bell,
-    className: "bg-muted text-muted-foreground ring-border",
+    className: "bg-muted text-muted-foreground border-border",
   };
 
 export function NotificationDrawer({
@@ -167,7 +167,7 @@ export function NotificationDrawer({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-2 py-2">
+          <div className="flex-1 overflow-y-auto px-2 py-1">
             {filteredNotifications.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground">
                 <Bell className="mb-3 size-10 opacity-25" />
@@ -175,7 +175,7 @@ export function NotificationDrawer({
                 <p className="mt-1 text-xs">Important workspace updates will appear here.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
+              <div className="flex flex-col">
                 {groupNotifications(filteredNotifications).map((item) => {
                   const notification = item.main;
                   const meta = getNotificationMeta(notification.event_type);
@@ -210,43 +210,43 @@ export function NotificationDrawer({
                         onOpenChange(false);
                       }}
                       className={cn(
-                        "group relative flex gap-3 cursor-pointer rounded-xl p-3 transition-[transform,background-color,border-color] duration-150 ease-out border active:scale-[0.98]",
+                        "group relative flex gap-2.5 cursor-pointer p-2.5 transition-all duration-150 ease-out border-b border-border/40 active:bg-muted/30 select-none",
                         isRead 
-                          ? "bg-background border-transparent hover:bg-muted/40 hover:border-border/40" 
-                          : "bg-muted/15 border-border/10 hover:bg-muted/25 hover:border-border/30 shadow-xs",
+                          ? "bg-transparent hover:bg-muted/20" 
+                          : "bg-primary/[0.03] hover:bg-primary/[0.05]",
                       )}
                     >
                       {/* Left side: Avatar or Icon */}
-                      <div className="relative shrink-0">
+                      <div className="relative shrink-0 pt-0.5">
                         {hasSender ? (
                           <div className="relative">
-                            <Avatar className="size-8.5 border border-border/50 shadow-xs rounded-xl">
+                            <Avatar className="size-8 border border-border/50 shadow-xs rounded-full">
                               <AvatarImage
-                                src={getOptimizedImageUrl(notification.sender_avatar, { width: 68, height: 68 })}
+                                src={getOptimizedImageUrl(notification.sender_avatar, { width: 64, height: 64 })}
                                 alt={actor}
                               />
-                              <AvatarFallback className="bg-primary/20 text-foreground text-xs font-semibold uppercase rounded-xl">
+                              <AvatarFallback className="bg-primary/20 text-foreground text-xs font-semibold uppercase rounded-full">
                                 {actor.charAt(0).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div className={cn(
-                              "absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full border-2 border-background shadow-xs",
+                              "absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-background shadow-xs",
                               meta.className
                             )}>
-                              <Icon className="size-2.5" />
+                              <Icon className="size-2 text-white" />
                             </div>
                           </div>
                         ) : (
-                          <div className={cn("flex size-8.5 items-center justify-center rounded-xl shadow-xs border border-border/20", meta.className)}>
-                            <Icon className="size-4" />
+                          <div className={cn("flex size-8 items-center justify-center rounded-full shadow-xs border border-border/20", meta.className)}>
+                            <Icon className="size-3.5" />
                           </div>
                         )}
                       </div>
 
                       {/* Right side: Content */}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="flex items-start justify-between gap-2.5">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                             <h3
                               className={cn(
                                 "truncate text-xs tracking-tight",
@@ -255,32 +255,29 @@ export function NotificationDrawer({
                             >
                               {getNotificationTitle(notification)}
                             </h3>
-                            {!isRead && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
+                            <Badge
+                              variant="outline"
+                              className="h-auto py-0 px-1 text-[9px] font-normal rounded-md shrink-0 bg-transparent text-muted-foreground border-border/60"
+                            >
+                              {meta.label}
+                            </Badge>
+                            {!isRead && <span className="size-1.5 shrink-0 rounded-full bg-primary animate-pulse" />}
                           </div>
-                          <span className="text-[10px] text-muted-foreground/80 shrink-0">
+                          <span className="text-[10px] text-muted-foreground/70 shrink-0 mt-0.5">
                             {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                           </span>
                         </div>
                         
-                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">
+                        <p className="mt-0.5 text-xs leading-normal text-muted-foreground/90 line-clamp-2">
                           {descriptionText}
                         </p>
 
                         {/* Callout box for comments/messages */}
                         {calloutText && (
-                          <div className="mt-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-xs text-foreground/90 font-normal italic shadow-2xs leading-relaxed line-clamp-3">
+                          <div className="mt-1.5 border-l-2 border-border/80 pl-2 text-xs text-muted-foreground/75 font-normal italic line-clamp-2 leading-relaxed">
                             "{calloutText}"
                           </div>
                         )}
-
-                        <div className="mt-2.5 flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className="h-5 border-border/40 bg-card/50 px-1.5 text-[9px] font-medium text-muted-foreground shadow-none rounded-md"
-                          >
-                            {meta.label}
-                          </Badge>
-                        </div>
                       </div>
                     </article>
                   );

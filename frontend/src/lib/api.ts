@@ -27,9 +27,29 @@ api.interceptors.request.use(
             config.headers.Authorization = `Bearer ${session.access_token}`;
         }
 
+        // Attach unique browser session ID and platform info
+        let browserId = localStorage.getItem("keil_browser_id");
+        if (!browserId) {
+            browserId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            localStorage.setItem("keil_browser_id", browserId);
+        }
+        config.headers["X-Browser-Id"] = browserId;
+        config.headers["X-Platform"] = navigator.platform || "";
+
         return config;
     },
     (error) => {
+        return Promise.reject(error);
+    }
+);
+
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error.response?.status === 401 && error.response?.data?.code === "SESSION_REVOKED") {
+            // Dispatch event to log out the user from AuthContext
+            window.dispatchEvent(new CustomEvent("keil-session-revoked"));
+        }
         return Promise.reject(error);
     }
 );

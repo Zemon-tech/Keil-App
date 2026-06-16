@@ -128,7 +128,7 @@ import { usePreferences, useUpdateSttProvider, useUpdateDeleteSlotsOnComplete, t
 import { useOpenDM } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { getSessionRecords, type SessionRecord } from "@/contexts/AuthContext";
+import { type SessionRecord } from "@/contexts/AuthContext";
 import { useSettingsStore } from "@/store/useSettingsStore";
 
 // ─── Helper Functions ─────────────────────────────────────────────────
@@ -3689,17 +3689,26 @@ function SessionsTab() {
   const { signOut, signOutGlobal } = useAuth();
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [isSigningOutAll, setIsSigningOutAll] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load sessions from localStorage on mount and on focus
-  const loadSessions = () => {
-    const records = getSessionRecords();
-    // Sort: current first, then newest login first
-    records.sort((a, b) => {
-      if (a.isCurrent) return -1;
-      if (b.isCurrent) return 1;
-      return new Date(b.loginAt).getTime() - new Date(a.loginAt).getTime();
-    });
-    setSessions(records);
+  // Load sessions from database on mount and on focus
+  const loadSessions = async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get("/users/sessions");
+      const records: SessionRecord[] = res.data.data || [];
+      // Sort: current first, then newest login first
+      records.sort((a, b) => {
+        if (a.isCurrent) return -1;
+        if (b.isCurrent) return 1;
+        return new Date(b.loginAt).getTime() - new Date(a.loginAt).getTime();
+      });
+      setSessions(records);
+    } catch (err) {
+      console.error("Failed to load sessions:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -3718,15 +3727,15 @@ function SessionsTab() {
     }
   };
 
-  const handleRemoveSession = (id: string) => {
+  const handleRemoveSession = async (id: string) => {
     try {
-      const stored = localStorage.getItem("keil_sessions");
-      if (!stored) return;
-      const records: SessionRecord[] = JSON.parse(stored);
-      const updated = records.filter((r) => r.id !== id);
-      localStorage.setItem("keil_sessions", JSON.stringify(updated));
+      await api.delete(`/users/sessions/${id}`);
+      toast.success("Device signed out successfully");
       loadSessions();
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error("Failed to revoke session");
+      console.error(err);
+    }
   };
 
   return (
@@ -3749,17 +3758,22 @@ function SessionsTab() {
           <div>
             <p className="text-sm font-semibold text-foreground">Session Overview</p>
             <p className="text-xs text-muted-foreground">
-              {sessions.length} active {sessions.length === 1 ? "session" : "sessions"} tracked on this machine
+              {sessions.length} active {sessions.length === 1 ? "session" : "sessions"} on your account
             </p>
           </div>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Sessions are stored locally per browser. Signing out on one device does not affect others unless you use "Sign out all devices."
+          These are the browsers and devices that have recently logged in to your account. You can sign out of any active session or revoke them globally.
         </p>
       </div>
 
       {/* Session list */}
-      {sessions.length === 0 ? (
+      {isLoading && sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Loader2 className="size-8 text-primary animate-spin mb-3" />
+          <p className="text-sm font-medium text-muted-foreground">Loading active sessions...</p>
+        </div>
+      ) : sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Monitor className="size-10 text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium text-muted-foreground">No session records yet</p>

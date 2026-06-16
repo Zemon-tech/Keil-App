@@ -9,7 +9,6 @@ import { useOrgDashboard } from "@/hooks/api/useDashboard";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppContext } from "@/contexts/AppContext";
 import {
-  AlertCircle,
   SquarePen,
   History,
   Loader2,
@@ -589,6 +588,15 @@ export function Dashboard() {
       return;
     }
 
+    // Auto-generate title if this is the first message on an existing thread
+    if (messages.length === 0) {
+      let title = content.trim();
+      if (title.length > 40) {
+        title = title.substring(0, 40) + "...";
+      }
+      api.put(`v1/ai/threads/${threadId}`, { title }).catch(() => {});
+    }
+
     await sendMessage({ text: content });
   };
 
@@ -688,6 +696,13 @@ export function Dashboard() {
     const msg = pendingInitialMessageRef.current;
     pendingInitialMessageRef.current = null;
     sendMessage({ text: msg });
+
+    // Auto-generate title
+    let title = msg.trim();
+    if (title.length > 40) {
+      title = title.substring(0, 40) + "...";
+    }
+    api.put(`v1/ai/threads/${threadId}`, { title }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]); // intentionally omit sendMessage — it's stable and we only want this to fire on threadId change
 
@@ -778,27 +793,24 @@ export function Dashboard() {
             </Tooltip>
           )}
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleHistory}
-                disabled={isLoadingHistory}
-                className={cn(
-                  "size-8 rounded-full transition-colors",
-                  isHistoryOpen
-                    ? "text-primary bg-primary/5 hover:bg-primary/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/65"
-                )}
-              >
-                <History className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {isHistoryOpen ? "Close history" : "Conversation history"}
-            </TooltipContent>
-          </Tooltip>
+          {!isHistoryOpen && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleHistory}
+                  disabled={isLoadingHistory}
+                  className="size-8 rounded-full transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/65"
+                >
+                  <History className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Conversation history
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         {isLoadingHistory ? (
@@ -827,12 +839,7 @@ export function Dashboard() {
                 />
               </div>
 
-              {isError && (
-                <div className="w-full max-w-[54rem] mt-2 flex items-center justify-center p-4 bg-destructive/10 text-destructive rounded-lg gap-2 text-sm border border-destructive/20 relative z-10">
-                  <AlertCircle className="size-4" />
-                  <span>Failed to load dashboard data. Please try again.</span>
-                </div>
-              )}
+
 
               {/* Attached Animating Dashboard Panel */}
               <div className="w-full relative z-10 -mt-5 px-4">
@@ -865,7 +872,7 @@ export function Dashboard() {
                         </div>
 
                         {/* Expanded DashboardPanel */}
-                        <DashboardPanel data={data} isLoading={isDashboardLoading} isAttached />
+                        <DashboardPanel data={data} isLoading={isDashboardLoading} isError={isError} isAttached />
                       </motion.div>
                     ) : (
                       <motion.div
@@ -878,12 +885,23 @@ export function Dashboard() {
                       >
                         <div className="flex items-center gap-2">
                           <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            {isError ? (
+                              <>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 animate-pulse"></span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                              </>
+                            )}
                           </span>
                           <span>
                             {isDashboardLoading ? (
                               "Loading workspace snapshot..."
+                            ) : isError ? (
+                              <span className="text-red-400 font-medium">Failed to load dashboard data. Please try again.</span>
                             ) : (
                               <>
                                 Workspace Status: <span className="text-foreground font-medium">{urgentCount} urgent</span> • <span className="text-foreground font-medium">{replyCount} replies</span> • <span className="text-foreground font-medium">{queuedCount} queued</span>

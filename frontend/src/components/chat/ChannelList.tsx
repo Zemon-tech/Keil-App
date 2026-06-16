@@ -72,9 +72,9 @@ export function ChannelList({ orgId, spaceId }: ChannelListProps) {
                   <Users className="size-4" />
                 </div>
               ) : (
-                <Avatar className="shrink-0 size-8.5 rounded-xl border border-border/10">
+                <Avatar className="shrink-0 size-8.5 rounded-full border border-border/10">
                   <AvatarImage src={getOptimizedImageUrl(otherMember?.avatar_url, { width: 96, height: 96 })} alt={displayName} />
-                  <AvatarFallback className="text-xs font-semibold bg-primary/20 text-foreground uppercase rounded-xl">
+                  <AvatarFallback className="text-xs font-semibold bg-primary/20 text-foreground uppercase rounded-full">
                     {displayName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>

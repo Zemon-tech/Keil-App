@@ -65,6 +65,36 @@ export const protect = async (
         (req as any).user = result.rows[0];
         setInLogContext("userId", result.rows[0].id);
 
+        // Session validation and background tracking
+        const browserId = req.headers["x-browser-id"] as string;
+        if (browserId) {
+            const sessionRes = await pool.query(
+                "SELECT is_revoked FROM public.user_sessions WHERE user_id = $1 AND browser_id = $2",
+                [supabaseUser.id, browserId]
+            );
+
+            if (sessionRes.rows.length > 0 && sessionRes.rows[0].is_revoked) {
+                res.status(401).json({
+                    success: false,
+                    code: "SESSION_REVOKED",
+                    message: "This session has been signed out."
+                });
+                return;
+            }
+
+            const userAgent = req.headers["user-agent"] || "";
+            const platform = (req.headers["x-platform"] || req.headers["sec-ch-ua-platform"] || "") as string;
+
+            pool.query(`
+                INSERT INTO public.user_sessions (user_id, browser_id, user_agent, platform, last_seen)
+                VALUES ($1, $2, $3, $4, NOW())
+                ON CONFLICT (user_id, browser_id)
+                DO UPDATE SET last_seen = NOW(), user_agent = EXCLUDED.user_agent, platform = CASE WHEN EXCLUDED.platform <> '' THEN EXCLUDED.platform ELSE public.user_sessions.platform END
+            `, [supabaseUser.id, browserId, userAgent, platform]).catch(err => {
+                logger.error({ err, userId: supabaseUser.id, browserId }, "Failed to upsert user session in auth middleware");
+            });
+        }
+
         next();
     } catch (err) {
         logger.error({ err: err as Error }, "Auth middleware error");
