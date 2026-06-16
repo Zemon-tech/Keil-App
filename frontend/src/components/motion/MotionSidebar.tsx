@@ -672,7 +672,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                     className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] active:scale-98 transition-transform"
                     onClick={() => setImportDialogOpen(true)}
                   >
-                    <img src="/integrations/notion.png" alt="Notion" className="size-3.5 object-contain" />
+                    <img src="/integrations/Notion-logo.svg" alt="Notion" className="size-3.5 object-contain" />
                     Import from Notion
                   </DropdownMenuItem>
                 </DropdownMenuContent>

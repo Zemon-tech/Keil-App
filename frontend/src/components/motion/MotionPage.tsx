@@ -48,6 +48,103 @@ import {
   type MotionPageDTO,
 } from "@/hooks/api/useMotionPages";
 import { useRecordPageView } from "@/hooks/api/useMotionAnalytics";
+
+const COVER_CATEGORIES = [
+  {
+    title: "Color & Gradient",
+    type: "colors" as const,
+    items: ['#eb5757', '#f2994a', '#f2c94c', '#27ae60', '#2d9cdb', '#9b51e0', '#4a4a4a', '#6b7280']
+  },
+  {
+    title: "Hudson River School",
+    type: "images" as const,
+    items: [
+      "https://www.notion.so/images/page-cover/hudsonRiverSchool_theOxbow.jpg",
+      "https://www.notion.so/images/page-cover/hudsonRiverSchool_springLandscape.jpg",
+      "https://www.notion.so/images/page-cover/hudsonRiverSchool_aegeanSea.jpg",
+      "https://www.notion.so/images/page-cover/hudsonRiverSchool_catskillEarlyAutumn.jpg",
+      "https://app.notion.com/images/page-cover/hudsonRiverSchool_passingOffOfTheStorm.jpg"
+    ]
+  },
+  {
+    title: "Patterns",
+    type: "images" as const,
+    items: [
+      "https://app.notion.com/images/page-cover/met_william_morris_1877_willow.jpg",
+      "https://app.notion.com/images/page-cover/met_william_morris_1875.jpg",
+      "https://app.notion.com/images/page-cover/met_william_morris_1878.jpg",
+      "https://app.notion.com/images/page-cover/met_silk_kashan_carpet.jpg"
+    ]
+  },
+  {
+    title: "Rijksmuseum",
+    type: "images" as const,
+    items: [
+      "https://app.notion.com/images/page-cover/rijksmuseum_vermeer_the_milkmaid.jpg",
+      "https://app.notion.com/images/page-cover/rijksmuseum_jansz_1649.jpg",
+      "https://app.notion.com/images/page-cover/rijksmuseum_rembrandt_1642.jpg",
+      "https://app.notion.com/images/page-cover/rijksmuseum_jansz_1636.jpg",
+      "https://app.notion.com/images/page-cover/rijksmuseum_jan_lievens_1627.jpg",
+      "https://app.notion.com/images/page-cover/rijksmuseum_claesz_1628.jpg"
+    ]
+  },
+  {
+    title: "The Metropolitan Museum of Art",
+    type: "images" as const,
+    items: [
+      "https://app.notion.com/images/page-cover/met_vincent_van_gogh_ginoux.jpg",
+      "https://app.notion.com/images/page-cover/met_winslow_homer_maine_coast.jpg",
+      "https://app.notion.com/images/page-cover/met_frederic_edwin_church_1871.jpg",
+      "https://app.notion.com/images/page-cover/met_joseph_hidley_1870.jpg",
+      "https://app.notion.com/images/page-cover/met_jules_tavernier_1878.jpg",
+      "https://app.notion.com/images/page-cover/met_henry_lerolle_1885.jpg",
+      "https://app.notion.com/images/page-cover/met_georges_seurat_1884.jpg",
+      "https://app.notion.com/images/page-cover/met_john_singer_sargent_morocco.jpg",
+      "https://app.notion.com/images/page-cover/met_paul_signac.jpg",
+      "https://app.notion.com/images/page-cover/met_vincent_van_gogh_oleanders.jpg",
+      "https://app.notion.com/images/page-cover/met_emanuel_leutze.jpg",
+      "https://app.notion.com/images/page-cover/met_fitz_henry_lane.jpg",
+      "https://app.notion.com/images/page-cover/met_gerome_1890.jpg",
+      "https://app.notion.com/images/page-cover/met_camille_pissarro_1896.jpg",
+      "https://app.notion.com/images/page-cover/met_arnold_bocklin_1880.jpg",
+      "https://app.notion.com/images/page-cover/met_canaletto_1720.jpg",
+      "https://app.notion.com/images/page-cover/met_william_turner_1835.jpg",
+      "https://app.notion.com/images/page-cover/met_klimt_1912.jpg",
+      "https://app.notion.com/images/page-cover/met_bruegel_1565.jpg",
+      "https://app.notion.com/images/page-cover/met_goya_1789.jpg",
+      "https://app.notion.com/images/page-cover/met_the_unicorn_in_captivity.jpg",
+      "https://app.notion.com/images/page-cover/met_henri_rousseau_1907.jpg",
+      "https://app.notion.com/images/page-cover/met_horace_pippin.jpg"
+    ]
+  },
+  {
+    title: "Woodcuts",
+    type: "images" as const,
+    items: [
+      "https://app.notion.com/images/page-cover/woodcuts_1.jpg",
+      "https://app.notion.com/images/page-cover/woodcuts_5.jpg",
+      "https://app.notion.com/images/page-cover/woodcuts_9.jpg",
+      "https://app.notion.com/images/page-cover/woodcuts_15.jpg",
+      "https://app.notion.com/images/page-cover/woodcuts_16.jpg",
+      "https://app.notion.com/images/page-cover/woodcuts_11.jpg"
+    ]
+  },
+  {
+    title: "Art & Illustration",
+    type: "images" as const,
+    items: [
+      "https://www.notion.so/images/page-cover/nationalMuseumOfAsianArt_sparrowsFeedingTheirYoung.jpg",
+      "https://www.notion.so/images/page-cover/usda_pear.png",
+      "https://app.notion.com/images/page-cover/usda_cherries.png",
+      "https://app.notion.com/images/page-cover/usda_apple.png",
+      "https://app.notion.com/images/page-cover/usda_oranges.png"
+    ]
+  }
+];
+
+const ALL_COVER_IMAGES = COVER_CATEGORIES
+  .filter(cat => cat.type === "images")
+  .flatMap(cat => cat.items);
 import type { JSONContent } from "@tiptap/core";
 import { toast } from "sonner";
 import { saveDraft, getDraft, clearDraft } from "@/lib/motion-drafts";
@@ -1027,71 +1124,46 @@ export function MotionPage() {
                     <div className="p-4 max-h-[420px] overflow-y-auto custom-scrollbar">
                       {activeCoverTab === 'Gallery' && (
                         <div className="space-y-4">
-                          <div>
-                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Color & Gradient</span>
-                            <div className="grid grid-cols-4 gap-2 mt-2">
-                              {['#eb5757', '#f2994a', '#f2c94c', '#27ae60', '#2d9cdb', '#9b51e0', '#4a4a4a', '#6b7280'].map(color => (
-                                <button
-                                  key={color}
-                                  className="h-14 rounded-md transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
-                                  style={{ backgroundColor: color }}
-                                  onClick={() => {
-                                    if (pageId) {
-                                      updatePage.mutate({ id: pageId, updates: { cover_image: color } });
-                                    }
-                                    setShowCoverPicker(false);
-                                  }}
-                                />
-                              ))}
+                          {COVER_CATEGORIES.map((category) => (
+                            <div key={category.title}>
+                              <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
+                                {category.title}
+                              </span>
+                              {category.type === "colors" ? (
+                                <div className="grid grid-cols-4 gap-2 mt-2">
+                                  {category.items.map((color) => (
+                                    <button
+                                      key={color}
+                                      className="h-14 rounded-md transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1 cursor-pointer"
+                                      style={{ backgroundColor: color }}
+                                      onClick={() => {
+                                        if (pageId) {
+                                          updatePage.mutate({ id: pageId, updates: { cover_image: color } });
+                                        }
+                                        setShowCoverPicker(false);
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-3 gap-2 mt-2">
+                                  {category.items.map((url) => (
+                                    <button
+                                      key={url}
+                                      className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1 cursor-pointer"
+                                      style={{ backgroundImage: `url(${url})` }}
+                                      onClick={() => {
+                                        if (pageId) {
+                                          updatePage.mutate({ id: pageId, updates: { cover_image: url } });
+                                        }
+                                        setShowCoverPicker(false);
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                          <div>
-                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Hudson River School</span>
-                            <div className="grid grid-cols-3 gap-2 mt-2">
-                              {[
-                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_theOxbow.jpg",
-                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_springLandscape.jpg",
-                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_aegeanSea.jpg",
-                                "https://www.notion.so/images/page-cover/hudsonRiverSchool_catskillEarlyAutumn.jpg",
-                                "https://www.notion.so/images/page-cover/met_frederic_edwin_church_1871.jpg",
-                                "https://www.notion.so/images/page-cover/rijksmuseum_avercamp_1620.jpg",
-                              ].map(url => (
-                                <button
-                                  key={url}
-                                  className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
-                                  style={{ backgroundImage: `url(${url})` }}
-                                  onClick={() => {
-                                    if (pageId) {
-                                      updatePage.mutate({ id: pageId, updates: { cover_image: url } });
-                                    }
-                                    setShowCoverPicker(false);
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Art & Illustration</span>
-                            <div className="grid grid-cols-3 gap-2 mt-2">
-                              {[
-                                "https://www.notion.so/images/page-cover/nationalMuseumOfAsianArt_sparrowsFeedingTheirYoung.jpg",
-                                "https://www.notion.so/images/page-cover/usda_pear.png",
-                                "https://www.notion.so/images/page-cover/met_vincent_van_gogh_ginoux.jpg",
-                              ].map(url => (
-                                <button
-                                  key={url}
-                                  className="h-16 rounded-md bg-cover bg-center transition-transform hover:scale-[1.02] ring-offset-background hover:ring-2 hover:ring-ring hover:ring-offset-1"
-                                  style={{ backgroundImage: `url(${url})` }}
-                                  onClick={() => {
-                                    if (pageId) {
-                                      updatePage.mutate({ id: pageId, updates: { cover_image: url } });
-                                    }
-                                    setShowCoverPicker(false);
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -1325,9 +1397,9 @@ export function MotionPage() {
                     <button
                       className="hover:bg-muted/50 px-2 py-1 rounded transition-colors flex items-center gap-1.5"
                       onClick={() => {
-                        const defaultCover = "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=1600&auto=format&fit=crop";
+                        const randomCover = ALL_COVER_IMAGES[Math.floor(Math.random() * ALL_COVER_IMAGES.length)];
                         if (pageId) {
-                          updatePage.mutate({ id: pageId, updates: { cover_image: defaultCover } });
+                          updatePage.mutate({ id: pageId, updates: { cover_image: randomCover } });
                         }
                       }}
                     >
@@ -1461,7 +1533,7 @@ export function MotionPage() {
         <DialogContent className="sm:max-w-[425px] rounded-2xl border border-border/80 shadow-2xl bg-background/95 backdrop-blur-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground font-semibold text-base">
-              <img src="/integrations/notion.png" alt="Notion" className="size-5 object-contain" />
+              <img src="/integrations/Notion-logo.svg" alt="Notion" className="size-5 object-contain" />
               <span>Export to Notion</span>
             </DialogTitle>
           </DialogHeader>
