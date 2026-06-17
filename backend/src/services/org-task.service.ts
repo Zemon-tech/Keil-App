@@ -313,6 +313,16 @@ export const createTask = async (
       { title: created.title, status: created.status },
       client,
     );
+
+    if (created.start_date && created.due_date) {
+      await client.query(
+        `INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT DO NOTHING`,
+        [created.id, input.created_by, created.start_date, created.due_date, created.is_all_day ?? false]
+      );
+    }
+
     return created;
   });
 
@@ -443,6 +453,32 @@ export const updateTask = async (
     }
     if (input.due_date !== undefined && toISO(input.due_date) !== toISO(existingTask.due_date)) {
       await logSpaceActivity(context, userId, LogEntityType.TASK, taskId, LogActionType.DUE_DATE_CHANGED, { due_date: toISO(existingTask.due_date) }, { due_date: toISO(input.due_date) }, client);
+    }
+
+    if (updated.start_date && updated.due_date) {
+      const slotRes = await client.query(
+        `SELECT id FROM public.task_slots WHERE task_id = $1`,
+        [taskId]
+      );
+      if (slotRes.rows.length > 0) {
+        await client.query(
+          `UPDATE public.task_slots 
+           SET start_date = $1, due_date = $2, is_all_day = $3, updated_at = NOW() 
+           WHERE task_id = $4`,
+          [updated.start_date, updated.due_date, updated.is_all_day ?? false, taskId]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [taskId, userId, updated.start_date, updated.due_date, updated.is_all_day ?? false]
+        );
+      }
+    } else {
+      await client.query(
+        `DELETE FROM public.task_slots WHERE task_id = $1`,
+        [taskId]
+      );
     }
 
     return updated;
@@ -872,6 +908,13 @@ export const createSlot = async (
   userId: string,
   input: { start_date: Date; due_date: Date; is_all_day?: boolean; checklist_id?: string | null; notes?: string }
 ): Promise<TaskSlot> => {
+  await pool.query(
+    `UPDATE public.tasks 
+     SET start_date = $1, due_date = $2, is_all_day = $3, updated_at = NOW() 
+     WHERE id = $4`,
+    [input.start_date, input.due_date, input.is_all_day ?? false, taskId]
+  );
+
   const result = await pool.query(
     `
       INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day, checklist_id, notes)
@@ -937,7 +980,18 @@ export const updateSlot = async (
   query += ` RETURNING *`;
 
   const result = await pool.query(query, params);
-  return result.rows.length > 0 ? result.rows[0] : null;
+  const updatedSlot = result.rows.length > 0 ? result.rows[0] : null;
+
+  if (updatedSlot) {
+    await pool.query(
+      `UPDATE public.tasks 
+       SET start_date = $1, due_date = $2, is_all_day = $3, updated_at = NOW() 
+       WHERE id = $4`,
+      [updatedSlot.start_date, updatedSlot.due_date, updatedSlot.is_all_day, updatedSlot.task_id]
+    );
+  }
+
+  return updatedSlot;
 };
 
 export const deleteSlot = async (
@@ -945,6 +999,12 @@ export const deleteSlot = async (
   userId: string,
   spaceRole: string
 ): Promise<boolean> => {
+  const slotRes = await pool.query(
+    `SELECT task_id FROM public.task_slots WHERE id = $1`,
+    [slotId]
+  );
+  const taskId = slotRes.rows[0]?.task_id;
+
   let query = `DELETE FROM public.task_slots WHERE id = $1`;
   const params: any[] = [slotId];
 
@@ -955,6 +1015,17 @@ export const deleteSlot = async (
   query += ` RETURNING id`;
 
   const result = await pool.query(query, params);
-  return result.rows.length > 0;
+  const deleted = result.rows.length > 0;
+
+  if (deleted && taskId) {
+    await pool.query(
+      `UPDATE public.tasks 
+       SET start_date = NULL, due_date = NULL, updated_at = NOW() 
+       WHERE id = $1`,
+      [taskId]
+    );
+  }
+
+  return deleted;
 };
 
