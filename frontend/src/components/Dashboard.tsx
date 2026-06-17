@@ -65,6 +65,7 @@ import {
 } from "@/components/ai-elements/chain-of-thought";
 import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
 import { extractStreamingActivities, buildChainOfThoughtTimeline } from "@/lib/activity-stream";
+import { uploadChatAttachment } from "@/lib/s3-upload";
 import { useChat } from "@ai-sdk/react";
 import { supabase } from "@/lib/supabase";
 import { DefaultChatTransport } from "ai";
@@ -359,7 +360,7 @@ export function Dashboard() {
   const { threadId } = useParams<{ threadId?: string }>();
   const navigate = useNavigate();
   // Set when the user submits from the home page. Cleared once the message is sent.
-  const pendingInitialMessageRef = useRef<string | null>(null);
+  const pendingInitialMessageRef = useRef<{ text: string; files: any[] } | null>(null);
   // Set to true when we navigate to a brand-new thread from the home page.
   // Tells loadChat to skip the API call (there's no history yet).
   const isNewThreadRef = useRef(false);
@@ -397,6 +398,7 @@ export function Dashboard() {
   const [modelSelection, setModelSelection] = useState<string>(() => {
     return localStorage.getItem("ai_model_selection") || "gemini";
   });
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -483,7 +485,8 @@ export function Dashboard() {
     },
   });
 
-  const isLoading = status === "submitted" || status === "streaming";
+  const isStreaming = status === "streaming";
+  const isLoading = status === "submitted" || status === "streaming" || isUploadingFiles;
 
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [disliked, setDisliked] = useState<Record<string, boolean>>({});
@@ -577,27 +580,45 @@ export function Dashboard() {
     const content =
       text || `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
 
-    if (!threadId) {
-      // Home page: queue the message and navigate to a new thread.
-      // The sendInitialMessage effect below will send it once threadId is set.
-      const newThreadId = crypto.randomUUID();
-      pendingInitialMessageRef.current = content;
-      isNewThreadRef.current = true;
-      navigate(`/c/${newThreadId}`);
-      // Do NOT call sendMessage here — the new Dashboard instance will handle it.
-      return;
-    }
+    if (!content.trim() || isStreaming || isUploadingFiles) return;
 
-    // Auto-generate title if this is the first message on an existing thread
-    if (messages.length === 0) {
-      let title = content.trim();
-      if (title.length > 40) {
-        title = title.substring(0, 40) + "...";
+    try {
+      let uploadedFiles: any[] = [];
+      if (message.files && message.files.length > 0) {
+        setIsUploadingFiles(true);
+        uploadedFiles = await Promise.all(
+          message.files.map((file) => uploadChatAttachment(file))
+        );
       }
-      api.put(`v1/ai/threads/${threadId}`, { title }).catch(() => {});
-    }
 
-    await sendMessage({ text: content });
+      const msgPayload = { text: content, files: uploadedFiles };
+
+      if (!threadId) {
+        // Home page: queue the message and navigate to a new thread.
+        // The sendInitialMessage effect below will send it once threadId is set.
+        const newThreadId = crypto.randomUUID();
+        pendingInitialMessageRef.current = msgPayload;
+        isNewThreadRef.current = true;
+        navigate(`/c/${newThreadId}`);
+        // Do NOT call sendMessage here — the new Dashboard instance will handle it.
+        return;
+      }
+
+      // Auto-generate title if this is the first message on an existing thread
+      if (messages.length === 0) {
+        let title = content.trim();
+        if (title.length > 40) {
+          title = title.substring(0, 40) + "...";
+        }
+        api.put(`v1/ai/threads/${threadId}`, { title }).catch(() => {});
+      }
+
+      await sendMessage(msgPayload);
+    } catch (error) {
+      console.error("Failed to upload chat attachments to S3:", error);
+    } finally {
+      setIsUploadingFiles(false);
+    }
   };
 
   const handleNewChat = useCallback(() => {
@@ -695,10 +716,10 @@ export function Dashboard() {
     if (!threadId || !pendingInitialMessageRef.current) return;
     const msg = pendingInitialMessageRef.current;
     pendingInitialMessageRef.current = null;
-    sendMessage({ text: msg });
+    sendMessage(msg);
 
     // Auto-generate title
-    let title = msg.trim();
+    let title = msg.text.trim();
     if (title.length > 40) {
       title = title.substring(0, 40) + "...";
     }
@@ -1098,7 +1119,38 @@ export function Dashboard() {
                             )}
                           </div>
                         ) : (
-                          <MessageResponse>{text}</MessageResponse>
+                          <div className="flex flex-col gap-2">
+                            {text.trim() !== "" && (
+                              <MessageResponse>{text}</MessageResponse>
+                            )}
+                            {messageParts.length > 0 && (
+                              <div className="flex flex-col gap-1.5 mt-1">
+                                {messageParts.map((part: any, idx: number) => {
+                                  const isFile = part.type === "file";
+                                  if (!isFile) return null;
+                                  const isImage = part.mediaType?.startsWith("image/") || part.mimeType?.startsWith("image/");
+                                  if (isImage) {
+                                    return (
+                                      <div key={idx} className="max-w-[320px]">
+                                        <img 
+                                          src={part.url} 
+                                          alt={part.filename || "Attached image"} 
+                                          className="max-h-60 object-contain rounded-lg border border-border/40 hover:scale-[1.01] transition-transform cursor-pointer"
+                                          onClick={() => window.open(part.url, "_blank")}
+                                        />
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <div key={idx} className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/40 border border-border/30 text-xs max-w-[280px]">
+                                      <File className="size-3.5 text-muted-foreground flex-shrink-0" />
+                                      <span className="font-medium truncate flex-1">{part.filename}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </MessageContent>
                     </Message>

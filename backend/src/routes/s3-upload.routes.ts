@@ -20,6 +20,9 @@ router.post("/profile/avatar", s3UploadController.getProfileAvatarUploadUrl);
 // Endpoint to generate presigned PUT URL for motion page assets (public)
 router.post("/motion/asset", s3UploadController.getMotionAssetUploadUrl);
 
+// Endpoint to generate presigned PUT URL for AI chat images (public)
+router.post("/ai-chat/image", s3UploadController.getAiChatImageUploadUrl);
+
 // Endpoints to generate presigned PUT/GET URLs for task context attachments (private)
 router.post(
   "/task/upload",

@@ -169,3 +169,29 @@ export const getTaskAttachmentDownloadUrl = catchAsync(async (req: Request, res:
     }
 });
 
+/**
+ * Controller to get a presigned S3 upload URL for an AI chat image (public).
+ */
+export const getAiChatImageUploadUrl = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const { fileName, contentType } = req.body;
+    if (!fileName || !contentType) {
+        throw new ApiError(400, "Missing required parameters: fileName, contentType");
+    }
+
+    try {
+        const data = await s3UploadService.getAiChatImageUploadUrl(user.id, fileName, contentType);
+        return res.status(200).json(
+            new ApiResponse(200, data, "AI chat image upload URL generated successfully")
+        );
+    } catch (err: any) {
+        log.error({ err, userId: user.id }, "Error generating AI chat image upload URL");
+        throw new ApiError(500, "Failed to generate upload URL");
+    }
+});
+
+

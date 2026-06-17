@@ -12,6 +12,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
 import { extractStreamingActivities, buildChainOfThoughtTimeline } from "@/lib/activity-stream";
+import { uploadChatAttachment } from "@/lib/s3-upload";
 
 import {
     Message,
@@ -478,6 +479,7 @@ export function AiAssistant() {
     }, []);
 
     const [fabHovered, setFabHovered] = useState(false);
+    const [isUploadingFiles, setIsUploadingFiles] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const { activeOrgId, activeSpaceId } = useAppContext();
@@ -562,7 +564,7 @@ export function AiAssistant() {
     const { messages, sendMessage, status, setMessages } = useChat({ transport });
 
     const isStreaming = status === "streaming";
-    const isLoading = status === "submitted" || status === "streaming";
+    const isLoading = status === "submitted" || status === "streaming" || isUploadingFiles;
 
     const isAssistantThinking =
         isLoading && messages[messages.length - 1]?.role === "user";
@@ -741,14 +743,28 @@ export function AiAssistant() {
         });
     }, []);
 
-    const handlePromptSubmit = useCallback((message: PromptInputMessage) => {
+    const handlePromptSubmit = useCallback(async (message: PromptInputMessage) => {
         const text = message.text.trim();
         const fileCount = message.files.length;
         const content = text || `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
 
-        if (!content.trim() || isStreaming) return;
-        sendMessage({ text: content });
-    }, [isStreaming, sendMessage]);
+        if (!content.trim() || isStreaming || isUploadingFiles) return;
+
+        try {
+            let uploadedFiles: any[] = [];
+            if (message.files && message.files.length > 0) {
+                setIsUploadingFiles(true);
+                uploadedFiles = await Promise.all(
+                    message.files.map((file) => uploadChatAttachment(file))
+                );
+            }
+            sendMessage({ text: content, files: uploadedFiles });
+        } catch (error) {
+            console.error("Failed to upload chat attachments to S3:", error);
+        } finally {
+            setIsUploadingFiles(false);
+        }
+    }, [isStreaming, isUploadingFiles, sendMessage]);
 
     const handleSuggestionClick = useCallback((prompt: string) => {
         if (isStreaming) return;
@@ -1086,7 +1102,38 @@ export function AiAssistant() {
                                                 )}
                                             </div>
                                         ) : (
-                                            <MessageResponse>{text}</MessageResponse>
+                                            <div className="flex flex-col gap-2">
+                                                {text.trim() !== "" && (
+                                                    <MessageResponse>{text}</MessageResponse>
+                                                )}
+                                                {messageParts.length > 0 && (
+                                                    <div className="flex flex-col gap-1.5 mt-1">
+                                                        {messageParts.map((part: any, idx: number) => {
+                                                            const isFile = part.type === "file";
+                                                            if (!isFile) return null;
+                                                            const isImage = part.mediaType?.startsWith("image/") || part.mimeType?.startsWith("image/");
+                                                            if (isImage) {
+                                                                return (
+                                                                    <div key={idx} className="max-w-[200px]">
+                                                                        <img 
+                                                                            src={part.url} 
+                                                                            alt={part.filename || "Attached image"} 
+                                                                            className="max-h-40 object-contain rounded-lg border border-border/40 hover:scale-[1.01] transition-transform cursor-pointer"
+                                                                            onClick={() => window.open(part.url, "_blank")}
+                                                                        />
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-muted/40 border border-border/30 text-[11px] max-w-[200px]">
+                                                                    <File className="size-3 text-muted-foreground flex-shrink-0" />
+                                                                    <span className="font-medium truncate flex-1">{part.filename}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
                                     </MessageContent>
                                 </Message>

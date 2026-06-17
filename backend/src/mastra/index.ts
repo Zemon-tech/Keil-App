@@ -2,7 +2,7 @@ import { Mastra } from "@mastra/core";
 import { PostgresStore } from "@mastra/pg";
 import { registerApiRoute } from "@mastra/core/server";
 import { toAISdkStream } from "@mastra/ai-sdk";
-import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
+import { createUIMessageStream, createUIMessageStreamResponse, convertToModelMessages } from "ai";
 import type { UIMessage } from "ai";
 import jwt from "jsonwebtoken";
 import { config } from "../config";
@@ -179,8 +179,9 @@ export const mastra = new Mastra({
               // events directly. requestContext is the same Map object shared across
               // the entire supervisor → sub-agent → tool call chain.
               requestContext.set("uiWriter", writer);
+              const modelMessages = await convertToModelMessages(messages);
 
-              const agentStream = await agent.stream(messages, {
+              const agentStream = await agent.stream(modelMessages, {
                 requestContext,
                 instructions: instructionsOverride,
                 memory: {
