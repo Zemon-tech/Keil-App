@@ -242,3 +242,30 @@ export async function getTaskAttachmentDownloadUrl(
     return await getSignedUrl(getS3Client(), command, { expiresIn: 3600 }); // Valid for 1 hour
 }
 
+/**
+ * Generates presigned PUT URL for public AI chat image assets.
+ */
+export async function getAiChatImageUploadUrl(
+    userId: string,
+    fileName: string,
+    contentType: string
+): Promise<{ uploadUrl: string; publicUrl: string; s3Key: string }> {
+    const safeName = sanitizeFileName(fileName || "image.png");
+    const timestamp = Date.now();
+    const s3Key = `ai-chats/${userId}/${timestamp}-${safeName}`;
+
+    log.debug({ s3Key, bucket: config.awsS3PublicBucketName }, "Generating presigned PUT URL for AI chat image");
+
+    const command = new PutObjectCommand({
+        Bucket: config.awsS3PublicBucketName,
+        Key: s3Key,
+        ContentType: contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
+    const publicUrl = getPublicAssetUrl(s3Key);
+
+    return { uploadUrl, publicUrl, s3Key };
+}
+
+

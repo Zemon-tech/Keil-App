@@ -67,9 +67,9 @@ export function ChatDrawer() {
                       <Users className="size-4" />
                     </div>
                   ) : (
-                    <Avatar className="size-8 shrink-0 rounded-xl">
+                    <Avatar className="size-8 shrink-0 rounded-full">
                       <AvatarImage src={getOptimizedImageUrl(otherMember?.avatar_url, { width: 96, height: 96 })} alt={channelName} />
-                      <AvatarFallback className="text-xs font-semibold bg-primary/20 text-foreground uppercase rounded-xl">
+                      <AvatarFallback className="text-xs font-semibold bg-primary/20 text-foreground uppercase rounded-full">
                         {channelName.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>

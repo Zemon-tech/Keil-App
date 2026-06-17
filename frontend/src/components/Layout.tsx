@@ -228,6 +228,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
           {/* AI Assistant - Available on all pages except dashboard and motion */}
           {location.pathname !== "/" &&
             location.pathname !== "/dashboard" &&
+            !location.pathname.startsWith("/c/") &&
             location.pathname !== "/motion" ? (
             <AiAssistant />
           ) : null}

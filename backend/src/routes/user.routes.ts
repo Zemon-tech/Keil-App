@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware";
-import { getMe, searchUsers } from "../controllers/user.controller";
+import {
+    getMe,
+    searchUsers,
+    getUserSessions,
+    revokeUserSession,
+    revokeAllUserSessions,
+    revokeCurrentSession
+} from "../controllers/user.controller";
 
 const router = Router();
 
@@ -17,5 +24,33 @@ router.get("/me", protect, getMe);
  * @access  Private
  */
 router.get("/search", protect, searchUsers);
+
+/**
+ * @desc    Get active sessions for the current user
+ * @route   GET /api/users/sessions
+ * @access  Private
+ */
+router.get("/sessions", protect, getUserSessions);
+
+/**
+ * @desc    Revoke current browser session
+ * @route   DELETE /api/users/sessions/current
+ * @access  Private
+ */
+router.delete("/sessions/current", protect, revokeCurrentSession);
+
+/**
+ * @desc    Revoke a specific session
+ * @route   DELETE /api/users/sessions/:id
+ * @access  Private
+ */
+router.delete("/sessions/:id", protect, revokeUserSession);
+
+/**
+ * @desc    Revoke all sessions for the current user
+ * @route   DELETE /api/users/sessions
+ * @access  Private
+ */
+router.delete("/sessions", protect, revokeAllUserSessions);
 
 export default router;
