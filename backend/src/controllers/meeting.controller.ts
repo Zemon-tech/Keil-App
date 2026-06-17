@@ -8,7 +8,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
 import { processFailedTranscription } from "../services/transcription-processor";
-import { getTranscriptionProvider } from "../services/transcription";
+import { getTranscriptionProvider, isValidSttProvider } from "../services/transcription";
 import * as userPreferencesService from "../services/user-preferences.service";
 import { createServiceLogger } from "../lib/logger";
 
@@ -78,7 +78,7 @@ export const getUploadUrl = catchAsync(async (req: Request, res: Response) => {
  * Frontend uploads audio to S3, then calls this endpoint with the s3Key.
  */
 export const transcribeRecording = catchAsync(async (req: Request, res: Response) => {
-    const { recordingId, s3Key, durationSeconds, contentType } = req.body;
+    const { recordingId, s3Key, durationSeconds, contentType, provider: reqProvider } = req.body;
     const user = (req as any).user;
 
     try {
@@ -90,19 +90,32 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             return res.status(400).json({ error: "Recording ID is required" });
         }
 
-        if (!s3Key) {
+        // Fetch existing recording details if they exist in the DB
+        const existingRecording = await meetingService.getRecordingById(recordingId);
+        if (existingRecording && existingRecording.user_id !== user.id) {
+            return res.status(403).json({ error: "Unauthorized to access this recording" });
+        }
+
+        const finalS3Key = s3Key || existingRecording?.audio_s3_key;
+        const finalDuration = durationSeconds || existingRecording?.audio_duration_seconds || 0;
+
+        if (!finalS3Key) {
             return res.status(400).json({ error: "s3Key is required for transcription" });
         }
 
-        log.info({ recordingId, s3Key, durationSeconds, contentType }, "Sarvam transcription flow started");
+        // Determine provider (body parameter -> user preferences -> default "sarvam")
+        const userPrefProvider = await userPreferencesService.getSttProvider(user.id);
+        const chosenProvider = (reqProvider && isValidSttProvider(reqProvider)) ? reqProvider : userPrefProvider;
+
+        log.info({ recordingId, s3Key: finalS3Key, durationSeconds: finalDuration, contentType, provider: chosenProvider }, "Transcription flow started");
 
         // Update duration if provided
-        if (durationSeconds) {
-            await meetingService.updateRecordingDuration(recordingId, durationSeconds);
+        if (finalDuration) {
+            await meetingService.updateRecordingDuration(recordingId, finalDuration);
         }
 
         // Set recording to processing state
-        await meetingService.updateRecordingJob(recordingId, `sarvam_pending_${Date.now()}`, durationSeconds);
+        await meetingService.updateRecordingJob(recordingId, `${chosenProvider}_pending_${Date.now()}`, finalDuration, chosenProvider);
 
         // Broadcast processing started
         try {
@@ -118,28 +131,28 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
             log.warn({ sockErr, recordingId }, "Failed to broadcast WebSocket transcription start");
         }
 
-        // Generate presigned GET URL for ElevenLabs to fetch the audio
+        // Generate presigned GET URL for STT Provider to fetch the audio
         const getCommand = new GetObjectCommand({
             Bucket: config.awsS3BucketName,
-            Key: s3Key,
+            Key: finalS3Key,
         });
         const presignedAudioUrl = await getSignedUrl(getS3Client(), getCommand, { expiresIn: 3600 });
 
-        // Fire-and-forget: run Sarvam transcription in background
+        // Fire-and-forget: run transcription in background
         (async () => {
             try {
-                const provider = getTranscriptionProvider("sarvam");
-                const jobInfo = await provider.startTranscription(presignedAudioUrl, {
+                const providerInstance = getTranscriptionProvider(chosenProvider);
+                const jobInfo = await providerInstance.startTranscription(presignedAudioUrl, {
                     recordingId,
-                    durationSeconds,
-                    contentType,
+                    durationSeconds: finalDuration,
+                    contentType: contentType || "audio/webm",
                 });
 
-                log.info({ recordingId, jobId: jobInfo.jobId, completed: jobInfo.completed }, "Sarvam provider returned");
+                log.info({ recordingId, jobId: jobInfo.jobId, completed: jobInfo.completed, provider: chosenProvider }, "Transcription provider returned");
 
                 if (jobInfo.completed && jobInfo.result) {
                     // Synchronous completion — update job ID then save final results
-                    await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, jobInfo.result.audioDurationSeconds || durationSeconds);
+                    await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, jobInfo.result.audioDurationSeconds || finalDuration, chosenProvider);
 
                     const updated = await meetingService.updateRecordingResult(
                         recordingId,
@@ -158,14 +171,14 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                             recording: updated
                         });
                     } catch (sockErr) {
-                        log.warn({ sockErr }, "Failed to broadcast Sarvam completion");
+                        log.warn({ sockErr }, "Failed to broadcast transcription completion");
                     }
                 } else {
                     // Async path — update job ID for polling
-                    await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, durationSeconds);
+                    await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, finalDuration, chosenProvider);
                 }
             } catch (bgError: any) {
-                log.error({ err: bgError, recordingId }, "Sarvam background transcription error");
+                log.error({ err: bgError, recordingId, provider: chosenProvider }, "Background transcription error");
                 const updated = await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => {
                     log.error({ err: e }, "Could not update recording status to 'failed'");
                     return null;
@@ -180,18 +193,18 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                             recording: updated
                         });
                     } catch (sockErr) {
-                        log.warn({ sockErr }, "Failed to broadcast Sarvam failure");
+                        log.warn({ sockErr }, "Failed to broadcast transcription failure");
                     }
                 }
             }
-        })().catch(e => log.error({ err: e }, "Unhandled Sarvam background rejection"));
+        })().catch(e => log.error({ err: e }, "Unhandled background rejection"));
 
         return res.status(200).json(
             new ApiResponse(200, {
-                jobId: `sarvam_${recordingId}`,
+                jobId: `${chosenProvider}_${recordingId}`,
                 recordingId,
-                provider: "sarvam"
-            }, "Sarvam transcription triggered in background")
+                provider: chosenProvider
+            }, "Transcription triggered in background")
         );
 
     } catch (err: any) {

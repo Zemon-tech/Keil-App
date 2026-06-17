@@ -44,20 +44,22 @@ export const createRecording = async (
 export const updateRecordingJob = async (
     recordingId: string,
     jobId: string,
-    audioDurationSeconds?: number
+    audioDurationSeconds?: number,
+    sttProvider?: string
 ): Promise<MeetingRecording> => {
     const queryText = `
         UPDATE public.meeting_recordings
         SET sarvam_job_id = $1,
             transcription_status = 'processing',
             audio_duration_seconds = COALESCE($2, audio_duration_seconds),
+            stt_provider = COALESCE($3, stt_provider),
             updated_at = NOW()
-        WHERE id = $3
+        WHERE id = $4
         RETURNING *
     `;
     // Round duration to integer — the DB column is integer type
     const roundedDuration = audioDurationSeconds ? Math.round(audioDurationSeconds) : null;
-    const result = await pool.query(queryText, [jobId, roundedDuration, recordingId]);
+    const result = await pool.query(queryText, [jobId, roundedDuration, sttProvider || null, recordingId]);
     return result.rows[0];
 };
 

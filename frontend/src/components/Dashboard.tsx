@@ -49,6 +49,7 @@ import {
   LikeAction,
   DislikeAction,
   CopyAction,
+  TruncatedMessage,
 } from "@/components/ai-elements/message";
 import {
   Conversation,
@@ -980,7 +981,9 @@ export function Dashboard() {
                     <Message
                       from={message.role}
                       key={message.id}
-                      className="max-w-full w-full"
+                      className={cn(
+                        message.role === "user" ? "w-fit ml-auto max-w-[75%] sm:max-w-[70%] md:max-w-[65%]" : "max-w-full w-full"
+                      )}
                     >
                       <MessageContent
                         className={cn(
@@ -1121,7 +1124,7 @@ export function Dashboard() {
                         ) : (
                           <div className="flex flex-col gap-2">
                             {text.trim() !== "" && (
-                              <MessageResponse>{text}</MessageResponse>
+                              <TruncatedMessage text={text} />
                             )}
                             {messageParts.length > 0 && (
                               <div className="flex flex-col gap-1.5 mt-1">

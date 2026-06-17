@@ -6,8 +6,16 @@ import { motion, AnimatePresence } from "motion/react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
-import { useMeetingRecording, useDeleteRecording, useCancelTranscription } from "@/hooks/api/useMeetings";
+import { useMeetingRecording, useDeleteRecording, useCancelTranscription, useTranscribeRecording, meetingKeys } from "@/hooks/api/useMeetings";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Volume2, VolumeX } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 // Audio Visualizer Components
 import { AgentAudioVisualizerBar } from "@/components/agent-audio-visualizer-bar";
@@ -39,7 +47,11 @@ import {
   Sliders,
   Activity,
   CircleDot,
+  RotateCcw,
   Grid as GridIcon,
+  SkipBack,
+  SkipForward,
+  ChevronDown,
 } from "lucide-react";
 
 const visualizers = [
@@ -51,6 +63,7 @@ const visualizers = [
 ] as const;
 
 export const MeetingDialog: React.FC = () => {
+  const queryClient = useQueryClient();
   const {
     isDialogOpen,
     isMinimized,
@@ -86,6 +99,15 @@ export const MeetingDialog: React.FC = () => {
   const [localAudioUrl, setLocalAudioUrl] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
+  // Audio Playback progress & rate states
+  const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isVolumeMuted, setIsVolumeMuted] = useState(false);
+  const [audioVolume] = useState(1);
+  const [selectedProvider, setSelectedProvider] = useState<"sarvam" | "elevenlabs">("sarvam");
+  const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
+
   const [isMuted, setIsMuted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [localVolumes, setLocalVolumes] = useState<number[]>([0.05, 0.05, 0.05, 0.05, 0.05]);
@@ -110,6 +132,14 @@ export const MeetingDialog: React.FC = () => {
 
   const deleteMutation = useDeleteRecording();
   const cancelMutation = useCancelTranscription();
+  const transcribeMutation = useTranscribeRecording();
+
+  // Sync selected provider with loaded database recording's provider
+  useEffect(() => {
+    if (dbRecording?.stt_provider) {
+      setSelectedProvider(dbRecording.stt_provider as "sarvam" | "elevenlabs");
+    }
+  }, [dbRecording?.stt_provider]);
 
   // Unified computed states
   const currentStatus = isHistoricalReview
@@ -125,6 +155,24 @@ export const MeetingDialog: React.FC = () => {
   const currentDuration = isHistoricalReview ? (dbRecording?.audio_duration_seconds ?? 0) : duration;
   const currentTranscript = isHistoricalReview ? dbRecording?.transcript_text : localTranscript;
   const currentDiarizedTranscript = isHistoricalReview ? dbRecording?.transcript_diarized : localDiarizedTranscript;
+  
+  // Speaker filter states & computed entries
+  const toggleSpeakerFilter = (speakerId: string) => {
+    setSelectedSpeakers((prev) =>
+      prev.includes(speakerId)
+        ? prev.filter((id) => id !== speakerId)
+        : [...prev, speakerId]
+    );
+  };
+
+  const filteredEntries = useMemo(() => {
+    if (!currentDiarizedTranscript?.entries) return [];
+    if (selectedSpeakers.length === 0) return currentDiarizedTranscript.entries;
+    return currentDiarizedTranscript.entries.filter((entry: any) =>
+      selectedSpeakers.includes(entry.speaker_id || "0")
+    );
+  }, [currentDiarizedTranscript?.entries, selectedSpeakers]);
+
   const currentLanguageDetected = isHistoricalReview ? dbRecording?.language_detected : localLanguageDetected;
   const currentAudioUrl = isHistoricalReview ? (dbRecording as any)?.audio_url : localAudioUrl;
   const currentErrorMessage = isHistoricalReview
@@ -293,7 +341,7 @@ export const MeetingDialog: React.FC = () => {
       let recorder: MediaRecorder;
       try {
         recorder = new MediaRecorder(stream, options);
-      } catch (e) {
+      } catch {
         recorder = new MediaRecorder(stream);
       }
 
@@ -525,7 +573,12 @@ export const MeetingDialog: React.FC = () => {
       status: string;
       recording?: any;
     }) => {
-      if (payload.recordingId === recordingId) {
+      const activeId = meetingId || recordingId;
+      if (payload.recordingId === activeId) {
+        // Invalidate queries to ensure latest state is fetched
+        queryClient.invalidateQueries({ queryKey: meetingKeys.recording(activeId) });
+        queryClient.invalidateQueries({ queryKey: meetingKeys.all });
+
         if (payload.status === "completed" && payload.recording) {
           setStatus("completed");
           setLocalTranscript(payload.recording.transcript_text);
@@ -544,22 +597,45 @@ export const MeetingDialog: React.FC = () => {
     return () => {
       socket.off("meeting_update", handleMeetingUpdate);
     };
-  }, [recordingId]);
+  }, [meetingId, recordingId, queryClient]);
 
   // Audio Playback
   const toggleAudioPlay = () => {
-    if (!audioPlayerRef.current) return;
+    if (!audioPlayerRef.current || !currentAudioUrl) return;
     if (isAudioPlaying) {
       audioPlayerRef.current.pause();
       setIsAudioPlaying(false);
     } else {
-      audioPlayerRef.current.play();
+      audioPlayerRef.current.play().catch(e => console.error("Audio play failed:", e));
       setIsAudioPlaying(true);
     }
   };
 
   const handleAudioEnded = () => {
     setIsAudioPlaying(false);
+    setCurrentTime(0);
+  };
+
+  const handleSeek = (value: number) => {
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.currentTime = value;
+      setCurrentTime(value);
+    }
+  };
+
+  const handlePlaybackRateChange = (rate: number) => {
+    setPlaybackRate(rate);
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.playbackRate = rate;
+    }
+  };
+
+  const toggleVolumeMute = () => {
+    const nextMuted = !isVolumeMuted;
+    setIsVolumeMuted(nextMuted);
+    if (audioPlayerRef.current) {
+      audioPlayerRef.current.volume = nextMuted ? 0 : audioVolume;
+    }
   };
 
   // Review Dialog Mutations handlers
@@ -666,16 +742,7 @@ export const MeetingDialog: React.FC = () => {
     return colors[id % colors.length];
   };
 
-  const getSpeakerBg = (speakerId: string | number) => {
-    const id = parseInt(speakerId.toString().replace(/\D/g, "")) || 0;
-    const bgs = [
-      "bg-violet-500/10 text-violet-400 border-violet-500/20 dark:border-violet-400/20",
-      "bg-amber-500/10 text-amber-400 border-amber-500/20 dark:border-amber-400/20",
-      "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 dark:border-emerald-400/20",
-      "bg-pink-500/10 text-pink-400 border-pink-500/20 dark:border-pink-400/20",
-    ];
-    return bgs[id % bgs.length];
-  };
+
 
   // Speaker metrics
   const speakerIds = currentDiarizedTranscript?.entries
@@ -858,7 +925,24 @@ export const MeetingDialog: React.FC = () => {
 
   return (
     <>
-      <audio ref={audioPlayerRef} src={currentAudioUrl || undefined} onEnded={handleAudioEnded} className="hidden" />
+      <audio
+        ref={audioPlayerRef}
+        src={currentAudioUrl || undefined}
+        onEnded={handleAudioEnded}
+        onTimeUpdate={() => {
+          if (audioPlayerRef.current) {
+            setCurrentTime(audioPlayerRef.current.currentTime);
+          }
+        }}
+        onLoadedMetadata={() => {
+          if (audioPlayerRef.current) {
+            setAudioDuration(audioPlayerRef.current.duration);
+            audioPlayerRef.current.playbackRate = playbackRate;
+            audioPlayerRef.current.volume = isVolumeMuted ? 0 : audioVolume;
+          }
+        }}
+        className="hidden"
+      />
 
       {/* ─── Standard Dialog Overlay ─── */}
       {isDialogOpen && (
@@ -882,7 +966,7 @@ export const MeetingDialog: React.FC = () => {
           transition={{ type: "spring", stiffness: 350, damping: 25 }}
           className={cn(
             "relative w-full overflow-hidden transition-all duration-300 transform",
-            isCompleted ? "max-w-[900px] px-4 md:px-0" : "max-w-[620px] px-4"
+            isCompleted ? "max-w-[1020px] px-4 md:px-0" : "max-w-[620px] px-4"
           )}
         >
           <div className="w-full bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -910,36 +994,50 @@ export const MeetingDialog: React.FC = () => {
                     {/* Unified header: title | tabs | minimize | close */}
                     <div className="flex items-center gap-2 shrink-0 px-4 py-2.5 border-b border-border/50">
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="size-2 rounded-full bg-muted-foreground" />
+                        <Mic className="size-4 text-muted-foreground" />
                         <span className="text-[12px] font-semibold tracking-wide text-foreground">
                           Meeting Sync
                         </span>
                       </div>
 
-                      {/* Tabs — centered, flex-1 */}
+                      {/* Menu component to show all types of view of recorder — centered, flex-1 */}
                       <div className="flex flex-1 justify-center">
-                        <div className="inline-flex items-center gap-0.5 p-0.5 bg-muted/40 dark:bg-zinc-900/40 rounded-lg border border-border/40">
-                          {visualizers.map((vis) => {
-                            const Icon = vis.icon;
-                            const active = visualizerType === vis.id;
-                            return (
-                              <button
-                                key={vis.id}
-                                onClick={() => handleVisualizerChange(vis.id)}
-                                className={cn(
-                                  "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap",
-                                  active
-                                    ? "bg-background text-foreground shadow-sm border border-border"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent"
-                                )}
-                                title={vis.name}
-                              >
-                                <Icon className={cn("size-3", active ? "text-cyan-500" : "")} />
-                                <span>{vis.name}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 bg-muted/30 hover:bg-muted/60 text-[11px] font-semibold text-foreground transition-all cursor-pointer select-none active:scale-[0.97]">
+                              {(() => {
+                                const vis = visualizers.find((v) => v.id === visualizerType) || visualizers[0];
+                                const Icon = vis.icon;
+                                return (
+                                  <>
+                                    <Icon className="size-3.5 text-cyan-500" />
+                                    <span>{vis.name} View</span>
+                                    <ChevronDown className="size-3 text-muted-foreground ml-0.5" />
+                                  </>
+                                );
+                              })()}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="center" className="w-36">
+                            {visualizers.map((vis) => {
+                              const Icon = vis.icon;
+                              const active = visualizerType === vis.id;
+                              return (
+                                <DropdownMenuItem
+                                  key={vis.id}
+                                  onClick={() => handleVisualizerChange(vis.id)}
+                                  className={cn(
+                                    "flex items-center gap-2 text-[11px] cursor-pointer",
+                                    active ? "text-cyan-500 font-semibold bg-cyan-500/[0.04]" : "text-foreground"
+                                  )}
+                                >
+                                  <Icon className={cn("size-3.5", active ? "text-cyan-500" : "text-muted-foreground")} />
+                                  <span>{vis.name}</span>
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
 
                       {/* Minimize + Close */}
@@ -960,18 +1058,34 @@ export const MeetingDialog: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Visualizer — no box, no label, just the component centered */}
-                    <div className="flex flex-1 items-center justify-center py-10 px-5">
-                      {renderVisualizer(true)}
+                    {/* Visualizer — center-aligned with soft breathing gradient aura */}
+                    <div className="relative flex flex-1 items-center justify-center py-10 px-5 overflow-hidden">
+                      <motion.div
+                        animate={{
+                          scale: [0.98, 1.05, 0.98],
+                          opacity: [0.08, 0.15, 0.08],
+                        }}
+                        transition={{
+                          duration: 4,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                        }}
+                        className="absolute w-[200px] h-[200px] rounded-full bg-cyan-500/20 blur-[50px] pointer-events-none z-0"
+                      />
+                      <div className="relative z-10 w-full flex justify-center">
+                        {renderVisualizer(true)}
+                      </div>
                     </div>
 
+                    {/* Premium Start Capture Button Footer */}
                     <div className="flex justify-center border-t border-border px-5 py-5">
                       <button
                         onClick={startRecording}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs tracking-wider uppercase px-7 h-9 rounded-full cursor-pointer flex items-center justify-center gap-2 shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98]"
+                        className="relative group bg-primary hover:bg-primary/95 text-primary-foreground font-semibold text-xs tracking-wider uppercase px-8 h-10 rounded-full cursor-pointer flex items-center justify-center gap-2.5 shadow-md hover:shadow-primary/10 transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0 border border-primary/20 overflow-hidden"
                       >
-                        <Mic className="size-3.5" />
-                        Start Capture
+                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                        <Mic className="size-4 text-primary-foreground/90 transition-transform group-hover:scale-110 duration-200" />
+                        <span>Start Capture</span>
                       </button>
                     </div>
                   </div>
@@ -984,46 +1098,64 @@ export const MeetingDialog: React.FC = () => {
                     {/* Unified header: status | tabs | minimize | close */}
                     <div className="flex items-center gap-2 shrink-0 px-4 py-2.5 border-b border-border/50">
                       <div className="flex items-center gap-2 shrink-0">
-                        <span
-                          className={cn(
-                            "size-2 rounded-full transition-all duration-300",
-                            currentStatus === "recording" && !isPaused ? "bg-rose-500 animate-pulse" : "bg-muted-foreground"
-                          )}
-                        />
+                        {currentStatus === "recording" ? (
+                          <CircleDot
+                            className={cn(
+                              "size-4 transition-all duration-300",
+                              isPaused ? "text-amber-500" : "text-rose-500 animate-pulse"
+                            )}
+                          />
+                        ) : (
+                          <Loader2 className="size-4 animate-spin text-cyan-500" />
+                        )}
                         <span className="text-[12px] font-semibold tracking-wide text-foreground">
                           {currentStatus === "recording"
-                            ? "Capturing"
+                            ? (isPaused ? "Paused" : "Recording")
                             : currentStatus === "uploading"
                             ? "Uploading"
                             : "Processing"}
                         </span>
                       </div>
 
-                      {/* Tabs — centered, flex-1 — only show during recording */}
+                      {/* Menu component to show all types of view of recorder — centered, flex-1 */}
                       <div className="flex flex-1 justify-center">
                         {currentStatus === "recording" && (
-                          <div className="inline-flex items-center gap-0.5 p-0.5 bg-muted/40 dark:bg-zinc-900/40 rounded-lg border border-border/40">
-                            {visualizers.map((vis) => {
-                              const Icon = vis.icon;
-                              const active = visualizerType === vis.id;
-                              return (
-                                <button
-                                  key={vis.id}
-                                  onClick={() => handleVisualizerChange(vis.id)}
-                                  className={cn(
-                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer whitespace-nowrap",
-                                    active
-                                      ? "bg-background text-foreground shadow-sm border border-border"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-transparent"
-                                  )}
-                                  title={vis.name}
-                                >
-                                  <Icon className={cn("size-3", active ? "text-cyan-500" : "")} />
-                                  <span>{vis.name}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 bg-muted/30 hover:bg-muted/60 text-[11px] font-semibold text-foreground transition-all cursor-pointer select-none active:scale-[0.97]">
+                                {(() => {
+                                  const vis = visualizers.find((v) => v.id === visualizerType) || visualizers[0];
+                                  const Icon = vis.icon;
+                                  return (
+                                    <>
+                                      <Icon className="size-3.5 text-cyan-500" />
+                                      <span>{vis.name} View</span>
+                                      <ChevronDown className="size-3 text-muted-foreground ml-0.5" />
+                                    </>
+                                  );
+                                })()}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="center" className="w-36">
+                              {visualizers.map((vis) => {
+                                const Icon = vis.icon;
+                                const active = visualizerType === vis.id;
+                                return (
+                                  <DropdownMenuItem
+                                    key={vis.id}
+                                    onClick={() => handleVisualizerChange(vis.id)}
+                                    className={cn(
+                                      "flex items-center gap-2 text-[11px] cursor-pointer",
+                                      active ? "text-cyan-500 font-semibold bg-cyan-500/[0.04]" : "text-foreground"
+                                    )}
+                                  >
+                                    <Icon className={cn("size-3.5", active ? "text-cyan-500" : "text-muted-foreground")} />
+                                    <span>{vis.name}</span>
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
 
@@ -1057,235 +1189,308 @@ export const MeetingDialog: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Visualizer block — full width, not overlapped by any button */}
-                    <div className="relative w-full bg-muted/20 dark:bg-zinc-900/30 border-b border-border/40 flex-1 flex flex-col items-center justify-center py-14 px-4">
-                      {renderVisualizer(false)}
+                    {/* Immersive Visualizer Canvas with Floating Controls Capsule */}
+                    <div className="relative w-full bg-muted/10 dark:bg-zinc-900/20 border-b border-border/30 flex-1 flex flex-col items-center justify-center py-10 px-4 min-h-[280px]">
+                      {/* Dynamic breathing glow aura */}
+                      <motion.div
+                        animate={{
+                          scale: currentStatus === "recording" && !isPaused ? [0.95, 1.12, 0.95] : 1.0,
+                          opacity: currentStatus === "recording" && !isPaused ? [0.15, 0.28, 0.15] : 0.15,
+                        }}
+                        transition={{
+                          duration: 3,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                        }}
+                        className={cn(
+                          "absolute w-[240px] h-[240px] rounded-full blur-[60px] pointer-events-none z-0 transition-colors duration-1000",
+                          currentStatus === "recording" && !isPaused
+                            ? "bg-rose-500/25"
+                            : currentStatus === "recording" && isPaused
+                            ? "bg-amber-500/20"
+                            : currentStatus === "uploading" || currentStatus === "transcribing"
+                            ? "bg-cyan-500/25"
+                            : "bg-zinc-500/10"
+                        )}
+                      />
 
-                      {/* Timer — bottom-center */}
-                      <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none">
-                        <span className="text-[13px] font-mono font-medium text-foreground/70 tabular-nums">
-                          {formatTime(duration)}
-                        </span>
+                      {/* Visualizer component */}
+                      <div className="relative z-10 w-full flex justify-center py-4">
+                        {renderVisualizer(false)}
                       </div>
+
+                      {/* Floating HUD Control Capsule (Only show when recording) */}
+                      {currentStatus === "recording" && (
+                        <div className="absolute bottom-4 z-20 flex flex-col items-center gap-3">
+                          <div className="flex items-center gap-3 px-4 py-2 bg-popover/90 dark:bg-zinc-950/85 border border-border shadow-xl backdrop-blur-md rounded-full">
+                            {/* Monospace timer with status dot */}
+                            <div className="flex items-center gap-2 pr-2.5 border-r border-border/60">
+                              <CircleDot
+                                className={cn(
+                                  "size-3.5 transition-all duration-300",
+                                  isPaused ? "text-amber-500" : "text-rose-500 animate-pulse"
+                                )}
+                              />
+                              <span className="text-xs font-mono font-bold text-foreground tabular-nums select-none min-w-[38px]">
+                                {formatTime(duration)}
+                              </span>
+                            </div>
+
+                            {/* Capture controls */}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={toggleMute}
+                                className={cn(
+                                  "size-7.5 rounded-full flex items-center justify-center border transition-all active:scale-90 cursor-pointer",
+                                  isMuted
+                                    ? "bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/25"
+                                    : "bg-muted/80 border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted"
+                                )}
+                                title={isMuted ? "Unmute Mic" : "Mute Mic"}
+                              >
+                                {isMuted ? <MicOff className="size-3.5" /> : <Mic className="size-3.5" />}
+                              </button>
+
+                              <button
+                                onClick={togglePause}
+                                className={cn(
+                                  "size-7.5 rounded-full flex items-center justify-center border transition-all active:scale-90 cursor-pointer",
+                                  isPaused
+                                    ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/25 animate-pulse"
+                                    : "bg-muted/80 border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted"
+                                )}
+                                title={isPaused ? "Resume Capture" : "Pause Capture"}
+                              >
+                                {isPaused ? <Play className="size-3.5 text-cyan-500 fill-cyan-500" /> : <Pause className="size-3.5" />}
+                              </button>
+
+                              <button
+                                onClick={addMarker}
+                                className="size-7.5 rounded-full bg-muted/80 border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors active:scale-90 cursor-pointer"
+                                title="Add marker flag"
+                              >
+                                <Bookmark className="size-3.5" />
+                              </button>
+
+                              <button
+                                onClick={captureNote}
+                                className="size-7.5 rounded-full bg-muted/80 border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors active:scale-90 cursor-pointer"
+                                title="Capture note segment"
+                              >
+                                <Notebook className="size-3.5" />
+                              </button>
+                            </div>
+
+                            {/* End Session Button inside HUD */}
+                            <div className="pl-2.5 border-l border-border/60">
+                              <button
+                                onClick={stopRecording}
+                                className="bg-rose-500 hover:bg-rose-600 text-white font-semibold text-[9px] tracking-wider uppercase h-7 px-3.5 rounded-full cursor-pointer flex items-center justify-center gap-1 transition-all active:scale-95 shadow-sm shadow-rose-500/10"
+                              >
+                                <span>End</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Uploading/processing loader inside visualizer canvas */}
+                      {currentStatus !== "recording" && (
+                        <div className="absolute bottom-6 z-20 flex items-center gap-2 text-muted-foreground font-semibold text-[10px] tracking-widest uppercase bg-popover/85 dark:bg-zinc-950/85 border border-border/50 px-4.5 py-2 rounded-full shadow-md backdrop-blur-sm">
+                          <Loader2 className="size-3.5 animate-spin text-cyan-500" />
+                          <span>
+                            {currentStatus === "uploading" ? "Syncing session context..." : "Ingesting diarized timeline..."}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="w-full flex flex-col p-6 pt-4 select-none">
+                      <p className="text-[11px] font-medium text-muted-foreground/80 tracking-wide text-center">
+                        {currentStatus === "recording" && isPaused
+                          ? "Capture paused"
+                          : currentStatus === "recording"
+                          ? "Listening and gathering workspace context..."
+                          : currentStatus === "uploading"
+                          ? "Ingesting capture stream..."
+                          : "Analyzing conversations and context..."}
+                      </p>
 
-                    <p className="text-[11px] font-medium text-muted-foreground tracking-wide text-center mb-6">
-                      {currentStatus === "recording" && isPaused
-                        ? "Capture paused"
-                        : currentStatus === "recording"
-                        ? "Listening and gathering workspace context..."
-                        : currentStatus === "uploading"
-                        ? "Ingesting capture stream..."
-                        : "Analyzing conversations and context..."}
-                    </p>
-
-                    <div className="flex flex-col items-center gap-4 shrink-0 border-t border-border pt-4">
-                      <div className="flex items-center gap-3">
-                        {currentStatus === "recording" && (
-                          <>
-                            <button
-                              onClick={toggleMute}
-                              className={cn(
-                                "size-9 rounded-full flex items-center justify-center border transition-all cursor-pointer",
-                                isMuted
-                                  ? "bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/20"
-                                  : "bg-muted/80 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-                              )}
-                              title={isMuted ? "Unmute Mic" : "Mute Mic"}
-                            >
-                              {isMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-                            </button>
-
-                            <button
-                              onClick={togglePause}
-                              className={cn(
-                                "size-9 rounded-full flex items-center justify-center border transition-all cursor-pointer",
-                                isPaused
-                                  ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-500 hover:bg-cyan-500/20"
-                                  : "bg-muted/80 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-                              )}
-                              title={isPaused ? "Resume Capture" : "Pause Capture"}
-                            >
-                              {isPaused ? <Play className="size-4 text-cyan-500" /> : <Pause className="size-4" />}
-                            </button>
-
-                            <button
-                              onClick={addMarker}
-                              className="size-9 rounded-full bg-muted/80 border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                              title="Add marker flag"
-                            >
-                              <Bookmark className="size-4" />
-                            </button>
-
-                            <button
-                              onClick={captureNote}
-                              className="size-9 rounded-full bg-muted/80 border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                              title="Capture note segment"
-                            >
-                              <Notebook className="size-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="w-full flex flex-col items-center gap-2 mt-1">
-                        {currentStatus === "recording" ? (
-                          <>
-                            {/* Primary action: save and process the recording */}
-                            <button
-                              onClick={stopRecording}
-                              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 font-semibold text-[10px] tracking-widest uppercase py-1.5 px-4.5 rounded-full cursor-pointer flex items-center justify-center transition-all active:scale-[0.98] shadow-md shadow-rose-500/5 hover:border-rose-500/40"
-                            >
-                              End Session
-                            </button>
-                            {/* Secondary action: discard without uploading */}
-                            <button
-                              onClick={discardRecording}
-                              className="text-[10px] font-medium text-muted-foreground/60 hover:text-rose-400 tracking-wide transition-colors cursor-pointer underline-offset-2 hover:underline"
-                            >
-                              Discard recording
-                            </button>
-                          </>
-                        ) : (
-                          <div className="flex items-center gap-2 text-muted-foreground font-medium text-[11px] tracking-wide animate-pulse">
-                            <Loader2 className="size-3.5 animate-spin text-cyan-500" />
-                            <span>
-                              {currentStatus === "uploading" ? "Syncing session context..." : "Ingesting diarized timeline..."}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                      {currentStatus === "recording" && (
+                        <div className="flex justify-center mt-3">
+                          <button
+                            onClick={discardRecording}
+                            className="text-[10px] font-semibold text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/[0.04] dark:hover:bg-rose-500/[0.06] tracking-wider uppercase transition-colors cursor-pointer px-3.5 py-1.5 rounded-lg border border-transparent hover:border-rose-500/10"
+                          >
+                            Discard capture
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
                 )}
 
                 {/* REVIEW / COMPLETED MODE */}
                 {isCompleted && (
                   <div className="w-full flex flex-col select-none relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <header className="h-11 px-4 border-b border-border flex items-center justify-between shrink-0 bg-background/95 z-10">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "size-2 rounded-full",
-                            currentStatus === "completed" ? "bg-emerald-500" : "bg-rose-500"
-                          )}
-                        />
-                        <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                          {currentStatus === "completed" ? "Meeting Studio · Review Mode" : "Meeting Studio · Diagnostic Failure"}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        {currentStatus === "completed" && currentTranscript && (
-                          <>
-                            <button
-                              onClick={copyToClipboard}
-                              title="Copy Transcript"
-                              className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
-                            >
-                              <Copy className="size-3.5" />
-                            </button>
-                            <button
-                              onClick={downloadTextFile}
-                              title="Download Transcript"
-                              className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
-                            >
-                              <Download className="size-3.5" />
-                            </button>
-                            <div className="h-4 w-[1px] bg-border mx-0.5" />
-                          </>
-                        )}
-
-                        {deleteRecordingId && (
-                          <>
-                            <button
-                              onClick={handleDelete}
-                              disabled={deleteMutation.isPending}
-                              title="Delete Recording"
-                              className="size-7 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 flex items-center justify-center cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                              {deleteMutation.isPending ? (
-                                <Loader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="size-3.5" />
-                              )}
-                            </button>
-                            <div className="h-4 w-[1px] bg-border mx-0.5" />
-                          </>
-                        )}
-
-                        <button
-                          onClick={minimizeDialog}
-                          title="Minimize"
-                          className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
-                        >
-                          <Minimize2 className="size-3.5" />
-                        </button>
-
-                        <button
-                          onClick={handleClose}
-                          className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-                    </header>
-
-                    <div className="flex flex-col md:flex-row w-full overflow-hidden h-[400px] bg-background">
+                    <div className="flex flex-col md:flex-row w-full overflow-hidden h-[560px] bg-background">
                       {/* Left Column */}
-                      <div className="w-full md:w-[220px] flex flex-col items-center justify-between p-6 shrink-0 border-b md:border-b-0 md:border-r border-border bg-muted/10 transition-all select-none">
-                        <div className="flex-1 flex flex-col items-center justify-center">
-                          <div
-                            className="size-[90px] rounded-full flex items-center justify-center"
-                            style={{
-                              background:
-                                currentStatus === "completed"
-                                  ? "radial-gradient(circle at center, rgba(16,185,129,0.12) 0%, transparent 75%)"
-                                  : "radial-gradient(circle at center, rgba(239,68,68,0.12) 0%, transparent 75%)",
-                            }}
-                          >
-                            <div
-                              className={cn(
-                                "size-full rounded-full border flex items-center justify-center",
-                                currentStatus === "completed" ? "border-emerald-500/20 bg-emerald-500/5" : "border-rose-500/30 bg-rose-500/10"
-                              )}
-                            >
+                      <div className="w-full md:w-[240px] flex flex-col items-center justify-between p-5 shrink-0 border-b md:border-b-0 md:border-r border-border bg-muted-[0.02] dark:bg-zinc-900/[0.02] transition-all select-none">
+                        <div className="w-full flex-1 flex flex-col items-center justify-center gap-5">
+                          {/* Circular Playback Progress Ring */}
+                          <div className="relative size-[100px] flex items-center justify-center group">
+                            {/* Background track circle */}
+                            <svg className="absolute inset-0 size-full -rotate-90">
+                              <circle
+                                cx="50"
+                                cy="50"
+                                r="42"
+                                className="stroke-muted/20 dark:stroke-zinc-800/60 fill-transparent"
+                                strokeWidth="3"
+                              />
+                              {/* Dynamic progress circle */}
+                              <motion.circle
+                                cx="50"
+                                cy="50"
+                                r="42"
+                                className={cn(
+                                  "fill-transparent transition-all duration-150 ease-out",
+                                  currentStatus === "completed" ? "stroke-cyan-500" : "stroke-rose-500"
+                                )}
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                strokeDasharray={2 * Math.PI * 42}
+                                animate={{
+                                  strokeDashoffset: 2 * Math.PI * 42 - (((currentDuration || audioDuration) ? (currentTime / (currentDuration || audioDuration)) * 100 : 0) / 100) * (2 * Math.PI * 42)
+                                }}
+                                transition={{ duration: 0.1, ease: "linear" }}
+                              />
+                            </svg>
+                            
+                            {/* Inner Status Icon */}
+                            <div className="flex flex-col items-center justify-center">
                               {currentStatus === "completed" ? (
-                                <CheckCircle className="size-7 text-emerald-500" />
+                                <CheckCircle className="size-6 text-emerald-500 animate-in fade-in duration-300" />
                               ) : (
-                                <AlertCircle className="size-7 text-rose-500" />
+                                <AlertCircle className="size-6 text-rose-500 animate-in fade-in duration-300" />
                               )}
+                              <span className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase mt-1">
+                                {currentStatus === "completed" ? "Recorded" : "Failure"}
+                              </span>
                             </div>
                           </div>
 
-                          <div className="text-center mt-4">
-                            <div className="flex items-center gap-1.5 justify-center">
-                              <span className="text-[18px] font-semibold text-foreground font-mono tracking-tight tabular-nums">
-                                {formatTime(currentDuration)}
-                              </span>
-                              {currentAudioUrl && currentStatus === "completed" && (
-                                <button
-                                  onClick={toggleAudioPlay}
-                                  className="size-6 rounded-md hover:bg-muted text-cyan-500 flex items-center justify-center cursor-pointer transition-colors"
-                                >
-                                  {isAudioPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5 fill-cyan-500/20" />}
-                                </button>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase mt-0.5 block">
-                              {currentStatus === "completed" ? "Recorded" : "Failure"}
-                            </span>
+                          <div className="text-center w-full flex flex-col gap-3.5">
+                            {currentAudioUrl && (
+                              <div className="w-full bg-muted/20 dark:bg-zinc-900/30 border border-border/30 rounded-xl p-3 flex flex-col gap-2.5 shadow-sm">
+                                {/* Time display */}
+                                <div className="flex justify-between items-center text-[10px] font-mono text-muted-foreground">
+                                  <span className="tabular-nums">{formatTime(currentTime)}</span>
+                                  <span className="tabular-nums">{formatTime(currentDuration || audioDuration)}</span>
+                                </div>
+
+                                {/* Seek Slider Container */}
+                                <div className="relative w-full group/seek flex items-center h-2">
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={currentDuration || audioDuration || 100}
+                                    value={currentTime}
+                                    step={0.1}
+                                    onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                                    className="w-full h-1 bg-muted dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-cyan-500 focus:outline-none transition-all group-hover/seek:h-1.5 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:opacity-0 [&::-webkit-slider-thumb]:group-hover/seek:opacity-100 [&::-webkit-slider-thumb]:transition-opacity"
+                                  />
+                                  {/* Visual fill track */}
+                                  <div 
+                                    className="absolute top-0 bottom-0 left-0 bg-cyan-500 rounded-lg pointer-events-none transition-all group-hover/seek:h-1.5"
+                                    style={{
+                                      width: `${(currentDuration || audioDuration) ? (currentTime / (currentDuration || audioDuration)) * 100 : 0}%`,
+                                      height: '4px'
+                                    }}
+                                  />
+                                </div>
+
+                                {/* Playback Control Console */}
+                                <div className="flex items-center justify-between w-full mt-1.5">
+                                  {/* Volume Mute Toggle */}
+                                  <button
+                                    onClick={toggleVolumeMute}
+                                    className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 active:scale-95 cursor-pointer"
+                                    title={isVolumeMuted ? "Unmute" : "Mute"}
+                                  >
+                                    {isVolumeMuted ? (
+                                      <VolumeX className="size-4 text-rose-500 animate-in zoom-in-95 duration-150" />
+                                    ) : (
+                                      <Volume2 className="size-4 animate-in zoom-in-95 duration-150" />
+                                    )}
+                                  </button>
+
+                                  {/* Play/Pause & Skip group */}
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => handleSeek(Math.max(currentTime - 10, 0))}
+                                      className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 cursor-pointer"
+                                      title="Rewind 10s"
+                                    >
+                                      <SkipBack className="size-3.5" />
+                                    </button>
+
+                                    <button
+                                      onClick={toggleAudioPlay}
+                                      className="size-9 rounded-full bg-cyan-500 hover:bg-cyan-600 active:scale-[0.93] text-white flex items-center justify-center transition-all duration-150 shadow-md hover:shadow-cyan-500/10 cursor-pointer"
+                                      title={isAudioPlaying ? "Pause" : "Play"}
+                                    >
+                                      {isAudioPlaying ? (
+                                        <Pause className="size-4 fill-white" />
+                                      ) : (
+                                        <Play className="size-4 fill-white ml-0.5" />
+                                      )}
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleSeek(Math.min(currentTime + 10, currentDuration || audioDuration || 0))}
+                                      className="size-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 cursor-pointer"
+                                      title="Forward 10s"
+                                    >
+                                      <SkipForward className="size-3.5" />
+                                    </button>
+                                  </div>
+
+                                  {/* Speed Selector */}
+                                  <div className="relative group/speed">
+                                    <button
+                                      className="h-7 px-1.5 rounded-lg hover:bg-muted border border-border/30 text-[9px] font-semibold font-mono text-muted-foreground hover:text-foreground transition-all duration-200 flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
+                                    >
+                                      {playbackRate}x
+                                    </button>
+                                    <div className="absolute bottom-full right-0 mb-1 hidden group-hover/speed:flex flex-col bg-background border border-border shadow-lg rounded-xl p-0.5 z-30 min-w-14 animate-in fade-in duration-100">
+                                      {[1.0, 1.25, 1.5, 2.0].map((rate) => (
+                                        <button
+                                          key={rate}
+                                          onClick={() => handlePlaybackRateChange(rate)}
+                                          className={cn(
+                                            "w-full text-left px-2 py-1 rounded-md text-[9px] font-mono transition-colors cursor-pointer",
+                                            playbackRate === rate
+                                              ? "bg-cyan-500/10 text-cyan-500 font-semibold"
+                                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                          )}
+                                        >
+                                          {rate}x
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="w-full flex flex-col items-center shrink-0">
+                        <div className="w-full flex flex-col items-center gap-4 shrink-0 mt-4">
                           {!isHistoricalReview && (
                             <button
                               onClick={() => resetRecorder(true)}
-                              className="w-full border border-border hover:border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 font-semibold text-[10px] tracking-wider uppercase rounded-lg h-9 px-4 cursor-pointer flex items-center justify-center gap-1.5 transition-all duration-200"
+                              className="w-full border border-border hover:border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 font-semibold text-[10px] tracking-wider uppercase rounded-lg h-8 px-4 cursor-pointer flex items-center justify-center gap-1.5 transition-all duration-200 active:scale-98"
                             >
                               <Undo2 className="size-3.5" />
                               New capture
@@ -1293,26 +1498,67 @@ export const MeetingDialog: React.FC = () => {
                           )}
 
                           {currentStatus === "error" && currentErrorMessage && (
-                            <div className="w-full mt-3 p-3 rounded-lg bg-rose-500/5 border border-rose-500/10 text-rose-500 text-left max-h-[440px] overflow-y-auto">
+                            <div className="w-full mt-1 p-2.5 rounded-lg bg-rose-500/5 border border-rose-500/10 text-rose-500 text-left max-h-[100px] overflow-y-auto">
                               <p className="text-[10px] text-rose-500/80 leading-relaxed font-normal whitespace-pre-wrap">
                                 {currentErrorMessage}
                               </p>
                             </div>
                           )}
 
+                          {/* Horizontal Grid Metrics */}
                           {currentStatus === "completed" && (
-                            <div className="w-full border-t border-border pt-3 mt-3.5 flex flex-col gap-1.5">
-                              <div className="flex justify-between items-center text-[11px] font-medium text-muted-foreground">
-                                <span className="uppercase tracking-wider">Speakers</span>
-                                <span className="text-foreground font-mono">{speakerCount}</span>
+                            <div className="w-full grid grid-cols-3 gap-1 bg-muted/30 dark:bg-zinc-900/30 border border-border/20 p-2 rounded-xl text-center shadow-sm">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[8px] font-bold text-muted-foreground/80 uppercase tracking-widest">Speakers</span>
+                                <span className="text-[11px] font-semibold text-foreground font-mono">{speakerCount}</span>
                               </div>
-                              <div className="flex justify-between items-center text-[11px] font-medium text-muted-foreground">
-                                <span className="uppercase tracking-wider">Language</span>
-                                <span className="text-foreground uppercase font-mono">{currentLanguageDetected || "en-IN"}</span>
+                              <div className="flex flex-col gap-0.5 border-x border-border/20">
+                                <span className="text-[8px] font-bold text-muted-foreground/80 uppercase tracking-widest">Language</span>
+                                <span className="text-[11px] font-semibold text-foreground uppercase font-mono">{currentLanguageDetected || "en-IN"}</span>
                               </div>
-                              <div className="flex justify-between items-center text-[11px] font-medium text-muted-foreground">
-                                <span className="uppercase tracking-wider">Words</span>
-                                <span className="text-foreground font-mono">{wordCount}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[8px] font-bold text-muted-foreground/80 uppercase tracking-widest">Words</span>
+                                <span className="text-[11px] font-semibold text-foreground font-mono">{wordCount}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* STT Model Selector */}
+                          {deleteRecordingId && (
+                            <div className="w-full flex flex-col gap-1 text-left">
+                              <label className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground/85">
+                                Transcription Model
+                              </label>
+                              <div className="relative flex p-0.5 bg-muted/40 dark:bg-zinc-900/40 rounded-lg border border-border/20">
+                                {/* Sliding background slider indicator */}
+                                <div 
+                                  className={cn(
+                                    "absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] bg-background rounded-md shadow-sm border border-border/40 transition-transform duration-200 ease-out",
+                                    selectedProvider === "elevenlabs" ? "translate-x-full" : "translate-x-0"
+                                  )}
+                                />
+                                <button
+                                  onClick={() => setSelectedProvider("sarvam")}
+                                  className={cn(
+                                    "relative flex-1 py-1 rounded-md text-[9px] font-semibold transition-colors duration-200 cursor-pointer text-center z-10 active:scale-98",
+                                    selectedProvider === "sarvam"
+                                      ? "text-cyan-500"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                >
+                                  Sarvam AI
+                                </button>
+                                <button
+                                  onClick={() => setSelectedProvider("elevenlabs")}
+                                  className={cn(
+                                    "relative flex-1 py-1 rounded-md text-[9px] font-semibold transition-colors duration-200 cursor-pointer text-center z-10 active:scale-98",
+                                    selectedProvider === "elevenlabs"
+                                      ? "text-cyan-500"
+                                      : "text-muted-foreground hover:text-foreground"
+                                  )}
+                                >
+                                  ElevenLabs
+                                </button>
                               </div>
                             </div>
                           )}
@@ -1321,39 +1567,156 @@ export const MeetingDialog: React.FC = () => {
 
                       {/* Right Column */}
                       <div className="flex-1 flex flex-col min-w-0 bg-background">
-                        <div className="h-10 px-5 border-b border-border flex items-center justify-between shrink-0 bg-background">
-                          <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
-                            <Sparkles className="size-3 text-cyan-500" />
-                            Capture Transcript Timeline
-                          </span>
+                        <div className="h-11 px-5 border-b border-border flex items-center justify-between shrink-0 bg-background select-none">
+                          <div className="flex items-center gap-2">
+                            {currentStatus === "completed" ? (
+                              <CheckCircle className="size-4 text-emerald-500" />
+                            ) : (
+                              <AlertCircle className="size-4 text-rose-500" />
+                            )}
+                            <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                              Capture Transcript Timeline
+                            </span>
+                          </div>
 
-                          <div className="flex items-center gap-1.5">
-                            {speakerIds.map((spId) => {
-                              const idNum = parseInt(spId.toString().replace(/\D/g, "")) || 0;
-                              return (
-                                <div
-                                  key={spId}
-                                  className={`text-[9px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded border ${getSpeakerBg(
-                                    spId
-                                  )}`}
+                          <div className="flex items-center gap-3">
+                            {/* Speaker Filter Pills */}
+                            {speakerIds.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                {speakerIds.map((spId) => {
+                                  const idNum = parseInt(spId.toString().replace(/\D/g, "")) || 0;
+                                  const isSelected = selectedSpeakers.includes(spId.toString());
+                                  return (
+                                    <button
+                                      key={spId}
+                                      onClick={() => toggleSpeakerFilter(spId.toString())}
+                                      className={cn(
+                                        "text-[9px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full border transition-all duration-150 active:scale-95 cursor-pointer",
+                                        isSelected
+                                          ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-500"
+                                          : "bg-muted/30 border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                                      )}
+                                    >
+                                      {`Speaker ${String.fromCharCode(65 + idNum)}`}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Divider between speaker filters and transcribe button */}
+                            {speakerIds.length > 0 && deleteRecordingId && (
+                              <div className="h-4 w-[1px] bg-border" />
+                            )}
+
+                            {/* Transcribe Again Button */}
+                            {deleteRecordingId && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    toast.loading("Re-triggering transcription...", { id: "transcribe-retry" });
+                                    const res = await transcribeMutation.mutateAsync({
+                                      recordingId: deleteRecordingId,
+                                      provider: selectedProvider,
+                                    });
+                                    setStatus("transcribing");
+                                    setJobId(res.jobId);
+                                    setRecordingId(res.recordingId);
+                                    toast.success("AI Transcription triggered!", { id: "transcribe-retry" });
+                                  } catch (err: any) {
+                                    console.error("Transcription trigger failed:", err);
+                                    toast.error(err.message || "Failed to trigger transcription.", { id: "transcribe-retry" });
+                                  }
+                                }}
+                                disabled={transcribeMutation.isPending}
+                                className="flex items-center gap-1 px-2.5 h-7 bg-cyan-500 hover:bg-cyan-600 disabled:bg-muted disabled:text-muted-foreground text-white font-semibold text-[9px] tracking-wider uppercase rounded-lg transition-all duration-200 active:scale-95 cursor-pointer shadow-sm select-none"
+                                title="Re-transcribe using the selected model"
+                              >
+                                {transcribeMutation.isPending ? (
+                                  <Loader2 className="size-3 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="size-3" />
+                                )}
+                                <span>{transcribeMutation.isPending ? "Transcribing..." : "Transcribe"}</span>
+                              </button>
+                            )}
+
+                            {/* Divider between transcribe button and standard action buttons */}
+                            {deleteRecordingId && (
+                              <div className="h-4 w-[1px] bg-border" />
+                            )}
+
+                            {/* Action Buttons: Copy, Download, Delete, Minimize, Close */}
+                            <div className="flex items-center gap-0.5">
+                              {currentStatus === "completed" && currentTranscript && (
+                                <>
+                                  <button
+                                    onClick={copyToClipboard}
+                                    title="Copy Transcript"
+                                    className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                                  >
+                                    <Copy className="size-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={downloadTextFile}
+                                    title="Download Transcript"
+                                    className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                                  >
+                                    <Download className="size-3.5" />
+                                  </button>
+                                </>
+                              )}
+
+                              {deleteRecordingId && (
+                                <button
+                                  onClick={handleDelete}
+                                  disabled={deleteMutation.isPending}
+                                  title="Delete Recording"
+                                  className="size-7 rounded-lg hover:bg-rose-500/10 text-rose-500 hover:text-rose-600 flex items-center justify-center cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                                 >
-                                  {`Speaker ${String.fromCharCode(65 + idNum)}`}
-                                </div>
-                              );
-                            })}
+                                  {deleteMutation.isPending ? (
+                                    <Loader2 className="size-3.5 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="size-3.5" />
+                                  )}
+                                </button>
+                              )}
+
+                              <button
+                                onClick={minimizeDialog}
+                                title="Minimize"
+                                className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                              >
+                                <Minimize2 className="size-3.5" />
+                              </button>
+
+                              <button
+                                onClick={handleClose}
+                                className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
+                              >
+                                <X className="size-3.5" />
+                              </button>
+                            </div>
                           </div>
                         </div>
 
-                        <ScrollArea className="flex-1 max-h-[460px] overflow-y-auto">
-                          <div className="p-5 flex flex-col gap-5">
-                            {currentDiarizedTranscript?.entries && currentDiarizedTranscript.entries.length > 0 ? (
-                              currentDiarizedTranscript.entries.map((entry: any, index: number) => {
+                        <ScrollArea className="flex-1 overflow-y-auto">
+                          <div className="p-5 flex flex-col gap-4">
+                            {filteredEntries && filteredEntries.length > 0 ? (
+                              filteredEntries.map((entry: any, index: number) => {
                                 const speakerId = entry.speaker_id || "0";
                                 const idNum = parseInt(speakerId.toString().replace(/\D/g, "")) || 0;
                                 const speakerName = `Speaker ${String.fromCharCode(65 + idNum)}`;
+                                const isSegmentActive = isAudioPlaying && currentTime >= entry.start_time_seconds && currentTime <= entry.end_time_seconds;
 
                                 return (
-                                  <div key={index} className="flex items-start gap-3.5 group animate-in fade-in duration-200">
+                                  <div
+                                    key={index}
+                                    className={cn(
+                                      "flex items-start gap-3.5 group animate-in fade-in duration-200 p-2.5 rounded-xl border border-transparent transition-all duration-200",
+                                      isSegmentActive && "bg-cyan-500/[0.04] dark:bg-cyan-500/[0.06] border-cyan-500/20 dark:border-cyan-500/30 shadow-sm shadow-cyan-500/5"
+                                    )}
+                                  >
                                     <div
                                       className="size-[22px] rounded-full border flex items-center justify-center font-semibold text-[9px] shrink-0"
                                       style={{
@@ -1372,11 +1735,11 @@ export const MeetingDialog: React.FC = () => {
                                         </span>
                                         <span className="text-[10px] font-mono font-medium text-muted-foreground flex items-center">
                                           {formatSegmentTime(entry.start_time_seconds)}
-                                          <CornerDownRight className="size-2 text-muted-foreground mx-0.5 inline-block align-middle" />
+                                          <CornerDownRight className="size-2.5 text-muted-foreground mx-0.5 inline-block align-middle" />
                                           {formatSegmentTime(entry.end_time_seconds)}
                                         </span>
                                       </div>
-                                      <p className="text-[12px] leading-relaxed font-normal text-foreground/90 select-text mt-1">
+                                      <p className="text-[12px] leading-relaxed font-normal text-foreground/90 select-text mt-1.5">
                                         {entry.transcript}
                                       </p>
                                     </div>
@@ -1419,10 +1782,10 @@ export const MeetingDialog: React.FC = () => {
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span
+                  <CircleDot
                     className={cn(
-                      "size-2 rounded-full",
-                      currentStatus === "recording" && !isPaused ? "bg-rose-500 animate-pulse" : "bg-amber-500"
+                      "size-3.5 transition-all duration-300",
+                      currentStatus === "recording" && !isPaused ? "text-rose-500 animate-pulse" : "text-amber-500"
                     )}
                   />
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
