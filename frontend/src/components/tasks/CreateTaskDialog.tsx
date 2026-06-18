@@ -56,14 +56,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import type { TaskDTO, CreateTaskInput } from "@/hooks/api/useTasks";
-import { useCreateOrgTask, useUpdateOrgTask } from "@/hooks/api/useTasks";
+import { useCreateOrgTask, useUpdateOrgTask, useOrgTasks } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaceMembers, useSpaces } from "@/hooks/api/useSpaces";
+import { useMotionPages } from "@/hooks/api/useMotionPages";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import type { AnyStatus } from "@/types/task";
 import { StatusIcon, STATUS_OPTIONS, EVENT_STATUS_OPTIONS } from "./task-detail-shared";
 import { TaskContextSection } from "./TaskContextSection";
+import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 
 type SimpleAssigneeOption = {
   id: string;
@@ -158,6 +160,8 @@ export function CreateTaskDialog({
     selectedOrgId,
     selectedSpaceId
   );
+  const { data: orgTasks = [] } = useOrgTasks(selectedOrgId, selectedSpaceId);
+  const { data: pages = [] } = useMotionPages(selectedOrgId, selectedSpaceId);
 
   const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
     if (allUsers && allUsers.length > 0) return allUsers;
@@ -646,13 +650,17 @@ export function CreateTaskDialog({
               )}
             </div>
 
-            {/* Description Textarea */}
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add description..."
-              className="w-full text-sm bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/65 focus:outline-none focus:ring-0 resize-none min-h-[100px] custom-scrollbar"
-            />
+            {/* Description Editor */}
+            <div className="w-full">
+              <TaskDescriptionEditor
+                value={description}
+                onChange={setDescription}
+                placeholder="Add description..."
+                members={spaceMembers}
+                allTasks={orgTasks}
+                pages={pages}
+              />
+            </div>
 
             {/* Collapsible Clarity Section (Objective & Success Criteria) */}
             {type === "task" && (

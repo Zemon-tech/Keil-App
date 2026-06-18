@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AtSign,
-  Hash,
   Loader2,
   MessageSquare,
   Mic,
@@ -11,7 +11,10 @@ import {
   Smile,
   Trash2,
   X,
-  DollarSign,
+  User,
+  CheckSquare,
+  CalendarDays,
+  FileText,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,7 +26,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -35,6 +37,7 @@ import { useOrgTaskComments, useCreateOrgComment, useDeleteOrgComment } from "@/
 import type { Comment } from "@/types/task";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTaskPermissions } from "@/hooks/useTaskPermissions";
+import { useMotionPages, type MotionPageDTO } from "@/hooks/api/useMotionPages";
 
 import { formatRelTime } from "./task-detail-shared";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
@@ -42,12 +45,12 @@ import { renderMessageContent, type MentionMember } from "./renderMessageContent
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PickerType = "user" | "task" | "event";
+type PickerType = "all" | "user" | "task" | "event" | "page";
 
 interface MentionState {
   /** Which picker is active, or null if none */
   type: PickerType | null;
-  /** Index in `input` where the trigger symbol (@, #, $) was typed */
+  /** Index in `input` where the trigger symbol (@) was typed */
   triggerIndex: number;
   /** Text the user has typed after the trigger — used to filter results */
   query: string;
@@ -56,10 +59,32 @@ interface MentionState {
 }
 
 const MENTION_TRIGGERS: Record<string, PickerType> = {
-  "@": "user",
-  "#": "task",
-  $: "event",
+  "@": "all",
 };
+
+interface SearchItemUser {
+  kind: "user";
+  user_id: string;
+  name?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+  avatarUrl?: string | null;
+}
+
+interface SearchItemTask {
+  kind: "task" | "event";
+  id: string;
+  title: string;
+  type: string;
+}
+
+interface SearchItemPage {
+  kind: "page";
+  id: string;
+  title?: string;
+}
+
+type UnifiedSearchItem = SearchItemUser | SearchItemTask | SearchItemPage;
 
 // ─── CommentNode ──────────────────────────────────────────────────────────────
 
@@ -72,6 +97,7 @@ function CommentNode({
   spaceId,
   task,
   members,
+  pages,
 }: {
   comment: Comment;
   taskId: string;
@@ -81,6 +107,7 @@ function CommentNode({
   spaceId: string | null;
   task: TaskDTO;
   members: MentionMember[];
+  pages: MotionPageDTO[];
 }) {
   const authorName = comment.user?.name || comment.user?.email || "Unknown";
   const [isReplying, setIsReplying] = useState(false);
@@ -90,6 +117,7 @@ function CommentNode({
   const deleteComment = useDeleteOrgComment(orgId, spaceId);
   const { user } = useAuth();
   const { canComment, canDeleteOwnComment, canDeleteAnyComment } = useTaskPermissions(task);
+  const navigate = useNavigate();
 
   // Close reply box when clicking outside it.
   // We defer adding the listener by one frame so the mousedown that
@@ -97,10 +125,9 @@ function CommentNode({
   const replyBoxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!isReplying) return;
-    let rafId: number;
     let cleanup: (() => void) | undefined;
 
-    rafId = requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       const handleMouseDown = (e: MouseEvent) => {
         if (replyBoxRef.current && !replyBoxRef.current.contains(e.target as Node)) {
           setIsReplying(false);
@@ -160,7 +187,7 @@ function CommentNode({
 
         {/* Message Content */}
         <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-          {renderMessageContent(comment.content, allTasks, onTaskClick, members)}
+          {renderMessageContent(comment.content, allTasks, onTaskClick, members, (pageId) => navigate(`/motion/${pageId}`), pages)}
         </p>
 
         {/* Floating Action Menu */}
@@ -231,7 +258,7 @@ function CommentNode({
                 {/* Replies */}
                 <div className="pl-4 space-y-0">
                   {comment.replies.map((reply) => (
-                    <CommentNode key={reply.id} comment={reply} taskId={taskId} allTasks={allTasks} onTaskClick={onTaskClick} orgId={orgId} spaceId={spaceId} task={task} members={members} />
+                    <CommentNode key={reply.id} comment={reply} taskId={taskId} allTasks={allTasks} onTaskClick={onTaskClick} orgId={orgId} spaceId={spaceId} task={task} members={members} pages={pages} />
                   ))}
                 </div>
               </div>
@@ -264,9 +291,6 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   const createComment = useCreateOrgComment(taskOrgId, taskSpaceId);
   const { canComment } = useTaskPermissions(task);
 
-  // ── Inline mention state ──
-  // We detect @query / #query / $query directly from the caret position in the
-  // main input. No separate popup input — the user keeps typing in the same field.
   const [mention, setMention] = useState<MentionState>({
     type: null,
     triggerIndex: -1,
@@ -279,9 +303,9 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
 
   const { data: members = [] } = useSpaceMembers(taskOrgId, taskSpaceId);
   const { data: allTasks = [] } = useOrgTasks(taskOrgId, taskSpaceId);
+  const { data: pages = [] } = useMotionPages(taskOrgId, taskSpaceId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Task preview dialog state ──
   const [previewTaskId, setPreviewTaskId] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -290,9 +314,8 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     setPreviewOpen(true);
   };
 
-  // ── Filtered lists for the inline picker ──
   const filteredMembers = (members || []).filter((m) =>
-    (m.name || m.email).toLowerCase().includes(mention.query.toLowerCase())
+    (m.name || m.email || "").toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredTasks = allTasks.filter(
@@ -309,40 +332,69 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
       t.title.toLowerCase().includes(mention.query.toLowerCase())
   );
 
-  const activeResults =
-    mention.type === "user"
-      ? filteredMembers
-      : mention.type === "task"
-      ? filteredTasks
-      : filteredEvents;
+  const filteredPages = pages.filter(
+    (p) =>
+      !p.deleted_at &&
+      (p.title || "Untitled").toLowerCase().includes(mention.query.toLowerCase())
+  );
 
-  // ── Detect mention triggers as the user types ──
-  // Scans backwards from the caret to find the nearest unescaped trigger char.
+  const categories = useMemo(() => [
+    { id: "cat-user", kind: "category" as const, type: "user" as const, title: "People", icon: <User className="size-4" /> },
+    { id: "cat-task", kind: "category" as const, type: "task" as const, title: "Tasks", icon: <CheckSquare className="size-4" /> },
+    { id: "cat-event", kind: "category" as const, type: "event" as const, title: "Events", icon: <CalendarDays className="size-4" /> },
+    { id: "cat-page", kind: "category" as const, type: "page" as const, title: "Pages", icon: <FileText className="size-4" /> },
+  ], []);
+
+  const groupedResults = useMemo<{ label: string; items: UnifiedSearchItem[] }[]>(() => {
+    if (mention.type !== "all" || !mention.query) return [];
+    return [
+      { label: "People", items: filteredMembers.slice(0, 3).map(m => ({ ...m, kind: "user" as const })) },
+      { label: "Tasks", items: filteredTasks.slice(0, 3).map(t => ({ ...t, kind: "task" as const })) },
+      { label: "Events", items: filteredEvents.slice(0, 3).map(e => ({ ...e, kind: "event" as const })) },
+      { label: "Pages", items: filteredPages.slice(0, 3).map(p => ({ ...p, kind: "page" as const })) },
+    ].filter(g => g.items.length > 0);
+  }, [mention.type, mention.query, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
+
+  const flatResults = useMemo(() => {
+    if (mention.type === "all") {
+      if (!mention.query) {
+        return categories;
+      }
+      return groupedResults.flatMap(g => g.items);
+    }
+    if (mention.type === "user") return filteredMembers;
+    if (mention.type === "task") return filteredTasks;
+    if (mention.type === "event") return filteredEvents;
+    if (mention.type === "page") return filteredPages;
+    return [];
+  }, [mention.type, mention.query, categories, groupedResults, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
+
   const detectMentionFromInput = useCallback(
     (value: string, caretPos: number) => {
-      // Walk backwards from caret to find a trigger character
       for (let i = caretPos - 1; i >= 0; i--) {
         const ch = value[i];
         if (ch in MENTION_TRIGGERS) {
-          // Make sure there is no whitespace between trigger and caret
-          // (i.e. the user hasn't moved past the word)
           const between = value.slice(i + 1, caretPos);
           if (!between.includes(" ") && !between.includes("\n")) {
-            setMention({
-              type: MENTION_TRIGGERS[ch],
-              triggerIndex: i,
-              query: between,
-              highlightedIndex: 0,
+            setMention((prev) => {
+              const keepType =
+                prev.type && prev.type !== "all" && prev.triggerIndex === i
+                  ? prev.type
+                  : MENTION_TRIGGERS[ch];
+              const nextHighlighted = prev.query === between ? prev.highlightedIndex : 0;
+              return {
+                type: keepType,
+                triggerIndex: i,
+                query: between,
+                highlightedIndex: nextHighlighted,
+              };
             });
             return;
           }
-          // Found a trigger but it's separated by whitespace — stop
           break;
         }
-        // If we hit whitespace before finding a trigger, stop
         if (ch === " " || ch === "\n") break;
       }
-      // No active mention
       setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
     },
     []
@@ -352,7 +404,6 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
   }, []);
 
-  // ── Handle changes in the main input ──
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInput(value);
@@ -360,26 +411,23 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     detectMentionFromInput(value, caretPos);
   };
 
-  // Re-run detection when caret moves (click / arrow keys move position)
   const handleInputSelect = (e: React.SyntheticEvent<HTMLInputElement>) => {
     const target = e.target as HTMLInputElement;
     detectMentionFromInput(target.value, target.selectionStart ?? target.value.length);
   };
 
-  // ── Insert selected mention into the input ──
   const handleInsertMention = useCallback(
-    (symbol: string, label: string) => {
+    (label: string) => {
       if (mention.triggerIndex === -1) return;
 
-      const before = input.slice(0, mention.triggerIndex); // text before the trigger
+      const before = input.slice(0, mention.triggerIndex);
       const after = input.slice(
-        mention.triggerIndex + 1 + mention.query.length // skip trigger + typed query
+        mention.triggerIndex + 1 + mention.query.length
       );
-      const inserted = `${symbol}${label} `;
+      const inserted = `@${label} `;
       const newValue = before + inserted + after;
       setInput(newValue);
 
-      // Place caret right after the inserted mention
       const newCaretPos = before.length + inserted.length;
       requestAnimationFrame(() => {
         if (mainInputRef.current) {
@@ -393,14 +441,13 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     [input, mention, closePicker]
   );
 
-  // ── Keyboard navigation in the picker ──
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (mention.type) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setMention((prev) => ({
           ...prev,
-          highlightedIndex: Math.min(prev.highlightedIndex + 1, activeResults.length - 1),
+          highlightedIndex: Math.min(prev.highlightedIndex + 1, flatResults.length - 1),
         }));
         return;
       }
@@ -414,17 +461,32 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
       }
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        const item = activeResults[mention.highlightedIndex];
+        const item = flatResults[mention.highlightedIndex];
         if (item) {
-          const triggerSymbol = Object.keys(MENTION_TRIGGERS).find(
-            (k) => MENTION_TRIGGERS[k] === mention.type
-          )!;
-          const label =
-            mention.type === "user"
-              ? (item as (typeof members)[number]).name ||
-                (item as (typeof members)[number]).email
-              : (item as TaskDTO).title;
-          handleInsertMention(triggerSymbol, label);
+          if (mention.type === "all" && !mention.query) {
+            const cat = item as typeof categories[number];
+            setMention((prev) => ({
+              ...prev,
+              type: cat.type,
+              highlightedIndex: 0,
+            }));
+          } else {
+            const uItem = item as unknown as UnifiedSearchItem;
+            const type = mention.type === "all" ? uItem.kind : mention.type;
+            if (type === "user") {
+              const m = uItem as SearchItemUser;
+              handleInsertMention(m.name || m.email || "");
+            } else if (type === "task") {
+              const t = uItem as SearchItemTask;
+              handleInsertMention(t.title);
+            } else if (type === "event") {
+              const ev = uItem as SearchItemTask;
+              handleInsertMention(ev.title);
+            } else if (type === "page") {
+              const p = uItem as SearchItemPage;
+              handleInsertMention(p.title || "Untitled");
+            }
+          }
         }
         return;
       }
@@ -435,13 +497,11 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
       }
     }
 
-    // Normal send shortcut
     if (e.key === "Enter" && !e.shiftKey && !mention.type && canComment) {
       handleSend();
     }
   };
 
-  // ── Close picker when clicking outside ──
   useEffect(() => {
     if (!mention.type) return;
     const handlePointerDown = (e: PointerEvent) => {
@@ -458,12 +518,8 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [mention.type, closePicker]);
 
-  // ── Open picker from the + dropdown (without losing main-input focus) ──
   const openPickerFromMenu = (type: PickerType) => {
-    // Append the trigger symbol to the input and activate the picker
-    const triggerSymbol = Object.keys(MENTION_TRIGGERS).find(
-      (k) => MENTION_TRIGGERS[k] === type
-    )!;
+    const triggerSymbol = "@";
     const newValue = input + triggerSymbol;
     setInput(newValue);
     setMention({
@@ -491,20 +547,24 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // ── Picker label helpers ──
   const pickerLabel =
-    mention.type === "user" ? "people" : mention.type === "event" ? "events" : "tasks";
+    mention.type === "user"
+      ? "people"
+      : mention.type === "event"
+      ? "events"
+      : mention.type === "task"
+      ? "tasks"
+      : "pages";
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-background h-full relative">
-      {/* Task/event preview dialog — opened when a #task-name chip is clicked */}
       <TaskPreviewDialog
         taskId={previewTaskId}
         open={previewOpen}
         onOpenChange={setPreviewOpen}
       />
       <ScrollArea className="flex-1 min-h-0">
-        <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto">
+        <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto font-sans">
           {isPending ? (
             <div className="flex justify-center py-8 my-auto">
               <Loader2 className="size-8 animate-spin text-muted-foreground" />
@@ -512,7 +572,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
           ) : (comments ?? []).length > 0 ? (
             <div className="space-y-0.5 mt-auto">
               {(comments ?? []).map((comment) => (
-                <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} members={members} />
+                <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} members={members} pages={pages} />
               ))}
             </div>
           ) : (
@@ -527,22 +587,23 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
         </div>
       </ScrollArea>
 
-      {/* ── Inline mention picker — sits above the input bar ── */}
       {mention.type && (
         <div
           ref={pickerRef}
-          className="absolute bottom-[80px] left-8 w-72 flex flex-col bg-popover text-popover-foreground rounded-lg border shadow-lg z-50 overflow-hidden"
+          className="absolute bottom-[80px] left-8 w-72 flex flex-col bg-popover text-popover-foreground rounded-lg border shadow-lg z-50 overflow-hidden font-sans"
         >
-          {/* Header: shows what we're filtering + a dismiss button */}
           <div className="px-3 py-2 border-b bg-muted/50 flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
-              {mention.query
+              {mention.type === "all" && !mention.query
+                ? "Tag everything..."
+                : mention.type === "all"
+                ? `Searching for "${mention.query}"`
+                : mention.query
                 ? `Searching ${pickerLabel} for "${mention.query}"`
                 : `Matching ${pickerLabel}…`}
             </span>
             <button
               onMouseDown={(e) => {
-                // Use mousedown + preventDefault so the main input doesn't blur
                 e.preventDefault();
                 closePicker();
               }}
@@ -554,81 +615,152 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
           </div>
 
           <ScrollArea className="max-h-60 overflow-y-auto">
-            {mention.type === "user" ? (
+            {mention.type === "all" && !mention.query ? (
               <div className="p-1.5 space-y-0.5">
-                {filteredMembers.length === 0 ? (
-                  <p className="py-4 text-xs text-muted-foreground text-center">No people found</p>
-                ) : (
-                  filteredMembers.map((m, idx) => {
-                    const name = m.name || m.email;
-                    return (
-                      <button
-                        key={m.user_id}
-                        // mousedown prevents blur on main input; click handles selection
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleInsertMention("@", name)}
-                        className={`w-full flex items-center gap-2 p-1.5 rounded-md text-left transition-colors ${
-                          idx === mention.highlightedIndex
-                            ? "bg-accent"
-                            : "hover:bg-accent"
-                        }`}
-                      >
-                        <Avatar className="size-6">
-                          <AvatarImage src={getOptimizedImageUrl(m.avatar_url || m.avatarUrl, { width: 48, height: 48 })} alt={name} />
-                          <AvatarFallback className="text-[10px] bg-indigo-500/10 text-indigo-500 font-semibold">
-                            {name.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm truncate font-medium">{name}</span>
-                      </button>
-                    );
-                  })
-                )}
+                {categories.map((cat, idx) => (
+                  <button
+                    key={cat.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setMention((prev) => ({
+                        ...prev,
+                        type: cat.type,
+                        highlightedIndex: 0,
+                      }));
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors ${
+                      idx === mention.highlightedIndex
+                        ? "bg-accent text-accent-foreground"
+                        : "hover:bg-accent/60 text-foreground"
+                    }`}
+                  >
+                    <span className="shrink-0 size-6 rounded flex items-center justify-center bg-muted text-muted-foreground">
+                      {cat.icon}
+                    </span>
+                    <span className="text-sm font-medium">{cat.title}</span>
+                  </button>
+                ))}
               </div>
-            ) : mention.type === "task" ? (
-              <div className="p-1.5 space-y-0.5">
-                {filteredTasks.length === 0 ? (
-                  <p className="py-4 text-xs text-muted-foreground text-center">No tasks found</p>
+            ) : mention.type === "all" ? (
+              <div className="p-1.5 space-y-2">
+                {flatResults.length === 0 ? (
+                  <p className="py-4 text-xs text-muted-foreground text-center">No results found</p>
                 ) : (
-                  filteredTasks.map((t, idx) => (
-                    <button
-                      key={t.id}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleInsertMention("#", t.title)}
-                      className={`w-full flex items-center gap-2 p-1.5 rounded-md text-left transition-colors ${
-                        idx === mention.highlightedIndex ? "bg-accent" : "hover:bg-accent"
-                      }`}
-                    >
-                      <Hash className="size-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm truncate font-medium flex-1">{t.title}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0 font-mono hidden sm:inline-block">
-                        {t.id.slice(0, 8)}
-                      </span>
-                    </button>
-                  ))
+                  (() => {
+                    let flatIdx = 0;
+                    return groupedResults.map((group) => (
+                      <div key={group.label} className="space-y-0.5">
+                        <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                          {group.label}
+                        </p>
+                        {group.items.map((item) => {
+                          const idx = flatIdx++;
+                          const uItem = item as unknown as UnifiedSearchItem;
+                          const icon =
+                            uItem.kind === "user" ? (
+                              <Avatar className="size-5 shrink-0">
+                                <AvatarImage
+                                  src={getOptimizedImageUrl(uItem.avatar_url || uItem.avatarUrl, { width: 40, height: 40 })}
+                                  alt={uItem.name || uItem.email || "User"}
+                                />
+                                <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
+                                  {(uItem.name || uItem.email || "U").charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            ) : uItem.kind === "task" ? (
+                              <CheckSquare className="size-4 text-muted-foreground shrink-0" />
+                            ) : uItem.kind === "event" ? (
+                              <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                            ) : (
+                              <FileText className="size-4 text-muted-foreground shrink-0" />
+                            );
+
+                          const title =
+                            uItem.kind === "user"
+                              ? uItem.name || uItem.email || ""
+                              : uItem.title || "Untitled";
+
+                          return (
+                            <button
+                              key={uItem.kind === "user" ? uItem.user_id : uItem.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                handleInsertMention(title);
+                              }}
+                              className={`w-full flex items-center gap-2 p-1.5 rounded-md text-left transition-colors ${
+                                idx === mention.highlightedIndex
+                                  ? "bg-accent text-accent-foreground"
+                                  : "hover:bg-accent text-foreground"
+                              }`}
+                            >
+                              {icon}
+                              <span className="text-sm truncate font-medium flex-1">{title}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ));
+                  })()
                 )}
               </div>
             ) : (
               <div className="p-1.5 space-y-0.5">
-                {filteredEvents.length === 0 ? (
-                  <p className="py-4 text-xs text-muted-foreground text-center">No events found</p>
+                {flatResults.length === 0 ? (
+                  <p className="py-4 text-xs text-muted-foreground text-center">No results found</p>
                 ) : (
-                  filteredEvents.map((t, idx) => (
-                    <button
-                      key={t.id}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleInsertMention("$", t.title)}
-                      className={`w-full flex items-center gap-2 p-1.5 rounded-md text-left transition-colors ${
-                        idx === mention.highlightedIndex ? "bg-accent" : "hover:bg-accent"
-                      }`}
-                    >
-                      <DollarSign className="size-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm truncate font-medium flex-1">{t.title}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0 font-mono hidden sm:inline-block">
-                        {t.id.slice(0, 8)}
-                      </span>
-                    </button>
-                  ))
+                  flatResults.map((rawItem: unknown, idx) => {
+                    let icon = null;
+                    let title = "";
+                    let selectHandler = () => {};
+
+                    if (mention.type === "user") {
+                      const item = rawItem as SearchItemUser;
+                      title = item.name || item.email || "";
+                      icon = (
+                        <Avatar className="size-5 shrink-0">
+                          <AvatarImage
+                            src={getOptimizedImageUrl(item.avatar_url || item.avatarUrl, { width: 40, height: 40 })}
+                            alt={title}
+                          />
+                          <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
+                            {title.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      );
+                      selectHandler = () => handleInsertMention(title);
+                    } else if (mention.type === "task") {
+                      const item = rawItem as TaskDTO;
+                      title = item.title;
+                      icon = <CheckSquare className="size-4 text-muted-foreground shrink-0" />;
+                      selectHandler = () => handleInsertMention(title);
+                    } else if (mention.type === "event") {
+                      const item = rawItem as TaskDTO;
+                      title = item.title;
+                      icon = <CalendarDays className="size-4 text-muted-foreground shrink-0" />;
+                      selectHandler = () => handleInsertMention(title);
+                    } else if (mention.type === "page") {
+                      const item = rawItem as MotionPageDTO;
+                      title = item.title || "Untitled";
+                      icon = <FileText className="size-4 text-muted-foreground shrink-0" />;
+                      selectHandler = () => handleInsertMention(title);
+                    }
+
+                    return (
+                      <button
+                        key={mention.type === "user" ? (rawItem as SearchItemUser).user_id : (rawItem as TaskDTO | MotionPageDTO).id}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={selectHandler}
+                        className={`w-full flex items-center gap-2 p-1.5 rounded-md text-left transition-colors ${
+                          idx === mention.highlightedIndex
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent text-foreground"
+                        }`}
+                      >
+                        {icon}
+                        <span className="text-sm truncate font-medium flex-1">{title}</span>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -636,7 +768,6 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
         </div>
       )}
 
-      {/* Hidden File Input */}
       <input
         type="file"
         ref={fileInputRef}
@@ -645,37 +776,47 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
         multiple
       />
 
-      {/* Sticky comment input - WhatsApp Style */}
       <div className="shrink-0 px-6 pb-6 pt-2">
-        {/* Active mention chip preview — shown while the user is mid-mention */}
         {mention.type && (
-          <div className="mb-1.5 flex items-center gap-1.5 px-1 max-w-5xl mx-auto">
-            <span className="text-[11px] text-muted-foreground">Mentioning:</span>
+          <div className="mb-1.5 flex items-center gap-1.5 px-1 max-w-5xl mx-auto font-sans">
+            <span className="text-[11px] text-muted-foreground font-medium">Mentioning:</span>
             <span
               className={[
-                "inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[12px] font-semibold border",
+                "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-semibold border",
                 mention.type === "user"
                   ? "bg-primary/8 text-primary border-primary/25 dark:bg-primary/15 dark:border-primary/35"
                   : mention.type === "task"
                   ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
-                  : "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/25",
+                  : mention.type === "event"
+                  ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/25"
+                  : mention.type === "page"
+                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
+                  : "bg-muted text-muted-foreground border-border",
               ].join(" ")}
             >
               {mention.type === "user" ? (
                 <AtSign className="size-3 shrink-0 opacity-70" />
               ) : mention.type === "task" ? (
-                <Hash className="size-3 shrink-0 opacity-70" />
+                <CheckSquare className="size-3 shrink-0 opacity-70" />
+              ) : mention.type === "event" ? (
+                <CalendarDays className="size-3 shrink-0 opacity-70" />
+              ) : mention.type === "page" ? (
+                <FileText className="size-3 shrink-0 opacity-70" />
               ) : (
-                <DollarSign className="size-3 shrink-0 opacity-70" />
+                <AtSign className="size-3 shrink-0 opacity-70" />
               )}
-              {mention.query || <span className="opacity-50 italic">type to search…</span>}
+              {mention.type === "all" && !mention.query ? (
+                <span className="opacity-50 italic">select category…</span>
+              ) : (
+                mention.query || <span className="opacity-50 italic">type to search…</span>
+              )}
             </span>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground font-medium">
               ↑↓ navigate · Enter select · Esc cancel
             </span>
           </div>
         )}
-        <div className="flex items-center gap-2 w-full max-w-5xl mx-auto bg-background rounded-full px-4 py-2.5 border border-border focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all shadow-sm">
+        <div className="flex items-center gap-2 w-full max-w-5xl mx-auto bg-background rounded-full px-4 py-2.5 border border-border focus-within:ring-1 focus-within:ring-ring focus-within:border-ring transition-all shadow-sm font-sans">
           {canComment && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -685,42 +826,17 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="w-64 p-2 mb-2 rounded-xl border border-border shadow-md">
                 <DropdownMenuItem
-                  onClick={() => openPickerFromMenu("user")}
+                  onClick={() => openPickerFromMenu("all")}
                   className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent"
                 >
                   <div className="flex items-center justify-center size-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
                     <AtSign className="size-4" />
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Mention someone</span>
-                    <span className="text-xs text-muted-foreground">Notify a team member</span>
+                  <div className="flex flex-col font-sans">
+                    <span className="text-sm font-medium">@ mention</span>
+                    <span className="text-xs text-muted-foreground font-medium">Tag people, tasks, events, or pages</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => openPickerFromMenu("task")}
-                  className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent"
-                >
-                  <div className="flex items-center justify-center size-8 rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
-                    <Hash className="size-4" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Mention task</span>
-                    <span className="text-xs text-muted-foreground">Reference a task name</span>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => openPickerFromMenu("event")}
-                  className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent"
-                >
-                  <div className="flex items-center justify-center size-8 rounded-full bg-indigo-500/10 text-indigo-500 shrink-0">
-                    <DollarSign className="size-4" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Mention event</span>
-                    <span className="text-xs text-muted-foreground">Reference an event name</span>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="mx-2 my-1" />
                 <DropdownMenuItem
                   onClick={() => fileInputRef.current?.click()}
                   className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent"
@@ -728,9 +844,9 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                   <div className="flex items-center justify-center size-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
                     <Paperclip className="size-4" />
                   </div>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col font-sans">
                     <span className="text-sm font-medium">Add files</span>
-                    <span className="text-xs text-muted-foreground">Opens file picker dialog</span>
+                    <span className="text-xs text-muted-foreground font-medium">Opens file picker dialog</span>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -759,7 +875,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="size-8 p-0 text-primary hover:bg-primary/10 hover:text-primary font-semibold rounded-full flex items-center justify-center"
+                className="size-8 p-0 text-primary hover:bg-primary/10 hover:text-primary font-semibold rounded-full flex items-center justify-center font-sans"
                 onClick={handleSend}
                 disabled={createComment.isPending}
               >

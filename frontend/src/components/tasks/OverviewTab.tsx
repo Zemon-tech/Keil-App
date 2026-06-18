@@ -22,11 +22,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { EditableTextarea } from "@/components/ui/editable-text";
+import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import {
+  useOrgTasks,
   useOrgSubtasks,
   useAssignOrgUser,
   useRemoveOrgAssignee,
@@ -36,6 +37,7 @@ import {
   useDeleteChecklist,
 } from "@/hooks/api/useTasks";
 import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useMotionPages } from "@/hooks/api/useMotionPages";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 
@@ -88,6 +90,9 @@ export const OverviewTab = ({
     activeOrgId,
     activeSpaceId
   );
+  const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
+  const { data: pages = [] } = useMotionPages(activeOrgId, activeSpaceId);
+
   const assignUser = useAssignOrgUser(activeOrgId, activeSpaceId);
   const removeAssignee = useRemoveOrgAssignee(activeOrgId, activeSpaceId);
 
@@ -166,12 +171,14 @@ export const OverviewTab = ({
             <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Description
             </span>
-            <EditableTextarea
+            <TaskDescriptionEditor
               value={task.description ?? ""}
-              onSave={(description) => onUpdateField?.({ description })}
+              onBlur={(description) => onUpdateField?.({ description })}
               placeholder="Add a description..."
-              minRows={2}
               disabled={!canEditTask}
+              members={members}
+              allTasks={allTasks}
+              pages={pages}
             />
           </div>
 
