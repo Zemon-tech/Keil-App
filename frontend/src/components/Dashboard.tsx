@@ -49,6 +49,7 @@ import {
   LikeAction,
   DislikeAction,
   CopyAction,
+  TruncatedMessage,
 } from "@/components/ai-elements/message";
 import {
   Conversation,
@@ -353,6 +354,13 @@ const formatToolResult = (toolName: string, result: any) => {
   return jsonStr;
 };
 
+const BACKGROUNDS = [
+  { id: "none", name: "None", url: "" },
+  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
+  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
+  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
+];
+
 export function Dashboard() {
   const { state } = useSidebar();
   const [mounted, setMounted] = useState(false);
@@ -398,6 +406,12 @@ export function Dashboard() {
   const [modelSelection, setModelSelection] = useState<string>(() => {
     return localStorage.getItem("ai_model_selection") || "gemini";
   });
+  const [dashboardBackground, setDashboardBackground] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dashboard_background") || "open-garden";
+    }
+    return "open-garden";
+  });
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
   useEffect(() => {
@@ -412,6 +426,21 @@ export function Dashboard() {
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("ai_model_selection_changed", handleStorageChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem("dashboard_background");
+      if (saved) {
+        setDashboardBackground(saved);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("dashboard_background_changed", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("dashboard_background_changed", handleStorageChange);
     };
   }, []);
 
@@ -773,7 +802,9 @@ export function Dashboard() {
 
   if (!mounted) return null;
 
-  const showDashboardBackground = !hasChatStarted && !isLoadingHistory;
+  const selectedBg = BACKGROUNDS.find(bg => bg.id === dashboardBackground);
+  const bgUrl = selectedBg && selectedBg.id !== "none" ? selectedBg.url : null;
+  const showDashboardBackground = !hasChatStarted && !isLoadingHistory && !!bgUrl;
 
   return (
     <div className="h-[100dvh] bg-background text-foreground overflow-hidden overscroll-none flex">
@@ -784,9 +815,9 @@ export function Dashboard() {
           showDashboardBackground && "bg-cover bg-center bg-no-repeat"
         )}
         style={
-          showDashboardBackground
+          showDashboardBackground && bgUrl
             ? {
-              backgroundImage: `url("/backgrounds/ChatGPT Image Jun 16, 2026, 10_12_39 AM.png")`,
+              backgroundImage: `url("${bgUrl}")`,
             }
             : undefined
         }
@@ -980,7 +1011,9 @@ export function Dashboard() {
                     <Message
                       from={message.role}
                       key={message.id}
-                      className="max-w-full w-full"
+                      className={cn(
+                        message.role === "user" ? "w-fit ml-auto max-w-[75%] sm:max-w-[70%] md:max-w-[65%]" : "max-w-full w-full"
+                      )}
                     >
                       <MessageContent
                         className={cn(
@@ -1121,7 +1154,7 @@ export function Dashboard() {
                         ) : (
                           <div className="flex flex-col gap-2">
                             {text.trim() !== "" && (
-                              <MessageResponse>{text}</MessageResponse>
+                              <TruncatedMessage text={text} />
                             )}
                             {messageParts.length > 0 && (
                               <div className="flex flex-col gap-1.5 mt-1">

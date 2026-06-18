@@ -172,10 +172,10 @@ export function HistorySidebar({
       <Sidebar
         side="right"
         collapsible="offcanvas"
-        className="border-l border-[#2f2f2f] shadow-none bg-[#0d0d0d] text-[#ececec] z-20"
+        className="border-l border-sidebar-border shadow-none bg-sidebar text-sidebar-foreground z-20"
       >
         {/* ── Header: Motion-style Tabs ── */}
-        <SidebarHeader className="h-12 justify-center px-3 border-b border-[#2f2f2f] shrink-0 bg-[#0d0d0d]">
+        <SidebarHeader className="h-12 justify-center px-3 border-b border-sidebar-border shrink-0 bg-sidebar">
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar w-full">
             {mainTabs.map((tab) => {
               const isActive = sidebarMode === tab.id;
@@ -187,10 +187,10 @@ export function HistorySidebar({
                   size="sm"
                   onClick={() => setSidebarMode(tab.id as any)}
                   className={cn(
-                    "h-8 px-2.5 rounded-lg transition-all flex items-center gap-1.5 border border-transparent hover:bg-white/5 cursor-pointer text-xs",
+                    "h-8 px-2.5 rounded-lg transition-all flex items-center gap-1.5 border border-transparent hover:bg-sidebar-accent cursor-pointer text-xs",
                     isActive
-                      ? "bg-white/10 text-white border-white/5 shadow-sm"
-                      : "text-[#b4b4b4]"
+                      ? "bg-sidebar-accent text-sidebar-foreground border-sidebar-border/10 shadow-sm"
+                      : "text-muted-foreground"
                   )}
                 >
                   <tab.icon className="h-4 w-4 shrink-0" />
@@ -210,7 +210,7 @@ export function HistorySidebar({
               variant="ghost"
               size="icon"
               onClick={handleNewChat}
-              className="size-8 shrink-0 rounded-full text-[#b4b4b4] hover:bg-white/5 hover:text-white cursor-pointer"
+              className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground cursor-pointer"
               title="New Chat"
             >
               <SquarePen className="h-4 w-4" />
@@ -221,7 +221,7 @@ export function HistorySidebar({
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
-              className="size-8 shrink-0 text-[#b4b4b4] hover:bg-white/5 hover:text-white cursor-pointer"
+              className="size-8 shrink-0 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground cursor-pointer"
               title="Close history"
             >
               <X className="size-4" />
@@ -230,7 +230,7 @@ export function HistorySidebar({
         </SidebarHeader>
 
         {/* ── Content ───────────────────────────────────────────────────── */}
-        <SidebarContent className="overflow-hidden bg-[#0d0d0d] flex flex-col pt-2 select-none">
+        <SidebarContent className="overflow-hidden bg-sidebar flex flex-col pt-2 select-none">
           {sidebarMode === "chats" && (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="px-2.5 space-y-0.5 shrink-0">
@@ -238,14 +238,14 @@ export function HistorySidebar({
                 <div className="w-full">
                   <button
                     onClick={() => setShowSearch(!showSearch)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-[13px] font-medium text-[#ececec] hover:bg-white/5 rounded-lg transition-colors cursor-pointer select-none"
+                    className="w-full flex items-center justify-between px-3 py-2 text-[13px] font-medium text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors cursor-pointer select-none"
                   >
                     <div className="flex items-center gap-3">
-                      <Search className="size-4 text-[#b4b4b4]" />
+                      <Search className="size-4 text-muted-foreground" />
                       <span>Search chats</span>
                     </div>
                     {searchQuery && (
-                      <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-[#b4b4b4]">
+                      <span className="text-[10px] bg-sidebar-accent px-1.5 py-0.5 rounded text-muted-foreground">
                         Active
                       </span>
                     )}
@@ -258,7 +258,7 @@ export function HistorySidebar({
                         placeholder="Search conversations..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full h-8 bg-[#171717] border border-[#2f2f2f] rounded-lg px-2.5 text-xs text-[#ececec] placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/10"
+                        className="w-full h-8 bg-background/50 border border-sidebar-border rounded-lg px-2.5 text-xs text-sidebar-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/10"
                       />
                     </div>
                   )}
@@ -266,23 +266,23 @@ export function HistorySidebar({
               </div>
 
               {/* Recents section header */}
-              <div className="flex items-center justify-between px-5 py-2 mt-3 text-[10px] font-bold text-[#b4b4b4] tracking-wider select-none uppercase font-sans">
+              <div className="flex items-center justify-between px-5 py-2 mt-3 text-[10px] font-bold text-muted-foreground tracking-wider select-none uppercase font-sans">
                 <div 
                   onClick={() => setRecentsOpen(!recentsOpen)}
-                  className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 cursor-pointer hover:text-sidebar-foreground transition-colors"
                 >
                   {recentsOpen ? (
-                    <ChevronDown className="size-3 text-[#b4b4b4] shrink-0" />
+                    <ChevronDown className="size-3 text-muted-foreground shrink-0" />
                   ) : (
-                    <ChevronRight className="size-3 text-[#b4b4b4] shrink-0" />
+                    <ChevronRight className="size-3 text-muted-foreground shrink-0" />
                   )}
                   <span>Recents</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[#b4b4b4]">
-                  <button onClick={handleNewChat} className="hover:text-white transition-colors cursor-pointer">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <button onClick={handleNewChat} className="hover:text-sidebar-foreground transition-colors cursor-pointer">
                     <SquarePen className="size-3" />
                   </button>
-                  <MoreHorizontal className="size-3 cursor-pointer hover:text-white transition-colors" />
+                  <MoreHorizontal className="size-3 cursor-pointer hover:text-sidebar-foreground transition-colors" />
                 </div>
               </div>
 
@@ -308,8 +308,8 @@ export function HistorySidebar({
                             className={cn(
                               "flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer group border border-transparent transition-colors w-full min-w-0 mb-0.5",
                               isActive
-                                ? "bg-white/10 text-white font-medium"
-                                : "hover:bg-white/5 text-[#ececec]"
+                                ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+                                : "hover:bg-sidebar-accent/50 text-sidebar-foreground"
                             )}
                           >
                             {isEditing ? (
@@ -326,17 +326,17 @@ export function HistorySidebar({
                                     if (e.key === "Escape") setEditingThreadId(null);
                                   }}
                                   autoFocus
-                                  className="flex-1 bg-[#171717] border border-[#2f2f2f] rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/10 min-w-0"
+                                  className="flex-1 bg-background border border-sidebar-border rounded px-1.5 py-0.5 text-xs text-sidebar-foreground focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/10 min-w-0"
                                 />
                                 <button
                                   onClick={() => handleSaveRename(t.id)}
-                                  className="size-6 rounded-md hover:bg-white/10 flex items-center justify-center text-primary transition-colors cursor-pointer"
+                                  className="size-6 rounded-md hover:bg-sidebar-accent flex items-center justify-center text-primary transition-colors cursor-pointer"
                                 >
                                   <Check className="size-3.5" />
                                 </button>
                                 <button
                                   onClick={() => setEditingThreadId(null)}
-                                  className="size-6 rounded-md hover:bg-white/10 flex items-center justify-center text-[#b4b4b4] hover:text-white transition-colors cursor-pointer"
+                                  className="size-6 rounded-md hover:bg-sidebar-accent flex items-center justify-center text-muted-foreground hover:text-sidebar-foreground transition-colors cursor-pointer"
                                 >
                                   <X className="size-3.5" />
                                 </button>
@@ -349,20 +349,20 @@ export function HistorySidebar({
 
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {isActive && (
-                                    <div className="size-2 rounded-full border border-[#10a37f] bg-transparent" />
+                                    <div className="size-2 rounded-full border border-primary bg-transparent" />
                                   )}
                                   
                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
                                       onClick={(e) => handleStartRename(t.id, t.title, e)}
-                                      className="size-5 rounded-md hover:bg-white/10 flex items-center justify-center text-[#b4b4b4] hover:text-white transition-colors cursor-pointer"
+                                      className="size-5 rounded-md hover:bg-sidebar-accent flex items-center justify-center text-muted-foreground hover:text-sidebar-foreground transition-colors cursor-pointer"
                                       title="Rename"
                                     >
                                       <Pen className="size-3" />
                                     </button>
                                     <button
                                       onClick={(e) => handleDeleteThread(t.id, e)}
-                                      className="size-5 rounded-md hover:bg-white/10 flex items-center justify-center text-[#b4b4b4] hover:text-red-400 transition-colors cursor-pointer"
+                                      className="size-5 rounded-md hover:bg-sidebar-accent flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
                                       title="Delete"
                                     >
                                       <Trash2 className="size-3" />
@@ -383,29 +383,29 @@ export function HistorySidebar({
 
           {sidebarMode === "lib" && (
             <div className="p-6 text-center text-xs text-muted-foreground animate-in fade-in duration-200">
-              <BookOpen className="size-8 mx-auto mb-2 opacity-40 text-[#b4b4b4]" />
-              <p className="font-medium text-[#ececec]">Library</p>
-              <p className="mt-1 text-[11px] text-[#b4b4b4]/60">Your saved snippets and files will appear here.</p>
+              <BookOpen className="size-8 mx-auto mb-2 opacity-40 text-muted-foreground" />
+              <p className="font-medium text-sidebar-foreground">Library</p>
+              <p className="mt-1 text-[11px] text-muted-foreground/60">Your saved snippets and files will appear here.</p>
             </div>
           )}
 
           {sidebarMode === "projects" && (
             <div className="p-6 text-center text-xs text-muted-foreground animate-in fade-in duration-200">
-              <Folder className="size-8 mx-auto mb-2 opacity-40 text-[#b4b4b4]" />
-              <p className="font-medium text-[#ececec]">Projects</p>
-              <p className="mt-1 text-[11px] text-[#b4b4b4]/60">Your active workspace projects and pipelines.</p>
+              <Folder className="size-8 mx-auto mb-2 opacity-40 text-muted-foreground" />
+              <p className="font-medium text-sidebar-foreground">Projects</p>
+              <p className="mt-1 text-[11px] text-muted-foreground/60">Your active workspace projects and pipelines.</p>
             </div>
           )}
 
           {sidebarMode === "apps" && (
             <div className="p-6 text-center text-xs text-muted-foreground animate-in fade-in duration-200">
-              <LayoutGrid className="size-8 mx-auto mb-2 opacity-40 text-[#b4b4b4]" />
-              <p className="font-medium text-[#ececec]">Connected Apps</p>
-              <p className="mt-1 text-[11px] text-[#b4b4b4]/60">Integrate Slack, GitHub, and other plugins.</p>
+              <LayoutGrid className="size-8 mx-auto mb-2 opacity-40 text-muted-foreground" />
+              <p className="font-medium text-sidebar-foreground">Connected Apps</p>
+              <p className="mt-1 text-[11px] text-muted-foreground/60">Integrate Slack, GitHub, and other plugins.</p>
             </div>
           )}
         </SidebarContent>
-        <SidebarFooter className="border-t border-[#2f2f2f] bg-[#0d0d0d] p-3 text-center text-[10.5px] text-muted-foreground/50 select-none">
+        <SidebarFooter className="border-t border-sidebar-border bg-sidebar p-3 text-center text-[10.5px] text-muted-foreground/50 select-none">
           Keil AI — Powered by Mastra
         </SidebarFooter>
       </Sidebar>

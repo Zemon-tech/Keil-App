@@ -2150,7 +2150,27 @@ function SttProviderSelector() {
   );
 }
 
+const BACKGROUNDS = [
+  { id: "none", name: "None", url: "" },
+  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
+  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
+  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
+];
+
 function PersonalizationTab() {
+  const [dashboardBackground, setDashboardBackground] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dashboard_background") || "open-garden";
+    }
+    return "open-garden";
+  });
+
+  const handleBackgroundChange = (val: string) => {
+    setDashboardBackground(val);
+    localStorage.setItem("dashboard_background", val);
+    window.dispatchEvent(new Event("dashboard_background_changed"));
+  };
+
   const [localUrl, setLocalUrl] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
@@ -2236,6 +2256,69 @@ function PersonalizationTab() {
           placeholder="e.g., Engineering, Design"
           className="mt-2 rounded-lg"
         />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Palette className="size-4 text-muted-foreground" />
+            Dashboard Background
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose a visual style or background image for your dashboard home screen.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          {BACKGROUNDS.map((bg) => {
+            const isSelected = dashboardBackground === bg.id;
+            return (
+              <button
+                key={bg.id}
+                type="button"
+                onClick={() => handleBackgroundChange(bg.id)}
+                className={cn(
+                  "group relative flex flex-col overflow-hidden rounded-xl border bg-card text-left transition-all duration-300 hover:shadow-md",
+                  isSelected
+                    ? "border-primary ring-1 ring-primary"
+                    : "border-border/60 hover:border-border-muted"
+                )}
+              >
+                {/* Image Preview Container */}
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted flex items-center justify-center">
+                  {bg.id === "none" ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/60 p-2">
+                      <Palette className="size-6 mb-1" />
+                      <span className="text-[10px] font-medium font-sans">Solid Theme Color</span>
+                    </div>
+                  ) : (
+                    <>
+                      <img
+                        src={bg.url}
+                        alt={bg.name}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/10 transition-opacity duration-300 group-hover:opacity-0" />
+                    </>
+                  )}
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm animate-in zoom-in duration-200">
+                      <Check className="size-3" />
+                    </div>
+                  )}
+                </div>
+                {/* Title */}
+                <div className="p-2.5 flex items-center justify-between">
+                  <span className="text-xs font-medium text-foreground truncate">
+                    {bg.name}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <Separator />

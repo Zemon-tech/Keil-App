@@ -13,6 +13,7 @@ export interface MeetingRecordingDTO {
   transcript_text: string | null;
   transcript_diarized: any | null;
   language_detected: string | null;
+  stt_provider: string;
   created_at: string;
   updated_at: string;
 }
@@ -74,15 +75,23 @@ export function useMeetingSearch(query: string) {
 
 /**
  * Fetches a single recording by ID for review.
+ * Auto-polls every 3 seconds if the transcription status is pending or processing.
  */
 export function useMeetingRecording(recordingId: string | null) {
-  return useQuery({
+  return useQuery<MeetingRecordingDTO, Error>({
     queryKey: meetingKeys.recording(recordingId ?? ""),
     queryFn: async (): Promise<MeetingRecordingDTO> => {
       const res = await api.get(`v1/meetings/recording/${recordingId}/review`);
       return res.data.data;
     },
     enabled: !!recordingId,
+    refetchInterval: (query) => {
+      const rec = query.state.data;
+      if (rec && (rec.transcription_status === "pending" || rec.transcription_status === "processing")) {
+        return 3000;
+      }
+      return false;
+    },
   });
 }
 
@@ -113,6 +122,26 @@ export function useCancelTranscription() {
       return res.data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.all });
+    },
+  });
+}
+
+/**
+ * Triggers or retries transcription for a recording with a specific provider.
+ */
+export function useTranscribeRecording() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ recordingId, provider }: { recordingId: string; provider: "elevenlabs" | "sarvam" }) => {
+      const res = await api.post("v1/meetings/transcribe", {
+        recordingId,
+        provider,
+      });
+      return res.data.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.recording(variables.recordingId) });
       queryClient.invalidateQueries({ queryKey: meetingKeys.all });
     },
   });

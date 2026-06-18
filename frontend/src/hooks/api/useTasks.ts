@@ -296,6 +296,7 @@ export function useCreateOrgTask(orgId: string | null, spaceId: string | null) {
     onSuccess: (data) => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
       if (data.parent_task_id) {
         queryClient.invalidateQueries({
           queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.parent_task_id),
@@ -328,6 +329,7 @@ export function useUpdateOrgTask(orgId: string | null, spaceId: string | null) {
     onSuccess: (data) => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
       queryClient.invalidateQueries({
         queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
       });
@@ -412,6 +414,7 @@ export function useDeleteOrgTask(orgId: string | null, spaceId: string | null) {
     onSuccess: (_data, { id: taskId }, context) => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
       queryClient.removeQueries({
         queryKey: orgTaskKeys.detail(orgId, spaceId, taskId),
       });
@@ -471,6 +474,7 @@ export function useChangeOrgTaskStatus(
         queryKey: orgTaskKeys.detail(orgId, spaceId, data.id),
       });
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
       if (data.parent_task_id) {
         queryClient.invalidateQueries({
           queryKey: orgTaskKeys.subtasks(orgId, spaceId, data.parent_task_id),
@@ -696,6 +700,7 @@ export function useCreateTaskSlot(orgId: string | null, spaceId: string | null) 
     onSuccess: () => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Task scheduled on calendar");
     },
     onError: () => {
@@ -718,6 +723,7 @@ export function useUpdateTaskSlot(orgId: string | null, spaceId: string | null) 
     onSuccess: () => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Calendar slot updated");
     },
     onError: () => {
@@ -738,6 +744,7 @@ export function useDeleteTaskSlot(orgId: string | null, spaceId: string | null) 
     onSuccess: () => {
       if (!orgId || !spaceId) return;
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+      queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Task unscheduled");
     },
     onError: () => {

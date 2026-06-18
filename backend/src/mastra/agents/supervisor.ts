@@ -14,7 +14,8 @@ import { githubAgent } from "./github.agent";
 
 export const supervisorMemory = new Memory({
   options: {
-    lastMessages: 10,
+    lastMessages: 25, // 25
+    observationalMemory: true,
     workingMemory: {
       enabled: true,
       scope: "resource",

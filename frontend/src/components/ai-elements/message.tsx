@@ -17,6 +17,8 @@ import type { UIMessage } from "ai";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   CopyIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
@@ -42,7 +44,7 @@ export const Message = ({ className, from, ...props }: MessageProps) => (
   <div
     className={cn(
       "group flex w-full max-w-full flex-col gap-2",
-      from === "user" ? "is-user ml-auto justify-end" : "is-assistant",
+      from === "user" ? "is-user ml-auto justify-end items-end" : "is-assistant",
       className,
     )}
     {...props}
@@ -59,7 +61,7 @@ export const MessageContent = ({
   <div
     className={cn(
       "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:ml-auto group-[.is-user]:rounded-lg group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
+      "group-[.is-user]:ml-auto group-[.is-user]:max-w-[75%] sm:group-[.is-user]:max-w-[70%] md:group-[.is-user]:max-w-[65%] group-[.is-user]:rounded-2xl group-[.is-user]:rounded-tr-sm group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
       "group-[.is-assistant]:text-foreground group-[.is-assistant]:w-full",
       className,
     )}
@@ -456,3 +458,63 @@ export const CopyAction = memo(({ content }: CopyActionProps) => {
 });
 
 CopyAction.displayName = "CopyAction";
+
+export interface TruncatedMessageProps {
+  text: string;
+  charLimit?: number;
+  lineLimit?: number;
+}
+
+export const TruncatedMessage = ({
+  text,
+  charLimit = 300,
+  lineLimit = 4,
+}: TruncatedMessageProps) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!text) return null;
+
+  const lines = text.split("\n");
+  const isLineExceeded = lines.length > lineLimit;
+  const isCharExceeded = text.length > charLimit;
+  const needsTruncation = isLineExceeded || isCharExceeded;
+
+  let truncatedText = text;
+  if (needsTruncation && !isExpanded) {
+    if (isLineExceeded) {
+      truncatedText = lines.slice(0, lineLimit).join("\n");
+      if (truncatedText.length > charLimit) {
+        truncatedText = truncatedText.slice(0, charLimit);
+      }
+    } else {
+      truncatedText = text.slice(0, charLimit);
+    }
+    if (!truncatedText.endsWith("...")) {
+      truncatedText = truncatedText.trimEnd() + "...";
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1 w-full">
+      <MessageResponse>{truncatedText}</MessageResponse>
+      {needsTruncation && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs font-semibold text-muted-foreground/80 hover:text-foreground self-start mt-1 transition-colors flex items-center gap-1 cursor-pointer select-none active:scale-[0.97] transition-transform duration-100"
+          type="button"
+        >
+          {isExpanded ? (
+            <>
+              View less <ChevronUpIcon size={12} />
+            </>
+          ) : (
+            <>
+              View more <ChevronDownIcon size={12} />
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  );
+};
+

@@ -22,6 +22,7 @@ import {
     LikeAction,
     DislikeAction,
     CopyAction,
+    TruncatedMessage,
 } from "@/components/ai-elements/message";
 import {
     PromptInput,
@@ -1063,7 +1064,12 @@ export function AiAssistant() {
 
                         return (
                             <div key={msg.id} className={cn("flex gap-2 items-start ai-message-appear", msg.role === "user" ? "justify-end" : "justify-start")}>
-                                <Message from={msg.role} className="max-w-full w-full">
+                                <Message
+                                    from={msg.role}
+                                    className={cn(
+                                        msg.role === "user" ? "w-fit ml-auto max-w-[75%] sm:max-w-[70%] md:max-w-[65%]" : "max-w-full w-full"
+                                    )}
+                                >
                                     <MessageContent className={cn(
                                         isAssistant ? "w-full text-[12.5px] leading-relaxed" : "text-[12.5px] px-3 py-2 rounded-xl",
                                         showShimmer && "px-0 py-0"
@@ -1104,7 +1110,7 @@ export function AiAssistant() {
                                         ) : (
                                             <div className="flex flex-col gap-2">
                                                 {text.trim() !== "" && (
-                                                    <MessageResponse>{text}</MessageResponse>
+                                                    <TruncatedMessage text={text} />
                                                 )}
                                                 {messageParts.length > 0 && (
                                                     <div className="flex flex-col gap-1.5 mt-1">

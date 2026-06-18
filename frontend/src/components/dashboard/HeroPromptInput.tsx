@@ -194,10 +194,6 @@ function HeroPromptSurface({
             value={text}
           />
 
-          {text && (
-            <div className="pointer-events-none absolute inset-x-4 bottom-0 h-8 bg-gradient-to-t from-background/90 via-background/50 to-transparent sm:inset-x-5" />
-          )}
-
           {showCommandMenu && (
             <div className="absolute inset-x-0 top-full z-50 mt-3 px-0">
               <PromptInputCommand className="overflow-hidden rounded-[1.35rem] border border-border/70 bg-popover/95 p-2 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] backdrop-blur-xl">
