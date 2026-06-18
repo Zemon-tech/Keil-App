@@ -63,7 +63,7 @@ export function GroupSettingsDialog({ channel, orgId, spaceId }: GroupSettingsDi
       }}
     >
       <DialogTrigger asChild>
-        <button className="p-1.5 text-muted-foreground hover:bg-muted rounded-md transition-colors">
+        <button className="flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:bg-muted active:scale-90 transition-all duration-100 ease-out">
           <Settings className="size-4" />
         </button>
       </DialogTrigger>
