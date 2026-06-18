@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
     Bell,
     X,
+    Minimize2,
     CheckCheck,
     Trash2,
     CheckSquare,
@@ -23,6 +24,7 @@ import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 interface NotificationDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onMinimize?: () => void;
 }
 
 import { useNotifications, getNotificationTitle, getNotificationSnippet, groupNotifications } from "@/contexts/NotificationContext";
@@ -77,7 +79,7 @@ const getNotificationMeta = (eventType: string) =>
         className: "bg-muted text-muted-foreground ring-border",
     };
 
-export function NotificationDialog({ open, onOpenChange }: NotificationDialogProps) {
+export function NotificationDialog({ open, onOpenChange, onMinimize }: NotificationDialogProps) {
     const { notifications, unreadCount, markAllAsRead, clearAll, handleNotificationClick } = useNotifications();
     const { organisations } = useAppContext();
     const [filter, setFilter] = useState<"All" | "Tasks" | "Mentions" | "Chat" | "System">("All");
@@ -108,7 +110,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                showCloseButton={true}
+                showCloseButton={false}
                 aria-describedby={undefined}
                 className="!h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !w-[calc(100vw-40px)] !max-w-[1180px] !gap-0 overflow-hidden !rounded-2xl border border-border/80 bg-background !p-0 shadow-2xl"
             >
@@ -121,13 +123,15 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                         <div className="border-b border-border/50 px-4 py-3 h-14 flex items-center shrink-0">
                             <div className="flex w-full items-center justify-between gap-3">
                                 <h2 className="text-sm font-semibold tracking-tight text-foreground">Notifications</h2>
-                                <button
-                                    onClick={() => onOpenChange(false)}
-                                    className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
-                                    aria-label="Close notifications"
-                                >
-                                    <X className="size-4" />
-                                </button>
+                                {onMinimize && (
+                                    <button
+                                        onClick={onMinimize}
+                                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
+                                        aria-label="Minimize notifications"
+                                    >
+                                        <Minimize2 className="size-4" />
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -204,7 +208,7 @@ export function NotificationDialog({ open, onOpenChange }: NotificationDialogPro
                                     </Button>
                                     <button
                                         onClick={() => onOpenChange(false)}
-                                        className="flex size-8 items-center justify-center rounded-xl bg-card/85 border border-border/50 text-muted-foreground transition-all duration-100 ease-out hover:bg-muted hover:text-foreground active:scale-90 md:hidden"
+                                        className="flex size-8 items-center justify-center rounded-xl bg-card/85 border border-border/50 text-muted-foreground transition-all duration-100 ease-out hover:bg-muted hover:text-foreground active:scale-90 ml-2"
                                         aria-label="Close notifications"
                                     >
                                         <X className="size-4" />

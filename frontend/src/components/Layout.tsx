@@ -255,6 +255,10 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
           <NotificationDialog
             open={notificationDialogOpen}
             onOpenChange={setNotificationDialogOpen}
+            onMinimize={() => {
+              setNotificationDialogOpen(false);
+              setNotificationDrawerOpen(true);
+            }}
           />
 
           {/* Global Meeting Studio */}
