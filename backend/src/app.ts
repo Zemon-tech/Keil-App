@@ -1,6 +1,7 @@
 import express, { Express } from "express";
 import cors from "cors";
 import routes from "./routes/index";
+import webhookDodoRoutes from "./routes/webhook-dodo.routes";
 import { config } from "./config";
 import { errorHandler } from "./middlewares/error";
 import { requestIdMiddleware, requestLogger } from "./middlewares/logger";
@@ -34,6 +35,10 @@ app.use(cors({
     },
     credentials: true,
 }));
+
+// ─── Webhook routes (MUST be before express.json() — needs raw body) ──────────
+app.use("/api/webhooks", webhookDodoRoutes);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 

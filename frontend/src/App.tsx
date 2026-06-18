@@ -13,6 +13,7 @@ import { MotionHome } from "./components/motion/MotionHome";
 import { MotionProfile } from "./components/motion/MotionProfile";
 import { MotionPublicPage } from "./components/motion/MotionPublicPage";
 import { useMotionStore } from "./store/useMotionStore";
+import { BillingPage } from "./components/billing/BillingPage";
 
 import { useAppContext } from "./contexts/AppContext";
 
@@ -112,6 +113,10 @@ function App() {
           <Route
             path="/motion/:pageId"
             element={<MotionPage />}
+          />
+          <Route
+            path="/billing"
+            element={<BillingPage />}
           />
         </Route>
         <Route

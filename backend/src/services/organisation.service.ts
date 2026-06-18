@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { organisationRepository, spaceRepository } from "../repositories";
+import { organisationRepository, spaceRepository, orgSubscriptionRepository } from "../repositories";
 import { ApiError } from "../utils/ApiError";
 import { io } from "../socket";
 
@@ -127,6 +127,12 @@ export const joinOrganisation = async (
     throw new ApiError(404, "Organisation not found");
   }
 
+  // ── Seat availability check (Teams subscription) ────────────────────────────
+  const orgSub = await orgSubscriptionRepository.findByOrgId(orgId);
+  if (orgSub && orgSub.seats_used >= orgSub.seats_purchased) {
+    throw new ApiError(403, `This organisation has used all ${orgSub.seats_purchased} purchased seats. The org owner must purchase more seats before new members can join.`);
+  }
+
   let defaultSpace = await spaceRepository.findDefaultSpace(orgId);
   if (!defaultSpace) {
     throw new ApiError(500, "Organisation has no spaces");
@@ -144,6 +150,9 @@ export const joinOrganisation = async (
     // 1. Join user to organisation and default space
     await organisationRepository.addMember(orgId, userId, "member", client);
     await spaceRepository.addMember(orgId, defaultSpace!.id, userId, "member", client);
+
+    // 1b. Increment seats_used if org has a Teams subscription
+    await orgSubscriptionRepository.incrementSeatsUsed(orgId, client);
 
     // 2. Fetch joining user's name/email
     const userResult = await client.query(
@@ -336,4 +345,7 @@ export const removeOrgMember = async (
   }
 
   await organisationRepository.removeMember(orgId, targetUserId);
+
+  // Decrement seats_used if org has a Teams subscription
+  await orgSubscriptionRepository.decrementSeatsUsed(orgId);
 };

@@ -14,6 +14,10 @@ import { IntegrationRepository } from './integration.repository';
 import { MotionPageRepository, MotionPageShareRepository } from './motion-page.repository';
 import { NotificationRepository, UserNotificationPreferenceRepository, NotificationOutboxRepository } from './notification.repository';
 import { MotionAnalyticsRepository } from './motion-analytics.repository';
+import { UserSubscriptionRepository } from './user-subscription.repository';
+import { OrgSubscriptionRepository } from './org-subscription.repository';
+import { UsageTrackingRepository } from './usage-tracking.repository';
+import { DodoWebhookEventRepository } from './dodo-webhook-event.repository';
 
 // Instantiate repositories with the shared pool
 export const userRepository = new UserRepository();
@@ -33,6 +37,10 @@ export const notificationRepository = new NotificationRepository();
 export const userNotificationPreferenceRepository = new UserNotificationPreferenceRepository();
 export const notificationOutboxRepository = new NotificationOutboxRepository();
 export const motionAnalyticsRepository = new MotionAnalyticsRepository();
+export const userSubscriptionRepository = new UserSubscriptionRepository();
+export const orgSubscriptionRepository = new OrgSubscriptionRepository();
+export const usageTrackingRepository = new UsageTrackingRepository();
+export const dodoWebhookEventRepository = new DodoWebhookEventRepository();
 
 // Export repository classes for testing/mocking
 export {
@@ -53,4 +61,8 @@ export {
   UserNotificationPreferenceRepository,
   NotificationOutboxRepository,
   MotionAnalyticsRepository,
+  UserSubscriptionRepository,
+  OrgSubscriptionRepository,
+  UsageTrackingRepository,
+  DodoWebhookEventRepository,
 };

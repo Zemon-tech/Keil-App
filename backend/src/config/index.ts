@@ -57,4 +57,11 @@ export const config = {
     grafanaLokiHost: process.env.GRAFANA_LOKI_HOST || "",
     grafanaLokiUser: process.env.GRAFANA_LOKI_USER || "",
     grafanaLokiPassword: process.env.GRAFANA_LOKI_PASSWORD || "",
+    // ── Dodo Payments ────────────────────────────────────────────────────────
+    dodoPaymentsApiKey: process.env.DODO_PAYMENTS_API_KEY || "",
+    dodoPaymentsWebhookKey: process.env.DODO_PAYMENTS_WEBHOOK_KEY || "",
+    dodoPaymentsEnvironment: (process.env.DODO_PAYMENTS_ENVIRONMENT || "test_mode") as "test_mode" | "live_mode",
+    dodoPaymentsReturnUrl: process.env.DODO_PAYMENTS_RETURN_URL || "",
+    dodoProductPro: process.env.DODO_PRODUCT_PRO || "",
+    dodoProductTeams: process.env.DODO_PRODUCT_TEAMS || "",
 };
