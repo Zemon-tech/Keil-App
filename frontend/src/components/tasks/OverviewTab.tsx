@@ -97,6 +97,25 @@ export const OverviewTab = ({
   const deleteChecklistMutation = useDeleteChecklist(activeOrgId, activeSpaceId, task.id);
   const [newChecklistItemTitle, setNewChecklistItemTitle] = useState("");
 
+  const handleAddChecklistItems = async (text: string) => {
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) return;
+
+    setNewChecklistItemTitle("");
+
+    for (const line of lines) {
+      try {
+        await createChecklistMutation.mutateAsync({ title: line });
+      } catch (err) {
+        console.error("Failed to add checklist item:", line, err);
+      }
+    }
+  };
+
 
 
 
@@ -339,30 +358,27 @@ export const OverviewTab = ({
               </div>
 
               <div className="flex items-center gap-2 mt-2 pt-1">
-                <Input
-                  type="text"
+                <textarea
                   placeholder="Add private checklist item..."
                   value={newChecklistItemTitle}
                   onChange={(e) => setNewChecklistItemTitle(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       const val = newChecklistItemTitle.trim();
                       if (val) {
-                        createChecklistMutation.mutate({ title: val });
-                        setNewChecklistItemTitle("");
+                        handleAddChecklistItems(val);
                       }
                     }
                   }}
-                  className="h-8 text-xs bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary/20 flex-1"
+                  className="h-8 min-h-[32px] text-xs bg-background border border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-primary/20 flex-1 rounded-md px-3 py-1.5 resize-none field-sizing-content focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => {
                     const val = newChecklistItemTitle.trim();
                     if (val) {
-                      createChecklistMutation.mutate({ title: val });
-                      setNewChecklistItemTitle("");
+                      handleAddChecklistItems(val);
                     }
                   }}
                   className="h-8 px-3 rounded text-xs bg-primary hover:bg-primary/95 text-primary-foreground font-semibold flex items-center gap-1 shrink-0"
