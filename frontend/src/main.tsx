@@ -42,19 +42,27 @@ async function getUserScopedCacheKey(): Promise<string> {
   return 'keil-database'; // fallback for unauthenticated state
 }
 
-const cacheKeyPromise = getUserScopedCacheKey();
-
-// Build persister after resolving the user-scoped key
+// Build persister with dynamic store switching
 async function buildPersister() {
-  const cacheKey = await cacheKeyPromise;
-  const customStore = createStore(cacheKey, 'query-cache');
   return createAsyncStoragePersister({
     serialize: JSON.stringify,
     deserialize: JSON.parse,
     storage: {
-      getItem: (key) => get(key, customStore),
-      setItem: (key, value) => set(key, value, customStore),
-      removeItem: (key) => del(key, customStore),
+      getItem: async (key) => {
+        const cacheKey = await getUserScopedCacheKey();
+        const customStore = createStore(cacheKey, "query-cache");
+        return get(key, customStore);
+      },
+      setItem: async (key, value) => {
+        const cacheKey = await getUserScopedCacheKey();
+        const customStore = createStore(cacheKey, "query-cache");
+        return set(key, value, customStore);
+      },
+      removeItem: async (key) => {
+        const cacheKey = await getUserScopedCacheKey();
+        const customStore = createStore(cacheKey, "query-cache");
+        return del(key, customStore);
+      },
     },
     // Throttle writes to avoid hammering IndexedDB on rapid updates
     throttleTime: 1000,

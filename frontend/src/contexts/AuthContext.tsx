@@ -102,21 +102,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // 1. Clear active TanStack Query memory cache
         queryClient.clear();
 
-        // 2. Clear persistent IndexedDB store cache
+        // 2. Clear persistent IndexedDB store cache for this specific user
         try {
-            const customStore = createStore('keil-database', 'query-cache');
-            await del('keil-query-cache', customStore);
+            const cacheKey = user?.id ? `keil-cache-${user.id}` : "keil-database";
+            const customStore = createStore(cacheKey, "query-cache");
+            await del("keil-query-cache", customStore);
         } catch (e) {
             console.error("Failed to delete IndexedDB query cache on logout:", e);
         }
 
-        // 3. Clear Zustand store's optimistic and routing cache
+        // 3. Clear Zustand store's optimistic, routing cache and localStorage keys
         try {
             localStorage.removeItem("motion:lastOpenedPages");
+            localStorage.removeItem("motion:recentlyOpenedPages");
+            localStorage.removeItem("keil_active_org");
+            localStorage.removeItem("keil_active_space");
         } catch { /* ignore */ }
+
         useMotionStore.setState({
             dirtyPageIds: new Set<string>(),
-            lastOpenedPages: {}
+            lastOpenedPages: {},
+            recentlyOpenedPages: {},
+            sidebarOpen: true,
+            drawerOpen: false,
+            shareOpen: false
         });
     };
 

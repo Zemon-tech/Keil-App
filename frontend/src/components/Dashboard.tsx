@@ -604,21 +604,57 @@ export function Dashboard() {
   );
 
   const handlePromptSubmit = async (message: PromptInputMessage) => {
-    const text = message.text.trim();
-    const fileCount = message.files.length;
-    const content =
-      text || `${fileCount} attachment${fileCount === 1 ? "" : "s"} added`;
-
-    if (!content.trim() || isStreaming || isUploadingFiles) return;
+    if (isStreaming || isUploadingFiles) return;
 
     try {
+      let text = message.text.trim();
       let uploadedFiles: any[] = [];
+
       if (message.files && message.files.length > 0) {
         setIsUploadingFiles(true);
-        uploadedFiles = await Promise.all(
-          message.files.map((file) => uploadChatAttachment(file))
+
+        const textFiles = message.files.filter(f => 
+            f.mediaType?.startsWith('text/') || 
+            (f.filename && f.filename.match(/\.(md|txt|json|csv|log)$/i))
         );
+        
+        const otherFiles = message.files.filter(f => 
+            !(f.mediaType?.startsWith('text/') || 
+            (f.filename && f.filename.match(/\.(md|txt|json|csv|log)$/i)))
+        );
+
+        if (textFiles.length > 0) {
+            for (const f of textFiles) {
+                try {
+                    const res = await fetch(f.url);
+                    const decodedText = await res.text();
+                    text += `\n\n--- File: ${f.filename} ---\n${decodedText}\n--- End of ${f.filename} ---`;
+                } catch (e) {
+                    console.error("Failed to read text file:", e);
+                }
+            }
+        }
+
+        const uploadedOtherFiles = await Promise.all(
+          otherFiles.map((file) => uploadChatAttachment(file))
+        );
+
+        uploadedFiles = [
+          ...uploadedOtherFiles,
+          ...textFiles.map(f => ({
+              id: (f as any).id || crypto.randomUUID(),
+              type: "file",
+              filename: f.filename,
+              mediaType: f.mediaType || "text/plain",
+              url: ""
+          }))
+        ];
       }
+
+      const fileCount = message.files.length;
+      const content = text.trim() || (fileCount > 0 ? `${fileCount} attachment${fileCount === 1 ? "" : "s"} added` : "");
+
+      if (!content) return;
 
       const msgPayload = { text: content, files: uploadedFiles };
 
@@ -989,13 +1025,17 @@ export function Dashboard() {
                 {messages.map((message: any) => {
                   const isAssistant = message.role === "assistant";
                   const messageParts = Array.isArray(message.parts) ? message.parts : [];
-                  const text =
+                  const rawText =
                     messageParts
                       .filter((p: any) => p.type === "text")
                       .map((p: any) => p.text)
                       .join("\n") ||
                     message.content ||
                     "";
+
+                  const text = message.role === "user"
+                    ? rawText.replace(/(?:\n\n)?--- File: .*? ---\n[\s\S]*?\n--- End of .*? ---/g, "").trim()
+                    : rawText;
 
 
                   const timeline = buildChainOfThoughtTimeline(message);
@@ -1012,7 +1052,7 @@ export function Dashboard() {
                       from={message.role}
                       key={message.id}
                       className={cn(
-                        message.role === "user" ? "w-fit ml-auto max-w-[75%] sm:max-w-[70%] md:max-w-[65%]" : "max-w-full w-full"
+                        message.role === "user" ? "w-fit ml-auto max-w-[50%]" : "max-w-full w-full"
                       )}
                     >
                       <MessageContent
