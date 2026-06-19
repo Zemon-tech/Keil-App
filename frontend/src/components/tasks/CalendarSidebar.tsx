@@ -31,8 +31,12 @@ import {
   useUpdateOrgTask,
   useDeleteOrgTask,
   useChangeOrgTaskStatus,
+  useOrgTasks,
   type TaskDTO,
 } from "@/hooks/api/useTasks";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useMotionPages } from "@/hooks/api/useMotionPages";
+import { renderMessageContent, tiptapJsonToPlainText } from "./renderMessageContent";
 import type { CalendarBlock, TaskStatus } from "@/types/task";
 import { useAppContext } from "@/contexts/AppContext";
 import { toast } from "sonner";
@@ -85,6 +89,10 @@ export function CalendarSidebar({
   const deleteTask = useDeleteOrgTask(resolvedOrgId, resolvedSpaceId);
   const changeTaskStatus = useChangeOrgTaskStatus(resolvedOrgId, resolvedSpaceId);
 
+  const { data: members = [] } = useSpaceMembers(resolvedOrgId, resolvedSpaceId);
+  const { data: allTasks = [] } = useOrgTasks(resolvedOrgId, resolvedSpaceId);
+  const { data: pages = [] } = useMotionPages(resolvedOrgId, resolvedSpaceId);
+
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const handleCopyDetails = () => {
@@ -105,28 +113,6 @@ export function CalendarSidebar({
     updateTask.mutate({ id: taskId, updates: { start_date: null, due_date: null } });
     onUnschedule?.(taskId);
     onClose();
-  };
-
-  const renderTextWithLinks = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
-    return parts.map((part, index) => {
-      if (urlRegex.test(part)) {
-        return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:underline break-all"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-          </a>
-        );
-      }
-      return part;
-    });
   };
 
   return (
@@ -329,8 +315,15 @@ export function CalendarSidebar({
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   About this event
                 </span>
-                <div className="text-xs sm:text-sm text-foreground/80 leading-relaxed font-normal select-text break-words pr-2">
-                  {renderTextWithLinks(task.description || task.objective || "")}
+                <div className="text-xs sm:text-sm text-foreground/80 leading-relaxed font-normal select-text break-words pr-2 whitespace-pre-wrap">
+                  {renderMessageContent(
+                    tiptapJsonToPlainText(task.description || task.objective || ""),
+                    allTasks,
+                    (targetTaskId) => navigate(`/${allTasks.find(t => t.id === targetTaskId)?.type === "event" ? "events" : "tasks"}/${targetTaskId}`),
+                    members,
+                    (pageId) => navigate(`/motion/${pageId}`),
+                    pages
+                  )}
                 </div>
               </div>
             )}

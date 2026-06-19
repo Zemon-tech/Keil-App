@@ -47,7 +47,11 @@ import {
   useUpdateOrgTask,
   useDeleteOrgTask,
   useChangeOrgTaskStatus,
+  useOrgTasks,
 } from "@/hooks/api/useTasks";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useMotionPages } from "@/hooks/api/useMotionPages";
+import { renderMessageContent, tiptapJsonToPlainText } from "./renderMessageContent";
 import { useAppContext } from "@/contexts/AppContext";
 import { STATUS_COLOR, StatusIcon } from "./task-detail-shared";
 import type { AnyStatus, TaskStatus, EventStatus } from "@/types/task";
@@ -143,6 +147,10 @@ export function TaskPreviewDialog({
   const updateTask = useUpdateOrgTask(resolvedOrgId, resolvedSpaceId);
   const deleteTask = useDeleteOrgTask(resolvedOrgId, resolvedSpaceId);
   const changeTaskStatus = useChangeOrgTaskStatus(resolvedOrgId, resolvedSpaceId);
+
+  const { data: members = [] } = useSpaceMembers(resolvedOrgId, resolvedSpaceId);
+  const { data: allTasks = [] } = useOrgTasks(resolvedOrgId, resolvedSpaceId);
+  const { data: pages = [] } = useMotionPages(resolvedOrgId, resolvedSpaceId);
 
   const [descExpanded, setDescExpanded] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -373,11 +381,24 @@ export function TaskPreviewDialog({
                   {(task.description || task.objective) && (
                     <p
                       className={cn(
-                        "text-xs sm:text-sm text-foreground/80 leading-relaxed font-normal transition-all",
+                        "text-xs sm:text-sm text-foreground/80 leading-relaxed font-normal transition-all whitespace-pre-wrap",
                         !descExpanded ? "line-clamp-3" : "line-clamp-none"
                       )}
                     >
-                      {(task.description || task.objective)?.replace(/^•\s*/gm, "")}
+                      {renderMessageContent(
+                        tiptapJsonToPlainText(task.description || task.objective || ""),
+                        allTasks,
+                        (targetTaskId) => {
+                          navigate(`/${allTasks.find(t => t.id === targetTaskId)?.type === "event" ? "events" : "tasks"}/${targetTaskId}`);
+                          onOpenChange(false);
+                        },
+                        members,
+                        (pageId) => {
+                          navigate(`/motion/${pageId}`);
+                          onOpenChange(false);
+                        },
+                        pages
+                      )}
                     </p>
                   )}
                   {task.location && (

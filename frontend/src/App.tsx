@@ -13,8 +13,10 @@ import { MotionHome } from "./components/motion/MotionHome";
 import { MotionProfile } from "./components/motion/MotionProfile";
 import { MotionPublicPage } from "./components/motion/MotionPublicPage";
 import { useMotionStore } from "./store/useMotionStore";
+import { BillingPage } from "./components/billing/BillingPage";
 
 import { useAppContext } from "./contexts/AppContext";
+import { MobileBlocker } from "./components/MobileBlocker";
 
 /**
  * Redirects /motion to the last opened page if one exists,
@@ -57,7 +59,8 @@ function App() {
   const { user } = useAuth();
 
   return (
-    <Routes>
+    <MobileBlocker>
+      <Routes>
       {/* ── Auth ──────────────────────────────────────────────────────────── */}
       <Route
         path="/login"
@@ -113,6 +116,10 @@ function App() {
             path="/motion/:pageId"
             element={<MotionPage />}
           />
+          <Route
+            path="/billing"
+            element={<BillingPage />}
+          />
         </Route>
         <Route
           path="/my-tasks"
@@ -134,6 +141,7 @@ function App() {
       {/* ── Catch-all — redirect to home ─────────────────────────────────── */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </MobileBlocker>
   );
 }
 

@@ -12,6 +12,7 @@ import { renewExpiringWatchChannels, healDegradedWatchChannels, cleanupWebhookRe
 import { NotificationWorkerService } from "./services/notification-worker.service";
 import { createServiceLogger } from "./lib/logger";
 import { cleanupExpiredRateLimits } from "./services/rate-limiter.service";
+import { startTrialExpiryJob, stopTrialExpiryJob } from "./jobs/trial-expiry.job";
 
 const log = createServiceLogger("server");
 const dbLog = createServiceLogger("database");
@@ -93,6 +94,9 @@ const startServer = async () => {
         // Start background worker for outbox notifications fanning
         NotificationWorkerService.start();
 
+        // Start trial expiry job (checks every hour for expired trials & lockouts)
+        startTrialExpiryJob();
+
         // Start Google Calendar watch channel renewal cron (every 12 hours)
         // Renews expiring channels and self-heals degraded integrations
         const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
@@ -118,6 +122,7 @@ const startServer = async () => {
             log.info({ signal }, "Received shutdown signal. Shutting down gracefully...");
             NotificationWorkerService.stop();
             taskOverdueWorkerService.stop();
+            stopTrialExpiryJob();
             server.close(() => {
                 pool.end().then(() => {
                     log.info("Database connection pool ended cleanly");

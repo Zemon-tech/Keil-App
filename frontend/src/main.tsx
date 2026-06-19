@@ -13,6 +13,7 @@ import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { AuthProvider } from './contexts/AuthContext'
 import { AppProvider } from './contexts/AppContext'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { SubscriptionProvider } from './contexts/SubscriptionContext'
 import { supabase } from './lib/supabase'
 
 // TanStack Query client — 5 min stale time, 1 retry on failure
@@ -90,11 +91,13 @@ buildPersister().then((persister) => {
           <BrowserRouter>
             <AuthProvider>
               <AppProvider>
-                <NotificationProvider>
-                  <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-                    <App />
-                  </ThemeProvider>
-                </NotificationProvider>
+                <SubscriptionProvider>
+                  <NotificationProvider>
+                    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+                      <App />
+                    </ThemeProvider>
+                  </NotificationProvider>
+                </SubscriptionProvider>
               </AppProvider>
             </AuthProvider>
           </BrowserRouter>

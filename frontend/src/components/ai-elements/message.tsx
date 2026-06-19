@@ -61,7 +61,7 @@ export const MessageContent = ({
   <div
     className={cn(
       "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:ml-auto group-[.is-user]:max-w-[75%] sm:group-[.is-user]:max-w-[70%] md:group-[.is-user]:max-w-[65%] group-[.is-user]:rounded-2xl group-[.is-user]:rounded-tr-sm group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
+      "group-[.is-user]:ml-auto group-[.is-user]:max-w-[95%] sm:group-[.is-user]:max-w-[90%] md:group-[.is-user]:max-w-[85%] group-[.is-user]:rounded-2xl group-[.is-user]:rounded-tr-sm group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
       "group-[.is-assistant]:text-foreground group-[.is-assistant]:w-full",
       className,
     )}
@@ -339,6 +339,8 @@ export const MessageResponse = memo(
         "[&_code]:bg-transparent [&_code]:p-0",
         // Remove table borders/backgrounds if any
         "[&_table]:border-none [&_td]:border-none [&_th]:border-none",
+        // Padding horizontally from sides for list markdown
+        "[&_ul]:px-4 [&_ol]:px-4 [&_ul]:list-disc [&_ol]:list-decimal",
         className,
       )}
       plugins={streamdownPlugins}

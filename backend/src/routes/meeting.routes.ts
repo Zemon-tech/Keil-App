@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware";
+import { requireRecordingQuota } from "../middlewares/usage-limit.middleware";
 import * as meetingController from "../controllers/meeting.controller";
 
 const router = Router();
@@ -13,8 +14,8 @@ router.get("/history", meetingController.getMeetingHistory);
 // Endpoint to search meetings by transcript content
 router.get("/search/query", meetingController.searchMeetings);
 
-// Endpoint to generate presigned S3 upload URL
-router.post("/upload-url", meetingController.getUploadUrl);
+// Endpoint to generate presigned S3 upload URL (recording quota enforced)
+router.post("/upload-url", requireRecordingQuota, meetingController.getUploadUrl);
 
 // Endpoint to start a transcription job via ElevenLabs
 router.post("/transcribe", meetingController.transcribeRecording);

@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import type { PublicTaskDTO } from "@/hooks/api/usePublicTask";
 import type { AnyStatus } from "@/types/task";
 import { StatusIcon } from "./task-detail-shared";
+import { tiptapJsonToPlainText } from "./renderMessageContent";
 
 // ─── Shared styling maps (mirrors task-detail-shared.tsx values) ──────────────
 
@@ -280,7 +281,7 @@ export function PublicTaskView({ isLoading, isNotFound, task }: PublicTaskViewPr
               <div>
                 <SectionLabel>Description</SectionLabel>
                 <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">
-                  {task.description}
+                  {tiptapJsonToPlainText(task.description)}
                 </p>
               </div>
             )}

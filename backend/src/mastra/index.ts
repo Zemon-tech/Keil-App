@@ -13,6 +13,7 @@ import { motionAgent } from "./agents/motion.agent";
 import { schedulerAgent } from "./agents/scheduler.agent";
 import { githubAgent } from "./agents/github.agent";
 import { checkRateLimit } from "../services/rate-limiter.service";
+import { checkAiChatLimit } from "../middlewares/usage-limit.middleware";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 // Mastra storage needs a direct/session connection (not transaction pooler)
@@ -115,6 +116,15 @@ export const mastra = new Mastra({
               console.error("[Chat] Rate limiter error:", err);
               // Fail open: let requests pass if rate limit DB check fails
             }
+          }
+
+          // ── Subscription-based usage check (plan limits) ─────────
+          const usageCheck = await checkAiChatLimit(authResult.userId);
+          if (!usageCheck.allowed) {
+            return c.json(
+              { success: false, code: usageCheck.errorCode, message: usageCheck.errorMessage },
+              429
+            );
           }
 
           // ── Parse body & set requestContext ───────────────────────

@@ -21,6 +21,8 @@ import { useMotionStore } from "@/store/useMotionStore";
 import { useCachedPageById, useCreateMotionPage } from "@/hooks/api/useMotionPages";
 import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
 import { CreateTaskDialog } from "./tasks/CreateTaskDialog";
+import { LockoutOverlay } from "./billing/LockoutOverlay";
+import { TrialBanner } from "./billing/TrialBanner";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
@@ -199,7 +201,11 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
+      {/* Billing: Lockout overlay (blocks everything when locked/expired) */}
+      <LockoutOverlay />
       <div className="flex-1 h-full min-w-0 flex flex-col relative transition-all duration-300 ease-in-out">
+        {/* Billing: Trial countdown banner */}
+        <TrialBanner />
         <SidebarProvider>
           {sidebar || (
             <AppSidebar
@@ -255,6 +261,10 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
           <NotificationDialog
             open={notificationDialogOpen}
             onOpenChange={setNotificationDialogOpen}
+            onMinimize={() => {
+              setNotificationDialogOpen(false);
+              setNotificationDrawerOpen(true);
+            }}
           />
 
           {/* Global Meeting Studio */}

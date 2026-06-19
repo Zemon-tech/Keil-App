@@ -34,7 +34,7 @@ export function ChatDrawer() {
 
   const handleExpandClick = () => {
     openChatDialog();
-    closeChat();
+    useChatStore.setState({ isChatOpen: false });
   };
 
   if (!isChatOpen) {

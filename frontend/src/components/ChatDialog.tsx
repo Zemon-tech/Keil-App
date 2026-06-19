@@ -2,6 +2,7 @@ import {
     Dialog,
     DialogContent,
     DialogTitle,
+    DialogClose,
 } from "@/components/ui/dialog";
 import { VisuallyHidden } from "radix-ui";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
     Hash, Search,
-    Users, MessageCircle, Trash2, Minimize2
+    Users, MessageCircle, Trash2, Minimize2, X
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
@@ -72,21 +73,80 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
              <DialogContent
-                showCloseButton={true}
+                showCloseButton={false}
                 className="!flex !flex-col !max-w-[calc(100vw-40px)] !w-[calc(100vw-40px)] !h-[calc(100vh-40px)] !max-h-[calc(100vh-40px)] !rounded-2xl !p-0 !gap-0 border border-border/80 bg-background shadow-2xl overflow-hidden"
             >
                 <VisuallyHidden.Root>
                     <DialogTitle>Chat</DialogTitle>
                 </VisuallyHidden.Root>
 
-                {/* Minimize button — collapses back to the side drawer */}
-                <button
-                    onClick={() => { closeChatDialog(); openChat(); }}
-                    className="absolute top-4 right-11 z-50 flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
-                    aria-label="Minimize chat to sidebar"
-                >
-                    <Minimize2 className="size-4" />
-                </button>                 <div className="flex flex-row h-full w-full overflow-hidden min-h-0">
+                <div className="absolute top-0 right-4 h-14 z-50 flex items-center gap-2">
+                    {/* Delete / Group Settings Button */}
+                    {activeChannelId && currentChannel && (
+                        currentChannel.type === "group" ? (
+                            <GroupSettingsDialog
+                                channel={currentChannel}
+                                orgId={activeOrgId}
+                                spaceId={activeSpaceId}
+                            />
+                        ) : (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <button
+                                        className="flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90 transition-all duration-100 ease-out"
+                                        aria-label="Delete chat"
+                                        title="Delete Conversation"
+                                    >
+                                        <Trash2 className="size-4" />
+                                    </button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Are you sure you want to delete this direct message? This action cannot be undone.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction 
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                            onClick={() => {
+                                                if (activeChannelId) {
+                                                    deleteChannel.mutate(activeChannelId);
+                                                    setActiveChannel(null);
+                                                }
+                                            }}
+                                        >
+                                            Delete Chat
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )
+                    )}
+
+                    {/* Minimize button — collapses back to the side drawer */}
+                    <button
+                        onClick={() => { closeChatDialog(); openChat(); }}
+                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
+                        aria-label="Minimize chat to sidebar"
+                        title="Minimize"
+                    >
+                        <Minimize2 className="size-4" />
+                    </button>
+
+                    {/* Close (Cancel) Button */}
+                    <DialogClose asChild>
+                        <button 
+                            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-100 ease-out active:scale-90"
+                            aria-label="Close dialog"
+                            title="Close"
+                        >
+                            <X className="size-4" />
+                        </button>
+                    </DialogClose>
+                </div>                 <div className="flex flex-row h-full w-full overflow-hidden min-h-0">
                     {/* ── Left Sidebar: Channels & Participants ── */}
                     <div className="w-80 shrink-0 grow-0 bg-card/60 backdrop-blur-xs border-r border-border/50 flex flex-col h-full overflow-hidden">
                         {/* Sidebar Header */}
@@ -266,7 +326,7 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                         {activeChannelId && currentChannel ? (
                             <>
                                 {/* Chat Header */}
-                                <div className="h-14 shrink-0 border-b border-border flex items-center justify-between pl-4 pr-14 bg-card/50 backdrop-blur-sm">
+                                <div className="h-14 shrink-0 border-b border-border flex items-center justify-between pl-4 pr-36 bg-card/50 backdrop-blur-sm">
                                     <div className="flex items-center gap-3">
                                         {currentChannel.type === 'direct' ? (
                                             <>
@@ -296,48 +356,6 @@ export function ChatDialog({ open, onOpenChange }: ChatDialogProps) {
                                                     </p>
                                                 </div>
                                             </>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {currentChannel?.type === "group" ? (
-                                            <GroupSettingsDialog
-                                                channel={currentChannel}
-                                                orgId={activeOrgId}
-                                                spaceId={activeSpaceId}
-                                            />
-                                        ) : (
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <button
-                                                        className="flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                                        aria-label="Delete chat"
-                                                    >
-                                                        <Trash2 className="size-4" />
-                                                    </button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Are you sure you want to delete this direct message? This action cannot be undone.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction 
-                                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                                            onClick={() => {
-                                                                if (activeChannelId) {
-                                                                    deleteChannel.mutate(activeChannelId);
-                                                                    setActiveChannel(null);
-                                                                }
-                                                            }}
-                                                        >
-                                                            Delete Chat
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
                                         )}
                                     </div>
                                 </div>

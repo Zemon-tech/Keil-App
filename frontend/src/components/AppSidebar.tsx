@@ -638,11 +638,6 @@ export function AppSidebar({
                         <span>{item.title}</span>
                       </SidebarMenuButton>
                     )}
-                    {item.title === "Tasks" && (
-                      <SidebarMenuBadge className="right-2 top-2 text-[11px] text-muted-foreground">
-                        3/5
-                      </SidebarMenuBadge>
-                    )}
                     {item.title === "Notifications" && unreadCount > 0 && (
                       <SidebarMenuBadge className="right-2 top-2 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
                         {unreadCount}

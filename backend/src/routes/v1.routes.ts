@@ -9,6 +9,8 @@ import integrationRoutes from "./integration.routes";
 import gmailRoutes from "./gmail.routes";
 import motionPageRoutes from "./motion-page.routes";
 import motionPublicRoutes from "./motion-public.routes";
+import billingRoutes from "./billing.routes";
+import { requireActiveSubscription } from "../middlewares/subscription.middleware";
 import taskLocatorRoutes from "./task-locator.routes";
 import publicTaskRoutes from "./public-task.routes";
 import meetingRoutes from "./meeting.routes";
@@ -26,6 +28,12 @@ router.use("/notifications", notificationRoutes);
 
 // ── Public task read (no auth) — must be first to avoid auth middleware clash ──
 router.use("/public", publicTaskRoutes);
+
+// ── Billing & Subscriptions (Dodo Payments) — exempt from subscription check ─
+router.use("/billing", billingRoutes);
+
+// ── Subscription enforcement (blocks locked/expired users on all routes below) ─
+router.use(requireActiveSubscription);
 
 // ── Personal tasks ────────────────────────────────────────────────────────────
 router.use("/personal", personalTaskRoutes);
