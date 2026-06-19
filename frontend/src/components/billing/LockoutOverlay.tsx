@@ -7,7 +7,7 @@ import { Lock, Download, Zap } from "lucide-react";
  * Blocks all interaction with the app. Provides Export Data + Subscribe actions.
  */
 export function LockoutOverlay() {
-  const { isLocked, isExpired, status } = useSubscription();
+  const { isLocked, isExpired } = useSubscription();
   const checkout = useCreateCheckout();
 
   if (!isLocked && !isExpired) return null;

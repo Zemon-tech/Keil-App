@@ -101,7 +101,7 @@ export function BillingPage() {
           label="AI Chats Today"
           icon={<Zap className="size-4" />}
           used={usage?.ai_chats_today || 0}
-          limit={limits?.ai_chats_daily}
+          limit={limits?.ai_chats_daily ?? null}
         />
 
         {/* AI Chats - Hourly */}
@@ -119,7 +119,7 @@ export function BillingPage() {
           label="Recordings This Month"
           icon={<Mic className="size-4" />}
           used={usage?.recordings_this_month || 0}
-          limit={limits?.recordings_monthly}
+          limit={limits?.recordings_monthly ?? null}
         />
       </div>
 

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { UserPlanDTO, OrgPlanDTO, CheckoutResponse } from "@/types/billing";
 
@@ -52,8 +52,6 @@ export function useOrgPlan(orgId: string | null) {
  * On success, redirects the user to the Dodo hosted checkout.
  */
 export function useCreateCheckout() {
-  const queryClient = useQueryClient();
-
   return useMutation<CheckoutResponse, Error>({
     mutationFn: async () => {
       const { data } = await api.post("v1/billing/checkout");

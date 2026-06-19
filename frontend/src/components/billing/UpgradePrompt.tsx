@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useCreateCheckout } from "@/hooks/api/useBilling";
 import { Zap, X } from "lucide-react";
 
@@ -30,7 +29,7 @@ const RESOURCE_LABELS: Record<string, { title: string; description: string }> = 
  * Modal prompt shown when a usage limit is hit.
  * Offers upgrade CTA and dismiss option.
  */
-export function UpgradePrompt({ resource, limit, onDismiss }: UpgradePromptProps) {
+export function UpgradePrompt({ resource, limit: _limit, onDismiss }: UpgradePromptProps) {
   const checkout = useCreateCheckout();
   const info = RESOURCE_LABELS[resource] || RESOURCE_LABELS.ai_chats_daily;
 
