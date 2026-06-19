@@ -45,8 +45,7 @@ CREATE TYPE member_role AS ENUM (
 
 CREATE TYPE log_entity_type AS ENUM (
     'task',
-    'comment',
-    'workspace'
+    'comment'
 );
 
 CREATE TYPE log_action_type AS ENUM (
@@ -102,44 +101,10 @@ COMMENT ON TABLE public.users IS
     'Public profile mirror of auth.users. Populated on first sign-in.';
 
 
--- =============================================================================
--- SECTION 4: WORKSPACES
--- =============================================================================
-
-CREATE TABLE IF NOT EXISTS public.workspaces (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        TEXT        NOT NULL,
-    owner_id    UUID        NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at  TIMESTAMPTZ DEFAULT NULL,
-
-    CONSTRAINT workspaces_owner_unique UNIQUE (owner_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_workspaces_deleted_at
-    ON public.workspaces(deleted_at)
-    WHERE deleted_at IS NULL;
 
 
--- =============================================================================
--- SECTION 5: WORKSPACE MEMBERS
--- =============================================================================
 
-CREATE TABLE IF NOT EXISTS public.workspace_members (
-    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id    UUID        NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
-    user_id         UUID        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    role            member_role NOT NULL DEFAULT 'member',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT workspace_members_unique_user UNIQUE (user_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_workspace_members_user_id
-    ON public.workspace_members(user_id);
-
-CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace_id
-    ON public.workspace_members(workspace_id);
 
 
 -- =============================================================================
@@ -150,7 +115,6 @@ CREATE TABLE IF NOT EXISTS public.organisations (
     id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name                TEXT        NOT NULL,
     owner_user_id       UUID        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    source_workspace_id UUID        UNIQUE REFERENCES public.workspaces(id) ON DELETE SET NULL,
     is_personal         BOOLEAN     NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -196,12 +160,10 @@ CREATE INDEX IF NOT EXISTS idx_organisation_members_org_id
 
 CREATE TABLE IF NOT EXISTS public.spaces (
     id                  UUID             PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id        UUID             REFERENCES public.workspaces(id) ON DELETE SET NULL,
     org_id              UUID             NOT NULL REFERENCES public.organisations(id) ON DELETE CASCADE,
     name                TEXT             NOT NULL,
     visibility          space_visibility NOT NULL DEFAULT 'private',
     created_by          UUID             REFERENCES public.users(id) ON DELETE SET NULL,
-    source_workspace_id UUID             UNIQUE REFERENCES public.workspaces(id) ON DELETE SET NULL,
     is_default          BOOLEAN          NOT NULL DEFAULT FALSE,
     is_private          BOOLEAN          NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
@@ -266,7 +228,6 @@ CREATE INDEX IF NOT EXISTS idx_space_members_user_id
 
 CREATE TABLE IF NOT EXISTS public.tasks (
     id                  UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id        UUID            REFERENCES public.workspaces(id) ON DELETE CASCADE,
     org_id              UUID            NOT NULL,
     space_id            UUID            NOT NULL,
     parent_task_id      UUID            REFERENCES public.tasks(id) ON DELETE CASCADE,
@@ -321,15 +282,12 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     CONSTRAINT uq_tasks_user_google_event UNIQUE (created_by, google_event_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_tasks_workspace_id       ON public.tasks(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id     ON public.tasks(parent_task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status             ON public.tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_priority           ON public.tasks(priority);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date           ON public.tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at         ON public.tasks(created_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_by         ON public.tasks(created_by);
-CREATE INDEX IF NOT EXISTS idx_tasks_workspace_status_priority
-    ON public.tasks(workspace_id, status, priority);
 CREATE INDEX IF NOT EXISTS idx_tasks_org_space
     ON public.tasks(org_id, space_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_space_status_priority
@@ -411,7 +369,6 @@ CREATE INDEX IF NOT EXISTS idx_comments_deleted_at
 
 CREATE TABLE IF NOT EXISTS public.activity_logs (
     id              UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id    UUID                REFERENCES public.workspaces(id) ON DELETE CASCADE,
     org_id          UUID                NOT NULL,
     space_id        UUID,
     user_id         UUID                REFERENCES public.users(id) ON DELETE SET NULL,
@@ -432,10 +389,8 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
         ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_activity_logs_workspace_id   ON public.activity_logs(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_entity         ON public.activity_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id        ON public.activity_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at     ON public.activity_logs(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_org_space_created_at
     ON public.activity_logs(org_id, space_id, created_at DESC);
 
@@ -446,7 +401,6 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_org_space_created_at
 
 CREATE TABLE IF NOT EXISTS public.channels (
     id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id    UUID            REFERENCES public.workspaces(id) ON DELETE CASCADE,
     org_id          UUID            NOT NULL,
     space_id        UUID            NOT NULL,
     name            VARCHAR(50),
@@ -463,8 +417,6 @@ CREATE TABLE IF NOT EXISTS public.channels (
         REFERENCES public.spaces(id, org_id)
         ON DELETE CASCADE
 );
-
-CREATE INDEX IF NOT EXISTS idx_channels_workspace_id ON public.channels(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_channels_org_space
     ON public.channels(org_id, space_id);
 
@@ -804,7 +756,6 @@ CREATE TABLE IF NOT EXISTS public.user_notification_preferences (
 
 CREATE TABLE IF NOT EXISTS public.notifications (
     id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id  UUID         REFERENCES public.workspaces(id) ON DELETE CASCADE,
     org_id        UUID         REFERENCES public.organisations(id) ON DELETE CASCADE,
     space_id      UUID         REFERENCES public.spaces(id) ON DELETE CASCADE,
     recipient_id  UUID         NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -824,7 +775,6 @@ CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created_at
 
 CREATE TABLE IF NOT EXISTS public.notification_outbox (
     id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id  UUID,
     org_id        UUID,
     space_id      UUID,
     sender_id     UUID,
@@ -1101,179 +1051,15 @@ BEGIN
 END;
 $$;
 
--- Auto-insert workspace owner as 'owner' member
-CREATE OR REPLACE FUNCTION public.add_workspace_owner_as_member()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    INSERT INTO public.workspace_members (workspace_id, user_id, role)
-    VALUES (NEW.id, NEW.owner_id, 'owner');
-    RETURN NEW;
-END;
-$$;
-
--- Ensure workspace has corresponding organisation
-CREATE OR REPLACE FUNCTION public.ensure_workspace_organisation(p_workspace_id UUID)
-RETURNS TABLE(org_id UUID, space_id UUID)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_workspace public.workspaces%ROWTYPE;
-    v_org_id UUID;
-    v_space_id UUID;
-BEGIN
-    SELECT *
-    INTO v_workspace
-    FROM public.workspaces
-    WHERE id = p_workspace_id;
-
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Workspace % does not exist', p_workspace_id;
-    END IF;
-
-    INSERT INTO public.organisations (
-        name, owner_user_id, source_workspace_id, created_at, deleted_at
-    )
-    VALUES (
-        v_workspace.name, v_workspace.owner_id, v_workspace.id,
-        v_workspace.created_at, v_workspace.deleted_at
-    )
-    ON CONFLICT (source_workspace_id)
-    DO UPDATE SET
-        name = EXCLUDED.name,
-        owner_user_id = EXCLUDED.owner_user_id,
-        deleted_at = EXCLUDED.deleted_at
-    RETURNING id INTO v_org_id;
-
-    SELECT s.id
-    INTO v_space_id
-    FROM public.spaces s
-    WHERE s.source_workspace_id = v_workspace.id
-       OR s.workspace_id = v_workspace.id
-    ORDER BY
-        CASE WHEN s.source_workspace_id = v_workspace.id THEN 0 ELSE 1 END,
-        s.created_at ASC, s.id ASC
-    LIMIT 1;
-
-    IF v_space_id IS NULL THEN
-        INSERT INTO public.spaces (
-            workspace_id, org_id, name, visibility, created_by,
-            source_workspace_id, created_at, deleted_at
-        )
-        VALUES (
-            v_workspace.id, v_org_id, 'General', 'private',
-            v_workspace.owner_id, v_workspace.id,
-            v_workspace.created_at, v_workspace.deleted_at
-        )
-        RETURNING id INTO v_space_id;
-    ELSE
-        UPDATE public.spaces s
-        SET
-            workspace_id = COALESCE(s.workspace_id, v_workspace.id),
-            org_id = v_org_id,
-            source_workspace_id = CASE
-                WHEN s.source_workspace_id IS NOT NULL THEN s.source_workspace_id
-                WHEN NOT EXISTS (
-                    SELECT 1 FROM public.spaces sx
-                    WHERE sx.source_workspace_id = v_workspace.id AND sx.id <> s.id
-                ) THEN v_workspace.id
-                ELSE s.source_workspace_id
-            END,
-            deleted_at = COALESCE(s.deleted_at, v_workspace.deleted_at)
-        WHERE s.id = v_space_id
-        RETURNING s.id INTO v_space_id;
-    END IF;
-
-    RETURN QUERY SELECT v_org_id, v_space_id;
-END;
-$$;
-
-
--- Sync workspace insert to organisation
-CREATE OR REPLACE FUNCTION public.sync_workspace_insert_to_organisation()
+-- Validate parent task belongs to the same organisation and space
+CREATE OR REPLACE FUNCTION public.validate_task_parent()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    v_org_id UUID;
-    v_space_id UUID;
-BEGIN
-    SELECT e.org_id, e.space_id
-    INTO v_org_id, v_space_id
-    FROM public.ensure_workspace_organisation(NEW.id) e;
-
-    INSERT INTO public.organisation_members (org_id, user_id, role, created_at)
-    VALUES (v_org_id, NEW.owner_id, 'owner', NEW.created_at)
-    ON CONFLICT (org_id, user_id) DO UPDATE SET role = EXCLUDED.role;
-
-    INSERT INTO public.space_members (org_id, space_id, user_id, role, created_at)
-    VALUES (v_org_id, v_space_id, NEW.owner_id, 'owner', NEW.created_at)
-    ON CONFLICT (space_id, user_id) DO UPDATE SET role = EXCLUDED.role;
-
-    RETURN NEW;
-END;
-$$;
-
--- Sync workspace member changes to org/space
-CREATE OR REPLACE FUNCTION public.sync_workspace_member_to_org_space()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_workspace_id UUID;
-    v_org_id UUID;
-    v_space_id UUID;
-BEGIN
-    v_workspace_id := COALESCE(NEW.workspace_id, OLD.workspace_id);
-
-    SELECT e.org_id, e.space_id
-    INTO v_org_id, v_space_id
-    FROM public.ensure_workspace_organisation(v_workspace_id) e;
-
-    IF TG_OP = 'DELETE' THEN
-        DELETE FROM public.space_members
-        WHERE org_id = v_org_id AND space_id = v_space_id AND user_id = OLD.user_id;
-
-        DELETE FROM public.organisation_members
-        WHERE org_id = v_org_id AND user_id = OLD.user_id;
-
-        RETURN OLD;
-    END IF;
-
-    INSERT INTO public.organisation_members (org_id, user_id, role, created_at)
-    VALUES (v_org_id, NEW.user_id, NEW.role, NEW.created_at)
-    ON CONFLICT (org_id, user_id) DO UPDATE SET role = EXCLUDED.role;
-
-    INSERT INTO public.space_members (org_id, space_id, user_id, role, created_at)
-    VALUES (v_org_id, v_space_id, NEW.user_id, NEW.role, NEW.created_at)
-    ON CONFLICT (space_id, user_id)
-    DO UPDATE SET org_id = EXCLUDED.org_id, role = EXCLUDED.role;
-
-    RETURN NEW;
-END;
-$$;
-
--- Fill task org/space from workspace
-CREATE OR REPLACE FUNCTION public.fill_task_org_space_from_workspace()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_org_id UUID;
-    v_space_id UUID;
     v_parent_org_id UUID;
     v_parent_space_id UUID;
 BEGIN
-    IF NEW.org_id IS NULL OR NEW.space_id IS NULL THEN
-        SELECT e.org_id, e.space_id
-        INTO v_org_id, v_space_id
-        FROM public.ensure_workspace_organisation(NEW.workspace_id) e;
-
-        NEW.org_id := COALESCE(NEW.org_id, v_org_id);
-        NEW.space_id := COALESCE(NEW.space_id, v_space_id);
-    END IF;
-
     IF NEW.parent_task_id IS NOT NULL THEN
         SELECT org_id, space_id
         INTO v_parent_org_id, v_parent_space_id
@@ -1284,51 +1070,6 @@ BEGIN
            OR v_parent_space_id IS DISTINCT FROM NEW.space_id THEN
             RAISE EXCEPTION 'Parent task must belong to the same organisation and space';
         END IF;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
-
--- Fill channel org/space from workspace
-CREATE OR REPLACE FUNCTION public.fill_channel_org_space_from_workspace()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_org_id UUID;
-    v_space_id UUID;
-BEGIN
-    IF NEW.org_id IS NULL OR NEW.space_id IS NULL THEN
-        SELECT e.org_id, e.space_id
-        INTO v_org_id, v_space_id
-        FROM public.ensure_workspace_organisation(NEW.workspace_id) e;
-
-        NEW.org_id := COALESCE(NEW.org_id, v_org_id);
-        NEW.space_id := COALESCE(NEW.space_id, v_space_id);
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
--- Fill activity_logs org/space from workspace
-CREATE OR REPLACE FUNCTION public.fill_activity_org_space_from_workspace()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_org_id UUID;
-    v_space_id UUID;
-BEGIN
-    IF NEW.org_id IS NULL THEN
-        SELECT e.org_id, e.space_id
-        INTO v_org_id, v_space_id
-        FROM public.ensure_workspace_organisation(NEW.workspace_id) e;
-
-        NEW.org_id := v_org_id;
-        NEW.space_id := COALESCE(NEW.space_id, v_space_id);
     END IF;
 
     RETURN NEW;
@@ -1438,37 +1179,11 @@ CREATE TRIGGER on_auth_user_updated
     AFTER UPDATE ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_update_user();
 
--- Workspace triggers
-CREATE TRIGGER workspaces_add_owner_member
-    AFTER INSERT ON public.workspaces
+-- Safety trigger for task parent validation
+CREATE TRIGGER tasks_validate_parent
+    BEFORE INSERT OR UPDATE OF org_id, space_id, parent_task_id ON public.tasks
     FOR EACH ROW
-    EXECUTE FUNCTION public.add_workspace_owner_as_member();
-
-CREATE TRIGGER workspaces_sync_organisation
-    AFTER INSERT OR UPDATE OF name, owner_id, deleted_at ON public.workspaces
-    FOR EACH ROW
-    EXECUTE FUNCTION public.sync_workspace_insert_to_organisation();
-
-CREATE TRIGGER workspace_members_sync_org_space
-    AFTER INSERT OR UPDATE OR DELETE ON public.workspace_members
-    FOR EACH ROW
-    EXECUTE FUNCTION public.sync_workspace_member_to_org_space();
-
--- Org/space fill triggers
-CREATE TRIGGER tasks_fill_org_space
-    BEFORE INSERT OR UPDATE OF workspace_id, org_id, space_id, parent_task_id ON public.tasks
-    FOR EACH ROW
-    EXECUTE FUNCTION public.fill_task_org_space_from_workspace();
-
-CREATE TRIGGER channels_fill_org_space
-    BEFORE INSERT OR UPDATE OF workspace_id, org_id, space_id ON public.channels
-    FOR EACH ROW
-    EXECUTE FUNCTION public.fill_channel_org_space_from_workspace();
-
-CREATE TRIGGER activity_logs_fill_org_space
-    BEFORE INSERT OR UPDATE OF workspace_id, org_id, space_id ON public.activity_logs
-    FOR EACH ROW
-    EXECUTE FUNCTION public.fill_activity_org_space_from_workspace();
+    EXECUTE FUNCTION public.validate_task_parent();
 
 -- Safety triggers
 CREATE TRIGGER task_assignees_enforce_space_member

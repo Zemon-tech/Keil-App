@@ -130,6 +130,10 @@ import { useChatStore } from "@/store/useChatStore";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { type SessionRecord } from "@/contexts/AuthContext";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { useOrgPlan, useCreateCheckout, useCreateOrgCheckout, usePortalUrl } from "@/hooks/api/useBilling";
+import { PLAN_DISPLAY, STATUS_DISPLAY } from "@/types/billing";
+import { useSubscription } from "@/contexts/SubscriptionContext";
+import { CreditCard, Zap, ExternalLink } from "lucide-react";
 
 // ─── Helper Functions ─────────────────────────────────────────────────
 const handleCopyToClipboard = async (text: string, label: string) => {
@@ -152,7 +156,8 @@ type AccountTab =
   | "tasks"
   | "notifications"
   | "connectors"
-  | "sessions";
+  | "sessions"
+  | "billing";
 
 type WorkspaceTab = "org-general" | "org-members" | "org-spaces" | "api" | "enterprise";
 
@@ -180,6 +185,7 @@ const accountNavItems: AccountNavItem[] = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "connectors", label: "Connectors", icon: Plug },
   { id: "sessions", label: "Sessions", icon: Monitor },
+  { id: "billing", label: "Billing & Usage", icon: CreditCard },
 ];
 
 const workspaceNavItems: WorkspaceNavItem[] = [
@@ -3978,6 +3984,279 @@ function SessionsTab() {
   );
 }
 
+function UsageBar({
+  label,
+  icon,
+  used,
+  limit,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  used: number;
+  limit: number | null;
+}) {
+  const isUnlimited = limit === null;
+  const percentage = isUnlimited ? 0 : Math.min((used / limit) * 100, 100);
+  const isWarning = !isUnlimited && percentage >= 80;
+  const isExhausted = !isUnlimited && percentage >= 100;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          {icon}
+          <span>{label}</span>
+        </div>
+        <span className="font-medium text-foreground">
+          {used} / {isUnlimited ? "Unlimited" : limit}
+        </span>
+      </div>
+      {!isUnlimited && (
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${
+              isExhausted
+                ? "bg-red-500"
+                : isWarning
+                  ? "bg-amber-500"
+                  : "bg-primary"
+            }`}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeatureItem({ label, enabled }: { label: string; enabled: boolean }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={`size-4 rounded-full flex items-center justify-center text-xs shrink-0 ${
+          enabled
+            ? "bg-green-500/10 text-green-600 dark:text-green-400"
+            : "bg-muted text-muted-foreground"
+        }`}
+      >
+        {enabled ? "✓" : "—"}
+      </div>
+      <span className={enabled ? "text-foreground" : "text-muted-foreground"}>{label}</span>
+    </div>
+  );
+}
+
+function BillingTab() {
+  const { activeOrgId, organisations } = useAppContext();
+  const { planData, plan, status, limits, usage, trialDaysRemaining, isPaid, isLoading: isLoadingUserPlan } = useSubscription();
+
+  const { data: orgPlan, isLoading: isLoadingOrgPlan } = useOrgPlan(activeOrgId);
+  const checkout = useCreateCheckout();
+  const orgCheckout = useCreateOrgCheckout();
+  const portal = usePortalUrl();
+
+  const handlePortalRedirect = async () => {
+    try {
+      const portalUrl = planData?.portal_url || orgPlan?.portal_url;
+      if (portalUrl) {
+        window.open(portalUrl, "_blank");
+      } else {
+        const url = await portal.mutateAsync();
+        if (url) {
+          window.open(url, "_blank");
+        }
+      }
+    } catch (err) {
+      toast.error("Failed to open customer portal");
+      console.error(err);
+    }
+  };
+
+  const handleOrgUpgrade = () => {
+    const targetOrgId = activeOrgId || organisations.find(o => o.is_personal)?.id;
+    if (!targetOrgId) {
+      toast.error("No active or personal organisation found to upgrade");
+      return;
+    }
+    orgCheckout.mutate({ orgId: targetOrgId, seats: 2 });
+  };
+
+  if (isLoadingUserPlan || (activeOrgId && isLoadingOrgPlan)) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <Loader2 className="size-8 text-primary animate-spin mb-3" />
+        <p className="text-sm font-medium text-muted-foreground">Loading billing information...</p>
+      </div>
+    );
+  }
+
+  const planInfo = plan ? PLAN_DISPLAY[plan] : null;
+  const statusInfo = status ? STATUS_DISPLAY[status] : null;
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Billing & Usage</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Manage your plan, resource limits, and subscription.
+        </p>
+      </div>
+
+      <Separator />
+
+      {/* Plan Card */}
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-muted/20 p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <CreditCard className="size-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {planInfo?.name || "Free Trial"} Plan
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {planInfo?.price || "Free"}
+              </p>
+            </div>
+          </div>
+          {statusInfo && (
+            <Badge variant="secondary" className={cn("text-[10px] font-bold uppercase tracking-wider", statusInfo.color)}>
+              {statusInfo.label}
+            </Badge>
+          )}
+        </div>
+
+        {/* Trial Days Remaining */}
+        {status === "trialing" && trialDaysRemaining !== null && (
+          <div className="flex items-center gap-2 text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl px-3 py-2 border border-blue-500/10">
+            <Clock className="size-3.5" />
+            <span>
+              {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} remaining in your trial
+            </span>
+          </div>
+        )}
+
+        {/* Past due warning */}
+        {status === "past_due" && (
+          <div className="flex items-center gap-2 text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl px-3 py-2 border border-amber-500/10">
+            <Shield className="size-3.5" />
+            <span>Payment failed. Please update your payment method to avoid losing access.</span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 pt-1">
+          {isPaid || planData?.portal_url || orgPlan?.portal_url ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs rounded-xl flex items-center gap-1.5"
+              onClick={handlePortalRedirect}
+              disabled={portal.isPending}
+            >
+              {portal.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <ExternalLink className="size-3.5" />
+              )}
+              Manage Subscription & Billing
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs rounded-xl flex items-center gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95"
+                onClick={() => checkout.mutate()}
+                disabled={checkout.isPending}
+              >
+                {checkout.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Zap className="size-3.5" />
+                )}
+                Upgrade to Pro ($25/mo)
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs rounded-xl flex items-center gap-1.5"
+                onClick={handleOrgUpgrade}
+                disabled={orgCheckout.isPending}
+              >
+                {orgCheckout.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Building2 className="size-3.5" />
+                )}
+                Upgrade to Teams ($50/user/mo)
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Usage Section */}
+      <div className="rounded-2xl border border-border p-5 space-y-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Resource Usage This Period
+        </p>
+
+        <div className="space-y-4 pt-1">
+          {/* AI Chats Daily */}
+          <UsageBar
+            label="AI Chats Today"
+            icon={<Zap className="size-4 text-primary" />}
+            used={usage?.ai_chats_today || 0}
+            limit={limits?.ai_chats_daily ?? null}
+          />
+
+          {/* AI Chats Hourly */}
+          {limits?.ai_chats_hourly && (
+            <UsageBar
+              label="AI Chats This Hour"
+              icon={<Zap className="size-4 text-amber-500" />}
+              used={usage?.ai_chats_this_hour || 0}
+              limit={limits.ai_chats_hourly}
+            />
+          )}
+
+          {/* Recordings */}
+          <UsageBar
+            label="Meeting Recordings This Month"
+            icon={<Mic className="size-4 text-emerald-500" />}
+            used={usage?.recordings_this_month || 0}
+            limit={limits?.recordings_monthly ?? null}
+          />
+        </div>
+      </div>
+
+      {/* Plan Features */}
+      <div className="rounded-2xl border border-border p-5 space-y-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Enabled Capabilities
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm pt-1">
+          <FeatureItem
+            label="Transcription Diarization"
+            enabled={limits?.transcription_diarization || false}
+          />
+          <FeatureItem
+            label="Data Privacy (no training)"
+            enabled={!limits?.data_used_for_training}
+          />
+          <FeatureItem label="SSO / SAML Security" enabled={limits?.sso || false} />
+          <FeatureItem label="Enterprise Audit Logs" enabled={limits?.audit_logs || false} />
+          <FeatureItem
+            label="Centralized Billing & Invoices"
+            enabled={limits?.centralized_billing || false}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab Content Map ─────────────────────────────────────────────────
 const accountTabContent: Record<AccountTab, React.FC> = {
   account: AccountTab,
@@ -3989,6 +4268,7 @@ const accountTabContent: Record<AccountTab, React.FC> = {
   notifications: NotificationsTab,
   connectors: ConnectorsTab,
   sessions: SessionsTab,
+  billing: BillingTab,
 };
 
 const workspaceTabContent: Record<WorkspaceTab, React.FC> = {
