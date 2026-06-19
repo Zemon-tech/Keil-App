@@ -14,7 +14,11 @@ import logger from "../lib/logger";
 export const handleDodoWebhook = async (req: Request, res: Response): Promise<void> => {
   try {
     // The raw body is available as a string (configured in route with express.raw)
-    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    const rawBody = typeof req.body === "string"
+      ? req.body
+      : Buffer.isBuffer(req.body)
+        ? req.body.toString("utf8")
+        : JSON.stringify(req.body);
 
     // Extract headers as a flat record
     const headers: Record<string, string> = {};
