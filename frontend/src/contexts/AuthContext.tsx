@@ -117,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             localStorage.removeItem("motion:recentlyOpenedPages");
             localStorage.removeItem("keil_active_org");
             localStorage.removeItem("keil_active_space");
+            localStorage.removeItem("keil_browser_id");
         } catch { /* ignore */ }
 
         useMotionStore.setState({
