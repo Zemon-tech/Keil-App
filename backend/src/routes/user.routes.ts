@@ -2,6 +2,7 @@ import { Router } from "express";
 import { protect } from "../middlewares/auth.middleware";
 import {
     getMe,
+    completeOnboarding,
     searchUsers,
     getUserSessions,
     revokeUserSession,
@@ -17,6 +18,13 @@ const router = Router();
  * @access  Private (Requires Supabase JWT)
  */
 router.get("/me", protect, getMe);
+
+/**
+ * @desc    Complete user onboarding and mark in DB
+ * @route   PATCH /api/users/onboard
+ * @access  Private
+ */
+router.patch("/onboard", protect, completeOnboarding);
 
 /**
  * @desc    Search users by name or email

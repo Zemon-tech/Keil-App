@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -9,6 +9,7 @@ export interface MeResponse {
   name: string | null;
   created_at: string;
   avatar_url?: string | null;
+  onboarded: boolean;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -31,6 +32,23 @@ export function useMe() {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401) return false;
       return failureCount < 1;
+    },
+  });
+}
+
+/**
+ * Marks the current authenticated user as onboarded in the database.
+ */
+export function useCompleteOnboarding() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.patch("users/onboard");
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["me"] });
     },
   });
 }

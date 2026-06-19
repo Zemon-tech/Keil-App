@@ -13,7 +13,7 @@ import { MotionHome } from "./components/motion/MotionHome";
 import { MotionProfile } from "./components/motion/MotionProfile";
 import { MotionPublicPage } from "./components/motion/MotionPublicPage";
 import { useMotionStore } from "./store/useMotionStore";
-import { BillingPage } from "./components/billing/BillingPage";
+
 
 import { useAppContext } from "./contexts/AppContext";
 import { MobileBlocker } from "./components/MobileBlocker";
@@ -118,7 +118,7 @@ function App() {
           />
           <Route
             path="/billing"
-            element={<BillingPage />}
+            element={<Navigate to="/?success=true" replace />}
           />
         </Route>
         <Route

@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * Component for user registration.
@@ -31,7 +30,6 @@ export function SignupForm({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { setSuppressAutoLogin } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,11 +42,7 @@ export function SignupForm({
       return;
     }
 
-    // Tell AuthContext to suppress the auto-login session that Supabase
-    // creates on signup — this MUST be set before the signUp call.
-    setSuppressAutoLogin(true);
-
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -59,12 +53,14 @@ export function SignupForm({
     });
 
     if (error) {
-      setSuppressAutoLogin(false);
       setError(error.message);
+    } else if (data?.session) {
+      // User is logged in automatically, the page will auto-route to dashboard/onboarding
+      setLoading(false);
+      return;
     } else {
-      alert("Account created! Please sign in with your credentials.");
-
-      // Switch back to the login form
+      // Email verification is required or no session established yet
+      alert("Account created successfully! Please verify your email or sign in.");
       if (onSwitchToLogin) {
         onSwitchToLogin();
       }
