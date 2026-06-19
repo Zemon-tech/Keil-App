@@ -246,6 +246,7 @@ These integrations are fully functional, support OAuth or API key credentials, a
 | Integration | What It Does |
 |---|---|
 | **Google Calendar** | 2-way calendar sync, automated scheduling slot detection, task-to-event mirroring |
+| **Notion** | OAuth or manual token connection. Import Notion pages, export local Motion pages, and sync page content bidirectionally. |
 | **GitHub** | Fetch repository issues, pull requests, and contributors. Create tasks from GitHub issues, and generate GitHub issues from KeilHQ tasks automatically |
 | **Google Mail (Gmail)** | Read recent inbox emails and thread details. Turn messages into task cards or Motion docs, or summarize the context with AI in one click |
 | **AWS S3** | Secure storage for meeting recordings and uploaded files |
@@ -253,16 +254,15 @@ These integrations are fully functional, support OAuth or API key credentials, a
 | **ElevenLabs** | Fallback transcription provider for meetings |
 | **Google Gemini / OpenRouter / Local AI** | Model backends powering the agentic orchestrations and chat capabilities |
 
-### 🟡 Planned Integrations (UI Placeholders / Coming Soon)
+### 🟡 Settings UI Placeholder Connectors (Coming Soon)
 
-The following services are represented as connectors in the settings UI and are on the roadmap for direct native sync:
+The following services are represented as visual connectors/placeholders in the settings interface but do not yet have active backend sync logic:
 
-- **Notion**: Import pages, wikis, and databases directly
-- **Linear**: Sync issues and engineering tasks
-- **Jira**: Connect enterprise Jira boards
-- **Slack**: Feed notification activity to channels
-- **ChronicleHQ**: Create premium looking PPTs using AI
-- **Google Meet, Google Docs, Google Sheets, Google Slides, Google Drive**: Deep in-context workspace sync
+- **Linear**: Visual connector layout for issue tracking sync
+- **Jira**: Visual connector layout for enterprise board sync
+- **Slack**: Visual connector layout for activity feed routing
+- **ChronicleHQ**: Visual connector layout for AI-assisted presentations
+- **Google Meet, Google Docs, Google Sheets, Google Slides, Google Drive**: Visual connector layouts for Google workspace document previews and meeting links
 
 ---
 
@@ -417,7 +417,7 @@ Bring your whole team. Connect your calendar. Let the AI read your backlog. And 
 | **Best for** | Agencies, startups, product teams, freelancers |
 | **Replaces** | Slack + Asana/Linear + Notion + Otter.ai + Google Calendar (separately) |
 | **Key differentiator** | Clarity Engine + AI with real data access |
-| **Integrations** | Google Calendar, GitHub, Gmail, AWS S3, Sarvam AI, ElevenLabs, Gemini |
+| **Integrations** | Google Calendar, Notion, GitHub, Gmail, AWS S3, Sarvam AI, ElevenLabs, Gemini |
 | **Real-time** | Chat, doc editing, notifications, calendar sync |
 | **AI engine** | Google Gemini + OpenRouter + Local AI, orchestrated by Mastra |
 | **Infrastructure** | Vite, Express, AWS S3, Supabase PostgreSQL, Socket.io |

@@ -16,6 +16,7 @@ import { useMotionStore } from "./store/useMotionStore";
 import { BillingPage } from "./components/billing/BillingPage";
 
 import { useAppContext } from "./contexts/AppContext";
+import { MobileBlocker } from "./components/MobileBlocker";
 
 /**
  * Redirects /motion to the last opened page if one exists,
@@ -58,7 +59,8 @@ function App() {
   const { user } = useAuth();
 
   return (
-    <Routes>
+    <MobileBlocker>
+      <Routes>
       {/* ── Auth ──────────────────────────────────────────────────────────── */}
       <Route
         path="/login"
@@ -139,6 +141,7 @@ function App() {
       {/* ── Catch-all — redirect to home ─────────────────────────────────── */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </MobileBlocker>
   );
 }
 
