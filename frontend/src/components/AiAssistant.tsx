@@ -756,12 +756,12 @@ export function AiAssistant() {
 
                 const textFiles = message.files.filter(f => 
                     f.mediaType?.startsWith('text/') || 
-                    f.filename.match(/\.(md|txt|json|csv|log)$/i)
+                    (f.filename && f.filename.match(/\.(md|txt|json|csv|log)$/i))
                 );
                 
                 const otherFiles = message.files.filter(f => 
                     !(f.mediaType?.startsWith('text/') || 
-                    f.filename.match(/\.(md|txt|json|csv|log)$/i))
+                    (f.filename && f.filename.match(/\.(md|txt|json|csv|log)$/i)))
                 );
 
                 if (textFiles.length > 0) {
@@ -783,7 +783,7 @@ export function AiAssistant() {
                 uploadedFiles = [
                     ...uploadedOtherFiles,
                     ...textFiles.map(f => ({
-                        id: f.id || crypto.randomUUID(),
+                        id: (f as any).id || crypto.randomUUID(),
                         type: "file",
                         filename: f.filename,
                         mediaType: f.mediaType || "text/plain",
