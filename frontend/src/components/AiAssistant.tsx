@@ -1109,7 +1109,7 @@ export function AiAssistant() {
                                 <Message
                                     from={msg.role}
                                     className={cn(
-                                        msg.role === "user" ? "w-fit ml-auto max-w-[75%] sm:max-w-[70%] md:max-w-[65%]" : "max-w-full w-full"
+                                        msg.role === "user" ? "w-fit ml-auto max-w-[50%]" : "max-w-full w-full"
                                     )}
                                 >
                                     <MessageContent className={cn(

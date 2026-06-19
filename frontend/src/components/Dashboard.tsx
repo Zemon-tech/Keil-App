@@ -1052,7 +1052,7 @@ export function Dashboard() {
                       from={message.role}
                       key={message.id}
                       className={cn(
-                        message.role === "user" ? "w-fit ml-auto max-w-[75%] sm:max-w-[70%] md:max-w-[65%]" : "max-w-full w-full"
+                        message.role === "user" ? "w-fit ml-auto max-w-[50%]" : "max-w-full w-full"
                       )}
                     >
                       <MessageContent
