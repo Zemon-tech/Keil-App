@@ -2,12 +2,16 @@ import React, { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogoLoader } from "@/components/LogoLoader";
+import { OnboardingWizard } from "@/components/auth/OnboardingWizard";
 import { TaskDetailRoute } from "@/components/auth/TaskDetailRoute";
+
+import { useMe } from "@/hooks/api/useMe";
 
 /**
  * A wrapper component for protected routes.
  *
- * For authenticated users: renders the child routes via <Outlet />.
+ * For authenticated users: renders the child routes via <Outlet /> if onboarded,
+ * otherwise renders the OnboardingWizard.
  * For unauthenticated users:
  *   - On task/event deep-link paths (/tasks/:id, /events/:id): renders
  *     TaskDetailRoute which shows PublicTaskView without requiring auth.
@@ -19,6 +23,7 @@ import { TaskDetailRoute } from "@/components/auth/TaskDetailRoute";
  */
 const ProtectedRoute: React.FC = () => {
     const { user, loading } = useAuth();
+    const { data: meData, isLoading: isMeLoading } = useMe();
     const location = useLocation();
     const [splashDone, setSplashDone] = useState(false);
 
@@ -71,7 +76,22 @@ const ProtectedRoute: React.FC = () => {
         return <Navigate to="/login" replace />;
     }
 
-    // Render the child routes if authenticated
+    if (isMeLoading) {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center gap-6">
+                <LogoLoader size={240} label="Loading profile" />
+                <p className="text-muted-foreground">Syncing profile...</p>
+            </div>
+        );
+    }
+
+    // Intercept if onboarding is not completed in database
+    const onboardingCompleted = meData?.onboarded === true;
+    if (!onboardingCompleted) {
+        return <OnboardingWizard />;
+    }
+
+    // Render the child routes if authenticated and onboarded
     return <Outlet />;
 };
 

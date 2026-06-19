@@ -25,9 +25,33 @@ export const getMe = async (req: any, res: Response, next: NextFunction) => {
                     name: user.name,
                     created_at: user.created_at,
                     avatar_url: user.avatar_url,
+                    onboarded: user.onboarded,
                 },
                 "User profile retrieved successfully"
             )
+        );
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Complete user onboarding and mark in database
+ * @route   PATCH /api/users/onboard
+ * @access  Private
+ */
+export const completeOnboarding = async (req: any, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.id;
+
+        if (!userId) {
+            throw new ApiError(401, "Unauthorized access");
+        }
+
+        await pool.query("UPDATE public.users SET onboarded = true WHERE id = $1", [userId]);
+
+        return res.status(200).json(
+            new ApiResponse(200, { onboarded: true }, "Onboarding marked as completed successfully")
         );
     } catch (error) {
         next(error);
