@@ -547,6 +547,13 @@ async function softDeleteTaskFromGoogle(
     `UPDATE ${table} SET deleted_at = NOW(), google_event_id = NULL WHERE id = $1`,
     [id]
   );
+  // Clean up calendar slot to match the normal delete path and avoid orphaned rows
+  if (source === 'tasks') {
+    await pool.query(
+      `DELETE FROM public.task_slots WHERE task_id = $1`,
+      [id]
+    );
+  }
   log.info({ taskId: id, source }, 'Soft-deleted task — Google event was cancelled');
 }// ─── processIncomingGoogleEvent ───────────────────────────────────────────────
 
@@ -589,7 +596,7 @@ export async function processIncomingGoogleEvent(
   // For cancelled events, skip the window check — we always want to soft-delete
   if (event.status !== 'cancelled') {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
     const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
     const isAllDay = !!event.start?.date;
@@ -600,7 +607,7 @@ export async function processIncomingGoogleEvent(
     }
     const startDate = new Date(startRaw);
 
-    if (startDate < thirtyDaysAgo) {
+    if (startDate < sixtyDaysAgo) {
       log.debug({ eventId: googleEventId, reason: 'too-far-past' }, 'Skipping event — too far in the past');
       return;
     }
@@ -692,6 +699,13 @@ export async function processIncomingGoogleEvent(
           );
         }
         
+        // Create calendar slot so the event is visible in the calendar view
+        await pool.query(
+          `INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [newTaskId, userId, startDate, dueDate, isAllDay]
+        );
+
         log.info({ eventId: googleEventId, userId, spaceId: resolvedOrgSpace.spaceId, taskId: newTaskId }, 'Created org event from Google Calendar meeting');
       } else {
         // Fallback to personal task if no org/space found
@@ -832,6 +846,26 @@ export async function processIncomingGoogleEvent(
         );
       }
     }
+
+    // Upsert calendar slot so calendar view reflects the updated dates
+    const existingSlot = await pool.query(
+      `SELECT id FROM public.task_slots WHERE task_id = $1 LIMIT 1`,
+      [matchingTask.id]
+    );
+    if (existingSlot.rows.length > 0) {
+      await pool.query(
+        `UPDATE public.task_slots
+         SET start_date = $1, due_date = $2, is_all_day = $3, updated_at = NOW()
+         WHERE task_id = $4`,
+        [startDate, dueDate, isAllDay, matchingTask.id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [matchingTask.id, userId, startDate, dueDate, isAllDay]
+      );
+    }
   }
 
   // Notify frontend to refresh tasks
@@ -854,7 +888,7 @@ export async function doFullSync(
   const calendar = google.calendar({ version: 'v3', auth: authClient, timeout: 10000 } as any);
 
   const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
   const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
   let pageToken: string | undefined;
@@ -869,7 +903,7 @@ export async function doFullSync(
     const response = await calendar.events.list({
       calendarId,
       singleEvents: true,
-      timeMin: thirtyDaysAgo.toISOString(),
+      timeMin: sixtyDaysAgo.toISOString(),
       timeMax: oneYearFromNow.toISOString(),
       pageToken,
     });
