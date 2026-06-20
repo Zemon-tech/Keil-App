@@ -507,7 +507,9 @@ export function TaskSchedulePane({
             id: slot.id,
             title: slot.checklist_title || slot.task_title || task?.title || "Untitled",
             start: slot.start_date,
-            end: slot.due_date,
+            end: slot.is_all_day
+              ? new Date(new Date(slot.due_date).getTime() + 24 * 60 * 60 * 1000).toISOString()
+              : slot.due_date,
             allDay: slot.is_all_day,
             display: "block",
             backgroundColor: chipStyles.background,
@@ -568,7 +570,9 @@ export function TaskSchedulePane({
             id: t.id,
             title: t.title,
             start: t.start_date!,
-            end: t.due_date!,
+            end: isAllDay
+              ? new Date(endDate.getTime() + 24 * 60 * 60 * 1000).toISOString()
+              : t.due_date!,
             allDay: isAllDay,
             display: "block",
             backgroundColor: chipStyles.background,
