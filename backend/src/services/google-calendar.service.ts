@@ -1,6 +1,5 @@
-import { google } from 'googleapis';
+import { google, calendar_v3, tasks_v1 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
-import { calendar_v3 } from 'googleapis';
 import * as crypto from 'crypto';
 import { PoolClient } from 'pg';
 import pool from '../config/pg';
@@ -52,11 +51,12 @@ const PROVIDER = 'google_calendar';
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const MEET_SCOPE = 'https://www.googleapis.com/auth/meetings.space.created';
+const TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /**
- * Minimal task shape needed for Google Calendar sync.
+ * Minimal task shape needed for Google Calendar / Tasks sync.
  * Both workspace tasks and personal tasks are mapped to this before calling sync.
  */
 export interface SyncableTask {
@@ -72,6 +72,8 @@ export interface SyncableTask {
   meet_link?: string | null;
   /** Which table to write google_event_id back to after creation */
   source: 'tasks' | 'personal_tasks';
+  /** Whether this is a task or an event */
+  type: 'task' | 'event';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -160,7 +162,7 @@ export function getAuthUrl(userId: string): string {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent', // always request refresh token
-    scope: [CALENDAR_SCOPE, GMAIL_SCOPE, MEET_SCOPE],
+    scope: [CALENDAR_SCOPE, GMAIL_SCOPE, MEET_SCOPE, TASKS_SCOPE],
     state,
   });
 }
@@ -269,6 +271,11 @@ export async function syncTaskToCalendar(
   task: SyncableTask,
   options?: { skipGoogleSync?: boolean }
 ): Promise<void> {
+  if (task.type === 'task') {
+    await syncTaskToGoogleTasks(userId, task, options);
+    return;
+  }
+
   // --- INBOUND SYNC LOOP RETRIGGER SUPPRESSION ---
   // When processIncomingGoogleEvent() updates a task, it passes skipGoogleSync: true
   // to prevent the update from being echoed back to Google Calendar.
@@ -280,7 +287,7 @@ export async function syncTaskToCalendar(
   // If no start_date, the task is not scheduled — remove any existing Google event
   if (!task.start_date) {
     if (task.google_event_id) {
-      await deleteCalendarEvent(userId, task.google_event_id);
+      await deleteCalendarEvent(userId, task.google_event_id, 'event');
       await clearGoogleEventId(task.id, task.source);
     }
     return;
@@ -377,8 +384,14 @@ export async function syncTaskToCalendar(
  */
 export async function deleteCalendarEvent(
   userId: string,
-  googleEventId: string
+  googleEventId: string,
+  type: 'task' | 'event' = 'event'
 ): Promise<void> {
+  if (type === 'task') {
+    await deleteGoogleTask(userId, googleEventId);
+    return;
+  }
+
   const authClient = await getAuthorizedClient(userId);
   if (!authClient) return;
 
@@ -485,6 +498,8 @@ interface MatchedTask {
   id: string;
   source: 'tasks' | 'personal_tasks';
   title: string;
+  description: string | null;
+  status: string | null;
   updated_at: Date;
   start_date: Date | null;
   due_date: Date | null;
@@ -502,13 +517,13 @@ async function findTaskByGoogleEventIdOrIcalUidOrTaskId(
 ): Promise<MatchedTask | null> {
   const result = await pool.query(
     `SELECT * FROM (
-      (SELECT id, title, updated_at, start_date, due_date, owner_user_id, NULL::uuid AS created_by, location, meet_link, false AS is_all_day, 'personal_tasks' AS source
+      (SELECT id, title, description, status, updated_at, start_date, due_date, owner_user_id, NULL::uuid AS created_by, location, meet_link, false AS is_all_day, 'personal_tasks' AS source
        FROM public.personal_tasks
        WHERE deleted_at IS NULL
          AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
        LIMIT 1)
        UNION ALL
-       (SELECT id, title, updated_at, start_date, due_date, NULL::uuid AS owner_user_id, created_by, location, meet_link, is_all_day, 'tasks' AS source
+       (SELECT id, title, description, status, updated_at, start_date, due_date, NULL::uuid AS owner_user_id, created_by, location, meet_link, is_all_day, 'tasks' AS source
         FROM public.tasks
         WHERE deleted_at IS NULL
           AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
@@ -525,6 +540,8 @@ async function findTaskByGoogleEventIdOrIcalUidOrTaskId(
     id: row.id,
     source: row.source as 'tasks' | 'personal_tasks',
     title: row.title,
+    description: row.description,
+    status: row.status,
     updated_at: row.updated_at,
     start_date: row.start_date,
     due_date: row.due_date,
@@ -555,7 +572,39 @@ async function softDeleteTaskFromGoogle(
     );
   }
   log.info({ taskId: id, source }, 'Soft-deleted task — Google event was cancelled');
-}// ─── processIncomingGoogleEvent ───────────────────────────────────────────────
+}
+
+/**
+ * Check if a task matching the event ID was explicitly soft-deleted in KeilHQ.
+ */
+async function checkIfTaskWasDeleted(
+  googleEventId: string,
+  icalUid?: string | null,
+  taskId?: string | null
+): Promise<boolean> {
+  const safeTaskId = taskId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId)
+    ? taskId
+    : null;
+
+  const result = await pool.query(
+    `SELECT 1 FROM (
+      (SELECT id FROM public.personal_tasks
+       WHERE deleted_at IS NOT NULL
+         AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
+       LIMIT 1)
+       UNION ALL
+       (SELECT id FROM public.tasks
+        WHERE deleted_at IS NOT NULL
+          AND (google_event_id = $1 OR (ical_uid IS NOT NULL AND ical_uid = $2) OR id = $3)
+        LIMIT 1)
+     ) sub
+     LIMIT 1`,
+    [googleEventId, icalUid ?? null, safeTaskId]
+  );
+  return result.rows.length > 0;
+}
+
+// ─── processIncomingGoogleEvent ───────────────────────────────────────────────
 
 /**
  * Apply a single incoming Google Calendar event to the KeilHQ task store.
@@ -585,11 +634,15 @@ export async function processIncomingGoogleEvent(
   const matchingTask = await findTaskByGoogleEventIdOrIcalUidOrTaskId(googleEventId, icalUid, privateTaskId);
 
   // --- SYNC LOOP / DELETION PREVENTION ---
-  // If the event originated from KeilHQ, but there is no matching task, it has likely been deleted in our software.
-  // Skip to prevent recreating deleted tasks.
+  // If the event originated from KeilHQ, but there is no active matching task, we must check if
+  // it was explicitly soft-deleted in KeilHQ, or if it simply doesn't exist in our DB (e.g. fresh DB instance / reset).
   if (source === 'keilhq' && !matchingTask) {
-    log.debug({ eventId: event.id, reason: 'loop-prevention-deleted' }, 'Skipping event — originated from KeilHQ but no matching task found');
-    return;
+    const wasDeleted = await checkIfTaskWasDeleted(googleEventId, icalUid, privateTaskId);
+    if (wasDeleted) {
+      log.debug({ eventId: event.id, reason: 'loop-prevention-deleted' }, 'Skipping event — originated from KeilHQ and was explicitly deleted in KeilHQ');
+      return;
+    }
+    log.info({ eventId: event.id, taskId: privateTaskId }, 'Origin KeilHQ event not found in database and not deleted — importing as new event');
   }
 
   // --- SYNC WINDOW FILTER ---
@@ -922,6 +975,12 @@ export async function doFullSync(
     syncToken = response.data.nextSyncToken ?? undefined;
   } while (pageToken);
 
+  try {
+    await syncGoogleTasksInbound(userId, authClient);
+  } catch (err) {
+    log.error({ err, userId }, 'Failed to run full sync for Google Tasks');
+  }
+
   log.info({ userId, totalProcessed, hasSyncToken: !!syncToken }, 'Full sync complete');
   return syncToken;
 }
@@ -1204,6 +1263,17 @@ export async function doIncrementalSync(userId: string): Promise<void> {
         }
       }
 
+      // Sync Google Tasks in incremental sync
+      const updatedMin = integration.last_successful_sync_at
+        ? new Date(integration.last_successful_sync_at).toISOString()
+        : undefined;
+
+      try {
+        await syncGoogleTasksInbound(userId, authClient, updatedMin);
+      } catch (err) {
+        log.error({ err, userId }, 'Failed to run incremental sync for Google Tasks');
+      }
+
       // Save the new syncToken
       if (response.data.nextSyncToken) {
         await integrationRepository.saveSyncToken(userId, PROVIDER, response.data.nextSyncToken);
@@ -1357,6 +1427,323 @@ export async function createGoogleMeetSpace(userId: string): Promise<string> {
 
   log.info({ userId, meetingUri: response.data.meetingUri }, 'Google Meet space created successfully');
   return response.data.meetingUri;
+}
+
+// =============================================================================
+// GOOGLE TASKS SYNC IMPLEMENTATION
+// =============================================================================
+
+function mapStatusToGoogleTasks(status?: string | null): 'needsAction' | 'completed' {
+  if (status === 'done' || status === 'completed') {
+    return 'completed';
+  }
+  return 'needsAction';
+}
+
+export async function deleteGoogleTask(
+  userId: string,
+  googleTaskId: string
+): Promise<void> {
+  const authClient = await getAuthorizedClient(userId);
+  if (!authClient) return;
+
+  const tasksClient = google.tasks({ version: 'v1', auth: authClient });
+
+  try {
+    await tasksClient.tasks.delete({
+      tasklist: '@default',
+      task: googleTaskId,
+    });
+    log.info({ userId, googleTaskId }, 'Deleted Google Task');
+  } catch (err: any) {
+    if (err?.code === 404 || err?.code === 410) return; // already gone — fine
+    throw err;
+  }
+}
+
+export async function syncTaskToGoogleTasks(
+  userId: string,
+  task: SyncableTask,
+  options?: { skipGoogleSync?: boolean }
+): Promise<void> {
+  if (options?.skipGoogleSync) {
+    log.debug({ taskId: task.id }, 'Suppressing outbound sync to Google Tasks — update originated from Google');
+    return;
+  }
+
+  // If no start_date, the task is not scheduled — remove any existing Google task
+  if (!task.start_date) {
+    if (task.google_event_id) {
+      await deleteGoogleTask(userId, task.google_event_id);
+      await clearGoogleEventId(task.id, task.source);
+    }
+    return;
+  }
+
+  const authClient = await getAuthorizedClient(userId);
+  if (!authClient) return; // user not connected or token revoked — silent skip
+
+  const tasksClient = google.tasks({ version: 'v1', auth: authClient });
+
+  const googleStatus = mapStatusToGoogleTasks(task.status);
+  const dueDate = task.due_date ?? task.start_date;
+  const dueString = dueDate ? dueDate.toISOString() : undefined;
+
+  const taskBody: tasks_v1.Schema$Task = {
+    title: task.title,
+    notes: task.description ?? undefined,
+    status: googleStatus,
+    due: dueString,
+  };
+
+  try {
+    if (task.google_event_id) {
+      // Update existing task
+      await tasksClient.tasks.update({
+        tasklist: '@default',
+        task: task.google_event_id,
+        requestBody: taskBody,
+      });
+      log.info({ taskId: task.id, googleTaskId: task.google_event_id }, 'Updated Google Task');
+    } else {
+      // Create new task
+      const response = await tasksClient.tasks.insert({
+        tasklist: '@default',
+        requestBody: taskBody,
+      });
+
+      const newTaskId = response.data.id;
+      if (newTaskId) {
+        await writeGoogleEventId(task.id, task.source, newTaskId);
+        log.info({ taskId: task.id, googleTaskId: newTaskId }, 'Created Google Task');
+      }
+    }
+  } catch (err: any) {
+    if (err?.code === 404 || err?.code === 410) {
+      await clearGoogleEventId(task.id, task.source);
+    } else {
+      throw err;
+    }
+  }
+}
+
+export async function processIncomingGoogleTask(
+  userId: string,
+  googleTask: tasks_v1.Schema$Task,
+  defaultOrgSpace?: { orgId: string; spaceId: string } | null
+): Promise<void> {
+  const googleTaskId = googleTask.id;
+  if (!googleTaskId) return;
+
+  // Find matching task by google_event_id
+  const matchingTask = await findTaskByGoogleEventIdOrIcalUidOrTaskId(googleTaskId, null, null);
+
+  // Prevention of recreation if explicitly soft-deleted in KeilHQ
+  if (!matchingTask) {
+    const wasDeleted = await checkIfTaskWasDeleted(googleTaskId, null, null);
+    if (wasDeleted) {
+      log.debug({ googleTaskId, reason: 'loop-prevention-deleted' }, 'Skipping Google Task — was explicitly deleted in KeilHQ');
+      return;
+    }
+  }
+
+  // Deletion logic
+  if (googleTask.deleted || googleTask.hidden) {
+    if (matchingTask) {
+      await softDeleteTaskFromGoogle(matchingTask.id, matchingTask.source);
+      const io = getIO();
+      if (io) io.to(`user:${userId}`).emit('gcal_tasks_updated', { userId });
+    }
+    return;
+  }
+
+  const dueDate = googleTask.due ? new Date(googleTask.due) : null;
+  const startDate = dueDate;
+  const mappedStatus = googleTask.status === 'completed' ? TaskStatus.DONE : TaskStatus.TODO;
+  const title = googleTask.title || 'Untitled Google Task';
+  const description = googleTask.notes || null;
+
+  if (!matchingTask) {
+    try {
+      const resolvedOrgSpace = defaultOrgSpace !== undefined ? defaultOrgSpace : await getUserDefaultOrgSpace(userId);
+
+      if (resolvedOrgSpace) {
+        // Create as org task
+        const taskRes = await pool.query(
+          `INSERT INTO public.tasks
+             (org_id, space_id, title, description, start_date, due_date,
+              google_event_id, status, priority, created_by, type, is_all_day)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'task', false)
+           RETURNING id`,
+          [
+            resolvedOrgSpace.orgId,
+            resolvedOrgSpace.spaceId,
+            title,
+            description,
+            startDate,
+            dueDate,
+            googleTaskId,
+            mappedStatus,
+            TaskPriority.MEDIUM,
+            userId,
+          ]
+        );
+        const newTaskId = taskRes.rows[0].id;
+
+        await pool.query(
+          `INSERT INTO public.task_assignees (task_id, user_id)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [newTaskId, userId]
+        );
+
+        if (startDate && dueDate) {
+          await pool.query(
+            `INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day)
+             VALUES ($1, $2, $3, $4, false)`,
+            [newTaskId, userId, startDate, dueDate]
+          );
+        }
+
+        log.info({ googleTaskId, userId, spaceId: resolvedOrgSpace.spaceId, taskId: newTaskId }, 'Created org task from Google Tasks');
+      } else {
+        // Fallback to personal task
+        await personalTaskRepository.create({
+          owner_user_id: userId,
+          title,
+          description,
+          start_date: startDate,
+          due_date: dueDate,
+          google_event_id: googleTaskId,
+          status: mappedStatus,
+          priority: TaskPriority.MEDIUM,
+        });
+        log.info({ googleTaskId, userId }, 'Created personal task (fallback) from Google Task');
+      }
+
+      const io = getIO();
+      if (io) io.to(`user:${userId}`).emit('gcal_tasks_updated', { userId });
+    } catch (err: any) {
+      if (err.code === '23505') {
+        log.warn({ googleTaskId }, 'Duplicate task — treating as idempotent success');
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  // Match exists — compare fields
+  const sameDates = (d1: Date | string | null, d2: Date | null) => {
+    if (!d1 && !d2) return true;
+    if (!d1 || !d2) return false;
+    return new Date(d1).getTime() === new Date(d2).getTime();
+  };
+
+  if (
+    matchingTask.title === title &&
+    matchingTask.description === description &&
+    sameDates(matchingTask.start_date, startDate) &&
+    sameDates(matchingTask.due_date, dueDate) &&
+    matchingTask.status === mappedStatus
+  ) {
+    log.debug({ taskId: matchingTask.id, reason: 'up-to-date' }, 'Google Task already up-to-date — skipping write');
+    return;
+  }
+
+  // Conflict resolution: last write wins with 5-second tolerance
+  const googleUpdatedAt = googleTask.updated ? new Date(googleTask.updated) : new Date();
+  const ourUpdatedAt = new Date(matchingTask.updated_at);
+  const timeDiffMs = Math.abs(googleUpdatedAt.getTime() - ourUpdatedAt.getTime());
+
+  if (googleUpdatedAt <= ourUpdatedAt || timeDiffMs < 5000) {
+    log.debug({ taskId: matchingTask.id, timeDiffMs, reason: 'keilhq-newer' }, 'Skipping Google Task update — KeilHQ version is newer or within tolerance');
+    return;
+  }
+
+  log.info({ taskId: matchingTask.id, googleTaskId, timeDiffMs }, 'Updating task from Google Task');
+
+  if (matchingTask.source === 'personal_tasks') {
+    await personalTaskRepository.update(matchingTask.id, {
+      title,
+      description,
+      start_date: startDate,
+      due_date: dueDate,
+      status: mappedStatus,
+    });
+  } else {
+    await pool.query(
+      `UPDATE public.tasks
+       SET title = $1, description = $2, start_date = $3, due_date = $4, status = $5
+       WHERE id = $6 AND deleted_at IS NULL`,
+      [title, description, startDate, dueDate, mappedStatus, matchingTask.id]
+    );
+
+    if (startDate && dueDate) {
+      const existingSlot = await pool.query(
+        `SELECT id FROM public.task_slots WHERE task_id = $1 LIMIT 1`,
+        [matchingTask.id]
+      );
+      if (existingSlot.rows.length > 0) {
+        await pool.query(
+          `UPDATE public.task_slots
+           SET start_date = $1, due_date = $2, updated_at = NOW()
+           WHERE task_id = $3`,
+          [startDate, dueDate, matchingTask.id]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day)
+           VALUES ($1, $2, $3, $4, false)`,
+          [matchingTask.id, userId, startDate, dueDate]
+        );
+      }
+    } else {
+      await pool.query(
+        `DELETE FROM public.task_slots WHERE task_id = $1`,
+        [matchingTask.id]
+      );
+    }
+  }
+
+  const io = getIO();
+  if (io) io.to(`user:${userId}`).emit('gcal_tasks_updated', { userId });
+}
+
+export async function syncGoogleTasksInbound(
+  userId: string,
+  authClient: OAuth2Client,
+  updatedMin?: string
+): Promise<void> {
+  const tasksClient = google.tasks({ version: 'v1', auth: authClient });
+  const cachedOrgSpace = await getUserDefaultOrgSpace(userId);
+
+  let pageToken: string | undefined;
+  log.info({ userId, updatedMin }, 'Starting inbound Google Tasks sync');
+
+  do {
+    const response = await tasksClient.tasks.list({
+      tasklist: '@default',
+      showCompleted: true,
+      showDeleted: true,
+      showHidden: true,
+      pageToken,
+      ...(updatedMin ? { updatedMin } : {}),
+    });
+
+    const items = response.data.items ?? [];
+    for (const googleTask of items) {
+      try {
+        await processIncomingGoogleTask(userId, googleTask, cachedOrgSpace);
+      } catch (err) {
+        log.error({ err, googleTaskId: googleTask.id, userId }, 'Failed to process Google Task in inbound sync — skipping');
+      }
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  log.info({ userId }, 'Inbound Google Tasks sync complete');
 }
 
 

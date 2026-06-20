@@ -113,6 +113,12 @@ export const triggerGoogleSync = catchAsync(async (req: Request, res: Response) 
     throw new ApiError(400, 'Google Calendar is not connected');
   }
 
+  // Force a full reconciliation sync by clearing the sync token first
+  await pool.query(
+    `UPDATE public.user_integrations SET gcal_sync_token = NULL WHERE user_id = $1 AND provider = $2`,
+    [userId, PROVIDER]
+  );
+
   // Fire-and-forget — sync runs in the background
   doIncrementalSync(userId).catch(err =>
     log.error({ err, userId }, "Manual sync failed")

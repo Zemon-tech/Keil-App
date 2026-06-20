@@ -340,6 +340,7 @@ export const createTask = async (
       google_event_id: task.google_event_id,
       meet_link: task.meet_link ?? null,
       source: 'tasks',
+      type: task.type,
     }).catch(err => log.error({ err }, 'Org task create sync failed'));
   }
 
@@ -498,6 +499,7 @@ export const updateTask = async (
       google_event_id: result.google_event_id,
       meet_link: result.meet_link ?? null,
       source: 'tasks',
+      type: result.type,
     }).catch(err => log.error({ err }, 'Org task update sync failed'));
   }
 
@@ -609,7 +611,7 @@ export const deleteTask = async (
 
     // Fire-and-forget Google Calendar event deletion
     if (existing.google_event_id) {
-      deleteCalendarEvent(userId, existing.google_event_id)
+      deleteCalendarEvent(userId, existing.google_event_id, existing.type)
         .catch(err => log.error({ err }, 'Org task delete calendar event failed'));
     }
 
@@ -931,6 +933,26 @@ export const createSlot = async (
       input.notes ?? null
     ]
   );
+
+  // Sync to Google Calendar/Tasks
+  const task = await orgTaskRepository.findById(taskId);
+  if (task && task.start_date) {
+    syncTaskToCalendar(userId, {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      start_date: task.start_date,
+      due_date: task.due_date,
+      is_all_day: task.is_all_day,
+      location: task.location,
+      status: task.status,
+      google_event_id: task.google_event_id,
+      meet_link: task.meet_link,
+      source: 'tasks',
+      type: task.type,
+    }).catch(err => log.error({ err }, 'Google sync failed after slot creation'));
+  }
+
   return result.rows[0];
 };
 
@@ -989,6 +1011,25 @@ export const updateSlot = async (
        WHERE id = $4`,
       [updatedSlot.start_date, updatedSlot.due_date, updatedSlot.is_all_day, updatedSlot.task_id]
     );
+
+    // Sync to Google Calendar/Tasks
+    const task = await orgTaskRepository.findById(updatedSlot.task_id);
+    if (task) {
+      syncTaskToCalendar(userId, {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        start_date: task.start_date,
+        due_date: task.due_date,
+        is_all_day: task.is_all_day,
+        location: task.location,
+        status: task.status,
+        google_event_id: task.google_event_id,
+        meet_link: task.meet_link,
+        source: 'tasks',
+        type: task.type,
+      }).catch(err => log.error({ err }, 'Google sync failed after slot update'));
+    }
   }
 
   return updatedSlot;
@@ -1018,12 +1059,31 @@ export const deleteSlot = async (
   const deleted = result.rows.length > 0;
 
   if (deleted && taskId) {
+    const task = await orgTaskRepository.findById(taskId);
     await pool.query(
       `UPDATE public.tasks 
        SET start_date = NULL, due_date = NULL, updated_at = NOW() 
        WHERE id = $1`,
       [taskId]
     );
+
+    if (task) {
+      // Sync with start_date = null to remove from Google
+      syncTaskToCalendar(userId, {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        start_date: null,
+        due_date: null,
+        is_all_day: task.is_all_day,
+        location: task.location,
+        status: task.status,
+        google_event_id: task.google_event_id,
+        meet_link: task.meet_link,
+        source: 'tasks',
+        type: task.type,
+      }).catch(err => log.error({ err }, 'Google sync failed after slot deletion'));
+    }
   }
 
   return deleted;
