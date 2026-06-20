@@ -6,6 +6,7 @@ import {
   getGoogleStatus,
   disconnectGoogle,
   handleGoogleWebhook,
+  triggerGoogleSync,
   getGitHubConnectUrl,
   handleGitHubCallbackRoute,
   getGitHubStatus,
@@ -38,6 +39,7 @@ router.get('/google/callback', handleGoogleCallback);
 // Google OAuth
 router.get('/google/connect', protect, getGoogleConnectUrl);
 router.get('/google/status', protect, getGoogleStatus);
+router.post('/google/sync', protect, triggerGoogleSync);
 router.delete('/google', protect, disconnectGoogle);
 
 // GitHub Integration
