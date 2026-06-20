@@ -36,9 +36,11 @@ import {
   Timer,
   X,
   PanelRightOpen,
+  RefreshCw,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
@@ -52,9 +54,11 @@ import {
   useCreateTaskSlot, 
   useUpdateTaskSlot, 
   useDeleteTaskSlot,
+  orgTaskKeys,
   type TaskDTO 
 } from "@/hooks/api/useTasks";
 import { useAppContext } from "@/contexts/AppContext";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Props = {
   tasks: TaskDTO[];
@@ -383,6 +387,8 @@ export function TaskSchedulePane({
   const updateTaskSlot = useUpdateTaskSlot(activeOrgId, activeSpaceId);
   const deleteTaskSlot = useDeleteTaskSlot(activeOrgId, activeSpaceId);
   const [isMobile, setIsMobile] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const queryClient = useQueryClient();
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
@@ -501,7 +507,9 @@ export function TaskSchedulePane({
             id: slot.id,
             title: slot.checklist_title || slot.task_title || task?.title || "Untitled",
             start: slot.start_date,
-            end: slot.due_date,
+            end: slot.is_all_day
+              ? new Date(new Date(slot.due_date).getTime() + 24 * 60 * 60 * 1000).toISOString()
+              : slot.due_date,
             allDay: slot.is_all_day,
             display: "block",
             backgroundColor: chipStyles.background,
@@ -562,7 +570,9 @@ export function TaskSchedulePane({
             id: t.id,
             title: t.title,
             start: t.start_date!,
-            end: t.due_date!,
+            end: isAllDay
+              ? new Date(endDate.getTime() + 24 * 60 * 60 * 1000).toISOString()
+              : t.due_date!,
             allDay: isAllDay,
             display: "block",
             backgroundColor: chipStyles.background,
@@ -1062,6 +1072,27 @@ export function TaskSchedulePane({
     calendarApi.changeView(view);
   };
 
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await api.post("v1/integrations/google/sync");
+      toast.success("Sync triggered — refreshing calendar");
+      // Wait briefly for the background sync to process, then refetch slots
+      setTimeout(() => {
+        if (activeOrgId && activeSpaceId) {
+          queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(activeOrgId, activeSpaceId) });
+          queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId, activeSpaceId) });
+        }
+        setIsSyncing(false);
+      }, 3000);
+    } catch (err: any) {
+      const message = err?.response?.data?.message || "Sync failed";
+      toast.error(message);
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <>
       <div className="h-full min-h-0 flex flex-col">
@@ -1121,6 +1152,18 @@ export function TaskSchedulePane({
                   Month
                 </button>
               </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="size-7 p-0 rounded-md shrink-0 ml-1"
+                title="Sync Google Calendar"
+                disabled={isSyncing}
+                onClick={handleManualSync}
+              >
+                <RefreshCw className={cn("size-3.5 text-muted-foreground", isSyncing && "animate-spin")} />
+              </Button>
             </div>
 
             {/* Right: prev / date title / next + Today */}

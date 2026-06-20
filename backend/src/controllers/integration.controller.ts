@@ -99,6 +99,29 @@ export const getGoogleStatus = catchAsync(async (req: Request, res: Response) =>
 });
 
 /**
+ * POST /api/v1/integrations/google/sync  (protected)
+ * Manually triggers an incremental Google Calendar sync for the current user.
+ * Bypasses the 5-minute cooldown used for background polling.
+ * Returns immediately — sync runs in the background.
+ */
+export const triggerGoogleSync = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new ApiError(401, 'Unauthorized');
+
+  const integration = await integrationRepository.findByUserAndProvider(userId, PROVIDER);
+  if (!integration) {
+    throw new ApiError(400, 'Google Calendar is not connected');
+  }
+
+  // Fire-and-forget — sync runs in the background
+  doIncrementalSync(userId).catch(err =>
+    log.error({ err, userId }, "Manual sync failed")
+  );
+
+  res.json(new ApiResponse(200, null, 'Sync triggered'));
+});
+
+/**
  * DELETE /api/v1/integrations/google  (protected)
  * Disconnects Google Calendar by stopping the watch channel and removing stored tokens.
  */
