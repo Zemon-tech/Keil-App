@@ -87,6 +87,8 @@ import {
     FilePenLine,
     Clock,
     BrainIcon,
+    Mic,
+    Plus,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -1012,7 +1014,7 @@ export function AiAssistant() {
     // ─── Render: Input ─────────────────────────────────────────────────
     const renderInput = () => {
         return (
-            <div className="border-t border-border/40 bg-card shrink-0">
+            <div className="bg-transparent shrink-0 px-3 pb-2 pt-1.5 flex flex-col gap-1.5">
                 <PromptInputProvider>
                     <PromptInput
                         globalDrop
@@ -1021,11 +1023,16 @@ export function AiAssistant() {
                         className={cn(
                             "w-full bg-transparent overflow-visible",
                             "[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:overflow-visible",
-                            "[&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-none",
-                            "[&_[data-slot=input-group]]:bg-transparent",
-                            "[&_[data-slot=input-group]]:px-3 [&_[data-slot=input-group]]:py-2",
+                            "[&_[data-slot=input-group]]:rounded-[1.35rem]",
+                            "[&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
+                            "[&_[data-slot=input-group]]:has-[[data-slot=input-group-control]:focus-visible]:border-border/70",
+                            "[&_[data-slot=input-group]]:bg-background/88",
+                            "[&_[data-slot=input-group]]:shadow-[0_18px_55px_-36px_rgba(15,23,42,0.4)]",
+                            "[&_[data-slot=input-group]]:backdrop-blur-xl",
+                            "[&_[data-slot=input-group]]:px-3.5 [&_[data-slot=input-group]]:py-2.5",
                             "[&_[data-slot=input-group]]:flex [&_[data-slot=input-group]]:flex-col [&_[data-slot=input-group]]:items-stretch [&_[data-slot=input-group]]:gap-1.5",
-                            "transition-all"
+                            "transition-all duration-300 dark:shadow-[0_30px_80px_-42px_rgba(0,0,0,0.65)]",
+                            "[&_[data-slot=input-group]]:before:pointer-events-none [&_[data-slot=input-group]]:before:absolute [&_[data-slot=input-group]]:before:inset-x-6 [&_[data-slot=input-group]]:before:top-0 [&_[data-slot=input-group]]:before:h-px [&_[data-slot=input-group]]:before:bg-white/10 [&_[data-slot=input-group]]:before:content-['']"
                         )}
                     >
                         <PromptInputHeader className="p-0 border-none">
@@ -1033,30 +1040,48 @@ export function AiAssistant() {
                         </PromptInputHeader>
                         <PromptInputBody>
                             <PromptInputTextarea
-                                placeholder="Ask anything..."
-                                className="w-full resize-none bg-transparent text-[12.5px] text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 p-0 border-none min-h-[36px] max-h-[100px]"
+                                placeholder="Write a message..."
+                                className="w-full resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 p-0 border-none min-h-[36px] max-h-[100px]"
                             />
                         </PromptInputBody>
-                        <PromptInputFooter className="border-t border-border/30 pt-1.5 mt-0">
+                        <PromptInputFooter className="border-none pt-1 mt-0">
                             <PromptInputTools>
                                 <PromptInputActionMenu>
-                                    <PromptInputActionMenuTrigger />
+                                    <PromptInputActionMenuTrigger
+                                        className="rounded-full border border-border/60 bg-background/60 text-muted-foreground shadow-none transition-colors hover:bg-background hover:text-foreground size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
+                                        variant="ghost"
+                                    >
+                                        <Plus className="size-3.5" />
+                                    </PromptInputActionMenuTrigger>
                                     <PromptInputActionMenuContent>
-                                        <PromptInputActionAddAttachments />
+                                        <PromptInputActionAddAttachments label="Add photos or files" />
                                         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); alert("Screenshot feature is coming soon!"); }}>
                                             <Camera className="mr-2 size-4" /> Add screenshot
                                         </DropdownMenuItem>
                                     </PromptInputActionMenuContent>
                                 </PromptInputActionMenu>
-                                <PromptInputButton>
-                                    <Globe size={14} />
-                                    <span>Search</span>
-                                </PromptInputButton>
                             </PromptInputTools>
-                            <PromptInputSubmit status={isStreaming ? "streaming" : "ready"} />
+                            <div className="ml-auto flex items-center gap-1.5">
+                                <PromptInputButton
+                                    className="rounded-full text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
+                                    variant="ghost"
+                                    onClick={() => alert("Voice input feature is coming soon!")}
+                                >
+                                    <Mic className="size-3.5" />
+                                </PromptInputButton>
+                                <div className="h-4 w-px bg-border/60" />
+                                <PromptInputSubmit
+                                    className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92 size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
+                                    status={isStreaming ? "streaming" : "ready"}
+                                    variant="ghost"
+                                />
+                            </div>
                         </PromptInputFooter>
                     </PromptInput>
                 </PromptInputProvider>
+                <p className="text-center text-[10px] text-muted-foreground/60 leading-none pb-1">
+                    Keil AI can make mistakes. Check important details.
+                </p>
             </div>
         );
     };

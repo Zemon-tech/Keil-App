@@ -3,7 +3,6 @@ import { format, addDays, subDays, nextMonday, startOfToday, startOfDay, parseIS
 import {
   CalendarIcon,
   Flag,
-  Target,
   MapPin,
   Users,
   CheckCircle2,
@@ -45,7 +44,6 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
@@ -108,6 +106,85 @@ const safeFormat = (dateVal: Date | undefined | null, formatStr: string, fallbac
     return fallback;
   }
 };
+
+// ─── Markdown / Tiptap Parsing Helpers ──────────────────────────────────────────
+
+function getPlainTextFromTiptapJson(jsonStr: string): string {
+  if (!jsonStr) return "";
+  try {
+    const json = JSON.parse(jsonStr);
+    if (!json || typeof json !== "object") return jsonStr;
+    
+    let text = "";
+    const traverse = (node: any) => {
+      if (node.type === "text" && node.text) {
+        text += node.text;
+      }
+      if (Array.isArray(node.content)) {
+        node.content.forEach(traverse);
+      }
+      if (["paragraph", "heading", "listItem", "blockquote", "codeBlock"].includes(node.type)) {
+        text += "\n";
+      }
+    };
+    
+    if (json.type === "doc" && Array.isArray(json.content)) {
+      json.content.forEach(traverse);
+    } else {
+      traverse(json);
+    }
+    return text;
+  } catch (e) {
+    return jsonStr;
+  }
+}
+
+export function parseObjectiveAndSuccessCriteria(descJsonOrText: string) {
+  const text = getPlainTextFromTiptapJson(descJsonOrText);
+  const lines = text.split("\n");
+  let currentSection: "description" | "objective" | "success" = "description";
+  const objectiveLines: string[] = [];
+  const successLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim().toLowerCase();
+    
+    if (trimmed.match(/^(#+\s+)?objective(s)?$/) || trimmed === "objective:") {
+      currentSection = "objective";
+      continue;
+    }
+    
+    if (trimmed.match(/^(#+\s+)?success\s+criteria$/) || trimmed === "success criteria:") {
+      currentSection = "success";
+      continue;
+    }
+    
+    if (trimmed.match(/^(#+\s+)?(description|agenda|notes)$/) || trimmed === "description:") {
+      currentSection = "description";
+      continue;
+    }
+
+    if (currentSection === "objective") {
+      objectiveLines.push(line);
+    } else if (currentSection === "success") {
+      successLines.push(line);
+    }
+  }
+
+  const cleanSectionText = (linesArr: string[]) => {
+    return linesArr
+      .map(l => l.trim())
+      .map(l => l.replace(/^[•\-\*·]\s*/, ""))
+      .filter(l => l !== "")
+      .join("\n");
+  };
+
+  return {
+    objective: cleanSectionText(objectiveLines),
+    successCriteria: cleanSectionText(successLines),
+  };
+}
+
 
 export function CreateTaskDialog({
   open,
@@ -190,14 +267,10 @@ export function CreateTaskDialog({
 
   // Advanced sections
   const [description, setDescription] = useState("");
-  const [objective, setObjective] = useState("");
-  const [successCriteria, setSuccessCriteria] = useState("");
   const [location, setLocation] = useState("");
   const [agenda, setAgenda] = useState("");
 
   // Collapsible states
-  const [showClarity, setShowClarity] = useState(false);
-  const [showAgenda, setShowAgenda] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
 
   // Redesign UI state helpers
@@ -211,7 +284,7 @@ export function CreateTaskDialog({
   const [storyPoints, setStoryPoints] = useState<number | undefined>(undefined);
   const [timeEstimate, setTimeEstimate] = useState<number | undefined>(undefined); // in minutes
   const [isAllDay, setIsAllDay] = useState(true);
-  const [eventType, setEventType] = useState<string>("meeting");
+  const [eventType, setEventType] = useState<string>("feature");
   const [createMeetLink, setCreateMeetLink] = useState(false);
   const [guests, setGuests] = useState<string[]>([]);
   const [guestInput, setGuestInput] = useState("");
@@ -267,6 +340,18 @@ export function CreateTaskDialog({
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [dragEnd, date, endDate, isAllDay]);
+
+  // Sync category default when type changes
+  useEffect(() => {
+    setEventType(type === "task" ? "feature" : "meeting");
+  }, [type]);
+
+  // Reset description when switching to event or task if blank
+  useEffect(() => {
+    if (mode === "create") {
+      setDescription("");
+    }
+  }, [type, mode]);
 
   // ── Smart Parsing ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -338,25 +423,23 @@ export function CreateTaskDialog({
     if (open && initialValues) {
       setTitle(initialValues.title ?? "");
       setType((initialValues.type as "task" | "event") ?? "task");
-      setObjective(initialValues.objective ?? "");
-      setSuccessCriteria(initialValues.success_criteria ?? "");
       setPriority((initialValues.priority as any) ?? "medium");
       setAssigneeIds(((initialValues as any).assignees ?? []).map((a: any) => a.id));
       setLocation(initialValues.location ?? "");
       setIsAllDay(initialValues.is_all_day ?? true);
-      setEventType(initialValues.event_type ?? "meeting");
+      setEventType(initialValues.event_type ?? (initialValues.type === "event" ? "meeting" : "feature"));
       setStatus((initialValues.status as AnyStatus) ?? (initialValues.type === "event" ? "confirmed" : "todo"));
 
       const desc = initialValues.description ?? "";
-      const agendaIndex = desc.indexOf("\n\nAgenda:\n");
+      let initialDescVal = desc;
+
+      const agendaIndex = initialDescVal.indexOf("\n\nAgenda:\n");
       if (agendaIndex !== -1) {
-        setDescription(desc.substring(0, agendaIndex));
-        setAgenda(desc.substring(agendaIndex + 10));
-        setShowAgenda(true);
+        setDescription(initialDescVal.substring(0, agendaIndex));
+        setAgenda(initialDescVal.substring(agendaIndex + 10));
       } else {
-        setDescription(desc);
+        setDescription(initialDescVal);
         setAgenda("");
-        setShowAgenda(false);
       }
 
       const start = (initialValues as any).start_date;
@@ -365,13 +448,8 @@ export function CreateTaskDialog({
       if (start) setDate(parseISO(start));
       if (end) {
         const parsedEnd = parseISO(end);
-        // All-day due_date is stored as exclusive end (next day midnight) for FullCalendar.
-        // Subtract 1 day to show the correct inclusive end date in the picker.
         setEndDate(loadedIsAllDay ? subDays(startOfDay(parsedEnd), 1) : parsedEnd);
       }
-
-      // Auto-expand if content exists
-      if (initialValues.objective || initialValues.success_criteria) setShowClarity(true);
 
       setStoryPoints(initialValues.story_points || undefined);
       setTimeEstimate((initialValues as any).time_estimate || undefined);
@@ -379,7 +457,6 @@ export function CreateTaskDialog({
       setCreateMeetLink(!!initialValues.meet_link || !!(initialValues as any).create_meet_link);
       setContext(initialValues.context ?? []);
     } else if (open && mode === "create") {
-      // Reset
       setTitle("");
       setType("task");
       setStatus("todo");
@@ -388,22 +465,13 @@ export function CreateTaskDialog({
       setPriority("medium");
       setAssigneeIds([]);
       setDescription("");
-      setObjective("");
-      setSuccessCriteria("");
       setLocation("");
       setAgenda("");
-
-      const defaultShowClarity = typeof window !== "undefined"
-        ? localStorage.getItem("task_show_clarity_default") === "true"
-        : false;
-      setShowClarity(defaultShowClarity);
-
-      setShowAgenda(false);
       setStoryPoints(undefined);
       setTimeEstimate(undefined);
       setShowCommandMenu(false);
       setIsAllDay(true);
-      setEventType("meeting");
+      setEventType("feature");
       setCreateMeetLink(false);
       setGuests([]);
       setGuestInput("");
@@ -414,7 +482,7 @@ export function CreateTaskDialog({
   // Sync end date if not set for events
   useEffect(() => {
     if (type === 'event' && date && !endDate) {
-      setEndDate(addDays(date, 0)); // just to have it initialized if needed
+      setEndDate(addDays(date, 0));
     }
   }, [type, date]);
 
@@ -423,11 +491,9 @@ export function CreateTaskDialog({
     e?.preventDefault();
     if (!title.trim()) return;
 
-    // Validation: Block creation in the past
     if (mode === "create" && date) {
       const now = new Date();
       if (isAllDay) {
-        // For all-day tasks, we only block if the date is strictly before today
         const today = startOfToday();
         const selectedDateOnly = new Date(date);
         selectedDateOnly.setHours(0, 0, 0, 0);
@@ -439,7 +505,6 @@ export function CreateTaskDialog({
           return;
         }
       } else {
-        // For timed tasks, we block if it's even one minute in the past
         if (date < now) {
           toast.error("Cannot create in the past", {
             description: "Please select a future time slot.",
@@ -449,13 +514,8 @@ export function CreateTaskDialog({
       }
     }
 
-    // For all-day tasks/events with a date range, store due_date as exclusive end
-    // (i.e. start of the day AFTER the last selected day). FullCalendar requires
-    // exclusive end dates for all-day events to render correctly across all days.
     const computedDueDate = (() => {
       if (isAllDay && endDate) {
-        // endDate is the inclusive last day the user picked (e.g. Jun 10).
-        // Add 1 day so FullCalendar's exclusive end covers Jun 10 fully.
         return startOfDay(addDays(endDate, 1)).toISOString();
       }
       return endDate?.toISOString() || (type === 'task' ? date?.toISOString() : undefined);
@@ -463,25 +523,30 @@ export function CreateTaskDialog({
 
     const finalDescription = description.trim() + (type === "event" && agenda.trim() ? `\n\nAgenda:\n${agenda.trim()}` : "");
 
+    // Parse Objectives and Success Criteria from Tiptap Markdown Blocks
+    const parsedClarity = type === "task" 
+      ? parseObjectiveAndSuccessCriteria(description)
+      : { objective: "", successCriteria: "" };
+
     const input: CreateTaskInput = {
       title: title.trim(),
       type,
       priority: priority as any,
       description: finalDescription || undefined,
-      objective: objective.trim() || undefined,
-      success_criteria: successCriteria.trim() || undefined,
-      location: location.trim() || undefined,
+      objective: parsedClarity.objective || undefined,
+      success_criteria: parsedClarity.successCriteria || undefined,
+      location: type === "event" ? location.trim() || undefined : undefined,
       start_date: isAllDay && date ? startOfDay(date).toISOString() : date?.toISOString(),
       due_date: computedDueDate,
       assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
       status: status as any,
       parent_task_id: parentTaskId,
-      story_points: storyPoints,
-      time_estimate: timeEstimate,
-      event_type: type === 'event' ? eventType : undefined,
-      create_meet_link: createMeetLink,
-      guests: guests.length > 0 ? guests : undefined,
-      context: context.length > 0 ? context : undefined,
+      story_points: type === "task" ? storyPoints : undefined,
+      time_estimate: type === "task" ? timeEstimate : undefined,
+      event_type: eventType,
+      create_meet_link: type === "event" ? createMeetLink : false,
+      guests: type === "event" && guests.length > 0 ? guests : undefined,
+      context: type === "task" && context.length > 0 ? context : undefined,
     };
 
     const options = {
@@ -507,8 +572,8 @@ export function CreateTaskDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
-        "bg-background border border-border p-0 overflow-hidden shadow-2xl transition-all duration-200 [&>button]:hidden text-foreground flex flex-col w-full",
-        isMaximized ? "sm:max-w-[900px] h-[650px] rounded-xl" : "sm:max-w-[900px] h-[420px] rounded-xl"
+        "bg-background border border-border p-0 overflow-hidden shadow-2xl transition-all duration-200 ease-out [&>button]:hidden text-foreground flex flex-col w-full",
+        isMaximized ? "sm:max-w-[900px] h-[650px] rounded-xl" : "sm:max-w-[900px] h-[450px] rounded-xl"
       )}>
         <DialogTitle className="sr-only">
           {mode === "edit" ? "Edit Task" : "Create Task"}
@@ -520,7 +585,6 @@ export function CreateTaskDialog({
         {/* Header Breadcrumbs & Action Row */}
         <div className="flex items-center justify-between px-6 pt-5 pb-2 bg-background select-none">
           <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-            {/* Org Badge Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-0.5 px-2 py-0.5 rounded text-secondary-foreground hover:text-foreground hover:bg-secondary/80 transition-colors cursor-pointer focus:outline-none font-semibold">
                 <span className="truncate max-w-[120px]">{currentOrg?.name || "KAY"}</span>
@@ -540,7 +604,6 @@ export function CreateTaskDialog({
 
             <ChevronRight className="size-3 text-muted-foreground" />
 
-            {/* Space Badge Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-0.5 px-2 py-0.5 rounded text-secondary-foreground hover:text-foreground hover:bg-secondary/80 transition-colors cursor-pointer focus:outline-none font-medium">
                 <span className="truncate max-w-[120px]">{currentSpace?.name || "General"}</span>
@@ -560,12 +623,11 @@ export function CreateTaskDialog({
 
             <ChevronRight className="size-3 text-muted-foreground" />
 
-            {/* Task/Event Dropdown Selector */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-0.5 text-foreground/80 hover:text-foreground transition-colors font-semibold focus:outline-none cursor-pointer">
                 <span>{type === "task" ? "New task" : "New event"}</span>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-popover border border-border text-popover-foreground">
+              <DropdownMenuContent align="start" className="bg-popover border border-border text-popover-foreground font-medium">
                 <DropdownMenuItem onClick={() => setType("task")} className="hover:bg-accent focus:bg-accent hover:text-accent-foreground focus:text-accent-foreground cursor-pointer">
                   New task
                 </DropdownMenuItem>
@@ -586,7 +648,7 @@ export function CreateTaskDialog({
             <button
               type="button"
               onClick={() => setIsMaximized(!isMaximized)}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all focus:outline-none cursor-pointer"
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150 focus:outline-none cursor-pointer active:scale-95"
               title={isMaximized ? "Restore window" : "Expand window"}
             >
               {isMaximized ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
@@ -594,7 +656,7 @@ export function CreateTaskDialog({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all focus:outline-none cursor-pointer"
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-150 focus:outline-none cursor-pointer active:scale-95"
               title="Close dialog"
             >
               <X className="size-3.5" />
@@ -607,7 +669,7 @@ export function CreateTaskDialog({
 
           {/* Scrollable Fields Canvas */}
           <div className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar min-h-0">
-            {/* Title input and Slash commands */}
+            {/* Title input */}
             <div className="relative pt-1">
               <input
                 autoFocus
@@ -650,62 +712,38 @@ export function CreateTaskDialog({
               )}
             </div>
 
-            {/* Description Editor */}
+            {/* Divider */}
+            <div className="border-b border-border/30 my-2" />
+
+            {/* Description Editor (contains Objective, Success Criteria headings for Tasks; acts as Agenda/Details for Events) */}
             <div className="w-full">
               <TaskDescriptionEditor
                 value={description}
                 onChange={setDescription}
-                placeholder="Add description..."
+                onEnterSubmit={handleSubmit}
+                placeholder={type === "task" ? "Add description, objective..." : "Event details & agenda..."}
                 members={spaceMembers}
                 allTasks={orgTasks}
                 pages={pages}
               />
             </div>
 
-            {/* Collapsible Clarity Section (Objective & Success Criteria) */}
-            {type === "task" && (
-              <Collapsible open={showClarity} onOpenChange={setShowClarity} className="w-full">
-                <CollapsibleContent className="space-y-2.5 pt-1 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="flex items-center gap-2.5 bg-background border border-border rounded-lg px-3 py-1.5 focus-within:border-muted-foreground/50 transition-colors">
-                    <Target className="size-3.5 text-muted-foreground shrink-0" />
-                    <input
-                      value={objective}
-                      onChange={(e) => setObjective(e.target.value)}
-                      placeholder="What is the high-level objective?"
-                      className="w-full text-xs bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2.5 bg-background border border-border rounded-lg px-3 py-1.5 focus-within:border-muted-foreground/50 transition-colors">
-                    <CheckCircle2 className="size-3.5 text-muted-foreground shrink-0" />
-                    <input
-                      value={successCriteria}
-                      onChange={(e) => setSuccessCriteria(e.target.value)}
-                      placeholder="How do we measure success?"
-                      className="w-full text-xs bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
-                    />
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
-
-            {/* Collapsible Event Section (Location & Agenda) */}
+            {/* Event Specific Canvas Details */}
             {type === "event" && (
-              <div className="space-y-3 pt-1 animate-in fade-in duration-150">
+              <div className="space-y-3 pt-2 border-t border-border/40 animate-in fade-in duration-150">
                 {/* Location Input */}
-                {location !== undefined && (
-                  <div className="flex items-center gap-2.5 bg-background border border-border rounded-lg px-3 py-1.5 focus-within:border-muted-foreground/50 transition-colors">
-                    <MapPin className="size-3.5 text-muted-foreground shrink-0" />
-                    <input
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="Add location or meeting link..."
-                      className="w-full text-xs bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
-                    />
-                  </div>
-                )}
+                <div className="flex items-center gap-2.5 bg-background border border-border rounded-lg px-3 py-1.5 focus-within:border-muted-foreground/50 transition-colors">
+                  <MapPin className="size-3.5 text-muted-foreground shrink-0" />
+                  <input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Add location..."
+                    className="w-full text-xs bg-transparent border-0 p-0 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0"
+                  />
+                </div>
 
                 {/* Google Meet Toggle Block */}
-                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3.5 py-2">
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/10 px-3.5 py-2">
                   <div className="space-y-0.5">
                     <Label htmlFor="create-meet-link" className="text-xs font-semibold text-muted-foreground cursor-pointer">
                       Schedule Google Meet
@@ -722,38 +760,27 @@ export function CreateTaskDialog({
                   />
                 </div>
 
-                {/* Agenda Collapsible */}
-                <Collapsible open={showAgenda} onOpenChange={setShowAgenda}>
-                  <CollapsibleContent className="animate-in fade-in slide-in-from-top-2 duration-150 mt-1">
-                    <textarea
-                      value={agenda}
-                      onChange={(e) => setAgenda(e.target.value)}
-                      placeholder="List agenda items..."
-                      className="w-full text-xs bg-background border border-border focus-within:border-muted-foreground/50 rounded-lg p-3 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0 resize-none min-h-[80px]"
-                    />
-                  </CollapsibleContent>
-                </Collapsible>
+                {/* Agenda Details */}
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Agenda Details</Label>
+                  <textarea
+                    value={agenda}
+                    onChange={(e) => setAgenda(e.target.value)}
+                    placeholder="Agenda notes..."
+                    className="w-full text-xs bg-background border border-border focus-within:border-muted-foreground/50 rounded-lg p-3 text-muted-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-0 resize-none min-h-[80px] custom-scrollbar"
+                  />
+                </div>
               </div>
             )}
-
-            {/* Context Files/Links Section */}
-            <div className="pt-3 border-t border-border/40 mt-4">
-              <TaskContextSection
-                task={{ context, space_id: selectedSpaceId ?? activeSpaceId ?? undefined }}
-                onChangeContext={setContext}
-                spaceId={selectedSpaceId ?? activeSpaceId ?? undefined}
-                triggerUploadRef={triggerUploadRef}
-              />
-            </div>
           </div>
 
-          {/* Metadata Inline Pills Row (Always pinned to bottom of dialog canvas) */}
-          <div className="pt-3 pb-1 flex flex-wrap gap-2 items-center select-none overflow-x-auto no-scrollbar">
+          {/* Metadata Inline Pills Row (Tucked above action footer) */}
+          <div className="pt-3 pb-1 flex flex-wrap gap-2 items-center select-none overflow-x-auto no-scrollbar border-t border-border/40 mt-1">
 
-            {/* Status Selector Pill */}
+            {/* Status Pill */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 text-secondary-foreground capitalize cursor-pointer">
+                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 text-secondary-foreground capitalize cursor-pointer active:scale-95">
                   <StatusIcon status={status} type={type} className="size-3.5" />
                   <span>{status.replace("-", " ")}</span>
                 </button>
@@ -778,7 +805,7 @@ export function CreateTaskDialog({
               <Popover>
                 <PopoverTrigger asChild>
                   <button className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80",
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer active:scale-95",
                     priority === "urgent" ? "text-red-400 font-semibold" :
                       priority === "high" ? "text-orange-400 font-semibold" :
                         priority === "medium" ? "text-yellow-400 font-semibold" :
@@ -808,7 +835,7 @@ export function CreateTaskDialog({
             <Popover>
               <PopoverTrigger asChild>
                 <button className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80",
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer active:scale-95",
                   date ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
                 )}>
                   <CalendarIcon className="size-3.5" />
@@ -951,327 +978,291 @@ export function CreateTaskDialog({
               </PopoverContent>
             </Popover>
 
-            {/* Assignees Pill */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80",
-                  assigneeIds.length > 0 ? "text-secondary-foreground" : "text-muted-foreground"
-                )}>
-                  {assigneeIds.length > 0 ? (
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex -space-x-1.5">
-                        {assigneeIds.map(id => {
-                          const user = resolvedUsers.find(u => u.id === id);
-                          return (
-                            <Avatar key={id} className="size-4.5 border border-background shrink-0">
-                              <AvatarImage src={getOptimizedImageUrl(user?.avatarUrl, { width: 32, height: 32 })} />
-                              <AvatarFallback className="text-[7px] bg-secondary text-secondary-foreground font-bold">{(user?.name || "?")[0].toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                          );
-                        })}
+            {/* Assignees Pill (Task Only) */}
+            {type === "task" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer active:scale-95",
+                    assigneeIds.length > 0 ? "text-secondary-foreground font-semibold" : "text-muted-foreground"
+                  )}>
+                    {assigneeIds.length > 0 ? (
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex -space-x-1.5">
+                          {assigneeIds.map(id => {
+                            const user = resolvedUsers.find(u => u.id === id);
+                            return (
+                              <Avatar key={id} className="size-4.5 border border-background shrink-0">
+                                <AvatarImage src={getOptimizedImageUrl(user?.avatarUrl, { width: 32, height: 32 })} />
+                                <AvatarFallback className="text-[7px] bg-secondary text-secondary-foreground font-bold">{(user?.name || "?")[0].toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                            );
+                          })}
+                        </div>
+                        <span className="text-xs text-secondary-foreground font-semibold">
+                          {assigneeIds.length === 1
+                            ? (resolvedUsers.find(u => u.id === assigneeIds[0])?.name || "1 Assignee")
+                            : `${assigneeIds.length} Assigned`}
+                        </span>
                       </div>
-                      <span className="text-xs text-secondary-foreground font-medium">
-                        {assigneeIds.length === 1
-                          ? (resolvedUsers.find(u => u.id === assigneeIds[0])?.name || "1 Assignee")
-                          : `${assigneeIds.length} Assigned`}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                      <Users className="size-3.5 text-muted-foreground" />
-                      <span>Assignee</span>
-                    </div>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="p-0 w-64 bg-popover border border-border text-popover-foreground overflow-hidden rounded-lg shadow-xl" align="start">
-                <Command className="bg-transparent">
-                  <CommandInput placeholder="Assign to..." className="border-none focus:ring-0 text-foreground placeholder:text-muted-foreground/50" />
-                  <CommandList className="max-h-56">
-                    <CommandEmpty>No members found.</CommandEmpty>
-                    <CommandGroup>
-                      {resolvedUsers.map((user) => (
-                        <CommandItem
-                          key={user.id}
-                          onSelect={() => {
-                            setAssigneeIds(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]);
-                          }}
-                          className="flex items-center gap-2 px-3 py-2 cursor-pointer text-muted-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
-                        >
-                          <Avatar className="size-6">
-                            <AvatarImage src={getOptimizedImageUrl(user.avatarUrl, { width: 48, height: 48 })} />
-                            <AvatarFallback className="bg-muted text-muted-foreground font-bold">{user.name[0].toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 flex flex-col">
-                            <span className="text-sm font-medium">{user.name}</span>
-                          </div>
-                          {assigneeIds.includes(user.id) && <CheckCircle2 className="size-4 text-indigo-500" />}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-
-            {/* Google Meet Toggle Pill */}
-            <button
-              type="button"
-              onClick={() => setCreateMeetLink(!createMeetLink)}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                createMeetLink ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
-              )}
-            >
-              <Video className="size-3.5" />
-              <span>Google Meet</span>
-            </button>
-
-            {/* Invite Guests Pill & Popover */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                  guests.length > 0 ? "text-indigo-400 font-semibold" : "text-muted-foreground"
-                )}>
-                  <Users className={cn("size-3.5", guests.length > 0 ? "text-indigo-400" : "text-muted-foreground/60")} />
-                  <span>
-                    {guests.length > 0
-                      ? `${guests.length} ${guests.length === 1 ? "Guest" : "Guests"}`
-                      : "Invite guests"}
-                  </span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="p-3 w-72 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Invite Guests</div>
-                <div className="flex gap-1.5 mb-3">
-                  <Input
-                    type="email"
-                    placeholder="guest@example.com"
-                    value={guestInput}
-                    onChange={(e) => setGuestInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddGuest();
-                      }
-                    }}
-                    className="h-8 text-xs bg-background border-border text-foreground focus-visible:ring-primary/20 placeholder:text-muted-foreground/60 flex-1"
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleAddGuest}
-                    className="h-8 px-2 text-xs bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
-                  >
-                    Add
-                  </Button>
-                </div>
-                
-                {guests.length > 0 ? (
-                  <div className="max-h-32 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
-                    {guests.map((email) => (
-                      <div key={email} className="flex items-center justify-between bg-muted/40 hover:bg-muted/60 px-2 py-1 rounded text-xs transition-colors">
-                        <span className="truncate max-w-[200px] text-muted-foreground">{email}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveGuest(email)}
-                          className="text-muted-foreground hover:text-foreground hover:bg-secondary rounded p-0.5"
-                        >
-                          <X className="size-3" />
-                        </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <Users className="size-3.5 text-muted-foreground" />
+                        <span>Assignee</span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground/60 text-center py-2">
-                    Enter email addresses of workspace users or external guests.
-                  </p>
-                )}
-              </PopoverContent>
-            </Popover>
-
-            {/* Event Specific Pills */}
-            {type === "event" && (
-              <>
-                {/* Event Type Pill */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-all text-xs font-medium text-secondary-foreground capitalize focus:outline-none focus:ring-0 cursor-pointer">
-                      <Layout className="size-3.5 text-muted-foreground/60" />
-                      <span>{eventType}</span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-1 w-32 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
-                    {["meeting", "call", "birthday", "workshop", "other"].map((t) => (
-                      <PopoverClose asChild key={t}>
-                        <button
-                          onClick={() => setEventType(t)}
-                          className="w-full flex items-center px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors capitalize text-left cursor-pointer"
-                        >
-                          {t}
-                        </button>
-                      </PopoverClose>
-                    ))}
-                  </PopoverContent>
-                </Popover>
-
-                {/* Location Toggle Pill */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLocation(location !== undefined ? location : "");
-                  }}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                    location ? "text-indigo-400 font-semibold" : "text-secondary-foreground"
-                  )}
-                >
-                  <MapPin className="size-3.5" />
-                  <span>Location</span>
-                </button>
-
-                {/* Agenda Toggle Pill */}
-                <button
-                  type="button"
-                  onClick={() => setShowAgenda(!showAgenda)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                    showAgenda ? "text-indigo-400 font-semibold" : "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="size-3.5" />
-                  <span>Agenda</span>
-                </button>
-
-                {/* Story Points Pill */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                      storyPoints ? "text-secondary-foreground" : "text-muted-foreground"
-                    )}>
-                      <Zap className={cn("size-3.5", storyPoints ? "text-yellow-500 animate-pulse" : "text-muted-foreground/60")} />
-                      <span>{storyPoints ? `${storyPoints} pts` : "Story points"}</span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-2 w-36 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
-                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Story Points</div>
-                    <div className="grid grid-cols-3 gap-1">
-                      {[1, 2, 3, 5, 8].map(pts => (
-                        <PopoverClose asChild key={pts}>
-                          <button
-                            onClick={() => setStoryPoints(pts)}
-                            className={cn(
-                              "h-7 rounded flex items-center justify-center text-xs transition-colors cursor-pointer",
-                              storyPoints === pts ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"
-                            )}
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-64 bg-popover border border-border text-popover-foreground overflow-hidden rounded-lg shadow-xl" align="start">
+                  <Command className="bg-transparent font-sans">
+                    <CommandInput placeholder="Assign to..." className="border-none focus:ring-0 text-foreground placeholder:text-muted-foreground/50 text-xs h-9" />
+                    <CommandList className="max-h-56 custom-scrollbar">
+                      <CommandEmpty>No members found.</CommandEmpty>
+                      <CommandGroup>
+                        {resolvedUsers.map((user) => (
+                          <CommandItem
+                            key={user.id}
+                            onSelect={() => {
+                              setAssigneeIds(prev => prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]);
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 cursor-pointer text-muted-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
                           >
-                            {pts}
-                          </button>
-                        </PopoverClose>
-                      ))}
-                      <PopoverClose asChild>
-                        <button
-                          onClick={() => setStoryPoints(undefined)}
-                          className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      </PopoverClose>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Time Estimate Pill */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                      timeEstimate ? "text-secondary-foreground" : "text-muted-foreground"
-                    )}>
-                      <Timer className={cn("size-3.5", timeEstimate ? "text-blue-500" : "text-muted-foreground/60")} />
-                      <span>{timeEstimate ? `${timeEstimate}m` : "Estimate"}</span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-3 w-44 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
-                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Estimate (mins)</div>
-                    <Input
-                      type="number"
-                      value={timeEstimate || ""}
-                      onChange={(e) => setTimeEstimate(parseInt(e.target.value) || undefined)}
-                      placeholder="e.g. 60"
-                      className="h-8 text-xs bg-background border-border text-foreground focus-visible:ring-primary/20 placeholder:text-muted-foreground/60"
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                {/* Clarity Toggle Pill */}
-                <button
-                  type="button"
-                  onClick={() => setShowClarity(!showClarity)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer",
-                    showClarity ? "text-indigo-400 font-semibold" : "text-muted-foreground"
-                  )}
-                >
-                  <Target className="size-3.5" />
-                  <span>Clarity</span>
-                </button>
-              </>
+                            <Avatar className="size-6">
+                              <AvatarImage src={getOptimizedImageUrl(user.avatarUrl, { width: 48, height: 48 })} />
+                              <AvatarFallback className="bg-muted text-muted-foreground font-bold">{user.name[0].toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 flex flex-col">
+                              <span className="text-xs font-semibold text-foreground">{user.name}</span>
+                            </div>
+                            {assigneeIds.includes(user.id) && <CheckCircle2 className="size-4 text-indigo-500" />}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             )}
 
-            {/* Triple Dot Menu Popover */}
+            {/* Attendees Pill (Event Only - Merged Assignees & Guests Invite) */}
+            {type === "event" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer active:scale-95",
+                    (assigneeIds.length > 0 || guests.length > 0) ? "text-indigo-400 font-semibold" : "text-muted-foreground"
+                  )}>
+                    <Users className="size-3.5" />
+                    <span>
+                      {assigneeIds.length + guests.length > 0
+                        ? `${assigneeIds.length + guests.length} Attendees`
+                        : "Attendees"}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-80 bg-popover border border-border text-popover-foreground overflow-hidden rounded-lg shadow-xl" align="start">
+                  <Command className="bg-transparent font-sans">
+                    <CommandInput
+                      placeholder="Search members or paste email..."
+                      className="border-none focus:ring-0 text-foreground placeholder:text-muted-foreground/50 h-9 text-xs"
+                      value={guestInput}
+                      onValueChange={setGuestInput}
+                    />
+                    <CommandList className="max-h-64 custom-scrollbar">
+                      <CommandEmpty>No members found.</CommandEmpty>
+                      
+                      {/* If the input looks like an email, show invite guest option */}
+                      {guestInput.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestInput.trim()) && (
+                        <CommandGroup heading="Invite Guest">
+                          <CommandItem
+                            onSelect={() => {
+                              handleAddGuest();
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 cursor-pointer text-indigo-400 hover:text-indigo-500 font-medium hover:bg-accent focus:bg-accent"
+                          >
+                            <Video className="size-4 shrink-0" />
+                            <span className="truncate">Invite "{guestInput}" to Google Meet</span>
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+                      
+                      <CommandGroup heading="Workspace Members">
+                        {resolvedUsers.map((user) => {
+                          const isAssigned = assigneeIds.includes(user.id);
+                          return (
+                            <CommandItem
+                              key={user.id}
+                              onSelect={() => {
+                                setAssigneeIds(prev =>
+                                  isAssigned ? prev.filter(id => id !== user.id) : [...prev, user.id]
+                                );
+                              }}
+                              className="flex items-center justify-between px-3 py-2 cursor-pointer text-muted-foreground aria-selected:bg-accent aria-selected:text-accent-foreground"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Avatar className="size-5">
+                                  <AvatarImage src={getOptimizedImageUrl(user.avatarUrl, { width: 40, height: 40 })} />
+                                  <AvatarFallback className="bg-muted text-muted-foreground font-bold text-[9px]">{user.name[0].toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs font-semibold text-foreground">{user.name}</span>
+                              </div>
+                              {isAssigned && <CheckCircle2 className="size-3.5 text-indigo-500" />}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                      
+                      {guests.length > 0 && (
+                        <CommandGroup heading="Invited Guests">
+                          {guests.map((email) => (
+                            <div
+                              key={email}
+                              className="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent/40"
+                            >
+                              <span className="truncate max-w-[200px]">{email}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveGuest(email)}
+                                className="text-muted-foreground hover:text-foreground hover:bg-secondary rounded p-0.5"
+                              >
+                                <X className="size-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {/* Category Pill (eventType mapping) */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="size-7 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all focus:outline-none focus:ring-0 cursor-pointer">
-                  <span className="text-[10px] leading-none mb-1.5 font-bold">...</span>
+                <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 transition-all duration-150 text-xs font-medium text-secondary-foreground capitalize focus:outline-none focus:ring-0 cursor-pointer active:scale-95">
+                  <Layout className="size-3.5 text-muted-foreground/60" />
+                  <span>{eventType || (type === "task" ? "Feature" : "Meeting")}</span>
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="p-1 w-44 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
-                {type === "task" ? (
-                  <>
+              <PopoverContent className="p-1 w-36 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                {(type === "task"
+                  ? ["feature", "bug", "chore", "docs", "design", "refactor"]
+                  : ["meeting", "call", "birthday", "workshop", "other"]
+                ).map((cat) => (
+                  <PopoverClose asChild key={cat}>
                     <button
-                      onClick={() => setShowClarity(!showClarity)}
-                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors text-left cursor-pointer"
+                      onClick={() => setEventType(cat)}
+                      className="w-full flex items-center px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors capitalize text-left cursor-pointer"
                     >
-                      <span>Toggle Clarity Fields</span>
-                      <span className="text-[9px] text-muted-foreground/50">{showClarity ? "ON" : "OFF"}</span>
+                      {cat}
                     </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setShowAgenda(!showAgenda)}
-                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors text-left cursor-pointer"
-                    >
-                      <span>Toggle Agenda Field</span>
-                      <span className="text-[9px] text-muted-foreground/50">{showAgenda ? "ON" : "OFF"}</span>
-                    </button>
-                  </>
-                )}
+                  </PopoverClose>
+                ))}
               </PopoverContent>
             </Popover>
+
+            {/* Story Points Pill (Task Only) */}
+            {type === "task" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer active:scale-95",
+                    storyPoints ? "text-secondary-foreground font-semibold" : "text-muted-foreground"
+                  )}>
+                    <Zap className={cn("size-3.5", storyPoints ? "text-yellow-500" : "text-muted-foreground/60")} />
+                    <span>{storyPoints ? `${storyPoints} pts` : "Story points"}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-2 w-36 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">Story Points</div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[1, 2, 3, 5, 8].map(pts => (
+                      <PopoverClose asChild key={pts}>
+                        <button
+                          onClick={() => setStoryPoints(pts)}
+                          className={cn(
+                            "h-7 rounded flex items-center justify-center text-xs transition-colors cursor-pointer",
+                            storyPoints === pts ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {pts}
+                        </button>
+                      </PopoverClose>
+                    ))}
+                    <PopoverClose asChild>
+                      <button
+                        onClick={() => setStoryPoints(undefined)}
+                        className="h-7 rounded flex items-center justify-center text-xs hover:bg-muted text-muted-foreground cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </PopoverClose>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {/* Time Estimate Pill (Task Only) */}
+            {type === "task" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 text-xs font-medium focus:outline-none focus:ring-0 bg-secondary hover:bg-secondary/80 cursor-pointer active:scale-95",
+                    timeEstimate ? "text-secondary-foreground font-semibold" : "text-muted-foreground"
+                  )}>
+                    <Timer className={cn("size-3.5", timeEstimate ? "text-blue-500" : "text-muted-foreground/60")} />
+                    <span>{timeEstimate ? `${timeEstimate}m` : "Estimate"}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-3 w-44 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start">
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Estimate (mins)</div>
+                  <Input
+                    type="number"
+                    value={timeEstimate || ""}
+                    onChange={(e) => setTimeEstimate(parseInt(e.target.value) || undefined)}
+                    placeholder="e.g. 60"
+                    className="h-8 text-xs bg-background border-border text-foreground focus-visible:ring-primary/20 placeholder:text-muted-foreground/60 font-sans"
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+
           </div>
         </div>
 
         {/* Action Row Footer */}
-        <div className="px-6 py-4 bg-background flex items-center justify-between select-none">
-          {/* Left: Attachment trigger */}
-          <button
-            type="button"
-            className="p-2 rounded-full bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-all focus:outline-none cursor-pointer"
-            title="Attach file"
-            onClick={() => {
-              if (triggerUploadRef.current) {
-                triggerUploadRef.current();
-              } else {
-                toast.error("File upload is not ready");
-              }
-            }}
-          >
-            <Paperclip className="size-3.5" />
-          </button>
+        <div className="px-6 py-4 bg-background flex items-center justify-between select-none border-t border-border/40">
+          {/* Left: Attachment trigger with Popover for Context Assets */}
+          {type === "task" ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "p-2 rounded-full transition-all duration-150 focus:outline-none cursor-pointer active:scale-[0.88]",
+                    context.length > 0
+                      ? "bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20"
+                      : "bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+                  )}
+                  title="Add files and links"
+                >
+                  <Paperclip className="size-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-3 w-80 bg-popover border border-border text-popover-foreground rounded-lg shadow-xl" align="start" side="top">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Context Assets</div>
+                <TaskContextSection
+                  task={{ context, space_id: selectedSpaceId ?? activeSpaceId ?? undefined }}
+                  onChangeContext={setContext}
+                  spaceId={selectedSpaceId ?? activeSpaceId ?? undefined}
+                  triggerUploadRef={triggerUploadRef}
+                />
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <div className="w-8 h-8" />
+          )}
 
           {/* Right: Switch and Create buttons */}
           <div className="flex items-center gap-4">
@@ -1290,7 +1281,7 @@ export function CreateTaskDialog({
             <Button
               type="button"
               onClick={() => handleSubmit()}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md px-4 h-8 font-semibold text-xs transition-all shadow-md active:scale-95 border-none cursor-pointer"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md px-4 h-8 font-semibold text-xs transition-all duration-150 shadow-md active:scale-95 border-none cursor-pointer"
               disabled={!title.trim()}
             >
               {mode === "edit" ? "Save changes" : `Create ${type === 'task' ? 'task' : 'event'}`}

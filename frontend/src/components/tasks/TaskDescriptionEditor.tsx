@@ -20,7 +20,9 @@ import {
   Code,
   CalendarDays,
   FileText,
-  User
+  User,
+  Target,
+  CheckCircle2
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
@@ -108,6 +110,70 @@ const COMMANDS = [
       editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
     },
   },
+  {
+    title: "Objective Block",
+    shortcut: "/objective",
+    icon: <Target className="size-4 text-primary" />,
+    command: ({ editor, range }: any) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent([
+          {
+            type: "heading",
+            attrs: { level: 2 },
+            content: [{ type: "text", text: "Objective" }]
+          },
+          {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph"
+                  }
+                ]
+              }
+            ]
+          }
+        ])
+        .run();
+    },
+  },
+  {
+    title: "Success Criteria Block",
+    shortcut: "/success",
+    icon: <CheckCircle2 className="size-4 text-emerald-500" />,
+    command: ({ editor, range }: any) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent([
+          {
+            type: "heading",
+            attrs: { level: 2 },
+            content: [{ type: "text", text: "Success Criteria" }]
+          },
+          {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph"
+                  }
+                ]
+              }
+            ]
+          }
+        ])
+        .run();
+    },
+  },
 ];
 
 function parseInitialContent(val: string) {
@@ -127,6 +193,7 @@ export function TaskDescriptionEditor({
   value,
   onChange,
   onBlur,
+  onEnterSubmit,
   disabled = false,
   placeholder = "Add description...",
   members = [],
@@ -136,6 +203,7 @@ export function TaskDescriptionEditor({
   value: string;
   onChange?: (val: string) => void;
   onBlur?: (val: string) => void;
+  onEnterSubmit?: () => void;
   disabled?: boolean;
   placeholder?: string;
   members?: MentionMember[];
@@ -535,8 +603,29 @@ export function TaskDescriptionEditor({
     },
   });
 
+  const onEnterSubmitRef = useRef(onEnterSubmit);
+  useEffect(() => {
+    onEnterSubmitRef.current = onEnterSubmit;
+  }, [onEnterSubmit]);
+
+  const SubmitOnEnter = Extension.create({
+    name: "submitOnEnter",
+    addKeyboardShortcuts() {
+      return {
+        Enter: () => {
+          if (onEnterSubmitRef.current) {
+            onEnterSubmitRef.current();
+            return true;
+          }
+          return false;
+        },
+      };
+    },
+  });
+
   const editor = useEditor({
     extensions: [
+      SubmitOnEnter,
       StarterKit.configure({
         codeBlock: false,
       }),
