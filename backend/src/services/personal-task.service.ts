@@ -151,6 +151,7 @@ export const createPersonalTask = async (
       google_event_id: task.google_event_id,
       meet_link: task.meet_link ?? null,
       source: 'personal_tasks',
+      type: 'task',
     }).catch(err => log.error({ err }, 'Personal task create sync failed'));
   }
 
@@ -190,6 +191,7 @@ export const updatePersonalTask = async (
       google_event_id: updated.google_event_id,
       meet_link: updated.meet_link ?? null,
       source: 'personal_tasks',
+      type: 'task',
     }).catch(err => log.error({ err }, 'Personal task sync failed'));
   }
 
@@ -204,7 +206,7 @@ export const deletePersonalTask = async (taskId: string, ownerUserId: string): P
 
   // Fire-and-forget Google Calendar event deletion
   if (existingTask.google_event_id) {
-    deleteCalendarEvent(ownerUserId, existingTask.google_event_id)
+    deleteCalendarEvent(ownerUserId, existingTask.google_event_id, 'task')
       .catch(err => log.error({ err }, 'Delete personal task calendar event failed'));
   }
 

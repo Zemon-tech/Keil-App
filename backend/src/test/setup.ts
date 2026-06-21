@@ -84,6 +84,14 @@ vi.mock("googleapis", () => {
                     delete: vi.fn(async () => ({}))
                 },
                 channels: { stop: vi.fn(async () => ({})) }
+            })),
+            tasks: vi.fn(() => ({
+                tasks: {
+                    list: vi.fn(async () => ({ data: { items: [] } })),
+                    insert: vi.fn(async () => ({ data: { id: "test-task-id" } })),
+                    update: vi.fn(async () => ({ data: {} })),
+                    delete: vi.fn(async () => ({}))
+                }
             }))
         }
     };

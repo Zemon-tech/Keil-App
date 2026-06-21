@@ -5,6 +5,7 @@ import { ApiResponse } from "../utils/ApiResponse";
 import * as personalTaskService from "../services/personal-task.service";
 import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
+import { doIncrementalSyncWithCooldown } from "../services/google-calendar.service";
 
 const validateStatus = (status: unknown): status is TaskStatus =>
   typeof status === "string" && Object.values(TaskStatus).includes(status as TaskStatus);
@@ -36,6 +37,10 @@ export const getPersonalTasks = catchAsync(async (req: Request, res: Response) =
     },
     filters: {},
   };
+
+  if (userId) {
+    doIncrementalSyncWithCooldown(userId).catch(() => {});
+  }
 
   if (status) {
     if (!validateStatus(status)) throw new ApiError(400, "Invalid status");

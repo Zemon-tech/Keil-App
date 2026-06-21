@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import pool from "../config/pg";
 import { seedUser, seedOrg, seedSpace } from "../test/helpers";
-import { processIncomingGoogleEvent } from "./google-calendar.service";
+import { processIncomingGoogleEvent, processIncomingGoogleTask } from "./google-calendar.service";
 import { calendar_v3 } from "googleapis";
 
 // ─── Test Constants ──────────────────────────────────────────────────────────
@@ -282,18 +282,49 @@ describe("processIncomingGoogleEvent — task_slots management", () => {
       expect(task).toBeNull(); // Should not have been created
     });
 
-    it("should skip events tagged with source=keilhq that have no matching task", async () => {
+    it("should skip events tagged with source=keilhq that were explicitly soft-deleted in KeilHQ", async () => {
+      const taskId = "d4444444-4444-4444-4444-444444444444";
+      const googleEventId = "keilhq-deleted-event-123";
+      
+      // Seed the task as soft-deleted in the database
+      await pool.query(
+        `INSERT INTO public.tasks
+           (id, org_id, space_id, title, google_event_id, status, priority, created_by, type, event_type, deleted_at)
+         VALUES ($1, $2, $3, 'From KeilHQ (deleted)', $4, 'todo', 'medium', $5, 'event', 'meeting', NOW())`,
+        [taskId, TEST_ORG_ID, TEST_SPACE_ID, googleEventId, TEST_USER_ID]
+      );
+
       const keilhqEvent = makeGoogleEvent({
+        id: googleEventId,
         summary: "From KeilHQ (deleted)",
         extendedProperties: {
-          private: { source: "keilhq", taskId: "d4444444-4444-4444-4444-444444444444" },
+          private: { source: "keilhq", taskId },
         },
       });
 
       await processIncomingGoogleEvent(TEST_USER_ID, keilhqEvent, defaultOrgSpace);
 
-      const task = await getTaskByGoogleEventId(keilhqEvent.id!);
-      expect(task).toBeNull(); // Loop prevention — should not recreate
+      const task = await getTaskByGoogleEventId(googleEventId);
+      expect(task).toBeNull(); // Loop prevention — should not recreate since it was deleted
+    });
+
+    it("should import events tagged with source=keilhq that do not exist in the database (e.g. database reset)", async () => {
+      const taskId = "d5555555-5555-5555-5555-555555555555";
+      const googleEventId = "keilhq-fresh-event-123";
+
+      const keilhqEvent = makeGoogleEvent({
+        id: googleEventId,
+        summary: "From KeilHQ (fresh import)",
+        extendedProperties: {
+          private: { source: "keilhq", taskId },
+        },
+      });
+
+      await processIncomingGoogleEvent(TEST_USER_ID, keilhqEvent, defaultOrgSpace);
+
+      const task = await getTaskByGoogleEventId(googleEventId);
+      expect(task).not.toBeNull();
+      expect(task.title).toBe("From KeilHQ (fresh import)");
     });
 
     it("should not update task or slot when values are identical", async () => {
@@ -322,6 +353,136 @@ describe("processIncomingGoogleEvent — task_slots management", () => {
       // Still exactly one slot
       const slots = await getSlotsByTaskId(task.id);
       expect(slots).toHaveLength(1);
+    });
+  });
+
+  describe("processIncomingGoogleTask — Google Tasks sync", () => {
+    const defaultOrgSpace = { orgId: TEST_ORG_ID, spaceId: TEST_SPACE_ID };
+
+    it("should create an org task with type='task' when a new Google Task is imported", async () => {
+      const googleTask = {
+        id: "google-task-abc",
+        title: "Test Task Title",
+        notes: "Test Task Notes",
+        status: "needsAction",
+        due: new Date().toISOString(),
+        updated: new Date().toISOString(),
+      };
+
+      await processIncomingGoogleTask(TEST_USER_ID, googleTask, defaultOrgSpace);
+
+      const result = await pool.query(
+        `SELECT * FROM public.tasks WHERE google_event_id = $1 AND deleted_at IS NULL`,
+        [googleTask.id]
+      );
+      const dbTask = result.rows[0];
+      expect(dbTask).not.toBeNull();
+      expect(dbTask.title).toBe("Test Task Title");
+      expect(dbTask.description).toBe("Test Task Notes");
+      expect(dbTask.type).toBe("task");
+
+      // Verify slot is also created
+      const slots = await getSlotsByTaskId(dbTask.id);
+      expect(slots).toHaveLength(1);
+    });
+
+    it("should update an existing task and slot when updated Google Task is received", async () => {
+      const googleTaskId = "existing-google-task-123";
+      
+      // Seed task
+      const taskResult = await pool.query(
+        `INSERT INTO public.tasks
+           (org_id, space_id, title, start_date, due_date, google_event_id, status, priority, created_by, type)
+         VALUES ($1, $2, 'Old Title', '2026-06-20T10:00:00Z', '2026-06-20T11:00:00Z', $3, 'todo', 'medium', $4, 'task')
+         RETURNING id`,
+        [TEST_ORG_ID, TEST_SPACE_ID, googleTaskId, TEST_USER_ID]
+      );
+      const taskId = taskResult.rows[0].id;
+
+      // Seed slot
+      await pool.query(
+        `INSERT INTO public.task_slots (task_id, user_id, start_date, due_date, is_all_day)
+         VALUES ($1, $2, '2026-06-20T10:00:00Z', '2026-06-20T11:00:00Z', false)`,
+        [taskId, TEST_USER_ID]
+      );
+
+      const updatedGoogleTask = {
+        id: googleTaskId,
+        title: "New Title from Google",
+        notes: "Updated description",
+        status: "needsAction",
+        due: new Date("2026-06-21T00:00:00Z").toISOString(),
+        updated: new Date(Date.now() + 10000).toISOString(),
+      };
+
+      await processIncomingGoogleTask(TEST_USER_ID, updatedGoogleTask, defaultOrgSpace);
+
+      const updatedTaskResult = await pool.query(
+        `SELECT * FROM public.tasks WHERE id = $1`,
+        [taskId]
+      );
+      const dbTask = updatedTaskResult.rows[0];
+      expect(dbTask.title).toBe("New Title from Google");
+      expect(dbTask.description).toBe("Updated description");
+
+      // Slot should be updated
+      const slots = await getSlotsByTaskId(taskId);
+      expect(slots).toHaveLength(1);
+      expect(new Date(slots[0].start_date).toISOString()).toContain("2026-06-21");
+    });
+
+    it("should mark task as completed when Google Task is completed", async () => {
+      const googleTaskId = "complete-google-task-123";
+
+      const taskResult = await pool.query(
+        `INSERT INTO public.tasks
+           (org_id, space_id, title, google_event_id, status, priority, created_by, type)
+         VALUES ($1, $2, 'To Complete', $3, 'todo', 'medium', $4, 'task')
+         RETURNING id`,
+        [TEST_ORG_ID, TEST_SPACE_ID, googleTaskId, TEST_USER_ID]
+      );
+      const taskId = taskResult.rows[0].id;
+
+      const completedGoogleTask = {
+        id: googleTaskId,
+        title: "To Complete",
+        status: "completed",
+        updated: new Date(Date.now() + 10000).toISOString(),
+      };
+
+      await processIncomingGoogleTask(TEST_USER_ID, completedGoogleTask, defaultOrgSpace);
+
+      const dbTaskRes = await pool.query(
+        `SELECT status FROM public.tasks WHERE id = $1`,
+        [taskId]
+      );
+      expect(dbTaskRes.rows[0].status).toBe("done");
+    });
+
+    it("should soft-delete task when Google Task is deleted", async () => {
+      const googleTaskId = "delete-google-task-123";
+
+      const taskResult = await pool.query(
+        `INSERT INTO public.tasks
+           (org_id, space_id, title, google_event_id, status, priority, created_by, type)
+         VALUES ($1, $2, 'To Delete', $3, 'todo', 'medium', $4, 'task')
+         RETURNING id`,
+        [TEST_ORG_ID, TEST_SPACE_ID, googleTaskId, TEST_USER_ID]
+      );
+      const taskId = taskResult.rows[0].id;
+
+      const deletedGoogleTask = {
+        id: googleTaskId,
+        deleted: true,
+      };
+
+      await processIncomingGoogleTask(TEST_USER_ID, deletedGoogleTask, defaultOrgSpace);
+
+      const dbTaskRes = await pool.query(
+        `SELECT deleted_at FROM public.tasks WHERE id = $1`,
+        [taskId]
+      );
+      expect(dbTaskRes.rows[0].deleted_at).not.toBeNull();
     });
   });
 });
