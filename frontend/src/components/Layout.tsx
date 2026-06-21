@@ -231,11 +231,10 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
             </main>
           </SidebarInset>
 
-          {/* AI Assistant - Available on all pages except dashboard and motion */}
+          {/* AI Assistant - Available on all pages except dashboard */}
           {location.pathname !== "/" &&
             location.pathname !== "/dashboard" &&
-            !location.pathname.startsWith("/c/") &&
-            location.pathname !== "/motion" ? (
+            !location.pathname.startsWith("/c/") ? (
             <AiAssistant />
           ) : null}
 

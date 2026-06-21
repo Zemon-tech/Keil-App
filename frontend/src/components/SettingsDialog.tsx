@@ -124,6 +124,7 @@ import {
   useDisconnectNotion,
 } from "@/hooks/api/useNotion";
 import { toast } from "sonner";
+import { orgTaskKeys } from "@/hooks/api/useTasks";
 import { usePreferences, useUpdateSttProvider, useUpdateDeleteSlotsOnComplete, type SttProvider } from "@/hooks/api/usePreferences";
 import { useOpenDM } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
@@ -3192,6 +3193,31 @@ function ConnectorsTab() {
   const connectGcal = useConnectGoogleCalendar();
   const disconnectGcal = useDisconnectGoogleCalendar();
 
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const queryClient = useQueryClient();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await api.post("v1/integrations/google/sync");
+      toast.success("Sync triggered — refreshing calendar");
+      // Wait briefly for the background sync to process, then refetch slots
+      setTimeout(() => {
+        if (activeOrgId && activeSpaceId) {
+          queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(activeOrgId, activeSpaceId) });
+          queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(activeOrgId, activeSpaceId) });
+        }
+        setIsSyncing(false);
+      }, 3000);
+    } catch (err: any) {
+      const message = err?.response?.data?.message || "Sync failed";
+      toast.error(message);
+      setIsSyncing(false);
+    }
+  };
+
   const { data: githubStatus, isLoading: githubLoading } =
     useGitHubStatus();
   const connectGithub = useConnectGitHub();
@@ -3325,15 +3351,27 @@ function ConnectorsTab() {
             </div>
           </div>
           {gcalStatus?.connected ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled={disconnectGcal.isPending}
-              onClick={() => disconnectGcal.mutate()}
-            >
-              {disconnectGcal.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Disconnect"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs rounded-lg gap-1.5"
+                disabled={isSyncing}
+                onClick={handleManualSync}
+              >
+                <RefreshCw className={cn("size-3.5 text-muted-foreground", isSyncing && "animate-spin")} />
+                Sync Now
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs rounded-lg"
+                disabled={disconnectGcal.isPending}
+                onClick={() => disconnectGcal.mutate()}
+              >
+                {disconnectGcal.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Disconnect"}
+              </Button>
+            </div>
           ) : (
             <Button
               variant="default"

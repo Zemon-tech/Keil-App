@@ -346,14 +346,6 @@ export function MotionHome() {
         </div>
       </div>
 
-      <div className="fixed bottom-6 right-6">
-        <Button
-          size="icon"
-          className="size-10 rounded-full bg-white text-black hover:bg-white/90 shadow-2xl transition-transform hover:scale-110 active:scale-95"
-        >
-          <span className="text-lg">🎨</span>
-        </Button>
-      </div>
 
       <style
         dangerouslySetInnerHTML={{

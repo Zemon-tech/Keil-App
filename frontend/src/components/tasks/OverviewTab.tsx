@@ -23,7 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
-import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
+import { CreateTaskDialog, parseObjectiveAndSuccessCriteria } from "@/components/tasks/CreateTaskDialog";
 
 import type { TaskDTO, UpdateTaskInput } from "@/hooks/api/useTasks";
 import {
@@ -173,7 +173,15 @@ export const OverviewTab = ({
             </span>
             <TaskDescriptionEditor
               value={task.description ?? ""}
-              onBlur={(description) => onUpdateField?.({ description })}
+              onBlur={(description) => {
+                const updates: UpdateTaskInput = { description };
+                if (task.type === "task") {
+                  const parsed = parseObjectiveAndSuccessCriteria(description);
+                  updates.objective = parsed.objective;
+                  updates.success_criteria = parsed.successCriteria;
+                }
+                onUpdateField?.(updates);
+              }}
               placeholder="Add a description..."
               disabled={!canEditTask}
               members={members}
