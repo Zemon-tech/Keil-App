@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 
 function getPlainTextFromTiptapJson(jsonStr: string): string {
   if (!jsonStr) return "";
