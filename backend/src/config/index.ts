@@ -2,8 +2,25 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const port = process.env.PORT || 5001;
+
+// Helper function to resolve/override localhost port in a URL or provide a default local path
+const resolveLocalhostUrl = (url: string | undefined, defaultPath: string): string => {
+    const targetUrl = url || `http://localhost:${port}${defaultPath}`;
+    try {
+        const parsed = new URL(targetUrl);
+        if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+            parsed.port = String(port);
+            return parsed.toString().replace(/\/$/, ""); // remove trailing slash
+        }
+        return targetUrl;
+    } catch {
+        return targetUrl;
+    }
+};
+
 export const config = {
-    port: process.env.PORT || 5001,
+    port,
     env: process.env.NODE_ENV || "development",
     supabaseUrl: process.env.SUPABASE_URL || "",
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || "",
@@ -14,20 +31,20 @@ export const config = {
     // Google Calendar OAuth
     googleClientId: process.env.GOOGLE_CLIENT_ID || "",
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || "",
+    googleRedirectUri: resolveLocalhostUrl(process.env.GOOGLE_REDIRECT_URI, "/api/v1/integrations/google/callback"),
     googleOAuthStateSecret: process.env.GOOGLE_OAUTH_STATE_SECRET || "",
     // GitHub Integration OAuth
     githubClientId: process.env.GITHUB_CLIENT_ID || "",
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "",
-    githubRedirectUri: process.env.GITHUB_REDIRECT_URI || "",
+    githubRedirectUri: resolveLocalhostUrl(process.env.GITHUB_REDIRECT_URI, "/api/v1/integrations/github/callback"),
     // Notion Integration OAuth
     notionClientId: process.env.NOTION_CLIENT_ID || "",
     notionClientSecret: process.env.NOTION_CLIENT_SECRET || "",
-    notionRedirectUri: process.env.NOTION_REDIRECT_URI || "",
+    notionRedirectUri: resolveLocalhostUrl(process.env.NOTION_REDIRECT_URI, "/api/v1/integrations/notion/callback"),
     frontendUrl: process.env.FRONTEND_URL,
     // Backend public URL — used to construct the Google Calendar webhook address
     // Must be publicly reachable by Google (e.g. https://api.yourdomain.com)
-    backendUrl: process.env.BACKEND_URL || "",
+    backendUrl: resolveLocalhostUrl(process.env.BACKEND_URL, ""),
     // ElevenLabs STT
     elevenlabsApiKey: process.env.ELEVENLABS_API_KEY || "",
     // Sarvam AI STT

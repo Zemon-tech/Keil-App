@@ -26,16 +26,15 @@ async function main() {
   const { org_id, space_id } = orgSpaceRes.rows[0];
   console.log(`Found valid Org: ${org_id}, Space: ${space_id}`);
 
-  console.log('Inserting a test task...');
   const taskRes = await pool.query(
     `INSERT INTO public.tasks
-       (org_id, space_id, title, start_date, due_date, status, priority, created_by, type)
-     VALUES ($1, $2, 'Test Task Sync Outbound', NOW(), NOW() + INTERVAL '1 hour', 'todo', 'medium', $3, 'task')
+       (org_id, space_id, title, start_date, due_date, status, priority, created_by, type, event_type)
+     VALUES ($1, $2, 'Test Event Sync Outbound', NOW(), NOW() + INTERVAL '1 hour', 'todo', 'medium', $3, 'event', 'meeting')
      RETURNING *`,
     [org_id, space_id, userId]
   );
   const task = taskRes.rows[0];
-  console.log('Inserted task ID:', task.id);
+  console.log('Inserted event ID:', task.id);
 
   console.log('Syncing task to Google...');
   try {

@@ -449,7 +449,7 @@ export function Dashboard() {
   const chatTransport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}/chat`,
+        api: `${(import.meta.env.VITE_API_URL || "http://localhost:5001/api").replace(/\/api\/?$/, "")}/chat`,
         headers: async (): Promise<Record<string, string>> => {
           const {
             data: { session },
