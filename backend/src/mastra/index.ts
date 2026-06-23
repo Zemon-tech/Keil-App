@@ -14,16 +14,24 @@ import { schedulerAgent } from "./agents/scheduler.agent";
 import { githubAgent } from "./agents/github.agent";
 import { checkRateLimit } from "../services/rate-limiter.service";
 import { checkAiChatLimit } from "../middlewares/usage-limit.middleware";
+import {
+  startStreamSession,
+  finishStreamSession,
+  errorStreamSession,
+  getStreamSession,
+  getChunksSince,
+  getLatestChunkIndex,
+  persistChunk,
+  serialiseChunk,
+} from "../services/ai-stream-persistence.service";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
-// Mastra storage needs a direct/session connection (not transaction pooler)
-// because it runs DDL statements (CREATE TABLE, ALTER TABLE) during init.
-// Supabase session pooler limits to 15 concurrent connections total,
-// so we cap Mastra's pool to 5 to leave room for the app's pool.
 
 import { Pool as PgPool } from "pg";
 
-const isLocalMastraDb = config.mastraDatabaseUrl.includes("localhost") || config.mastraDatabaseUrl.includes("127.0.0.1");
+const isLocalMastraDb =
+  config.mastraDatabaseUrl.includes("localhost") ||
+  config.mastraDatabaseUrl.includes("127.0.0.1");
 
 const mastraPool = new PgPool({
   connectionString: config.mastraDatabaseUrl,
@@ -39,19 +47,12 @@ const storage = new PostgresStore({
 });
 
 // ─── Fast JWT verification ────────────────────────────────────────────────────
-// Decode the Supabase JWT locally instead of making a network call to
-// supabaseAdmin.auth.getUser(). This drops auth from ~230ms to <1ms.
-// We verify expiry locally. The token's integrity is guaranteed by Supabase
-// issuing it and the frontend sending it over HTTPS.
 
 function verifyToken(token: string): { userId: string } | null {
   try {
     const decoded = jwt.decode(token) as { sub?: string; exp?: number } | null;
     if (!decoded?.sub) return null;
-
-    // Check expiry
     if (decoded.exp && decoded.exp * 1000 < Date.now()) return null;
-
     return { userId: decoded.sub };
   } catch {
     return null;
@@ -72,6 +73,7 @@ export const mastra = new Mastra({
   storage,
   server: {
     apiRoutes: [
+      // ── POST /chat — start or continue a streaming AI conversation ──────────
       registerApiRoute("/chat", {
         method: "POST",
         requiresAuth: false,
@@ -79,46 +81,46 @@ export const mastra = new Mastra({
           const startTime = Date.now();
           const requestContext = c.get("requestContext");
 
-          // ── Auth (local JWT decode — <1ms) ────────────────────────
+          // ── Auth ──────────────────────────────────────────────────
           const authHeader = c.req.header("Authorization");
-          if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          if (!authHeader?.startsWith("Bearer ")) {
             return c.json({ success: false, message: "Not authorized" }, 401);
           }
           const token = authHeader.split(" ")[1];
           const authResult = verifyToken(token);
           if (!authResult) {
-            return c.json(
-              { success: false, message: "Invalid or expired token" },
-              401,
-            );
+            return c.json({ success: false, message: "Invalid or expired token" }, 401);
           }
           console.log(`[Chat] Auth verified in ${Date.now() - startTime}ms`);
 
-          // ── Rate Limiting (PostgreSQL distributed) ───────────────
+          // ── Rate Limiting ─────────────────────────────────────────
           const isTestEnv = process.env.NODE_ENV === "test" && !process.env.RATE_LIMIT_TEST;
           if (!isTestEnv) {
             try {
-              const minLimitResult = await checkRateLimit(`rl:ai:min:user:${authResult.userId}`, 20, 60);
+              const minLimitResult = await checkRateLimit(
+                `rl:ai:min:user:${authResult.userId}`, 20, 60
+              );
               if (!minLimitResult.allowed) {
                 return c.json(
-                  { success: false, message: "AI rate limit exceeded. Please wait a minute before making another request." },
+                  { success: false, message: "AI rate limit exceeded. Please wait a minute." },
                   429
                 );
               }
-              const dailyLimitResult = await checkRateLimit(`rl:ai:day:user:${authResult.userId}`, 100, 86400);
+              const dailyLimitResult = await checkRateLimit(
+                `rl:ai:day:user:${authResult.userId}`, 100, 86400
+              );
               if (!dailyLimitResult.allowed) {
                 return c.json(
-                  { success: false, message: "Daily AI chat limit of 100 requests reached. Please try again tomorrow." },
+                  { success: false, message: "Daily AI chat limit of 100 requests reached." },
                   429
                 );
               }
             } catch (err) {
               console.error("[Chat] Rate limiter error:", err);
-              // Fail open: let requests pass if rate limit DB check fails
             }
           }
 
-          // ── Subscription-based usage check (plan limits) ─────────
+          // ── Subscription check ────────────────────────────────────
           const usageCheck = await checkAiChatLimit(authResult.userId);
           if (!usageCheck.allowed) {
             return c.json(
@@ -127,25 +129,26 @@ export const mastra = new Mastra({
             );
           }
 
-          // ── Parse body & set requestContext ───────────────────────
+          // ── Parse body & context ──────────────────────────────────
           const body = await c.req.json();
+          const threadId: string = body?.memory?.thread ?? body?.threadId ?? crypto.randomUUID();
+
           requestContext.set("userId", authResult.userId);
-          if (body?.modelSelection)
-            requestContext.set("modelSelection", body.modelSelection);
+          if (body?.modelSelection) requestContext.set("modelSelection", body.modelSelection);
           if (body?.orgId) requestContext.set("orgId", body.orgId);
           if (body?.spaceId) requestContext.set("spaceId", body.spaceId);
-          if (body?.localAiBaseUrl)
-            requestContext.set("localAiBaseUrl", body.localAiBaseUrl);
-          if (body?.localAiModel)
-            requestContext.set("localAiModel", body.localAiModel);
-          if (body?.openRouterModel)
-            requestContext.set("openRouterModel", body.openRouterModel);
+          if (body?.localAiBaseUrl) requestContext.set("localAiBaseUrl", body.localAiBaseUrl);
+          if (body?.localAiModel) requestContext.set("localAiModel", body.localAiModel);
+          if (body?.openRouterModel) requestContext.set("openRouterModel", body.openRouterModel);
 
           console.log(
-            `[Chat] model=${body?.modelSelection || "gemini"} | user=${authResult.userId} | bodyParsed in ${Date.now() - startTime}ms`,
+            `[Chat] model=${body?.modelSelection || "gemini"} | user=${authResult.userId} | thread=${threadId} | parsed in ${Date.now() - startTime}ms`
           );
 
-          // ── Get agent and stream directly ─────────────────────────
+          // ── Start persistent stream session ───────────────────────
+          await startStreamSession(threadId, authResult.userId).catch(() => {});
+
+          // ── Build instructions ────────────────────────────────────
           const agent = c.get("mastra").getAgent("keilhq-ai");
           const messages = body.messages as UIMessage[];
 
@@ -153,25 +156,23 @@ export const mastra = new Mastra({
             const now = new Date();
             return [
               `<temporal_context>`,
-              `Today is ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.`,
-              `Current time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}.`,
+              `Today is ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`,
+              `Current time: ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}.`,
               `ISO: ${now.toISOString()}.`,
               `UTC offset: ${(-now.getTimezoneOffset() / 60).toFixed(1)} hours.`,
               `Use this for all relative date calculations. Do not call any tool for the current time.`,
               `</temporal_context>`,
-            ].join('\n');
+            ].join("\n");
           }
 
           const baseInstructions = await agent.getInstructions({ requestContext });
           const temporalContext = buildTemporalContext();
-
-          // ── Page context from the frontend (current route) ────────
           const pageContextBlock = body?.pageContext
             ? [
                 `<page_context>`,
-                `The user is currently using the KeilHQ app on the following page:`,
+                `The user is currently on this page:`,
                 body.pageContext,
-                `Use this to answer questions about what the user is currently viewing or working on, without asking them to specify the page or title again.`,
+                `Use this to answer questions about what the user is currently viewing.`,
                 `</page_context>`,
               ].join("\n")
             : "";
@@ -180,34 +181,40 @@ export const mastra = new Mastra({
             .filter(Boolean)
             .join("\n\n");
 
-          // ── Convert to AI SDK v6 format and return ────────────────
+          // ── Stream with persistence ───────────────────────────────
+          let chunkIndex = 0;
+
           const uiStream = createUIMessageStream({
             originalMessages: messages,
             execute: async ({ writer }) => {
-              // Store the UI writer in requestContext so ALL tools — including those
-              // inside sub-agents (taskAgent, chatAgent, etc.) — can emit activity
-              // events directly. requestContext is the same Map object shared across
-              // the entire supervisor → sub-agent → tool call chain.
               requestContext.set("uiWriter", writer);
               const modelMessages = await convertToModelMessages(messages);
 
-              const agentStream = await agent.stream(modelMessages, {
-                requestContext,
-                instructions: instructionsOverride,
-                memory: {
-                  ...body.memory,
-                  resource: authResult.userId,
-                },
-                abortSignal: c.req.raw.signal,
-              });
+              let agentStream: any;
+              try {
+                agentStream = await agent.stream(modelMessages, {
+                  requestContext,
+                  instructions: instructionsOverride,
+                  memory: {
+                    ...body.memory,
+                    thread: threadId,
+                    resource: authResult.userId,
+                  },
+                  // NOTE: We intentionally do NOT forward abortSignal here so the
+                  // agent keeps processing even if the HTTP connection drops.
+                  // Chunks are persisted and the client can replay on reconnect.
+                });
+              } catch (err: any) {
+                await errorStreamSession(threadId, err.message, chunkIndex).catch(() => {});
+                throw err;
+              }
 
-              console.log(
-                `[Chat] agent.stream() started in ${Date.now() - startTime}ms`,
-              );
+              console.log(`[Chat] agent.stream() started in ${Date.now() - startTime}ms`);
 
-              // Wrap agentStream.fullStream to intercept any remaining custom events
+              // Wrap fullStream to intercept activity events + persist all chunks
               const originalFullStream = agentStream.fullStream;
               const reader = originalFullStream.getReader();
+
               const wrappedFullStream = new ReadableStream({
                 async pull(controller) {
                   const { done, value } = await reader.read();
@@ -215,20 +222,29 @@ export const mastra = new Mastra({
                     controller.close();
                     return;
                   }
-                  // Intercept data-agent-activity custom chunks
+
                   const val = value as any;
-                  if (val && val.type === "custom" && val.payload?.type === "data-agent-activity") {
+
+                  // ── Activity events → write to UI writer ──────────
+                  if (val?.type === "custom" && val.payload?.type === "data-agent-activity") {
                     if (process.env.NODE_ENV === "development") {
                       console.log(
-                        `[Debug] Activity received: [${val.payload.data?.agent}] ${val.payload.data?.action} (${val.payload.data?.status})`
+                        `[Debug] Activity: [${val.payload.data?.agent}] ${val.payload.data?.action} (${val.payload.data?.status})`
                       );
                     }
-                    // Write directly to Hono's writer as an AI SDK message part
-                    writer.write({
+                    const activityPart = {
                       type: "data-agent-activity",
                       data: val.payload.data,
-                    } as any);
+                    };
+                    writer.write(activityPart as any);
+
+                    // Persist activity chunk
+                    await persistChunk(
+                      threadId, authResult.userId, chunkIndex++,
+                      "data-agent-activity", val.payload.data
+                    ).catch(() => {});
                   }
+
                   controller.enqueue(value);
                 },
                 cancel() {
@@ -236,7 +252,6 @@ export const mastra = new Mastra({
                 },
               });
 
-              // Replace fullStream on agentStream with our wrapped stream using Object.defineProperty to override the read-only getter
               const interceptedAgentStream = Object.create(agentStream);
               Object.defineProperty(interceptedAgentStream, "fullStream", {
                 value: wrappedFullStream,
@@ -245,12 +260,28 @@ export const mastra = new Mastra({
                 enumerable: true,
               });
 
-              for await (const part of toAISdkStream(interceptedAgentStream, {
-                from: "agent",
-                version: "v6",
-                sendReasoning: true,
-              })) {
-                writer.write(part as any);
+              try {
+                for await (const part of toAISdkStream(interceptedAgentStream, {
+                  from: "agent",
+                  version: "v6",
+                  sendReasoning: true,
+                })) {
+                  writer.write(part as any);
+
+                  // Persist every chunk for stream resume
+                  const serialised = serialiseChunk(part);
+                  if (serialised) {
+                    await persistChunk(
+                      threadId, authResult.userId, chunkIndex++,
+                      serialised.type, serialised.data
+                    ).catch(() => {});
+                  }
+                }
+
+                await finishStreamSession(threadId, chunkIndex).catch(() => {});
+              } catch (err: any) {
+                await errorStreamSession(threadId, err.message, chunkIndex).catch(() => {});
+                throw err;
               }
             },
           });
@@ -258,38 +289,85 @@ export const mastra = new Mastra({
           return createUIMessageStreamResponse({ stream: uiStream });
         },
       }),
+
+      // ── GET /chat/resume — replay missed chunks after reconnect ─────────────
+      registerApiRoute("/chat/resume", {
+        method: "GET",
+        requiresAuth: false,
+        handler: async (c) => {
+          // Auth
+          const authHeader = c.req.header("Authorization");
+          if (!authHeader?.startsWith("Bearer ")) {
+            return c.json({ success: false, message: "Not authorized" }, 401);
+          }
+          const authResult = verifyToken(authHeader.split(" ")[1]);
+          if (!authResult) {
+            return c.json({ success: false, message: "Invalid or expired token" }, 401);
+          }
+
+          const threadId = c.req.query("threadId");
+          const fromIndex = parseInt(c.req.query("fromIndex") ?? "0", 10);
+
+          if (!threadId) {
+            return c.json({ success: false, message: "threadId is required" }, 400);
+          }
+
+          try {
+            const [session, chunks, latestIndex] = await Promise.all([
+              getStreamSession(threadId, authResult.userId),
+              getChunksSince(threadId, authResult.userId, fromIndex),
+              getLatestChunkIndex(threadId, authResult.userId),
+            ]);
+
+            return c.json({
+              success: true,
+              data: {
+                threadId,
+                status: session?.status ?? "unknown",
+                totalChunks: session?.total_chunks ?? latestIndex + 1,
+                latestChunkIndex: latestIndex,
+                chunks: chunks.map((row) => ({
+                  index: row.chunk_index,
+                  type: row.chunk_type,
+                  data: row.chunk_data,
+                })),
+                isComplete: session?.status === "complete",
+                isStreaming: session?.status === "streaming",
+              },
+            });
+          } catch (err: any) {
+            console.error("[Chat/Resume] Error:", err);
+            return c.json({ success: false, message: err.message }, 500);
+          }
+        },
+      }),
     ],
   },
 });
 
+// ─── Activity streaming tool decoration ──────────────────────────────────────
+
 function initializeActivityStreaming(mastraInstance: any) {
   const allTools = mastraInstance.listTools();
-  if (allTools) {
-    for (const [key, tool] of Object.entries(allTools)) {
-      if (!tool || typeof (tool as any).execute !== "function") continue;
+  if (!allTools) return;
 
-      const originalExecute = (tool as any).execute;
+  for (const [key, tool] of Object.entries(allTools)) {
+    if (!tool || typeof (tool as any).execute !== "function") continue;
+    const originalExecute = (tool as any).execute;
+    if ((originalExecute as any).__wrapped) continue;
 
-      // Prevent double wrapping
-      if ((originalExecute as any).__wrapped) continue;
+    const wrappedExecute = async function (this: any, inputData: any, context: any) {
+      const executionId = `${(tool as any).id || key}_${Math.random().toString(36).substring(2, 11)}`;
+      if (context) {
+        context.activeToolId = (tool as any).id || key;
+        context.toolExecutionId = executionId;
+      }
+      return originalExecute.call(this, inputData, context);
+    };
 
-      const wrappedExecute = async function (this: any, inputData: any, context: any) {
-        const executionId = `${(tool as any).id || key}_${Math.random().toString(36).substring(2, 11)}`;
-
-        if (context) {
-          context.activeToolId = (tool as any).id || key;
-          context.toolExecutionId = executionId;
-        }
-
-        return originalExecute.call(this, inputData, context);
-      };
-
-      (wrappedExecute as any).__wrapped = true;
-      (tool as any).execute = wrappedExecute;
-    }
+    (wrappedExecute as any).__wrapped = true;
+    (tool as any).execute = wrappedExecute;
   }
 }
 
-// Initialize activity streaming tool decoration
 initializeActivityStreaming(mastra);
-
