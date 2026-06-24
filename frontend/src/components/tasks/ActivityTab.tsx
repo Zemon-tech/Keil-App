@@ -842,18 +842,6 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                     <span className="text-xs text-muted-foreground font-medium">Tag people, tasks, events, or pages</span>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent"
-                >
-                  <div className="flex items-center justify-center size-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
-                    <Paperclip className="size-4" />
-                  </div>
-                  <div className="flex flex-col font-sans">
-                    <span className="text-sm font-medium">Add files</span>
-                    <span className="text-xs text-muted-foreground font-medium">Opens file picker dialog</span>
-                  </div>
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}

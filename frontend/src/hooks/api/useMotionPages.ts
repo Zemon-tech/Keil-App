@@ -66,6 +66,7 @@ export interface CreateMotionPageInput {
   title?: string;
   icon?: string | null;
   cover_image?: string | null;
+  content?: JSONContent;
 }
 
 export interface UpdateMotionPageInput {

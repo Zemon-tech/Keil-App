@@ -8,6 +8,8 @@ import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useMeetingRecording, useDeleteRecording, useCancelTranscription, useTranscribeRecording, meetingKeys } from "@/hooks/api/useMeetings";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAppContext } from "@/contexts/AppContext";
+import { useCreateMotionPage } from "@/hooks/api/useMotionPages";
 import { toast } from "sonner";
 import { Volume2, VolumeX } from "lucide-react";
 import {
@@ -107,6 +109,73 @@ export const MeetingDialog: React.FC = () => {
   const [audioVolume] = useState(1);
   const [selectedProvider, setSelectedProvider] = useState<"sarvam" | "elevenlabs">("sarvam");
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
+
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const createPageMutation = useCreateMotionPage(activeOrgId, activeSpaceId);
+
+  const handleSaveToNotion = async () => {
+    if (!dbRecording?.summary_text) {
+      toast.error("No summary text available to save.");
+      return;
+    }
+
+    try {
+      toast.loading("Saving summary to Notion...", { id: "save-to-notion" });
+      const lines = dbRecording.summary_text.split("\n");
+      const contentNodes = lines.map(line => {
+        if (line.startsWith("# ")) {
+          return {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: line.replace("# ", "") }]
+          };
+        } else if (line.startsWith("## ")) {
+          return {
+            type: "heading",
+            attrs: { level: 2 },
+            content: [{ type: "text", text: line.replace("## ", "") }]
+          };
+        } else if (line.startsWith("- ") || line.startsWith("* ")) {
+          return {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: line.substring(2) }]
+                  }
+                ]
+              }
+            ]
+          };
+        } else if (line.trim().length === 0) {
+          return null;
+        } else {
+          return {
+            type: "paragraph",
+            content: [{ type: "text", text: line }]
+          };
+        }
+      }).filter(Boolean);
+
+      const tiptapContent = {
+        type: "doc",
+        content: contentNodes.length > 0 ? contentNodes : [{ type: "paragraph" }]
+      };
+
+      await createPageMutation.mutateAsync({
+        title: `Meeting Summary - ${new Date(dbRecording.created_at).toLocaleDateString()}`,
+        content: tiptapContent as any
+      });
+      toast.success("Saved successfully as Motion Page!", { id: "save-to-notion" });
+    } catch (err: any) {
+      console.error("Save to Notion failed:", err);
+      toast.error(err.message || "Failed to save to Notion.", { id: "save-to-notion" });
+    }
+  };
 
   const [isMuted, setIsMuted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -1574,9 +1643,36 @@ export const MeetingDialog: React.FC = () => {
                               ) : (
                                 <AlertCircle className="size-4 text-rose-500" />
                               )}
-                              <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                                Capture Transcript Timeline
-                              </span>
+                              {currentStatus === "completed" ? (
+                                <div className="flex items-center bg-muted/40 p-0.5 rounded-lg border border-border">
+                                  <button
+                                    onClick={() => setActiveTab("transcript")}
+                                    className={cn(
+                                      "px-2.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wide uppercase cursor-pointer transition-all duration-150 active:scale-95",
+                                      activeTab === "transcript"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                  >
+                                    Transcript
+                                  </button>
+                                  <button
+                                    onClick={() => setActiveTab("summary")}
+                                    className={cn(
+                                      "px-2.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wide uppercase cursor-pointer transition-all duration-150 active:scale-95",
+                                      activeTab === "summary"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                  >
+                                    Summary
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                                  Capture Transcript Timeline
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-3">
@@ -1648,6 +1744,22 @@ export const MeetingDialog: React.FC = () => {
 
                               {/* Action Buttons: Copy, Download, Delete, Minimize, Close */}
                               <div className="flex items-center gap-0.5">
+                                {currentStatus === "completed" && activeTab === "summary" && dbRecording?.summary_text && (
+                                  <button
+                                    onClick={handleSaveToNotion}
+                                    disabled={createPageMutation.isPending}
+                                    title="Save Summary to Notion"
+                                    className="flex items-center gap-1.5 px-3 h-7 bg-cyan-500 hover:bg-cyan-600 disabled:bg-muted disabled:text-muted-foreground text-white font-semibold text-[9px] tracking-wider uppercase rounded-lg transition-all duration-200 active:scale-95 cursor-pointer shadow-sm select-none mr-2"
+                                  >
+                                    {createPageMutation.isPending ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <Notebook className="size-3" />
+                                    )}
+                                    <span>{createPageMutation.isPending ? "Saving..." : "Save to Notion"}</span>
+                                  </button>
+                                )}
+
                                 {currentStatus === "completed" && currentTranscript && (
                                   <>
                                     <button
@@ -1702,54 +1814,84 @@ export const MeetingDialog: React.FC = () => {
 
                           <ScrollArea className="flex-1 overflow-y-auto">
                             <div className="p-5 flex flex-col gap-4">
-                              {filteredEntries && filteredEntries.length > 0 ? (
-                                filteredEntries.map((entry: any, index: number) => {
-                                  const speakerId = entry.speaker_id || "0";
-                                  const idNum = parseInt(speakerId.toString().replace(/\D/g, "")) || 0;
-                                  const speakerName = `Speaker ${String.fromCharCode(65 + idNum)}`;
-                                  const isSegmentActive = isAudioPlaying && currentTime >= entry.start_time_seconds && currentTime <= entry.end_time_seconds;
-
-                                  return (
-                                    <div
-                                      key={index}
-                                      className={cn(
-                                        "flex items-start gap-3.5 group animate-in fade-in duration-200 p-2.5 rounded-xl border border-transparent transition-all duration-200",
-                                        isSegmentActive && "bg-cyan-500/[0.04] dark:bg-cyan-500/[0.06] border-cyan-500/20 dark:border-cyan-500/30 shadow-sm shadow-cyan-500/5"
-                                      )}
-                                    >
-                                      <div
-                                        className="size-[22px] rounded-full border flex items-center justify-center font-semibold text-[9px] shrink-0"
-                                        style={{
-                                          backgroundColor: getSpeakerColor(speakerId).replace("1)", "0.1)"),
-                                          color: getSpeakerColor(speakerId),
-                                          borderColor: getSpeakerColor(speakerId).replace("1)", "0.2)"),
-                                        }}
-                                      >
-                                        {String.fromCharCode(65 + idNum)}
-                                      </div>
-
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[12px] font-semibold text-foreground">
-                                            {speakerName}
-                                          </span>
-                                          <span className="text-[10px] font-mono font-medium text-muted-foreground flex items-center">
-                                            {formatSegmentTime(entry.start_time_seconds)}
-                                            <CornerDownRight className="size-2.5 text-muted-foreground mx-0.5 inline-block align-middle" />
-                                            {formatSegmentTime(entry.end_time_seconds)}
-                                          </span>
-                                        </div>
-                                        <p className="text-[12px] leading-relaxed font-normal text-foreground/90 select-text mt-1.5">
-                                          {entry.transcript}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              ) : (
+                              {activeTab === "summary" ? (
                                 <div className="text-[12px] leading-relaxed font-normal text-foreground/90 whitespace-pre-wrap select-text px-1">
-                                  {currentTranscript || "No dialogue segment detected. Session timeline is empty."}
+                                  {dbRecording?.summary_text ? (
+                                    <div className="flex flex-col gap-2.5">
+                                      {dbRecording.summary_text.split("\n").map((line, idx) => {
+                                        if (line.startsWith("# ")) {
+                                          return <h1 key={idx} className="text-[16px] font-bold text-foreground mt-3 mb-1.5 border-b border-border pb-1">{line.replace("# ", "")}</h1>;
+                                        }
+                                        if (line.startsWith("## ")) {
+                                          return <h2 key={idx} className="text-[14px] font-semibold text-foreground mt-2.5 mb-1">{line.replace("## ", "")}</h2>;
+                                        }
+                                        if (line.startsWith("### ")) {
+                                          return <h3 key={idx} className="text-[13px] font-medium text-foreground mt-2 mb-1">{line.replace("### ", "")}</h3>;
+                                        }
+                                        if (line.startsWith("- ") || line.startsWith("* ")) {
+                                          return <li key={idx} className="ml-4 list-disc text-muted-foreground leading-relaxed mt-0.5">{line.substring(2)}</li>;
+                                        }
+                                        if (line.trim().length === 0) return <div key={idx} className="h-1.5" />;
+                                        return <p key={idx} className="text-foreground/90 leading-relaxed mt-1">{line}</p>;
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div className="text-muted-foreground text-center py-12 flex flex-col items-center justify-center gap-3">
+                                      <Loader2 className="size-5 animate-spin text-cyan-500" />
+                                      <span className="text-[11px] font-medium tracking-wide">Generating AI summary... Please wait.</span>
+                                    </div>
+                                  )}
                                 </div>
+                              ) : (
+                                filteredEntries && filteredEntries.length > 0 ? (
+                                  filteredEntries.map((entry: any, index: number) => {
+                                    const speakerId = entry.speaker_id || "0";
+                                    const idNum = parseInt(speakerId.toString().replace(/\D/g, "")) || 0;
+                                    const speakerName = `Speaker ${String.fromCharCode(65 + idNum)}`;
+                                    const isSegmentActive = isAudioPlaying && currentTime >= entry.start_time_seconds && currentTime <= entry.end_time_seconds;
+
+                                    return (
+                                      <div
+                                        key={index}
+                                        className={cn(
+                                          "flex items-start gap-3.5 group animate-in fade-in duration-200 p-2.5 rounded-xl border border-transparent transition-all duration-200",
+                                          isSegmentActive && "bg-cyan-500/[0.04] dark:bg-cyan-500/[0.06] border-cyan-500/20 dark:border-cyan-500/30 shadow-sm shadow-cyan-500/5"
+                                        )}
+                                      >
+                                        <div
+                                          className="size-[22px] rounded-full border flex items-center justify-center font-semibold text-[9px] shrink-0"
+                                          style={{
+                                            backgroundColor: getSpeakerColor(speakerId).replace("1)", "0.1)"),
+                                            color: getSpeakerColor(speakerId),
+                                            borderColor: getSpeakerColor(speakerId).replace("1)", "0.2)"),
+                                          }}
+                                        >
+                                          {String.fromCharCode(65 + idNum)}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[12px] font-semibold text-foreground">
+                                              {speakerName}
+                                            </span>
+                                            <span className="text-[10px] font-mono font-medium text-muted-foreground flex items-center">
+                                              {formatSegmentTime(entry.start_time_seconds)}
+                                              <CornerDownRight className="size-2.5 text-muted-foreground mx-0.5 inline-block align-middle" />
+                                              {formatSegmentTime(entry.end_time_seconds)}
+                                            </span>
+                                          </div>
+                                          <p className="text-[12px] leading-relaxed font-normal text-foreground/90 select-text mt-1.5">
+                                            {entry.transcript}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <div className="text-[12px] leading-relaxed font-normal text-foreground/90 whitespace-pre-wrap select-text px-1">
+                                    {currentTranscript || "No dialogue segment detected. Session timeline is empty."}
+                                  </div>
+                                )
                               )}
                             </div>
                           </ScrollArea>

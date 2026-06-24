@@ -73,11 +73,9 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedAttachment, setUploadedAttachment] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadFile = async (file: File) => {
     // Size validation (25MB limit)
     const MAX_SIZE = 25 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
@@ -146,6 +144,20 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
       setAttachmentFile(null);
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadFile(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const file = e.clipboardData.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      e.preventDefault();
+      uploadFile(file);
     }
   };
 
@@ -220,7 +232,35 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const channelName = otherMember?.name ?? currentChannel?.name ?? "Group Chat";
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+    <div 
+      className={`flex flex-col flex-1 overflow-hidden min-h-0 relative ${isDragging ? 'ring-2 ring-primary/50 bg-primary/5' : ''}`}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Ignore leave events from children
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file && !isUploading && !attachmentFile) {
+          uploadFile(file);
+        }
+      }}
+    >
       {/* ── Header ── */}
       {!hideHeader && (
         <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-border bg-card">
@@ -336,7 +376,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                     setReplyingTo({
                       messageId: msg.id,
                       senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
-                      text: msg.content,
+                      text: msg.content || (msg.attachments?.length ? msg.attachments[0].fileName : ""),
                     });
                   }
                 }}
@@ -365,16 +405,20 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                         {msg.reply_to && (
                           <div
                             onClick={() => scrollToMessage(msg.reply_to!.messageId)}
-                            className={`mb-1.5 p-2 rounded-lg text-xs cursor-pointer border-l-2 border-foreground select-none text-left ${
+                            className={`mb-1.5 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer border-l-[3px] select-none text-left flex flex-col gap-0.5 transition-colors ${
                               isMine
-                                ? "bg-primary-foreground/15 text-primary-foreground/90"
-                                : "bg-muted text-muted-foreground"
+                                ? "bg-black/10 hover:bg-black/15 border-primary-foreground/40"
+                                : "bg-muted/60 hover:bg-muted/80 border-primary/40"
                             }`}
                           >
-                            <div className="font-bold text-[10px] truncate">
+                            <div className={`font-semibold text-[10.5px] truncate ${
+                              isMine ? "text-primary-foreground/90" : "text-primary/90"
+                            }`}>
                               {msg.reply_to.senderName}
                             </div>
-                            <div className="line-clamp-3 text-[11px] leading-tight opacity-90 break-words">
+                            <div className={`line-clamp-2 text-[11px] leading-snug break-words ${
+                              isMine ? "text-primary-foreground/75" : "text-muted-foreground"
+                            }`}>
                               {msg.reply_to.text}
                             </div>
                           </div>
@@ -425,7 +469,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                     onClick={() => setReplyingTo({
                       messageId: msg.id,
                       senderName: isMine ? "You" : (msg.sender.name ?? "Unknown"),
-                      text: msg.content,
+                      text: msg.content || (msg.attachments?.length ? msg.attachments[0].fileName : ""),
                     })}
                     className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-muted text-muted-foreground cursor-pointer flex items-center justify-center shrink-0 self-center"
                     title="Reply"
@@ -544,6 +588,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             value={text}
             onChange={handleInputChange}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onPaste={handlePaste}
             placeholder="Message..."
             className="flex-1 text-sm bg-muted/65 hover:bg-muted/90 focus:bg-background rounded-xl px-3.5 py-2 outline-none placeholder:text-muted-foreground border border-border/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all duration-150 ease-out"
           />

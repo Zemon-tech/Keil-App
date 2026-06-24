@@ -11,6 +11,7 @@ export interface MeetingRecording {
     transcript_diarized: any | null;
     language_detected: string | null;
     stt_provider: string;
+    summary_text?: string | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -108,6 +109,24 @@ export const updateRecordingResult = async (
         languageDetected || null,
         recordingId
     ]);
+    return result.rows[0];
+};
+
+/**
+ * Updates the summary text of a recording
+ */
+export const updateRecordingSummary = async (
+    recordingId: string,
+    summaryText: string
+): Promise<MeetingRecording> => {
+    const queryText = `
+        UPDATE public.meeting_recordings
+        SET summary_text = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING *
+    `;
+    const result = await pool.query(queryText, [summaryText, recordingId]);
     return result.rows[0];
 };
 

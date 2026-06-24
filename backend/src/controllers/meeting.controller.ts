@@ -7,7 +7,7 @@ import { getS3Client } from "../lib/s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
-import { processFailedTranscription } from "../services/transcription-processor";
+import { processCompletedTranscription, processFailedTranscription } from "../services/transcription-processor";
 import { getTranscriptionProvider, isValidSttProvider } from "../services/transcription";
 import * as userPreferencesService from "../services/user-preferences.service";
 import { createServiceLogger } from "../lib/logger";
@@ -151,51 +151,32 @@ export const transcribeRecording = catchAsync(async (req: Request, res: Response
                 log.info({ recordingId, jobId: jobInfo.jobId, completed: jobInfo.completed, provider: chosenProvider }, "Transcription provider returned");
 
                 if (jobInfo.completed && jobInfo.result) {
-                    // Synchronous completion — update job ID then save final results
+                    // Synchronous completion — update job ID then save final results and trigger AI summary
                     await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, jobInfo.result.audioDurationSeconds || finalDuration, chosenProvider);
 
-                    const updated = await meetingService.updateRecordingResult(
+                    await processCompletedTranscription(
+                        jobInfo.jobId,
                         recordingId,
-                        "completed",
-                        jobInfo.result.transcriptText,
-                        jobInfo.result.transcriptDiarized,
-                        jobInfo.result.languageDetected || undefined
+                        user.id,
+                        {
+                            transcriptText: jobInfo.result.transcriptText,
+                            transcriptDiarized: jobInfo.result.transcriptDiarized,
+                            languageDetected: jobInfo.result.languageDetected || null
+                        }
                     );
-
-                    try {
-                        const { broadcastMeetingUpdate } = require("../socket");
-                        broadcastMeetingUpdate(user.id, {
-                            type: "transcription_complete",
-                            recordingId,
-                            status: "completed",
-                            recording: updated
-                        });
-                    } catch (sockErr) {
-                        log.warn({ sockErr }, "Failed to broadcast transcription completion");
-                    }
                 } else {
                     // Async path — update job ID for polling
                     await meetingService.updateRecordingJob(recordingId, jobInfo.jobId, finalDuration, chosenProvider);
                 }
             } catch (bgError: any) {
                 log.error({ err: bgError, recordingId, provider: chosenProvider }, "Background transcription error");
-                const updated = await meetingService.updateRecordingStatus(recordingId, "failed").catch(e => {
-                    log.error({ err: e }, "Could not update recording status to 'failed'");
-                    return null;
+                await processFailedTranscription(
+                    `${chosenProvider}_failed_${recordingId}`,
+                    recordingId,
+                    user.id
+                ).catch(e => {
+                    log.error({ err: e }, "Failed during processFailedTranscription call");
                 });
-                if (updated) {
-                    try {
-                        const { broadcastMeetingUpdate } = require("../socket");
-                        broadcastMeetingUpdate(user.id, {
-                            type: "transcription_complete",
-                            recordingId,
-                            status: "failed",
-                            recording: updated
-                        });
-                    } catch (sockErr) {
-                        log.warn({ sockErr }, "Failed to broadcast transcription failure");
-                    }
-                }
             }
         })().catch(e => log.error({ err: e }, "Unhandled background rejection"));
 

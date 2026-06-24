@@ -14,6 +14,7 @@ export interface MeetingRecordingDTO {
   transcript_diarized: any | null;
   language_detected: string | null;
   stt_provider: string;
+  summary_text?: string | null;
   created_at: string;
   updated_at: string;
 }
