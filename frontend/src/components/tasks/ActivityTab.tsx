@@ -5,7 +5,6 @@ import {
   Loader2,
   MessageSquare,
   Mic,
-  Paperclip,
   Plus,
   Send,
   Smile,
@@ -315,26 +314,26 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     setPreviewOpen(true);
   };
 
-  const filteredMembers = (members || []).filter((m) =>
+  const filteredMembers = (members || []).filter((m: any) =>
     (m.name || m.email || "").toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredTasks = allTasks.filter(
-    (t) =>
+    (t: any) =>
       t.type === "task" &&
       t.id !== task.id &&
       t.title.toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredEvents = allTasks.filter(
-    (t) =>
+    (t: any) =>
       t.type === "event" &&
       t.id !== task.id &&
       t.title.toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredPages = pages.filter(
-    (p) =>
+    (p: any) =>
       !p.deleted_at &&
       (p.title || "Untitled").toLowerCase().includes(mention.query.toLowerCase())
   );
@@ -349,10 +348,10 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   const groupedResults = useMemo<{ label: string; items: UnifiedSearchItem[] }[]>(() => {
     if (mention.type !== "all" || !mention.query) return [];
     return [
-      { label: "People", items: filteredMembers.slice(0, 3).map(m => ({ ...m, kind: "user" as const })) },
-      { label: "Tasks", items: filteredTasks.slice(0, 3).map(t => ({ ...t, kind: "task" as const })) },
-      { label: "Events", items: filteredEvents.slice(0, 3).map(e => ({ ...e, kind: "event" as const })) },
-      { label: "Pages", items: filteredPages.slice(0, 3).map(p => ({ ...p, kind: "page" as const })) },
+      { label: "People", items: filteredMembers.slice(0, 3).map((m: any) => ({ ...m, kind: "user" as const })) },
+      { label: "Tasks", items: filteredTasks.slice(0, 3).map((t: any) => ({ ...t, kind: "task" as const })) },
+      { label: "Events", items: filteredEvents.slice(0, 3).map((e: any) => ({ ...e, kind: "event" as const })) },
+      { label: "Pages", items: filteredPages.slice(0, 3).map((p: any) => ({ ...p, kind: "page" as const })) },
     ].filter(g => g.items.length > 0);
   }, [mention.type, mention.query, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
 
@@ -713,7 +712,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                 {flatResults.length === 0 ? (
                   <p className="py-4 text-xs text-muted-foreground text-center">No results found</p>
                 ) : (
-                  flatResults.map((rawItem: unknown, idx) => {
+                  flatResults.map((rawItem: unknown, idx: number) => {
                     let icon = null;
                     let title = "";
                     let selectHandler = () => {};
