@@ -42,6 +42,7 @@ import { useMotionPages, type MotionPageDTO } from "@/hooks/api/useMotionPages";
 import { formatRelTime } from "./task-detail-shared";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import { renderMessageContent, type MentionMember } from "./renderMessageContent";
+import { ActivityAiSummary } from "./ActivityAiSummary";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -564,16 +565,20 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
         onOpenChange={setPreviewOpen}
       />
       <ScrollArea className="flex-1 min-h-0">
-        <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto font-sans">
+        <div className="w-full py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto font-sans">
           {isPending ? (
             <div className="flex justify-center py-8 my-auto">
               <Loader2 className="size-8 animate-spin text-muted-foreground" />
             </div>
           ) : (comments ?? []).length > 0 ? (
-            <div className="space-y-0.5 mt-auto">
-              {(comments ?? []).map((comment) => (
-                <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} members={members} pages={pages} />
-              ))}
+            <div className="flex flex-col mt-auto">
+              {/* AI-generated living summary — sits above the comment thread */}
+              <ActivityAiSummary task={task} comments={comments ?? []} />
+              <div className="space-y-0.5 px-8">
+                {(comments ?? []).map((comment) => (
+                  <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} members={members} pages={pages} />
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center my-auto py-12 text-center">
