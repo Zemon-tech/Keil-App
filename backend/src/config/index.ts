@@ -74,6 +74,11 @@ export const config = {
     grafanaLokiHost: process.env.GRAFANA_LOKI_HOST || "",
     grafanaLokiUser: process.env.GRAFANA_LOKI_USER || "",
     grafanaLokiPassword: process.env.GRAFANA_LOKI_PASSWORD || "",
+    // ── AI Summary ─────────────────────────────────────────────────────────
+    // OpenRouter model used for task activity summaries (direct generateText, no agent)
+    aiSummaryModel: process.env.AI_SUMMARY_MODEL || "openai/gpt-4o-mini",
+    aiSummaryMaxComments: parseInt(process.env.AI_SUMMARY_MAX_COMMENTS || "100", 10),
+    aiSummaryRateLimit: parseInt(process.env.AI_SUMMARY_RATE_LIMIT || "100", 10),
     // ── Dodo Payments ────────────────────────────────────────────────────────
     dodoPaymentsApiKey: process.env.DODO_PAYMENTS_API_KEY || "",
     dodoPaymentsWebhookKey: process.env.DODO_PAYMENTS_WEBHOOK_KEY || "",

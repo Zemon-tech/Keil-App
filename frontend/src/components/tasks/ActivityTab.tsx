@@ -572,7 +572,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
           ) : (comments ?? []).length > 0 ? (
             <div className="flex flex-col mt-auto">
               {/* AI-generated living summary — sits above the comment thread */}
-              <ActivityAiSummary task={task} comments={comments ?? []} />
+              <ActivityAiSummary task={task} orgId={taskOrgId} spaceId={taskSpaceId} commentCount={(comments ?? []).length} />
               <div className="space-y-0.5 px-8">
                 {(comments ?? []).map((comment) => (
                   <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} members={members} pages={pages} />

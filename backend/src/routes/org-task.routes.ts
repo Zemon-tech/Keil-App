@@ -27,6 +27,8 @@ import {
   createChecklist,
   updateChecklist,
   deleteChecklist,
+  getTaskAiSummary,
+  regenerateTaskAiSummary,
 } from "../controllers/org-task.controller";
 
 const router = Router({ mergeParams: true });
@@ -63,6 +65,10 @@ router.get("/:id/subtasks", requireSpaceRole("admin", "manager", "member"), getS
 router.get("/:id/comments", requireSpaceRole("admin", "manager", "member"), getTaskComments);
 router.post("/:id/comments", requireSpaceRole("admin", "manager", "member"), addTaskComment);
 router.delete("/:id/comments/:commentId", requireSpaceRole("admin", "manager", "member"), deleteTaskComment);
+
+// AI Summary routes
+router.get("/:id/summary", requireSpaceRole("admin", "manager", "member"), getTaskAiSummary);
+router.post("/:id/summary/regenerate", requireSpaceRole("admin", "manager", "member"), regenerateTaskAiSummary);
 
 export default router;
 

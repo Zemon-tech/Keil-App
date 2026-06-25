@@ -7,6 +7,7 @@ import { LogEntityType, LogActionType } from '../types/enums';
 import { CommentQueryOptions } from '../types/repository';
 import { ApiError } from '../utils/ApiError';
 import { createServiceLogger } from '../lib/logger';
+import { scheduleSummaryGeneration } from './ai-summary.service';
 
 const log = createServiceLogger('comment-service');
 
@@ -220,6 +221,13 @@ export const createComment = async (
     
     return commentWithUser!;
   });
+
+  // ── Trigger AI summary generation (fire-and-forget, after transaction commits) ──
+  try {
+    scheduleSummaryGeneration(data.task_id);
+  } catch (err) {
+    log.warn({ err, taskId: data.task_id }, "[createComment] Failed to schedule AI summary generation");
+  }
 
   return commentToDTO(comment);
 };
