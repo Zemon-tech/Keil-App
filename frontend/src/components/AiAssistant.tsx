@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useStreamResume, chunksToText } from "@/hooks/api/useStreamResume";
+import { useStreamResume } from "@/hooks/api/useStreamResume";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import api from "@/lib/api";
@@ -570,12 +570,11 @@ export function AiAssistant() {
     // Track the highest chunk index we've received so the resume hook
     // knows where to start fetching from after a reconnect.
     const [lastChunkIndex, setLastChunkIndex] = useState(-1);
-    const [resumedText, setResumedText] = useState<string | null>(null);
 
     // ─── Stream resume on reconnect ────────────────────────────────────────
     // If the user left while the AI was still streaming, we fetch missed
     // chunks from the server and replay them into the last assistant message.
-    const { isResuming, streamStatus } = useStreamResume({
+    const { isResuming } = useStreamResume({
         threadId,
         fromChunkIndex: lastChunkIndex + 1,
         onReplayChunk: (chunk) => {
@@ -583,9 +582,8 @@ export function AiAssistant() {
                 setLastChunkIndex((prev) => Math.max(prev, chunk.index));
             }
         },
-        onReplayComplete: (status, text) => {
+        onReplayComplete: (_status, text) => {
             if (!text) return;
-            setResumedText(text);
             // Merge replayed text into the last assistant message if it's incomplete
             setMessages((prev) => {
                 const lastMsg = prev[prev.length - 1];
@@ -623,7 +621,6 @@ export function AiAssistant() {
     // Reset resume state when switching threads
     useEffect(() => {
         setLastChunkIndex(-1);
-        setResumedText(null);
     }, [threadId]);
 
     const isStreaming = status === "streaming";
