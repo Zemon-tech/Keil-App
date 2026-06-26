@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import { useStreamResume } from "@/hooks/api/useStreamResume";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import api from "@/lib/api";
@@ -566,13 +567,70 @@ export function AiAssistant() {
 
     const { messages, sendMessage, status, setMessages } = useChat({ transport });
 
+    // Track the highest chunk index we've received so the resume hook
+    // knows where to start fetching from after a reconnect.
+    const [lastChunkIndex, setLastChunkIndex] = useState(-1);
+
+    // ─── Stream resume on reconnect ────────────────────────────────────────
+    // If the user left while the AI was still streaming, we fetch missed
+    // chunks from the server and replay them into the last assistant message.
+    const { isResuming } = useStreamResume({
+        threadId,
+        fromChunkIndex: lastChunkIndex + 1,
+        onReplayChunk: (chunk) => {
+            if (chunk.type === "text-delta") {
+                setLastChunkIndex((prev) => Math.max(prev, chunk.index));
+            }
+        },
+        onReplayComplete: (_status, text) => {
+            if (!text) return;
+            // Merge replayed text into the last assistant message if it's incomplete
+            setMessages((prev) => {
+                const lastMsg = prev[prev.length - 1];
+                if (!lastMsg || lastMsg.role !== "assistant") {
+                    // No existing assistant message — append a new one
+                    return [
+                        ...prev,
+                        {
+                            id: crypto.randomUUID(),
+                            role: "assistant" as const,
+                            content: text,
+                            parts: [{ type: "text" as const, text }],
+                        },
+                    ];
+                }
+                // Existing assistant message — check if it's missing content
+                const existingText = lastMsg.parts
+                    ?.filter((p: any) => p.type === "text")
+                    .map((p: any) => p.text)
+                    .join("") ?? "";
+                if (existingText.length >= text.length) return prev; // already complete
+                return prev.map((m, i) =>
+                    i === prev.length - 1
+                        ? {
+                              ...m,
+                              content: text,
+                              parts: [{ type: "text" as const, text }],
+                          }
+                        : m
+                );
+            });
+        },
+    });
+
+    // Reset resume state when switching threads
+    useEffect(() => {
+        setLastChunkIndex(-1);
+    }, [threadId]);
+
     const isStreaming = status === "streaming";
-    const isLoading = status === "submitted" || status === "streaming" || isUploadingFiles;
+    const isLoading = status === "submitted" || status === "streaming" || isUploadingFiles || isResuming;
 
     const isAssistantThinking =
         isLoading && messages[messages.length - 1]?.role === "user";
 
     const assistantLoadingText = useMemo(() => {
+        if (isResuming) return "Resuming where we left off…";
         return [
             "Fetching the output",
             "Be ready",

@@ -556,23 +556,25 @@ export function AppSidebar({
             <SidebarMenuItem>
               {isCollapsed ? (
                 <div className="relative group/trigger flex items-center justify-center size-8 mx-auto transition-all duration-300">
-                  <img
-                    src={logoSrc}
-                    alt="Keil HQ"
-                    className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90"
-                  />
+                  <Link to="/">
+                    <img
+                      src={logoSrc}
+                      alt="Keil HQ"
+                      className="size-6 transition-all duration-300 group-hover/trigger:opacity-0 group-hover/trigger:scale-90 cursor-pointer"
+                    />
+                  </Link>
                   <SidebarTrigger className="absolute inset-0 opacity-0 group-hover/trigger:opacity-100 transition-all duration-300 scale-75 group-hover/trigger:scale-100 bg-card hover:bg-muted border-none shadow-none" />
                 </div>
               ) : (
                 <div className="flex h-9 items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
+                  <Link to="/" className="flex items-center gap-2.5">
                     <div className="flex size-8 items-center justify-center rounded-lg bg-background shadow-sm ring-1 ring-border/60">
                       <img src={logoSrc} alt="Keil HQ" className="size-5" />
                     </div>
                     <span className="truncate text-[15px] font-bold tracking-tight text-foreground">
                       KeilHQ
                     </span>
-                  </div>
+                  </Link>
                   <SidebarTrigger className="size-7 rounded-md border border-border/60 bg-background/80 shadow-sm hover:bg-sidebar-accent" />
                 </div>
               )}

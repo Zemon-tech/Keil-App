@@ -66,6 +66,7 @@ export interface CreateMotionPageInput {
   title?: string;
   icon?: string | null;
   cover_image?: string | null;
+  content?: JSONContent;
 }
 
 export interface UpdateMotionPageInput {
@@ -139,7 +140,7 @@ export function useCachedPageById(id: string | null | undefined): MotionPageDTO 
   const { data: pages } = useMotionPages(activeOrgId, activeSpaceId);
   return useMemo(() => {
     if (!id || !pages) return undefined;
-    return pages.find((p) => p.id === id);
+    return pages.find((p: MotionPageDTO) => p.id === id);
   }, [id, pages]);
 }
 
@@ -148,8 +149,8 @@ export function useRootPages(orgId: string | null, spaceId: string | null): Moti
   const { data: pages = [] } = useMotionPages(orgId, spaceId);
   return useMemo(() => {
     return pages
-      .filter((p) => !p.parent_id && !p.deleted_at)
-      .sort((a, b) => a.position - b.position);
+      .filter((p: MotionPageDTO) => !p.parent_id && !p.deleted_at)
+      .sort((a: MotionPageDTO, b: MotionPageDTO) => a.position - b.position);
   }, [pages]);
 }
 
@@ -163,8 +164,8 @@ export function useSubpages(
   return useMemo(() => {
     if (!parentId) return [];
     return pages
-      .filter((p) => p.parent_id === parentId && !p.deleted_at)
-      .sort((a, b) => a.position - b.position);
+      .filter((p: MotionPageDTO) => p.parent_id === parentId && !p.deleted_at)
+      .sort((a: MotionPageDTO, b: MotionPageDTO) => a.position - b.position);
   }, [pages, parentId]);
 }
 
@@ -248,19 +249,19 @@ export function useCreateMotionPage(
   const queryClient = useQueryClient();
 
   return useMutation<MotionPageDTO, Error, CreateMotionPageInput>({
-    mutationFn: async (input) => {
+    mutationFn: async (input: CreateMotionPageInput) => {
       const res = await api.post<{ data: MotionPageDTO }>(
         notesBase(orgId!, spaceId!),
         input
       );
       return res.data.data;
     },
-    onSuccess: (newPage) => {
+    onSuccess: (newPage: MotionPageDTO) => {
       if (!orgId || !spaceId) return;
       // Optimistically prepend to the list cache
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.lists(orgId, spaceId),
-        (old) => (old ? [newPage, ...old] : [newPage])
+        (old: MotionPageDTO[] | undefined) => (old ? [newPage, ...old] : [newPage])
       );
       // Also seed the detail cache so navigating to the page is instant
       queryClient.setQueryData(
@@ -292,7 +293,7 @@ export function useUpdateMotionPage(
     { id: string; updates: UpdateMotionPageInput },
     { previousList?: MotionPageDTO[]; previousDetail?: MotionPageDTO; previousShared?: MotionPageDTO[] }
   >({
-    onMutate: async ({ id, updates }) => {
+    onMutate: async ({ id, updates }: { id: string; updates: UpdateMotionPageInput }) => {
       if (!orgId || !spaceId) return {};
 
       // Cancel in-flight refetches to avoid overwriting our optimistic update
@@ -327,8 +328,8 @@ export function useUpdateMotionPage(
       // Apply optimistic update to list cache (title + icon visible in sidebar)
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.lists(orgId, spaceId),
-        (old) =>
-          old?.map((p) =>
+        (old: MotionPageDTO[] | undefined) =>
+          old?.map((p: MotionPageDTO) =>
             p.id === id
               ? { ...p, ...updates, updated_at: new Date().toISOString() }
               : p
@@ -338,8 +339,8 @@ export function useUpdateMotionPage(
       // Apply optimistic update to shared list cache
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.shared(orgId, spaceId),
-        (old) =>
-          old?.map((p) =>
+        (old: MotionPageDTO[] | undefined) =>
+          old?.map((p: MotionPageDTO) =>
             p.id === id
               ? { ...p, ...updates, updated_at: new Date().toISOString() }
               : p
@@ -348,14 +349,14 @@ export function useUpdateMotionPage(
 
       return { previousDetail, previousList, previousShared };
     },
-    mutationFn: async ({ id, updates }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: UpdateMotionPageInput }) => {
       const res = await api.patch<{ data: MotionPageDTO }>(
         `${notesBase(orgId!, spaceId!)}/${id}`,
         updates
       );
       return res.data.data;
     },
-    onSuccess: (serverPage) => {
+    onSuccess: (serverPage: MotionPageDTO) => {
       if (!orgId || !spaceId) return;
       // Replace optimistic data with server-confirmed data
       queryClient.setQueryData(
@@ -364,11 +365,11 @@ export function useUpdateMotionPage(
       );
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.lists(orgId, spaceId),
-        (old) => old?.map((p) => (p.id === serverPage.id ? serverPage : p))
+        (old: MotionPageDTO[] | undefined) => old?.map((p: MotionPageDTO) => (p.id === serverPage.id ? serverPage : p))
       );
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.shared(orgId, spaceId),
-        (old) => old?.map((p) => (p.id === serverPage.id ? serverPage : p))
+        (old: MotionPageDTO[] | undefined) => old?.map((p: MotionPageDTO) => (p.id === serverPage.id ? serverPage : p))
       );
       // Invalidate motion-analytics query keys to trigger fresh updates reload in the drawer
       // Keys are structured as ["motion-analytics", orgId, spaceId, pageId, ...] so we must
@@ -377,7 +378,7 @@ export function useUpdateMotionPage(
         queryKey: ["motion-analytics", orgId, spaceId, serverPage.id],
       });
     },
-    onError: (_err, { id }, context) => {
+    onError: (_err: any, { id }: { id: string }, context: any) => {
       // Roll back optimistic updates on failure
       if (context?.previousDetail && orgId && spaceId) {
         queryClient.setQueryData(
@@ -410,7 +411,7 @@ export function useSoftDeleteMotionPage(
   const queryClient = useQueryClient();
 
   return useMutation<void, Error, { id: string; title: string }>({
-    onMutate: async ({ id }) => {
+    onMutate: async ({ id }: { id: string }) => {
       if (!orgId || !spaceId) return;
       await queryClient.cancelQueries({
         queryKey: motionPageKeys.lists(orgId, spaceId),
@@ -418,27 +419,27 @@ export function useSoftDeleteMotionPage(
       // Optimistically remove from list (and all descendants)
       queryClient.setQueryData<MotionPageDTO[]>(
         motionPageKeys.lists(orgId, spaceId),
-        (old) => {
+        (old: MotionPageDTO[] | undefined) => {
           if (!old) return [];
           const idsToRemove = new Set<string>([id]);
           let added = true;
           while (added) {
             added = false;
-            old.forEach((p) => {
+            old.forEach((p: MotionPageDTO) => {
               if (p.parent_id && idsToRemove.has(p.parent_id) && !idsToRemove.has(p.id)) {
                 idsToRemove.add(p.id);
                 added = true;
               }
             });
           }
-          return old.filter((p) => !idsToRemove.has(p.id));
+          return old.filter((p: MotionPageDTO) => !idsToRemove.has(p.id));
         }
       );
     },
-    mutationFn: async ({ id }) => {
+    mutationFn: async ({ id }: { id: string }) => {
       await api.delete(`${notesBase(orgId!, spaceId!)}/${id}`);
     },
-    onSuccess: (_, { title }) => {
+    onSuccess: (_: any, { title }: { title: string }) => {
       if (!orgId || !spaceId) return;
       // Refresh both list and trash
       queryClient.invalidateQueries({
@@ -469,7 +470,7 @@ export function useRestoreMotionPage(
   const queryClient = useQueryClient();
 
   return useMutation<MotionPageDTO, Error, string>({
-    mutationFn: async (pageId) => {
+    mutationFn: async (pageId: string) => {
       const res = await api.patch<{ data: MotionPageDTO }>(
         `${notesBase(orgId!, spaceId!)}/${pageId}/restore`
       );
@@ -499,7 +500,7 @@ export function useHardDeleteMotionPage(
   const queryClient = useQueryClient();
 
   return useMutation<void, Error, string>({
-    mutationFn: async (pageId) => {
+    mutationFn: async (pageId: string) => {
       await api.delete(`${notesBase(orgId!, spaceId!)}/${pageId}/permanent`);
     },
     onSuccess: () => {
@@ -526,7 +527,7 @@ export function useCreateMotionPageShare(
   const queryClient = useQueryClient();
 
   return useMutation<MotionPageShareDTO, Error, CreateShareInput>({
-    mutationFn: async (input) => {
+    mutationFn: async (input: CreateShareInput) => {
       const res = await api.post<{ data: MotionPageShareDTO }>(
         `${notesBase(orgId!, spaceId!)}/${pageId}/shares`,
         input
@@ -558,7 +559,7 @@ export function useRevokeMotionPageShare(
   const queryClient = useQueryClient();
 
   return useMutation<void, Error, string>({
-    mutationFn: async (shareId) => {
+    mutationFn: async (shareId: string) => {
       await api.delete(
         `${notesBase(orgId!, spaceId!)}/${pageId}/shares/${shareId}`
       );
@@ -592,7 +593,7 @@ export function useUpdateMotionPageShare(
     Error,
     { shareId: string; permission: MotionPermission }
   >({
-    mutationFn: async ({ shareId, permission }) => {
+    mutationFn: async ({ shareId, permission }: { shareId: string; permission: MotionPermission }) => {
       const res = await api.patch<{ data: MotionPageShareDTO }>(
         `${notesBase(orgId!, spaceId!)}/${pageId}/shares/${shareId}`,
         { permission }
@@ -642,18 +643,18 @@ export function useMotionSocketListeners(
             if (page.share_permission) {
               queryClient.setQueryData<MotionPageDTO[]>(
                 motionPageKeys.shared(orgId, spaceId),
-                (old) => {
+                (old: MotionPageDTO[] | undefined) => {
                   if (!old) return [page];
-                  if (old.some((p) => p.id === page.id)) return old;
+                  if (old.some((p: MotionPageDTO) => p.id === page.id)) return old;
                   return [page, ...old];
                 }
               );
             } else {
               queryClient.setQueryData<MotionPageDTO[]>(
                 motionPageKeys.lists(orgId, spaceId),
-                (old) => {
+                (old: MotionPageDTO[] | undefined) => {
                   if (!old) return [page];
-                  if (old.some((p) => p.id === page.id)) return old;
+                  if (old.some((p: MotionPageDTO) => p.id === page.id)) return old;
                   return [page, ...old];
                 }
               );
@@ -666,13 +667,13 @@ export function useMotionSocketListeners(
             // Update list cache
             queryClient.setQueryData<MotionPageDTO[]>(
               motionPageKeys.lists(orgId, spaceId),
-              (old) => old?.map((p) => (p.id === pageId ? page : p))
+              (old: MotionPageDTO[] | undefined) => old?.map((p: MotionPageDTO) => (p.id === pageId ? page : p))
             );
 
             // Update shared cache
             queryClient.setQueryData<MotionPageDTO[]>(
               motionPageKeys.shared(orgId, spaceId),
-              (old) => old?.map((p) => (p.id === pageId ? page : p))
+              (old: MotionPageDTO[] | undefined) => old?.map((p: MotionPageDTO) => (p.id === pageId ? page : p))
             );
             
             // Update detail cache ONLY if it's the page we are currently editing
@@ -690,11 +691,11 @@ export function useMotionSocketListeners(
           if (pageId) {
             queryClient.setQueryData<MotionPageDTO[]>(
               motionPageKeys.lists(orgId, spaceId),
-              (old) => old?.filter((p) => p.id !== pageId && p.parent_id !== pageId) ?? []
+              (old: MotionPageDTO[] | undefined) => old?.filter((p: MotionPageDTO) => p.id !== pageId && p.parent_id !== pageId) ?? []
             );
             queryClient.setQueryData<MotionPageDTO[]>(
               motionPageKeys.shared(orgId, spaceId),
-              (old) => old?.filter((p) => p.id !== pageId) ?? []
+              (old: MotionPageDTO[] | undefined) => old?.filter((p: MotionPageDTO) => p.id !== pageId) ?? []
             );
             queryClient.invalidateQueries({ queryKey: motionPageKeys.trash(orgId, spaceId) });
 
@@ -709,18 +710,18 @@ export function useMotionSocketListeners(
             if (page.share_permission) {
               queryClient.setQueryData<MotionPageDTO[]>(
                 motionPageKeys.shared(orgId, spaceId),
-                (old) => {
+                (old: MotionPageDTO[] | undefined) => {
                   if (!old) return [page];
-                  if (old.some((p) => p.id === page.id)) return old;
+                  if (old.some((p: MotionPageDTO) => p.id === page.id)) return old;
                   return [...old, page];
                 }
               );
             } else {
               queryClient.setQueryData<MotionPageDTO[]>(
                 motionPageKeys.lists(orgId, spaceId),
-                (old) => {
+                (old: MotionPageDTO[] | undefined) => {
                   if (!old) return [page];
-                  if (old.some((p) => p.id === page.id)) return old;
+                  if (old.some((p: MotionPageDTO) => p.id === page.id)) return old;
                   return [...old, page];
                 }
               );

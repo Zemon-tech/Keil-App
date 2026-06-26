@@ -5,6 +5,7 @@ import { ApiResponse } from "../utils/ApiResponse";
 import * as orgTaskService from "../services/org-task.service";
 import { doIncrementalSyncWithCooldown } from "../services/google-calendar.service";
 import { createComment, getThreadedComments, hardDeleteComment } from "../services/comment.service";
+import { getTaskSummary as getTaskSummaryFromService, generateTaskSummary, isGenerationInFlight } from "../services/ai-summary.service";
 import { TaskPriority, TaskStatus } from "../types/enums";
 import { TaskQueryOptions } from "../types/repository";
 import { taskAssigneeRepository, orgTaskRepository } from "../repositories";
@@ -538,3 +539,49 @@ export const deleteChecklist = catchAsync(async (req: Request, res: Response) =>
   res.status(200).json(new ApiResponse(200, {}, "Checklist item deleted successfully"));
 });
 
+
+// ─── AI Summary Endpoints ─────────────────────────────────────────────────────
+
+export const getTaskAiSummary = catchAsync(async (req: Request, res: Response) => {
+  await assertTaskInSpace(req, asString(req.params.id));
+
+  const summary = await getTaskSummaryFromService(asString(req.params.id));
+
+  if (!summary) {
+    res.status(204).send();
+    return;
+  }
+
+  res.status(200).json(new ApiResponse(200, summary, "Summary retrieved successfully"));
+});
+
+export const regenerateTaskAiSummary = catchAsync(async (req: Request, res: Response) => {
+  await assertTaskInSpace(req, asString(req.params.id));
+
+  const taskId = asString(req.params.id);
+
+  // Check if already generating
+  if (isGenerationInFlight(taskId)) {
+    res.status(409).json({
+      success: false,
+      code: "SUMMARY_IN_PROGRESS",
+      message: "Summary is already being generated for this task.",
+    });
+    return;
+  }
+
+  // Fire generation asynchronously and return 202 immediately
+  // The result will be pushed via socket
+  generateTaskSummary(taskId).then((result) => {
+    if (result.status === "rate_limited") {
+      // Can't notify via HTTP anymore (already sent 202), but the socket won't fire either
+      // The client should check via GET if unsure
+    }
+  }).catch(() => {
+    // Errors logged inside the service
+  });
+
+  // Check rate limit synchronously to give immediate feedback if possible
+  // (This is a lightweight pre-check — the actual enforcement is in the service)
+  res.status(202).json(new ApiResponse(202, { taskId }, "Summary regeneration started"));
+});

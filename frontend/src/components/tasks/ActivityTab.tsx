@@ -5,7 +5,6 @@ import {
   Loader2,
   MessageSquare,
   Mic,
-  Paperclip,
   Plus,
   Send,
   Smile,
@@ -42,6 +41,7 @@ import { useMotionPages, type MotionPageDTO } from "@/hooks/api/useMotionPages";
 import { formatRelTime } from "./task-detail-shared";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import { renderMessageContent, type MentionMember } from "./renderMessageContent";
+import { ActivityAiSummary } from "./ActivityAiSummary";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -314,26 +314,26 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
     setPreviewOpen(true);
   };
 
-  const filteredMembers = (members || []).filter((m) =>
+  const filteredMembers = (members || []).filter((m: any) =>
     (m.name || m.email || "").toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredTasks = allTasks.filter(
-    (t) =>
+    (t: any) =>
       t.type === "task" &&
       t.id !== task.id &&
       t.title.toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredEvents = allTasks.filter(
-    (t) =>
+    (t: any) =>
       t.type === "event" &&
       t.id !== task.id &&
       t.title.toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredPages = pages.filter(
-    (p) =>
+    (p: any) =>
       !p.deleted_at &&
       (p.title || "Untitled").toLowerCase().includes(mention.query.toLowerCase())
   );
@@ -348,10 +348,10 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   const groupedResults = useMemo<{ label: string; items: UnifiedSearchItem[] }[]>(() => {
     if (mention.type !== "all" || !mention.query) return [];
     return [
-      { label: "People", items: filteredMembers.slice(0, 3).map(m => ({ ...m, kind: "user" as const })) },
-      { label: "Tasks", items: filteredTasks.slice(0, 3).map(t => ({ ...t, kind: "task" as const })) },
-      { label: "Events", items: filteredEvents.slice(0, 3).map(e => ({ ...e, kind: "event" as const })) },
-      { label: "Pages", items: filteredPages.slice(0, 3).map(p => ({ ...p, kind: "page" as const })) },
+      { label: "People", items: filteredMembers.slice(0, 3).map((m: any) => ({ ...m, kind: "user" as const })) },
+      { label: "Tasks", items: filteredTasks.slice(0, 3).map((t: any) => ({ ...t, kind: "task" as const })) },
+      { label: "Events", items: filteredEvents.slice(0, 3).map((e: any) => ({ ...e, kind: "event" as const })) },
+      { label: "Pages", items: filteredPages.slice(0, 3).map((p: any) => ({ ...p, kind: "page" as const })) },
     ].filter(g => g.items.length > 0);
   }, [mention.type, mention.query, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
 
@@ -564,16 +564,20 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
         onOpenChange={setPreviewOpen}
       />
       <ScrollArea className="flex-1 min-h-0">
-        <div className="w-full px-8 py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto font-sans">
+        <div className="w-full py-6 flex flex-col min-h-full justify-end max-w-5xl mx-auto font-sans">
           {isPending ? (
             <div className="flex justify-center py-8 my-auto">
               <Loader2 className="size-8 animate-spin text-muted-foreground" />
             </div>
           ) : (comments ?? []).length > 0 ? (
-            <div className="space-y-0.5 mt-auto">
-              {(comments ?? []).map((comment) => (
-                <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} members={members} pages={pages} />
-              ))}
+            <div className="flex flex-col mt-auto">
+              {/* AI-generated living summary — sits above the comment thread */}
+              <ActivityAiSummary task={task} orgId={taskOrgId} spaceId={taskSpaceId} commentCount={(comments ?? []).length} />
+              <div className="space-y-0.5 px-8">
+                {(comments ?? []).map((comment) => (
+                  <CommentNode key={comment.id} comment={comment} taskId={task.id} allTasks={allTasks} onTaskClick={handleTaskClick} orgId={taskOrgId} spaceId={taskSpaceId} task={task} members={members} pages={pages} />
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center my-auto py-12 text-center">
@@ -708,7 +712,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                 {flatResults.length === 0 ? (
                   <p className="py-4 text-xs text-muted-foreground text-center">No results found</p>
                 ) : (
-                  flatResults.map((rawItem: unknown, idx) => {
+                  flatResults.map((rawItem: unknown, idx: number) => {
                     let icon = null;
                     let title = "";
                     let selectHandler = () => {};
@@ -835,18 +839,6 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                   <div className="flex flex-col font-sans">
                     <span className="text-sm font-medium">@ mention</span>
                     <span className="text-xs text-muted-foreground font-medium">Tag people, tasks, events, or pages</span>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-3 p-2.5 cursor-pointer rounded-lg hover:bg-accent focus:bg-accent"
-                >
-                  <div className="flex items-center justify-center size-8 rounded-full bg-violet-500/10 text-violet-500 shrink-0">
-                    <Paperclip className="size-4" />
-                  </div>
-                  <div className="flex flex-col font-sans">
-                    <span className="text-sm font-medium">Add files</span>
-                    <span className="text-xs text-muted-foreground font-medium">Opens file picker dialog</span>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>

@@ -14,6 +14,7 @@ export interface MeetingRecordingDTO {
   transcript_diarized: any | null;
   language_detected: string | null;
   stt_provider: string;
+  summary_text?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -85,7 +86,7 @@ export function useMeetingRecording(recordingId: string | null) {
       return res.data.data;
     },
     enabled: !!recordingId,
-    refetchInterval: (query) => {
+    refetchInterval: (query: any) => {
       const rec = query.state.data;
       if (rec && (rec.transcription_status === "pending" || rec.transcription_status === "processing")) {
         return 3000;
@@ -140,7 +141,7 @@ export function useTranscribeRecording() {
       });
       return res.data.data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (_: any, variables: any) => {
       queryClient.invalidateQueries({ queryKey: meetingKeys.recording(variables.recordingId) });
       queryClient.invalidateQueries({ queryKey: meetingKeys.all });
     },

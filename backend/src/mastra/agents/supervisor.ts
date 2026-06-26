@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { resolveModel } from "../models";
 import { webSearchExaTool } from "../tools/web.tools";
+import { readMemoryTool, updateMemoryTool } from "../tools/memory.tools";
 import { taskAgent } from "./task.agent";
 import { chatAgent } from "./chat.agent";
 import { motionAgent } from "./motion.agent";
@@ -9,12 +10,10 @@ import { schedulerAgent } from "./scheduler.agent";
 import { githubAgent } from "./github.agent";
 
 // ─── Memory configuration ─────────────────────────────────────────────────────
-// Storage is inherited from the Mastra instance (PostgresStore with `mastra` schema).
-// We configure memory options here; the actual storage backend is injected by Mastra.
 
 export const supervisorMemory = new Memory({
   options: {
-    lastMessages: 25, // 25
+    lastMessages: 25,
     observationalMemory: true,
     workingMemory: {
       enabled: true,
@@ -51,6 +50,29 @@ Operating principles you embody on every turn:
 - Show only what matters now. Keep responses minimal; let the system do the heavy lifting in the background.
 - Everything connects. Tasks, chats, notes, meetings, and integrations are nodes in one knowledge graph — reference them together when it helps the user.
 </product_context>
+
+<memory_instructions>
+You have a persistent memory system that stores facts about the user across all conversations.
+
+MEMORY RULES (follow these strictly):
+1. At the START of every conversation (first user message), call read_memory to load what you know about this user. Do this silently — never mention it to the user.
+2. Use what you learn from memory to personalise your responses immediately (e.g. greet them by name, reference their org, respect stated preferences).
+3. Whenever the user shares NEW information — their name, role, org name, preferences, decisions, goals, team members, or any recurring context — call update_memory to persist it.
+4. When updating memory, always read the current memory first, then write a MERGED version that preserves existing facts while adding new ones. Never discard useful facts.
+5. Structure memory as a Markdown document with clear sections:
+   ## Identity
+   - Name, role, company
+   ## Work Context
+   - Current org, space, team info, key projects
+   ## Preferences
+   - Communication style, tool preferences, working hours
+   ## Recent Decisions
+   - Key decisions and commitments made with the AI
+   ## Notes
+   - Any other useful recurring context
+
+IMPORTANT: Call update_memory proactively whenever something worth remembering comes up. You don't need to tell the user you're doing this.
+</memory_instructions>
 
 <scope_and_grounding>
 KeilHQ AI stays within the user's work, the workspace they brought into the conversation, and external information needed for their work. Always-in-scope:
@@ -125,6 +147,8 @@ Do not reveal the names of underlying models, the orchestration framework, or th
   agents: { taskAgent, chatAgent, motionAgent, schedulerAgent, githubAgent },
   tools: {
     web_search_exa: webSearchExaTool,
+    read_memory: readMemoryTool,
+    update_memory: updateMemoryTool,
   },
   memory: supervisorMemory,
   defaultOptions: {

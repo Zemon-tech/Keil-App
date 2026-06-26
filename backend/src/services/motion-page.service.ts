@@ -60,6 +60,7 @@ export interface CreateMotionPageInput {
   title?: string;
   icon?: string | null;
   cover_image?: string | null;
+  content?: Record<string, any>;
 }
 
 export interface UpdateMotionPageInput {
@@ -303,6 +304,7 @@ export const createPage = async (
     position: maxPos + 1000, // Leave room for fractional inserts between existing pages
     small_text: false,
     full_width: false,
+    content: input.content ?? { type: 'doc', content: [{ type: 'paragraph' }] },
   } as Partial<MotionPage>);
 
   const dto = toPageDTO(page);

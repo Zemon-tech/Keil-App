@@ -71,6 +71,14 @@ const startServer = async () => {
             dbLog.warn({ err }, "Note on altering messages table for attachments");
         }
 
+        // Ensure summary_text column exists on meeting_recordings table
+        try {
+            await pool.query("ALTER TABLE public.meeting_recordings ADD COLUMN IF NOT EXISTS summary_text TEXT DEFAULT NULL");
+            dbLog.info("Successfully verified and applied meeting_recordings table summary_text column");
+        } catch (err: unknown) {
+            dbLog.warn({ err }, "Note on altering meeting_recordings table for summary_text");
+        }
+
         // Initialize Mastra server (auto-registers agent endpoints)
         // Storage init may fail on first attempt due to connection pressure;
         // Mastra retries lazily on the first actual /chat request.
