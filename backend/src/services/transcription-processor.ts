@@ -3,9 +3,7 @@ import { MeetingRecording } from "./meeting.service";
 import { broadcastMeetingUpdate } from "../socket";
 import { createServiceLogger } from "../lib/logger";
 import { generateTextResponse } from "./ai.service";
-import { createPage } from "./motion-page.service";
-import { markdownToTiptap } from "./notion.service";
-import { taskRepository, organisationRepository, spaceRepository } from "../repositories";
+import { saveMeetingSummaryToMotion } from "./meeting-motion.service";
 
 const log = createServiceLogger("transcription-processor");
 
@@ -60,53 +58,21 @@ export async function processCompletedTranscription(
                 return;
             }
 
-            // Resolve target org_id and space_id
-            let orgId: string | null = null;
-            let spaceId: string | null = null;
-
-            if (updated.meeting_id) {
-                const task = await taskRepository.findById(updated.meeting_id);
-                if (task) {
-                    orgId = task.org_id ?? null;
-                    spaceId = task.space_id ?? null;
-                }
-            }
-
-            if (!orgId || !spaceId) {
-                const orgs = await organisationRepository.findByUserId(userId);
-                if (orgs && orgs.length > 0) {
-                    orgId = orgs[0].id;
-                    const defaultSpace = await spaceRepository.findDefaultSpace(orgId);
-                    if (defaultSpace) {
-                        spaceId = defaultSpace.id;
-                    } else {
-                        const visibleSpaces = await spaceRepository.findVisibleByOrgAndUser(orgId, userId);
-                        if (visibleSpaces && visibleSpaces.length > 0) {
-                            spaceId = visibleSpaces[0].id;
-                        }
-                    }
-                }
-            }
-
-            if (!orgId || !spaceId) {
-                log.warn({ recordingId, userId }, "Could not resolve org_id or space_id for saving meeting summary");
-                return;
-            }
-
-            // Convert markdown to tiptap json
-            const tiptapContent = markdownToTiptap(summaryText);
-
-            // Save the summary as a MotionPage
-            const pageTitle = `Meeting Summary: ${new Date(updated.created_at).toLocaleDateString()}`;
-            await createPage(orgId, spaceId, userId, {
-                title: pageTitle,
-                content: tiptapContent
-            });
-
-            log.info({ recordingId, orgId, spaceId }, "Meeting summary successfully saved to Motion page");
-
-            // Save summary_text to database
+            // Save summary_text to database before creating Motion/Notion pages
             const finalUpdatedWithSummary = await meetingService.updateRecordingSummary(recordingId, summaryText);
+
+            try {
+                const { page, notionExported } = await saveMeetingSummaryToMotion(
+                    finalUpdatedWithSummary,
+                    userId
+                );
+                log.info(
+                    { recordingId, pageId: page.id, notionExported },
+                    "Meeting summary saved to Motion page"
+                );
+            } catch (saveErr) {
+                log.warn({ err: saveErr, recordingId }, "Could not save meeting summary to Motion");
+            }
 
             // Re-broadcast transcription complete with the newly populated summary
             try {

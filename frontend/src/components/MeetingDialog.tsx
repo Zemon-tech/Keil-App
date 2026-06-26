@@ -9,7 +9,8 @@ import { getSocket } from "@/lib/socket";
 import { useMeetingRecording, useDeleteRecording, useCancelTranscription, useTranscribeRecording, meetingKeys } from "@/hooks/api/useMeetings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "@/contexts/AppContext";
-import { useCreateMotionPage } from "@/hooks/api/useMotionPages";
+import { useNotionStatus } from "@/hooks/api/useNotion";
+import { motionPageKeys } from "@/hooks/api/useMotionPages";
 import { toast } from "sonner";
 import { Volume2, VolumeX } from "lucide-react";
 import {
@@ -64,6 +65,53 @@ const visualizers = [
   { id: "radial", name: "Radial", icon: CircleDot },
 ] as const;
 
+function summaryTextToTiptap(summaryText: string) {
+  const contentNodes = summaryText.split("\n").map((line) => {
+    if (line.startsWith("# ")) {
+      return {
+        type: "heading",
+        attrs: { level: 1 },
+        content: [{ type: "text", text: line.replace("# ", "") }],
+      };
+    }
+    if (line.startsWith("## ")) {
+      return {
+        type: "heading",
+        attrs: { level: 2 },
+        content: [{ type: "text", text: line.replace("## ", "") }],
+      };
+    }
+    if (line.startsWith("- ") || line.startsWith("* ")) {
+      return {
+        type: "bulletList",
+        content: [
+          {
+            type: "listItem",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: line.substring(2) }],
+              },
+            ],
+          },
+        ],
+      };
+    }
+    if (line.trim().length === 0) {
+      return null;
+    }
+    return {
+      type: "paragraph",
+      content: [{ type: "text", text: line }],
+    };
+  }).filter(Boolean);
+
+  return {
+    type: "doc",
+    content: contentNodes.length > 0 ? contentNodes : [{ type: "paragraph" }],
+  };
+}
+
 export const MeetingDialog: React.FC = () => {
   const queryClient = useQueryClient();
   const {
@@ -110,70 +158,66 @@ export const MeetingDialog: React.FC = () => {
   const [selectedProvider, setSelectedProvider] = useState<"sarvam" | "elevenlabs">("sarvam");
   const [selectedSpeakers, setSelectedSpeakers] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript");
+  const [isSavingToMotion, setIsSavingToMotion] = useState(false);
 
   const { activeOrgId, activeSpaceId } = useAppContext();
-  const createPageMutation = useCreateMotionPage(activeOrgId, activeSpaceId);
+  const { data: notionStatus } = useNotionStatus();
 
-  const handleSaveToNotion = async () => {
-    if (!dbRecording?.summary_text) {
-      toast.error("No summary text available to save.");
+  const handleSaveToMotion = async () => {
+    const activeRecordingId = dbRecording?.id || meetingId || recordingId;
+    const summaryText = dbRecording?.summary_text;
+
+    if (!activeRecordingId || !summaryText) {
+      toast.error("No summary available to save yet.");
+      return;
+    }
+
+    if (!activeOrgId || !activeSpaceId) {
+      toast.error("Select an organisation and space before saving.");
       return;
     }
 
     try {
-      toast.loading("Saving summary to Notion...", { id: "save-to-notion" });
-      const lines = dbRecording.summary_text.split("\n");
-      const contentNodes = lines.map(line => {
-        if (line.startsWith("# ")) {
-          return {
-            type: "heading",
-            attrs: { level: 1 },
-            content: [{ type: "text", text: line.replace("# ", "") }]
-          };
-        } else if (line.startsWith("## ")) {
-          return {
-            type: "heading",
-            attrs: { level: 2 },
-            content: [{ type: "text", text: line.replace("## ", "") }]
-          };
-        } else if (line.startsWith("- ") || line.startsWith("* ")) {
-          return {
-            type: "bulletList",
-            content: [
-              {
-                type: "listItem",
-                content: [
-                  {
-                    type: "paragraph",
-                    content: [{ type: "text", text: line.substring(2) }]
-                  }
-                ]
-              }
-            ]
-          };
-        } else if (line.trim().length === 0) {
-          return null;
-        } else {
-          return {
-            type: "paragraph",
-            content: [{ type: "text", text: line }]
-          };
-        }
-      }).filter(Boolean);
+      setIsSavingToMotion(true);
+      toast.loading("Saving summary to Motion...", { id: "save-to-motion" });
 
-      const tiptapContent = {
-        type: "doc",
-        content: contentNodes.length > 0 ? contentNodes : [{ type: "paragraph" }]
-      };
-
-      await createPageMutation.mutateAsync({
-        title: `Meeting Summary - ${new Date(dbRecording.created_at).toLocaleDateString()}`,
-        content: tiptapContent as any
+      const pageTitle = `Meeting Summary - ${new Date(dbRecording!.created_at).toLocaleDateString()}`;
+      const pageRes = await api.post(`v1/orgs/${activeOrgId}/spaces/${activeSpaceId}/notes`, {
+        title: pageTitle,
+        content: summaryTextToTiptap(summaryText),
       });
-      toast.success("Saved successfully as Motion Page!", { id: "save-to-notion" });
+      const page = pageRes.data.data;
+
+      queryClient.invalidateQueries({ queryKey: motionPageKeys.lists(activeOrgId, activeSpaceId) });
+
+      let notionExported = false;
+      if (notionStatus?.connected && page?.id) {
+        try {
+          await api.post("v1/integrations/notion/export", { motionPageId: page.id });
+          notionExported = true;
+        } catch (exportErr) {
+          // Motion save succeeded; Notion export is best-effort (may already exist from auto-save)
+          console.warn("Notion export skipped or already synced:", exportErr);
+        }
+      }
+
+      if (notionExported) {
+        toast.success("Saved to Motion and exported to Notion!", { id: "save-to-motion" });
+      } else {
+        toast.success("Saved to Motion!", {
+          id: "save-to-motion",
+          description: notionStatus?.connected
+            ? undefined
+            : "Connect Notion in Settings to also export summaries automatically.",
+        });
+      }
     } catch (err: any) {
-      console.error("Save to Notion failed:", err);
-      toast.error(err.message || "Failed to save to Notion.", { id: "save-to-notion" });
+      console.error("Save to Motion failed:", err);
+      toast.error(err.response?.data?.message || err.response?.data?.error || "Failed to save to Motion.", {
+        id: "save-to-motion",
+      });
+    } finally {
+      setIsSavingToMotion(false);
     }
   };
 
@@ -370,7 +414,13 @@ export const MeetingDialog: React.FC = () => {
   useEffect(() => {
     if (!requestAction) return;
 
-    if (requestAction === "pause" && !isPaused) {
+    if (
+      requestAction === "start" &&
+      !isHistoricalReview &&
+      (currentStatus === "idle" || currentStatus === "completed" || currentStatus === "error")
+    ) {
+      startRecording();
+    } else if (requestAction === "pause" && !isPaused) {
       togglePause();
     } else if (requestAction === "resume" && isPaused) {
       togglePause();
@@ -566,8 +616,14 @@ export const MeetingDialog: React.FC = () => {
       });
     } catch (err: any) {
       console.error("[MeetingCompanion] Background Upload Error:", err);
-      toast.error("Failed to process meeting recording", {
-        description: err.message || "Please check developer console logs or try again."
+      const apiMessage = err.response?.data?.message;
+      const isRecordingLimit = err.response?.status === 429 && err.response?.data?.code === "LIMIT_REACHED";
+
+      toast.error(isRecordingLimit ? "Monthly recording limit reached" : "Failed to process meeting recording", {
+        description:
+          apiMessage ||
+          err.message ||
+          "Please check developer console logs or try again.",
       });
     }
   };
@@ -1746,17 +1802,17 @@ export const MeetingDialog: React.FC = () => {
                               <div className="flex items-center gap-0.5">
                                 {currentStatus === "completed" && activeTab === "summary" && dbRecording?.summary_text && (
                                   <button
-                                    onClick={handleSaveToNotion}
-                                    disabled={createPageMutation.isPending}
-                                    title="Save Summary to Notion"
+                                    onClick={handleSaveToMotion}
+                                    disabled={isSavingToMotion}
+                                    title="Save summary to Motion and Notion"
                                     className="flex items-center gap-1.5 px-3 h-7 bg-cyan-500 hover:bg-cyan-600 disabled:bg-muted disabled:text-muted-foreground text-white font-semibold text-[9px] tracking-wider uppercase rounded-lg transition-all duration-200 active:scale-95 cursor-pointer shadow-sm select-none mr-2"
                                   >
-                                    {createPageMutation.isPending ? (
+                                    {isSavingToMotion ? (
                                       <Loader2 className="size-3 animate-spin" />
                                     ) : (
                                       <Notebook className="size-3" />
                                     )}
-                                    <span>{createPageMutation.isPending ? "Saving..." : "Save to Notion"}</span>
+                                    <span>{isSavingToMotion ? "Saving..." : "Save to Motion"}</span>
                                   </button>
                                 )}
 

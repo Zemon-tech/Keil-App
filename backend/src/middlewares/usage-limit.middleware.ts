@@ -1,19 +1,24 @@
 import { Request, Response, NextFunction } from "express";
+import { config } from "../config";
 import * as subscriptionService from "../services/subscription.service";
 import logger from "../lib/logger";
 
-/**
- * Middleware that checks and enforces the meeting recording limit.
- * Apply to routes that initiate a new recording (e.g., POST /meetings/upload-url).
- *
- * If the limit is reached, returns 429.
- * If approaching the limit (80%+), attaches x-plan-warning header.
- */
-export const requireRecordingQuota = async (
+interface RecordingQuotaOptions {
+  /** When true, increments the monthly recording counter after the check passes. */
+  record?: boolean;
+}
+
+async function enforceRecordingQuota(
   req: Request,
   res: Response,
-  next: NextFunction
-): Promise<void> => {
+  next: NextFunction,
+  options: RecordingQuotaOptions
+): Promise<void> {
+  if (config.bypassUsageLimits) {
+    next();
+    return;
+  }
+
   const userId = (req as any).user?.id as string;
   if (!userId) {
     next();
@@ -41,15 +46,36 @@ export const requireRecordingQuota = async (
       );
     }
 
-    // Increment usage counter (recording is being initiated)
-    await subscriptionService.recordRecordingUsage(userId);
+    if (options.record) {
+      await subscriptionService.recordRecordingUsage(userId);
+    }
+
     next();
   } catch (err) {
     // Fail open on billing errors
     logger.error({ err, userId }, "Recording usage check failed — allowing request");
     next();
   }
-};
+}
+
+/**
+ * Checks monthly recording quota before issuing an upload URL.
+ * Does not increment usage — quota is charged when transcription starts.
+ */
+export const requireRecordingQuota = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => enforceRecordingQuota(req, res, next, { record: false });
+
+/**
+ * Checks and records monthly recording usage when transcription is initiated.
+ */
+export const recordRecordingQuota = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => enforceRecordingQuota(req, res, next, { record: true });
 
 /**
  * Checks AI chat usage for the current user.
@@ -65,6 +91,10 @@ export async function checkAiChatLimit(userId: string): Promise<{
   errorMessage: string | null;
   errorCode: string | null;
 }> {
+  if (config.bypassUsageLimits) {
+    return { allowed: true, warning: false, warningHeader: null, errorMessage: null, errorCode: null };
+  }
+
   try {
     const check = await subscriptionService.checkAiChatUsage(userId);
 
