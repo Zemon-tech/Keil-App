@@ -59,6 +59,94 @@ export const completeOnboarding = async (req: any, res: Response, next: NextFunc
 };
 
 /**
+ * @desc    Update user profile name/avatar
+ * @route   PATCH /api/users/profile
+ * @access  Private
+ */
+export const updateProfile = async (req: any, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.id;
+        const { name, avatar_url } = req.body;
+
+        if (!userId) {
+            throw new ApiError(401, "Unauthorized access");
+        }
+
+        // Build the update query dynamically based on provided fields
+        const updates: string[] = [];
+        const values: any[] = [];
+        let index = 1;
+
+        if (name !== undefined) {
+            updates.push(`name = $${index++}`);
+            values.push(name);
+        }
+        if (avatar_url !== undefined) {
+            updates.push(`avatar_url = $${index++}`);
+            values.push(avatar_url);
+        }
+
+        if (updates.length > 0) {
+            values.push(userId);
+            const query = `
+                UPDATE public.users
+                SET ${updates.join(", ")}
+                WHERE id = $${index}
+                RETURNING *
+            `;
+            const result = await pool.query(query, values);
+            if (result.rows.length === 0) {
+                throw new ApiError(404, "User profile not found");
+            }
+            
+            // If the name was updated, rename their personal organization (Workspace) to match
+            if (name !== undefined) {
+                const firstName = name.trim().split(" ")[0] || "User";
+                const orgName = `${firstName} Workspace`;
+                await pool.query(`
+                    UPDATE public.organisations
+                    SET name = $1
+                    WHERE owner_user_id = $2 AND is_personal = TRUE
+                `, [orgName, userId]);
+            }
+        }
+
+        // Fetch organization members who share an organization with the user
+        const membersRes = await pool.query(`
+            SELECT DISTINCT user_id 
+            FROM organisation_members 
+            WHERE org_id IN (
+                SELECT org_id 
+                FROM organisation_members 
+                WHERE user_id = $1
+            )
+        `, [userId]);
+
+        // Broadcast to all organization members
+        const { io } = require("../socket");
+        if (io) {
+            membersRes.rows.forEach((row: any) => {
+                io.to(`user:${row.user_id}`).emit("user_updated", {
+                    userId,
+                    name,
+                    avatar_url,
+                });
+            });
+        }
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                { name, avatar_url },
+                "Profile updated and broadcasted successfully"
+            )
+        );
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
  * @desc    Search registered users on the platform
  * @route   GET /api/users/search
  * @access  Private

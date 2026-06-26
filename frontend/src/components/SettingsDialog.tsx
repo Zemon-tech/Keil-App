@@ -1097,10 +1097,23 @@ function AccountTab() {
     setLoading(true);
     setError(null);
     try {
+      // 1. Update Supabase metadata for local auth context
       const { error } = await supabase.auth.updateUser({
         data: { full_name: newName.trim() },
       });
       if (error) throw error;
+
+      // 2. Call backend to update database and broadcast changes to other users
+      await api.patch("users/profile", { name: newName.trim() });
+
+      // 3. Immediately invalidate local queries so current user sees updates instantly
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      await queryClient.invalidateQueries({ queryKey: ["orgs"] });
+      await queryClient.invalidateQueries({ queryKey: ["spaces"] });
+      await queryClient.invalidateQueries({ queryKey: ["chat"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["org-tasks"] });
+
       setSuccess("Name updated successfully");
       setIsEditingName(false);
     } catch (err: any) {
@@ -1182,10 +1195,16 @@ function AccountTab() {
       });
       if (metaError) throw metaError;
 
+      // Call backend to update database and broadcast changes to other users
+      await api.patch("users/profile", { avatar_url: publicUrl });
+
       // Invalidate queries to reload updated profile info
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      await queryClient.invalidateQueries({ queryKey: ["organisations"] });
+      await queryClient.invalidateQueries({ queryKey: ["orgs"] });
+      await queryClient.invalidateQueries({ queryKey: ["spaces"] });
       await queryClient.invalidateQueries({ queryKey: ["chat"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["org-tasks"] });
 
       setSuccess("Avatar updated successfully");
     } catch (err: any) {
