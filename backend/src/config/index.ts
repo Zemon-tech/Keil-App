@@ -22,6 +22,10 @@ const resolveLocalhostUrl = (url: string | undefined, defaultPath: string): stri
 export const config = {
     port,
     env: process.env.NODE_ENV || "development",
+    // Skip billing usage limits in non-production unless explicitly enforced
+    bypassUsageLimits:
+        process.env.ENFORCE_USAGE_LIMITS !== "true" &&
+        (process.env.NODE_ENV || "development") !== "production",
     supabaseUrl: process.env.SUPABASE_URL || "",
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY || "",
     supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || "",

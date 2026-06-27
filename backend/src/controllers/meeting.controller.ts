@@ -7,6 +7,7 @@ import { getS3Client } from "../lib/s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import * as meetingService from "../services/meeting.service";
+import { saveMeetingSummaryToMotion } from "../services/meeting-motion.service";
 import { processCompletedTranscription, processFailedTranscription } from "../services/transcription-processor";
 import { getTranscriptionProvider, isValidSttProvider } from "../services/transcription";
 import * as userPreferencesService from "../services/user-preferences.service";
@@ -435,6 +436,45 @@ export const cancelTranscription = catchAsync(async (req: Request, res: Response
         log.error({ err }, "cancelTranscription error");
         return res.status(500).json({ error: "Failed to cancel transcription" });
     }
+});
+
+/**
+ * Saves a meeting recording summary to Motion and exports to Notion when connected.
+ */
+export const saveRecordingToMotion = catchAsync(async (req: Request, res: Response) => {
+    const user = (req as any).user;
+
+    if (!user || !user.id) {
+        throw new ApiError(401, "User authentication required");
+    }
+
+    const recordingId = req.params.recordingId as string;
+    if (!recordingId) {
+        return res.status(400).json({ error: "Recording ID is required" });
+    }
+
+    const { orgId, spaceId } = req.body ?? {};
+
+    const recording = await meetingService.getRecordingById(recordingId);
+    if (!recording) {
+        return res.status(404).json({ error: "Recording not found" });
+    }
+
+    if (recording.user_id !== user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const result = await saveMeetingSummaryToMotion(recording, user.id, { orgId, spaceId });
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            result,
+            result.notionExported
+                ? "Meeting summary saved to Motion and exported to Notion"
+                : "Meeting summary saved to Motion"
+        )
+    );
 });
 
 /**
