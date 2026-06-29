@@ -527,7 +527,7 @@ export const resolveWorkspaceTool = createTool({
     });
 
     const orgsResult = await pool.query(
-      `SELECT o.id, o.name, o.slug, om.role
+      `SELECT o.id, o.name, om.role
        FROM public.organisations o
        INNER JOIN public.organisation_members om ON om.org_id = o.id
        WHERE om.user_id = $1 AND o.deleted_at IS NULL
@@ -541,7 +541,7 @@ export const resolveWorkspaceTool = createTool({
         continue;
       }
       const spacesResult = await pool.query(
-        `SELECT s.id, s.name, s.slug, sm.role
+        `SELECT s.id, s.name, sm.role
          FROM public.spaces s
          INNER JOIN public.space_members sm ON sm.space_id = s.id
          WHERE sm.user_id = $1 AND s.org_id = $2 AND s.deleted_at IS NULL
