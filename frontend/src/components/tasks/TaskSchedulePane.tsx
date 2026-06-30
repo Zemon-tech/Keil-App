@@ -779,6 +779,10 @@ export function TaskSchedulePane({
               due_date: allDayEnd.toISOString(),
               is_all_day: true,
             }
+          }, {
+            onError: () => {
+              info.revert();
+            }
           });
         } else if (onTaskSchedule) {
           onTaskSchedule(
@@ -800,6 +804,10 @@ export function TaskSchedulePane({
               start_date: timedStart.toISOString(),
               due_date: timedEnd.toISOString(),
               is_all_day: false,
+            }
+          }, {
+            onError: () => {
+              info.revert();
             }
           });
         } else if (onTaskSchedule) {
@@ -860,6 +868,10 @@ export function TaskSchedulePane({
               due_date: endISO,
               is_all_day: true,
             }
+          }, {
+            onError: () => {
+              info.revert();
+            }
           });
         } else if (onTaskSchedule) {
           onTaskSchedule(taskId, startISO, endISO, true);
@@ -878,6 +890,10 @@ export function TaskSchedulePane({
               start_date: timedStart.toISOString(),
               due_date: timedEnd.toISOString(),
               is_all_day: false,
+            }
+          }, {
+            onError: () => {
+              info.revert();
             }
           });
         } else if (onTaskSchedule) {
