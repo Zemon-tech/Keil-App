@@ -2381,6 +2381,7 @@ function PersonalizationTab() {
               <SelectContent>
                 <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
                 <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
+                <SelectItem value="google/gemma-4-31b-it">Google Gemma 4 31B IT (google/gemma-4-31b-it)</SelectItem>
                 <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
                 <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
               </SelectContent>

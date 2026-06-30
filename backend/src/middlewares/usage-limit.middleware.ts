@@ -53,8 +53,8 @@ export const requireRecordingQuota = async (
 
 /**
  * Checks AI chat usage for the current user.
- * This is NOT a middleware (Mastra chat is not Express) — it's a function
- * called directly from the Mastra chat handler.
+ * Pure check — does NOT increment the counter. Call recordAiChatUsageForUser
+ * after a successful AI response to count only real outputs.
  *
  * Returns: { allowed, warning, warningMessage, errorMessage }
  */
@@ -87,9 +87,6 @@ export async function checkAiChatLimit(userId: string): Promise<{
       warningHeader = `${check.resource}_${Math.round(((check.limit! - check.remaining!) / check.limit!) * 100)}`;
     }
 
-    // Increment usage counter
-    await subscriptionService.recordAiChatUsage(userId);
-
     return {
       allowed: true,
       warning: check.warning,
@@ -101,5 +98,17 @@ export async function checkAiChatLimit(userId: string): Promise<{
     // Fail open on billing errors
     logger.error({ err, userId }, "AI chat usage check failed — allowing request");
     return { allowed: true, warning: false, warningHeader: null, errorMessage: null, errorCode: null };
+  }
+}
+
+/**
+ * Increments the AI chat usage counter for a user.
+ * Call this only after the AI has successfully produced output.
+ */
+export async function recordAiChatUsageForUser(userId: string): Promise<void> {
+  try {
+    await subscriptionService.recordAiChatUsage(userId);
+  } catch (err) {
+    logger.error({ err, userId }, "Failed to record AI chat usage — continuing");
   }
 }

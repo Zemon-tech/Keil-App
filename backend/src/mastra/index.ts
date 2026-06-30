@@ -13,7 +13,7 @@ import { motionAgent } from "./agents/motion.agent";
 import { schedulerAgent } from "./agents/scheduler.agent";
 import { githubAgent } from "./agents/github.agent";
 import { checkRateLimit } from "../services/rate-limiter.service";
-import { checkAiChatLimit } from "../middlewares/usage-limit.middleware";
+import { checkAiChatLimit, recordAiChatUsageForUser } from "../middlewares/usage-limit.middleware";
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 // Mastra storage needs a direct/session connection (not transaction pooler)
@@ -252,6 +252,9 @@ export const mastra = new Mastra({
               })) {
                 writer.write(part as any);
               }
+
+              // Increment usage only after the AI has successfully produced output.
+              recordAiChatUsageForUser(authResult.userId);
             },
           });
 
