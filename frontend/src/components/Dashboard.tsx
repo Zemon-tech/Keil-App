@@ -386,7 +386,7 @@ export function Dashboard() {
 
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("dashboard_expanded") === "true";
+      return sessionStorage.getItem("dashboard_expanded") === "true";
     }
     return false;
   });
@@ -394,7 +394,7 @@ export function Dashboard() {
   const handleToggleDashboard = useCallback(() => {
     setIsDashboardExpanded((prev) => {
       const next = !prev;
-      localStorage.setItem("dashboard_expanded", String(next));
+      sessionStorage.setItem("dashboard_expanded", String(next));
       return next;
     });
   }, []);
@@ -802,12 +802,12 @@ export function Dashboard() {
       if (isNewThreadRef.current) {
         isNewThreadRef.current = false; // reset so subsequent threadId changes load normally
         const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-        localStorage.setItem(key, threadId);
+        sessionStorage.setItem(key, threadId);
         return;
       }
 
       const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-      localStorage.setItem(key, threadId);
+      sessionStorage.setItem(key, threadId);
 
       setIsLoadingHistory(true);
       try {
