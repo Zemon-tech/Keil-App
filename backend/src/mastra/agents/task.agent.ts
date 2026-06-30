@@ -9,6 +9,8 @@ import {
   resolveWorkspaceTool,
   searchTasksTool,
   getCalendarEventsTool,
+  createSubtaskTool,
+  getSubtasksTool,
 } from "../tools/task.tools";
 
 export const taskAgent = new Agent({
@@ -29,6 +31,10 @@ IMPORTANT RULES:
 - IMPORTANT: "personal tasks" are tasks in the user's personal org's private space (is_personal=TRUE org, is_private=TRUE space). They live in the same tasks table as org tasks. When the user asks for "my tasks" or "tasks assigned to me", call list_tasks({ scope: 'personal' }) and list_tasks({ scope: 'assigned' }) in parallel.
 - CALENDAR & EVENTS: Use get_calendar_events to read the user's schedule/meetings for a given date range. When creating/updating events, set the type to "event" and provide location, event_type, is_all_day, and meet_link if specified.
 - PARALLEL EXECUTION: If a request spans multiple domains or tasks (e.g. check calendar and list personal tasks), execute the tool calls in parallel to maximize performance and speed.
+- SUBTASKS:
+  - To create a subtask, first find the parent task (using search_tasks or listing tools if the name/title is specified) to obtain its parentTaskId, then call create_subtask. Note that nested subtasks (subtask of a subtask) are NOT allowed.
+  - To retrieve/list subtasks under a parent task, call get_subtasks with parentTaskId.
+  - To update or delete a subtask, first call get_subtasks on the parent task to find the subtask's UUID, and then call update_task or delete_task with that subtask's UUID.
 
 For org tasks, space role rules apply (enforced automatically by each tool):
   - admin / manager: full CRUD on all tasks
@@ -46,5 +52,7 @@ Present dates in human-readable format (e.g. "June 15, 2026").`,
     create_task: createTaskTool,
     update_task: updateTaskTool,
     delete_task: deleteTaskTool,
+    create_subtask: createSubtaskTool,
+    get_subtasks: getSubtasksTool,
   },
 });

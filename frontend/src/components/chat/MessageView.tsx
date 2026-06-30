@@ -438,7 +438,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                               src={getOptimizedImageUrl(att.downloadUrl, { width: 800 })} 
                               alt={att.fileName} 
                               className="max-h-48 object-contain rounded-lg border border-border hover:scale-[1.01] transition-transform cursor-pointer"
-                              onClick={() => setPreviewImage(att.downloadUrl)}
+                              onClick={() => setPreviewImage(att.downloadUrl ?? null)}
                             />
                           </div>
                         );
