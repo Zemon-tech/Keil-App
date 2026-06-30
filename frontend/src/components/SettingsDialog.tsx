@@ -150,9 +150,7 @@ const handleCopyToClipboard = async (text: string, label: string) => {
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type AccountTab =
   | "account"
-  | "preferences"
   | "personalization"
-  | "assistant"
   | "shortcuts"
   | "tasks"
   | "notifications"
@@ -178,9 +176,7 @@ interface WorkspaceNavItem {
 
 const accountNavItems: AccountNavItem[] = [
   { id: "account", label: "Account", icon: User },
-  { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
   { id: "personalization", label: "Personalization", icon: Sparkles },
-  { id: "assistant", label: "Assistant", icon: Bot },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -1630,8 +1626,187 @@ function AccountTab() {
   );
 }
 
-function PreferencesTab() {
+
+function CalendarPreferenceSection() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateDeleteSlots = useUpdateDeleteSlotsOnComplete();
+
+  const deleteSlotsOnComplete = prefs?.delete_slots_on_complete || false;
+
+  const handleToggle = (checked: boolean) => {
+    updateDeleteSlots.mutate(checked, {
+      onSuccess: () => {
+        toast.success(
+          checked
+            ? "Calendar slots will be deleted when task is completed"
+            : "Calendar slots will be kept when task is completed"
+        );
+      },
+      onError: () => {
+        toast.error("Failed to update calendar preference");
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading calendar preference...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <CalendarDays className="size-4 text-muted-foreground" />
+        Calendar Slots
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose how calendar slots behave when tasks are completed.
+      </p>
+      <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+        <div>
+          <p className="text-xs font-semibold text-foreground">
+            Delete Slots on Completion
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+            Automatically delete calendar slots associated with a task when it is marked completed.
+          </p>
+        </div>
+        <Switch
+          checked={deleteSlotsOnComplete}
+          onCheckedChange={handleToggle}
+          disabled={updateDeleteSlots.isPending}
+        />
+      </div>
+    </div>
+  );
+}
+
+const STT_PROVIDERS: Array<{
+  id: SttProvider;
+  name: string;
+  badge?: string;
+  description: string;
+  features: string[];
+}> = [
+    {
+      id: "sarvam",
+      name: "Sarvam AI",
+      badge: "Recommended",
+      description: "Saaras v3 — purpose-built for Indian languages and English.",
+      features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
+    },
+    {
+      id: "elevenlabs",
+      name: "ElevenLabs",
+      description: "Scribe v2 — broad language support with word-level detail.",
+      features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
+    },
+  ];
+
+function SttProviderSelector() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateProvider = useUpdateSttProvider();
+
+  const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
+
+  const handleProviderChange = (provider: SttProvider) => {
+    if (provider === currentProvider || updateProvider.isPending) return;
+    const label = STT_PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
+    updateProvider.mutate(provider, {
+      onSuccess: () => toast.success(`Speech-to-text provider changed to ${label}`),
+      onError: () => toast.error("Failed to update STT provider"),
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading preferences...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <Mic className="size-4 text-muted-foreground" />
+        Speech-to-Text Provider
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose which AI service transcribes your meeting recordings.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {STT_PROVIDERS.map((provider) => {
+          const isActive = currentProvider === provider.id;
+          return (
+            <button
+              key={provider.id}
+              onClick={() => handleProviderChange(provider.id)}
+              disabled={updateProvider.isPending}
+              className={cn(
+                "flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
+                isActive
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+                updateProvider.isPending && "opacity-60 cursor-not-allowed",
+              )}
+            >
+              {/* Header row */}
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">{provider.name}</span>
+                  {provider.badge && (
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
+                      {provider.badge}
+                    </span>
+                  )}
+                </div>
+                {isActive && (
+                  updateProvider.isPending
+                    ? <Loader2 className="size-4 animate-spin text-primary" />
+                    : <Check className="size-4 text-primary shrink-0" />
+                )}
+              </div>
+
+              {/* Description */}
+              <span className="text-[11px] text-muted-foreground leading-tight">
+                {provider.description}
+              </span>
+
+              {/* Feature pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {provider.features.map((f) => (
+                  <span
+                    key={f}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const BACKGROUNDS = [
+  { id: "none", name: "None", url: "" },
+  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
+  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
+  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
+];
+
+function PersonalizationTab() {
   const { theme, setTheme } = useTheme();
+  const showLocalAISettings = import.meta.env.VITE_ENABLE_LOCAL_AI_SETTINGS === 'true';
   const [chatView, setChatView] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("default_chat_view") || "sidebar";
@@ -1687,12 +1862,76 @@ function PreferencesTab() {
     window.dispatchEvent(new Event("calendar_day_headers_preference_changed"));
   };
 
+  const [dashboardBackground, setDashboardBackground] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dashboard_background") || "open-garden";
+    }
+    return "open-garden";
+  });
+
+  const handleBackgroundChange = (val: string) => {
+    setDashboardBackground(val);
+    localStorage.setItem("dashboard_background", val);
+    window.dispatchEvent(new Event("dashboard_background_changed"));
+  };
+
+  const [localUrl, setLocalUrl] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
+    }
+    return "http://localhost:8080/v1";
+  });
+
+  const [localModel, setLocalModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_model") || "gemma-4";
+    }
+    return "gemma-4";
+  });
+
+  const handleUrlChange = (val: string) => {
+    setLocalUrl(val);
+    localStorage.setItem("local_ai_base_url", val);
+  };
+
+  const handleModelChange = (val: string) => {
+    setLocalModel(val);
+    localStorage.setItem("local_ai_model", val);
+  };
+
+  const [openRouterModel, setOpenRouterModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini";
+    }
+    return "openai/gpt-4o-mini";
+  });
+
+  const handleOpenRouterModelChange = (val: string) => {
+    setOpenRouterModel(val);
+    localStorage.setItem("openrouter_model", val);
+  };
+
+  const [modelSelection, setModelSelection] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("ai_model_selection") || "gemini";
+    }
+    return "gemini";
+  });
+
+  const handleGlobalModelChange = (val: string) => {
+    setModelSelection(val);
+    localStorage.setItem("ai_model_selection", val);
+    window.dispatchEvent(new Event("ai_model_selection_changed"));
+  };
+
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Preferences</h2>
+        <h2 className="text-lg font-semibold text-foreground">
+          Personalization
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Customize how KeilHQ works for you.
+          Customize your KeilHQ experience.
         </p>
       </div>
 
@@ -2002,290 +2241,10 @@ function PreferencesTab() {
 
       {/* Speech-to-Text Provider */}
       <SttProviderSelector />
-    </div>
-  );
-}
-
-function CalendarPreferenceSection() {
-  const { data: prefs, isLoading } = usePreferences();
-  const updateDeleteSlots = useUpdateDeleteSlotsOnComplete();
-
-  const deleteSlotsOnComplete = prefs?.delete_slots_on_complete || false;
-
-  const handleToggle = (checked: boolean) => {
-    updateDeleteSlots.mutate(checked, {
-      onSuccess: () => {
-        toast.success(
-          checked
-            ? "Calendar slots will be deleted when task is completed"
-            : "Calendar slots will be kept when task is completed"
-        );
-      },
-      onError: () => {
-        toast.error("Failed to update calendar preference");
-      },
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 py-2">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Loading calendar preference...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <CalendarDays className="size-4 text-muted-foreground" />
-        Calendar Slots
-      </h3>
-      <p className="text-xs text-muted-foreground mt-1 mb-4">
-        Choose how calendar slots behave when tasks are completed.
-      </p>
-      <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
-        <div>
-          <p className="text-xs font-semibold text-foreground">
-            Delete Slots on Completion
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-            Automatically delete calendar slots associated with a task when it is marked completed.
-          </p>
-        </div>
-        <Switch
-          checked={deleteSlotsOnComplete}
-          onCheckedChange={handleToggle}
-          disabled={updateDeleteSlots.isPending}
-        />
-      </div>
-    </div>
-  );
-}
-
-const STT_PROVIDERS: Array<{
-  id: SttProvider;
-  name: string;
-  badge?: string;
-  description: string;
-  features: string[];
-}> = [
-    {
-      id: "sarvam",
-      name: "Sarvam AI",
-      badge: "Recommended",
-      description: "Saaras v3 — purpose-built for Indian languages and English.",
-      features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
-    },
-    {
-      id: "elevenlabs",
-      name: "ElevenLabs",
-      description: "Scribe v2 — broad language support with word-level detail.",
-      features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
-    },
-  ];
-
-function SttProviderSelector() {
-  const { data: prefs, isLoading } = usePreferences();
-  const updateProvider = useUpdateSttProvider();
-
-  const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
-
-  const handleProviderChange = (provider: SttProvider) => {
-    if (provider === currentProvider || updateProvider.isPending) return;
-    const label = STT_PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
-    updateProvider.mutate(provider, {
-      onSuccess: () => toast.success(`Speech-to-text provider changed to ${label}`),
-      onError: () => toast.error("Failed to update STT provider"),
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 py-2">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Loading preferences...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <Mic className="size-4 text-muted-foreground" />
-        Speech-to-Text Provider
-      </h3>
-      <p className="text-xs text-muted-foreground mt-1 mb-4">
-        Choose which AI service transcribes your meeting recordings.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {STT_PROVIDERS.map((provider) => {
-          const isActive = currentProvider === provider.id;
-          return (
-            <button
-              key={provider.id}
-              onClick={() => handleProviderChange(provider.id)}
-              disabled={updateProvider.isPending}
-              className={cn(
-                "flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
-                isActive
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
-                updateProvider.isPending && "opacity-60 cursor-not-allowed",
-              )}
-            >
-              {/* Header row */}
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">{provider.name}</span>
-                  {provider.badge && (
-                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
-                      {provider.badge}
-                    </span>
-                  )}
-                </div>
-                {isActive && (
-                  updateProvider.isPending
-                    ? <Loader2 className="size-4 animate-spin text-primary" />
-                    : <Check className="size-4 text-primary shrink-0" />
-                )}
-              </div>
-
-              {/* Description */}
-              <span className="text-[11px] text-muted-foreground leading-tight">
-                {provider.description}
-              </span>
-
-              {/* Feature pills */}
-              <div className="flex flex-wrap gap-1.5">
-                {provider.features.map((f) => (
-                  <span
-                    key={f}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50"
-                  >
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const BACKGROUNDS = [
-  { id: "none", name: "None", url: "" },
-  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
-  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
-  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
-];
-
-function PersonalizationTab() {
-  const [dashboardBackground, setDashboardBackground] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("dashboard_background") || "open-garden";
-    }
-    return "open-garden";
-  });
-
-  const handleBackgroundChange = (val: string) => {
-    setDashboardBackground(val);
-    localStorage.setItem("dashboard_background", val);
-    window.dispatchEvent(new Event("dashboard_background_changed"));
-  };
-
-  const [localUrl, setLocalUrl] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
-    }
-    return "http://localhost:8080/v1";
-  });
-
-  const [localModel, setLocalModel] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("local_ai_model") || "gemma-4";
-    }
-    return "gemma-4";
-  });
-
-  const handleUrlChange = (val: string) => {
-    setLocalUrl(val);
-    localStorage.setItem("local_ai_base_url", val);
-  };
-
-  const handleModelChange = (val: string) => {
-    setLocalModel(val);
-    localStorage.setItem("local_ai_model", val);
-  };
-
-  const [openRouterModel, setOpenRouterModel] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini";
-    }
-    return "openai/gpt-4o-mini";
-  });
-
-  const handleOpenRouterModelChange = (val: string) => {
-    setOpenRouterModel(val);
-    localStorage.setItem("openrouter_model", val);
-  };
-
-  const [modelSelection, setModelSelection] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("ai_model_selection") || "gemini";
-    }
-    return "gemini";
-  });
-
-  const handleGlobalModelChange = (val: string) => {
-    setModelSelection(val);
-    localStorage.setItem("ai_model_selection", val);
-    window.dispatchEvent(new Event("ai_model_selection_changed"));
-  };
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">
-          Personalization
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Tell KeilHQ about yourself for a better experience.
-        </p>
-      </div>
 
       <Separator />
 
-      <div>
-        <Label htmlFor="role" className="text-sm font-medium">
-          Your Role
-        </Label>
-        <Input
-          id="role"
-          placeholder="e.g., Product Manager, Developer"
-          className="mt-2 rounded-lg"
-        />
-        <p className="text-xs text-muted-foreground mt-1.5">
-          This helps tailor the dashboard to your needs.
-        </p>
-      </div>
-
-      <div>
-        <Label htmlFor="team" className="text-sm font-medium">
-          Team / Department
-        </Label>
-        <Input
-          id="team"
-          placeholder="e.g., Engineering, Design"
-          className="mt-2 rounded-lg"
-        />
-      </div>
-
-      <Separator />
-
+      {/* Dashboard Background */}
       <div className="space-y-4">
         <div>
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -2349,114 +2308,118 @@ function PersonalizationTab() {
 
       <Separator />
 
-      {/* Model Selection section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Bot className="size-4 text-muted-foreground" />
-          Default AI Model
-        </h3>
+      {showLocalAISettings && (
+        <>
+          {/* Model Selection section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Bot className="size-4 text-muted-foreground" />
+              Default AI Model
+            </h3>
 
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Model Selection
-            </Label>
-            <Select value={modelSelection} onValueChange={handleGlobalModelChange}>
-              <SelectTrigger className="w-full mt-2 rounded-lg">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gemini">Gemini 3.5 Flash (Default)</SelectItem>
-                <SelectItem value="github-models">GitHub Models</SelectItem>
-                <SelectItem value="openrouter">OpenRouter AI</SelectItem>
-                <SelectItem value="local">Local LLM</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Choose the default model to use for AI responses.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* OpenRouter AI Configuration Section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Globe className="size-4 text-muted-foreground" />
-          OpenRouter Model Configuration
-        </h3>
-
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              OpenRouter Model
-            </Label>
-            <Select value={openRouterModel} onValueChange={handleOpenRouterModelChange}>
-              <SelectTrigger className="w-full mt-2 rounded-lg">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
-                <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
-                <SelectItem value="google/gemma-4-31b-it">Google Gemma 4 31B IT (google/gemma-4-31b-it)</SelectItem>
-                <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
-                <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Select which OpenRouter model to query when OpenRouter AI is selected.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Local AI Configuration Section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <SlidersHorizontal className="size-4 text-muted-foreground" />
-          Local AI Model Integration
-        </h3>
-
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Local AI Connection URL
-            </Label>
-            <Input
-              id="local_ai_url"
-              value={localUrl}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              placeholder="e.g., http://localhost:8080/v1"
-              className="mt-2 rounded-lg font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              The OpenAI-compatible endpoint URL of your locally running LLM (e.g. llama.cpp or Ollama).
-            </p>
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Model Selection
+                </Label>
+                <Select value={modelSelection} onValueChange={handleGlobalModelChange}>
+                  <SelectTrigger className="w-full mt-2 rounded-lg">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini 3.5 Flash (Default)</SelectItem>
+                    <SelectItem value="github-models">GitHub Models</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter AI</SelectItem>
+                    <SelectItem value="local">Local LLM</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Choose the default model to use for AI responses.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="local_ai_model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Local Model Identifier
-            </Label>
-            <Input
-              id="local_ai_model"
-              value={localModel}
-              onChange={(e) => handleModelChange(e.target.value)}
-              placeholder="e.g., gemma-4, llama3"
-              className="mt-2 rounded-lg font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              The exact name or identifier of the local model currently loaded in your server.
-            </p>
-          </div>
-        </div>
-      </div>
+          <Separator />
 
-      <Separator />
+          {/* OpenRouter AI Configuration Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Globe className="size-4 text-muted-foreground" />
+              OpenRouter Model Configuration
+            </h3>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  OpenRouter Model
+                </Label>
+                <Select value={openRouterModel} onValueChange={handleOpenRouterModelChange}>
+                  <SelectTrigger className="w-full mt-2 rounded-lg">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
+                    <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
+                    <SelectItem value="google/gemma-4-31b-it">Google Gemma 4 31B IT (google/gemma-4-31b-it)</SelectItem>
+                    <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
+                    <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Select which OpenRouter model to query when OpenRouter AI is selected.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Local AI Configuration Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <SlidersHorizontal className="size-4 text-muted-foreground" />
+              Local AI Model Integration
+            </h3>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Local AI Connection URL
+                </Label>
+                <Input
+                  id="local_ai_url"
+                  value={localUrl}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  placeholder="e.g., http://localhost:8080/v1"
+                  className="mt-2 rounded-lg font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  The OpenAI-compatible endpoint URL of your locally running LLM (e.g. llama.cpp or Ollama).
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="local_ai_model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Local Model Identifier
+                </Label>
+                <Input
+                  id="local_ai_model"
+                  value={localModel}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  placeholder="e.g., gemma-4, llama3"
+                  className="mt-2 rounded-lg font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  The exact name or identifier of the local model currently loaded in your server.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+        </>
+      )}
 
       <div className="flex items-center justify-between">
         <div>
@@ -2483,56 +2446,6 @@ function PersonalizationTab() {
   );
 }
 
-function AssistantTab() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Assistant</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure your AI assistant preferences.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">AI Assistant</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Get intelligent help across all features
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Auto-complete</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Suggest completions as you type
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Context Awareness
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Allow the assistant to understand your current context
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-    </div>
-  );
-}
 
 function ShortcutsTab() {
   const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform);
@@ -3293,28 +3206,6 @@ function ConnectorsTab() {
     },
   ];
 
-  const staticConnectors = [
-    {
-      name: "Linear",
-      description: "Sync project issues and engineering tasks automatically",
-      logo: "/integrations/linear.jpeg",
-    },
-    {
-      name: "Jira",
-      description: "Connect Jira boards to track enterprise team progress",
-      logo: "/integrations/atlassianjira.png",
-    },
-    {
-      name: "Slack",
-      description: "Send instant notifications and feed updates to Slack channels",
-      logo: "/integrations/slack.png",
-    },
-    {
-      name: "ChronicleHQ",
-      description: "Create premium looking PPTs using Ai",
-      logo: "/integrations/chroniclehq.jpeg",
-    },
-  ];
 
   return (
     <div className="space-y-8">
@@ -3328,18 +3219,7 @@ function ConnectorsTab() {
       <Separator />
 
       <div className="space-y-6">
-      {/* ── Google Suite ── */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-3">
-          <img src="/integrations/google.png" alt="Google" className="size-4 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Google Suite</p>
-          {gcalStatus?.connected && (
-            <span className="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-              Connected
-            </span>
-          )}
-        </div>
-
         {/* Google Calendar — primary OAuth connector */}
         <div className={cn(
           "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
@@ -3406,50 +3286,51 @@ function ConnectorsTab() {
         </div>
 
         {/* Google sub-services — status inherits from Calendar OAuth */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-0">
-          {googleSuiteServices.map((svc) => (
-            <div
-              key={svc.name}
-              className={cn(
-                "flex items-center justify-between p-3.5 rounded-xl border transition-colors",
-                gcalStatus?.connected
-                  ? "border-emerald-500/20 bg-emerald-500/5"
-                  : "border-border/60 bg-card opacity-60",
-              )}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="size-8 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-                  <img src={svc.logo} alt={svc.name} className="size-5 object-contain" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-medium text-foreground truncate">{svc.name}</p>
-                    {gcalStatus?.connected && (
-                      <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 line-clamp-1">
-                    {gcalStatus?.connected ? svc.activeDescription : svc.description}
-                  </p>
-                </div>
+        {googleSuiteServices.map((svc) => (
+          <div
+            key={svc.name}
+            className={cn(
+              "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
+              gcalStatus?.connected
+                ? "border-emerald-500/20 bg-emerald-500/5"
+                : "border-border",
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
+                <img src={svc.logo} alt={svc.name} className="size-6 object-contain" />
               </div>
-              <span className={cn(
-                "text-[10px] font-semibold shrink-0 ml-2 px-2 py-0.5 rounded-full border",
-                gcalStatus?.connected
-                  ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
-                  : "text-muted-foreground/50 bg-muted/30 border-border/40",
-              )}>
-                {gcalStatus?.connected ? "Connected" : "Pending"}
-              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    {svc.name}
+                  </p>
+                  {!gcalLoading && (
+                    <span
+                      className={cn(
+                        "inline-block size-2 rounded-full",
+                        gcalStatus?.connected
+                          ? "bg-emerald-500"
+                          : "bg-muted-foreground/40",
+                      )}
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {gcalStatus?.connected ? svc.activeDescription : svc.description}
+                </p>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Other Integrations ── */}
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Other Integrations</p>
-
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs rounded-lg"
+              disabled
+            >
+              {gcalStatus?.connected ? "Connected" : "Pending"}
+            </Button>
+          </div>
+        ))}
         {/* Notion — live integration */}
         <div className={cn(
           "rounded-xl border border-border bg-card transition-colors overflow-hidden",
@@ -3650,35 +3531,7 @@ function ConnectorsTab() {
           )}
         </div>
 
-        {/* Other static placeholder connectors */}
-        {staticConnectors.map((connector, i) => (
-          <div
-            key={`static-${i}`}
-            className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-                <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {connector.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {connector.description}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled
-            >
-              Coming soon
-            </Button>
-          </div>
-        ))}
+
       </div>
       </div>
     </div>
@@ -4318,9 +4171,7 @@ function BillingTab() {
 // ─── Tab Content Map ─────────────────────────────────────────────────
 const accountTabContent: Record<AccountTab, React.FC> = {
   account: AccountTab,
-  preferences: PreferencesTab,
   personalization: PersonalizationTab,
-  assistant: AssistantTab,
   shortcuts: ShortcutsTab,
   tasks: TasksTab,
   notifications: NotificationsTab,
