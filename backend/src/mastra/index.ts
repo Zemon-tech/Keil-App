@@ -13,7 +13,7 @@ import { motionAgent } from "./agents/motion.agent";
 import { schedulerAgent } from "./agents/scheduler.agent";
 import { githubAgent } from "./agents/github.agent";
 import { checkRateLimit } from "../services/rate-limiter.service";
-import { checkAiChatLimit } from "../middlewares/usage-limit.middleware";
+import { checkAiChatLimit, recordAiChatUsageForUser } from "../middlewares/usage-limit.middleware";
 import {
   startStreamSession,
   finishStreamSession,
