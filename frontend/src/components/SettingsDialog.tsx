@@ -1806,6 +1806,7 @@ const BACKGROUNDS = [
 
 function PersonalizationTab() {
   const { theme, setTheme } = useTheme();
+  const showLocalAISettings = import.meta.env.VITE_ENABLE_LOCAL_AI_SETTINGS === 'true';
   const [chatView, setChatView] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("default_chat_view") || "sidebar";
@@ -2307,113 +2308,117 @@ function PersonalizationTab() {
 
       <Separator />
 
-      {/* Model Selection section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Bot className="size-4 text-muted-foreground" />
-          Default AI Model
-        </h3>
+      {showLocalAISettings && (
+        <>
+          {/* Model Selection section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Bot className="size-4 text-muted-foreground" />
+              Default AI Model
+            </h3>
 
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Model Selection
-            </Label>
-            <Select value={modelSelection} onValueChange={handleGlobalModelChange}>
-              <SelectTrigger className="w-full mt-2 rounded-lg">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gemini">Gemini 3.5 Flash (Default)</SelectItem>
-                <SelectItem value="github-models">GitHub Models</SelectItem>
-                <SelectItem value="openrouter">OpenRouter AI</SelectItem>
-                <SelectItem value="local">Local LLM</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Choose the default model to use for AI responses.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* OpenRouter AI Configuration Section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Globe className="size-4 text-muted-foreground" />
-          OpenRouter Model Configuration
-        </h3>
-
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              OpenRouter Model
-            </Label>
-            <Select value={openRouterModel} onValueChange={handleOpenRouterModelChange}>
-              <SelectTrigger className="w-full mt-2 rounded-lg">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
-                <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
-                <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
-                <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Select which OpenRouter model to query when OpenRouter AI is selected.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Local AI Configuration Section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <SlidersHorizontal className="size-4 text-muted-foreground" />
-          Local AI Model Integration
-        </h3>
-
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Local AI Connection URL
-            </Label>
-            <Input
-              id="local_ai_url"
-              value={localUrl}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              placeholder="e.g., http://localhost:8080/v1"
-              className="mt-2 rounded-lg font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              The OpenAI-compatible endpoint URL of your locally running LLM (e.g. llama.cpp or Ollama).
-            </p>
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Model Selection
+                </Label>
+                <Select value={modelSelection} onValueChange={handleGlobalModelChange}>
+                  <SelectTrigger className="w-full mt-2 rounded-lg">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini 3.5 Flash (Default)</SelectItem>
+                    <SelectItem value="github-models">GitHub Models</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter AI</SelectItem>
+                    <SelectItem value="local">Local LLM</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Choose the default model to use for AI responses.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="local_ai_model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Local Model Identifier
-            </Label>
-            <Input
-              id="local_ai_model"
-              value={localModel}
-              onChange={(e) => handleModelChange(e.target.value)}
-              placeholder="e.g., gemma-4, llama3"
-              className="mt-2 rounded-lg font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              The exact name or identifier of the local model currently loaded in your server.
-            </p>
-          </div>
-        </div>
-      </div>
+          <Separator />
 
-      <Separator />
+          {/* OpenRouter AI Configuration Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Globe className="size-4 text-muted-foreground" />
+              OpenRouter Model Configuration
+            </h3>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  OpenRouter Model
+                </Label>
+                <Select value={openRouterModel} onValueChange={handleOpenRouterModelChange}>
+                  <SelectTrigger className="w-full mt-2 rounded-lg">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
+                    <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
+                    <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
+                    <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Select which OpenRouter model to query when OpenRouter AI is selected.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Local AI Configuration Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <SlidersHorizontal className="size-4 text-muted-foreground" />
+              Local AI Model Integration
+            </h3>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Local AI Connection URL
+                </Label>
+                <Input
+                  id="local_ai_url"
+                  value={localUrl}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  placeholder="e.g., http://localhost:8080/v1"
+                  className="mt-2 rounded-lg font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  The OpenAI-compatible endpoint URL of your locally running LLM (e.g. llama.cpp or Ollama).
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="local_ai_model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Local Model Identifier
+                </Label>
+                <Input
+                  id="local_ai_model"
+                  value={localModel}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  placeholder="e.g., gemma-4, llama3"
+                  className="mt-2 rounded-lg font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  The exact name or identifier of the local model currently loaded in your server.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+        </>
+      )}
 
       <div className="flex items-center justify-between">
         <div>
