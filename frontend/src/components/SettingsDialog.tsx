@@ -150,9 +150,7 @@ const handleCopyToClipboard = async (text: string, label: string) => {
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type AccountTab =
   | "account"
-  | "preferences"
   | "personalization"
-  | "assistant"
   | "shortcuts"
   | "tasks"
   | "notifications"
@@ -178,9 +176,7 @@ interface WorkspaceNavItem {
 
 const accountNavItems: AccountNavItem[] = [
   { id: "account", label: "Account", icon: User },
-  { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
   { id: "personalization", label: "Personalization", icon: Sparkles },
-  { id: "assistant", label: "Assistant", icon: Bot },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -1630,7 +1626,185 @@ function AccountTab() {
   );
 }
 
-function PreferencesTab() {
+
+function CalendarPreferenceSection() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateDeleteSlots = useUpdateDeleteSlotsOnComplete();
+
+  const deleteSlotsOnComplete = prefs?.delete_slots_on_complete || false;
+
+  const handleToggle = (checked: boolean) => {
+    updateDeleteSlots.mutate(checked, {
+      onSuccess: () => {
+        toast.success(
+          checked
+            ? "Calendar slots will be deleted when task is completed"
+            : "Calendar slots will be kept when task is completed"
+        );
+      },
+      onError: () => {
+        toast.error("Failed to update calendar preference");
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading calendar preference...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <CalendarDays className="size-4 text-muted-foreground" />
+        Calendar Slots
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose how calendar slots behave when tasks are completed.
+      </p>
+      <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+        <div>
+          <p className="text-xs font-semibold text-foreground">
+            Delete Slots on Completion
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+            Automatically delete calendar slots associated with a task when it is marked completed.
+          </p>
+        </div>
+        <Switch
+          checked={deleteSlotsOnComplete}
+          onCheckedChange={handleToggle}
+          disabled={updateDeleteSlots.isPending}
+        />
+      </div>
+    </div>
+  );
+}
+
+const STT_PROVIDERS: Array<{
+  id: SttProvider;
+  name: string;
+  badge?: string;
+  description: string;
+  features: string[];
+}> = [
+    {
+      id: "sarvam",
+      name: "Sarvam AI",
+      badge: "Recommended",
+      description: "Saaras v3 — purpose-built for Indian languages and English.",
+      features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
+    },
+    {
+      id: "elevenlabs",
+      name: "ElevenLabs",
+      description: "Scribe v2 — broad language support with word-level detail.",
+      features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
+    },
+  ];
+
+function SttProviderSelector() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateProvider = useUpdateSttProvider();
+
+  const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
+
+  const handleProviderChange = (provider: SttProvider) => {
+    if (provider === currentProvider || updateProvider.isPending) return;
+    const label = STT_PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
+    updateProvider.mutate(provider, {
+      onSuccess: () => toast.success(`Speech-to-text provider changed to ${label}`),
+      onError: () => toast.error("Failed to update STT provider"),
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading preferences...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <Mic className="size-4 text-muted-foreground" />
+        Speech-to-Text Provider
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose which AI service transcribes your meeting recordings.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {STT_PROVIDERS.map((provider) => {
+          const isActive = currentProvider === provider.id;
+          return (
+            <button
+              key={provider.id}
+              onClick={() => handleProviderChange(provider.id)}
+              disabled={updateProvider.isPending}
+              className={cn(
+                "flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
+                isActive
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+                updateProvider.isPending && "opacity-60 cursor-not-allowed",
+              )}
+            >
+              {/* Header row */}
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">{provider.name}</span>
+                  {provider.badge && (
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
+                      {provider.badge}
+                    </span>
+                  )}
+                </div>
+                {isActive && (
+                  updateProvider.isPending
+                    ? <Loader2 className="size-4 animate-spin text-primary" />
+                    : <Check className="size-4 text-primary shrink-0" />
+                )}
+              </div>
+
+              {/* Description */}
+              <span className="text-[11px] text-muted-foreground leading-tight">
+                {provider.description}
+              </span>
+
+              {/* Feature pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {provider.features.map((f) => (
+                  <span
+                    key={f}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const BACKGROUNDS = [
+  { id: "none", name: "None", url: "" },
+  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
+  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
+  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
+];
+
+function PersonalizationTab() {
   const { theme, setTheme } = useTheme();
   const [chatView, setChatView] = useState(() => {
     if (typeof window !== "undefined") {
@@ -1687,12 +1861,76 @@ function PreferencesTab() {
     window.dispatchEvent(new Event("calendar_day_headers_preference_changed"));
   };
 
+  const [dashboardBackground, setDashboardBackground] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dashboard_background") || "open-garden";
+    }
+    return "open-garden";
+  });
+
+  const handleBackgroundChange = (val: string) => {
+    setDashboardBackground(val);
+    localStorage.setItem("dashboard_background", val);
+    window.dispatchEvent(new Event("dashboard_background_changed"));
+  };
+
+  const [localUrl, setLocalUrl] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
+    }
+    return "http://localhost:8080/v1";
+  });
+
+  const [localModel, setLocalModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_model") || "gemma-4";
+    }
+    return "gemma-4";
+  });
+
+  const handleUrlChange = (val: string) => {
+    setLocalUrl(val);
+    localStorage.setItem("local_ai_base_url", val);
+  };
+
+  const handleModelChange = (val: string) => {
+    setLocalModel(val);
+    localStorage.setItem("local_ai_model", val);
+  };
+
+  const [openRouterModel, setOpenRouterModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini";
+    }
+    return "openai/gpt-4o-mini";
+  });
+
+  const handleOpenRouterModelChange = (val: string) => {
+    setOpenRouterModel(val);
+    localStorage.setItem("openrouter_model", val);
+  };
+
+  const [modelSelection, setModelSelection] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("ai_model_selection") || "gemini";
+    }
+    return "gemini";
+  });
+
+  const handleGlobalModelChange = (val: string) => {
+    setModelSelection(val);
+    localStorage.setItem("ai_model_selection", val);
+    window.dispatchEvent(new Event("ai_model_selection_changed"));
+  };
+
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Preferences</h2>
+        <h2 className="text-lg font-semibold text-foreground">
+          Personalization
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Customize how KeilHQ works for you.
+          Customize your KeilHQ experience.
         </p>
       </div>
 
@@ -2002,290 +2240,10 @@ function PreferencesTab() {
 
       {/* Speech-to-Text Provider */}
       <SttProviderSelector />
-    </div>
-  );
-}
-
-function CalendarPreferenceSection() {
-  const { data: prefs, isLoading } = usePreferences();
-  const updateDeleteSlots = useUpdateDeleteSlotsOnComplete();
-
-  const deleteSlotsOnComplete = prefs?.delete_slots_on_complete || false;
-
-  const handleToggle = (checked: boolean) => {
-    updateDeleteSlots.mutate(checked, {
-      onSuccess: () => {
-        toast.success(
-          checked
-            ? "Calendar slots will be deleted when task is completed"
-            : "Calendar slots will be kept when task is completed"
-        );
-      },
-      onError: () => {
-        toast.error("Failed to update calendar preference");
-      },
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 py-2">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Loading calendar preference...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <CalendarDays className="size-4 text-muted-foreground" />
-        Calendar Slots
-      </h3>
-      <p className="text-xs text-muted-foreground mt-1 mb-4">
-        Choose how calendar slots behave when tasks are completed.
-      </p>
-      <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
-        <div>
-          <p className="text-xs font-semibold text-foreground">
-            Delete Slots on Completion
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-            Automatically delete calendar slots associated with a task when it is marked completed.
-          </p>
-        </div>
-        <Switch
-          checked={deleteSlotsOnComplete}
-          onCheckedChange={handleToggle}
-          disabled={updateDeleteSlots.isPending}
-        />
-      </div>
-    </div>
-  );
-}
-
-const STT_PROVIDERS: Array<{
-  id: SttProvider;
-  name: string;
-  badge?: string;
-  description: string;
-  features: string[];
-}> = [
-    {
-      id: "sarvam",
-      name: "Sarvam AI",
-      badge: "Recommended",
-      description: "Saaras v3 — purpose-built for Indian languages and English.",
-      features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
-    },
-    {
-      id: "elevenlabs",
-      name: "ElevenLabs",
-      description: "Scribe v2 — broad language support with word-level detail.",
-      features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
-    },
-  ];
-
-function SttProviderSelector() {
-  const { data: prefs, isLoading } = usePreferences();
-  const updateProvider = useUpdateSttProvider();
-
-  const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
-
-  const handleProviderChange = (provider: SttProvider) => {
-    if (provider === currentProvider || updateProvider.isPending) return;
-    const label = STT_PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
-    updateProvider.mutate(provider, {
-      onSuccess: () => toast.success(`Speech-to-text provider changed to ${label}`),
-      onError: () => toast.error("Failed to update STT provider"),
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 py-2">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Loading preferences...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <Mic className="size-4 text-muted-foreground" />
-        Speech-to-Text Provider
-      </h3>
-      <p className="text-xs text-muted-foreground mt-1 mb-4">
-        Choose which AI service transcribes your meeting recordings.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {STT_PROVIDERS.map((provider) => {
-          const isActive = currentProvider === provider.id;
-          return (
-            <button
-              key={provider.id}
-              onClick={() => handleProviderChange(provider.id)}
-              disabled={updateProvider.isPending}
-              className={cn(
-                "flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
-                isActive
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
-                updateProvider.isPending && "opacity-60 cursor-not-allowed",
-              )}
-            >
-              {/* Header row */}
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">{provider.name}</span>
-                  {provider.badge && (
-                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
-                      {provider.badge}
-                    </span>
-                  )}
-                </div>
-                {isActive && (
-                  updateProvider.isPending
-                    ? <Loader2 className="size-4 animate-spin text-primary" />
-                    : <Check className="size-4 text-primary shrink-0" />
-                )}
-              </div>
-
-              {/* Description */}
-              <span className="text-[11px] text-muted-foreground leading-tight">
-                {provider.description}
-              </span>
-
-              {/* Feature pills */}
-              <div className="flex flex-wrap gap-1.5">
-                {provider.features.map((f) => (
-                  <span
-                    key={f}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50"
-                  >
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const BACKGROUNDS = [
-  { id: "none", name: "None", url: "" },
-  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
-  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
-  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
-];
-
-function PersonalizationTab() {
-  const [dashboardBackground, setDashboardBackground] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("dashboard_background") || "open-garden";
-    }
-    return "open-garden";
-  });
-
-  const handleBackgroundChange = (val: string) => {
-    setDashboardBackground(val);
-    localStorage.setItem("dashboard_background", val);
-    window.dispatchEvent(new Event("dashboard_background_changed"));
-  };
-
-  const [localUrl, setLocalUrl] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
-    }
-    return "http://localhost:8080/v1";
-  });
-
-  const [localModel, setLocalModel] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("local_ai_model") || "gemma-4";
-    }
-    return "gemma-4";
-  });
-
-  const handleUrlChange = (val: string) => {
-    setLocalUrl(val);
-    localStorage.setItem("local_ai_base_url", val);
-  };
-
-  const handleModelChange = (val: string) => {
-    setLocalModel(val);
-    localStorage.setItem("local_ai_model", val);
-  };
-
-  const [openRouterModel, setOpenRouterModel] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini";
-    }
-    return "openai/gpt-4o-mini";
-  });
-
-  const handleOpenRouterModelChange = (val: string) => {
-    setOpenRouterModel(val);
-    localStorage.setItem("openrouter_model", val);
-  };
-
-  const [modelSelection, setModelSelection] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("ai_model_selection") || "gemini";
-    }
-    return "gemini";
-  });
-
-  const handleGlobalModelChange = (val: string) => {
-    setModelSelection(val);
-    localStorage.setItem("ai_model_selection", val);
-    window.dispatchEvent(new Event("ai_model_selection_changed"));
-  };
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">
-          Personalization
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Tell KeilHQ about yourself for a better experience.
-        </p>
-      </div>
 
       <Separator />
 
-      <div>
-        <Label htmlFor="role" className="text-sm font-medium">
-          Your Role
-        </Label>
-        <Input
-          id="role"
-          placeholder="e.g., Product Manager, Developer"
-          className="mt-2 rounded-lg"
-        />
-        <p className="text-xs text-muted-foreground mt-1.5">
-          This helps tailor the dashboard to your needs.
-        </p>
-      </div>
-
-      <div>
-        <Label htmlFor="team" className="text-sm font-medium">
-          Team / Department
-        </Label>
-        <Input
-          id="team"
-          placeholder="e.g., Engineering, Design"
-          className="mt-2 rounded-lg"
-        />
-      </div>
-
-      <Separator />
-
+      {/* Dashboard Background */}
       <div className="space-y-4">
         <div>
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -2482,56 +2440,6 @@ function PersonalizationTab() {
   );
 }
 
-function AssistantTab() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Assistant</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure your AI assistant preferences.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">AI Assistant</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Get intelligent help across all features
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Auto-complete</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Suggest completions as you type
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Context Awareness
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Allow the assistant to understand your current context
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-    </div>
-  );
-}
 
 function ShortcutsTab() {
   const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform);
@@ -4257,9 +4165,7 @@ function BillingTab() {
 // ─── Tab Content Map ─────────────────────────────────────────────────
 const accountTabContent: Record<AccountTab, React.FC> = {
   account: AccountTab,
-  preferences: PreferencesTab,
   personalization: PersonalizationTab,
-  assistant: AssistantTab,
   shortcuts: ShortcutsTab,
   tasks: TasksTab,
   notifications: NotificationsTab,
