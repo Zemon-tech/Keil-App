@@ -24,6 +24,7 @@ export function markdownToTiptap(markdown: string): any {
   let codeLines: string[] = [];
   
   let currentList: { type: 'bulletList' | 'orderedList' | 'taskList'; items: any[] } | null = null;
+  let currentTable: { headers: string[]; rows: string[][] } | null = null;
 
   const flushList = () => {
     if (currentList) {
@@ -32,6 +33,40 @@ export function markdownToTiptap(markdown: string): any {
         content: currentList.items,
       });
       currentList = null;
+    }
+  };
+
+  const flushTable = () => {
+    if (currentTable && currentTable.headers.length > 0) {
+      const tableRows: any[] = [];
+      
+      // Add header row
+      const headerCells = currentTable.headers.map(header => ({
+        type: 'tableHeader',
+        content: [{ type: 'paragraph', content: parseInline(header) }]
+      }));
+      tableRows.push({
+        type: 'tableRow',
+        content: headerCells
+      });
+      
+      // Add data rows
+      for (const row of currentTable.rows) {
+        const cells = row.map(cell => ({
+          type: 'tableCell',
+          content: [{ type: 'paragraph', content: parseInline(cell) }]
+        }));
+        tableRows.push({
+          type: 'tableRow',
+          content: cells
+        });
+      }
+      
+      content.push({
+        type: 'table',
+        content: tableRows
+      });
+      currentTable = null;
     }
   };
 
@@ -125,6 +160,7 @@ export function markdownToTiptap(markdown: string): any {
         codeLines = [];
       } else {
         flushList();
+        flushTable();
         inCodeBlock = true;
         codeLanguage = line.trim().substring(3).trim();
       }
@@ -138,12 +174,14 @@ export function markdownToTiptap(markdown: string): any {
 
     if (line.trim() === '') {
       flushList();
+      flushTable();
       continue;
     }
 
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
     if (headingMatch) {
       flushList();
+      flushTable();
       const level = headingMatch[1].length;
       content.push({
         type: 'heading',
@@ -155,6 +193,7 @@ export function markdownToTiptap(markdown: string): any {
 
     if (line.trim().startsWith('>')) {
       flushList();
+      flushTable();
       content.push({
         type: 'blockquote',
         content: [{
@@ -167,6 +206,7 @@ export function markdownToTiptap(markdown: string): any {
 
     const taskMatch = line.match(/^[-*]\s+\[([ xX])\]\s+(.*)$/);
     if (taskMatch) {
+      flushTable();
       if (currentList && currentList.type !== 'taskList') {
         flushList();
       }
@@ -187,6 +227,7 @@ export function markdownToTiptap(markdown: string): any {
 
     const bulletMatch = line.match(/^[-*]\s+(.*)$/);
     if (bulletMatch) {
+      flushTable();
       if (currentList && currentList.type !== 'bulletList') {
         flushList();
       }
@@ -205,6 +246,7 @@ export function markdownToTiptap(markdown: string): any {
 
     const orderedMatch = line.match(/^(\d+)\.\s+(.*)$/);
     if (orderedMatch) {
+      flushTable();
       if (currentList && currentList.type !== 'orderedList') {
         flushList();
       }
@@ -224,6 +266,7 @@ export function markdownToTiptap(markdown: string): any {
     const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imageMatch) {
       flushList();
+      flushTable();
       content.push({
         type: 'image',
         attrs: { src: imageMatch[2] },
@@ -233,13 +276,47 @@ export function markdownToTiptap(markdown: string): any {
 
     if (line.trim() === '---') {
       flushList();
+      flushTable();
       content.push({
         type: 'horizontalRule',
       });
       continue;
     }
 
-    flushList();
+    // Markdown table parsing
+    const tableRowMatch = line.match(/^\|(.+)\|$/);
+    if (tableRowMatch) {
+      flushList();
+      
+      const cells = tableRowMatch[1].split('|').map(cell => cell.trim());
+      
+      // Check if this is a separator row (e.g., |---|---|)
+      const isSeparator = cells.every(cell => /^[-:]+$/.test(cell));
+      
+      if (isSeparator) {
+        // Separator row marks the end of headers
+        if (currentTable) {
+          // Headers already captured, just continue
+        } else {
+          // No headers before separator, skip
+        }
+      } else {
+        if (!currentTable) {
+          // First row is headers
+          currentTable = { headers: cells, rows: [] };
+        } else {
+          // Subsequent rows are data
+          currentTable.rows.push(cells);
+        }
+      }
+      continue;
+    }
+
+    // If we're not in a table row anymore, flush the table
+    if (currentTable) {
+      flushTable();
+    }
+
     content.push({
       type: 'paragraph',
       content: parseInline(line),
@@ -247,6 +324,7 @@ export function markdownToTiptap(markdown: string): any {
   }
 
   flushList();
+  flushTable();
 
   return {
     type: 'doc',

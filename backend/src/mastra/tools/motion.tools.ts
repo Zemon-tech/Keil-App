@@ -231,6 +231,37 @@ function tiptapToMarkdown(node: any, parentType?: string, itemIndex = 0): string
       return "\n";
     case "horizontalRule":
       return "---\n\n";
+    case "table": {
+      if (!node.content || node.content.length === 0) return "";
+      let markdown = "";
+      const firstRow = node.content[0];
+      const isFirstRowHeader = firstRow?.type === "tableRow" && 
+        firstRow.content?.some((cell: any) => cell.type === "tableHeader");
+      
+      for (let i = 0; i < node.content.length; i++) {
+        const row = node.content[i];
+        if (row.type !== "tableRow") continue;
+        
+        const cellTexts = (row.content || []).map((cell: any) => {
+          const cellChildren = (cell.content || []).map((c: any) => tiptapToMarkdown(c, cell.type)).join("");
+          return cellChildren.trim();
+        });
+        
+        markdown += `| ${cellTexts.join(" | ")} |\n`;
+        
+        // Add separator row after header row
+        if (i === 0 && isFirstRowHeader) {
+          const separator = cellTexts.map(() => "---").join(" | ");
+          markdown += `| ${separator} |\n`;
+        }
+      }
+      return markdown + "\n";
+    }
+    case "tableRow":
+      return childrenText;
+    case "tableHeader":
+    case "tableCell":
+      return childrenText;
     default:
       return childrenText;
   }
@@ -470,6 +501,42 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
   let isCallout = false;
   let blockquoteLines: string[] = [];
 
+  let currentTable: { headers: string[]; rows: string[][] } | null = null;
+
+  const flushTable = () => {
+    if (currentTable && currentTable.headers.length > 0) {
+      const tableRows: any[] = [];
+      
+      // Add header row
+      const headerCells = currentTable.headers.map(header => ({
+        type: 'tableHeader',
+        content: [{ type: 'paragraph', content: parseInlineFormatting(header) }]
+      }));
+      tableRows.push({
+        type: 'tableRow',
+        content: headerCells
+      });
+      
+      // Add data rows
+      for (const row of currentTable.rows) {
+        const cells = row.map(cell => ({
+          type: 'tableCell',
+          content: [{ type: 'paragraph', content: parseInlineFormatting(cell) }]
+        }));
+        tableRows.push({
+          type: 'tableRow',
+          content: cells
+        });
+      }
+      
+      contentNodes.push({
+        type: 'table',
+        content: tableRows
+      });
+      currentTable = null;
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
@@ -493,6 +560,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
 
     if (trimmed.startsWith("```")) {
       flushAllLists();
+      flushTable();
       inCodeBlock = true;
       codeLanguage = trimmed.slice(3).trim();
       codeLines = [];
@@ -503,6 +571,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     const quoteMatch = line.match(/^\s*>\s?(.*)$/);
     if (quoteMatch) {
       flushAllLists();
+      flushTable();
       const content = quoteMatch[1];
       if (!inBlockquote) {
         inBlockquote = true;
@@ -536,12 +605,14 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     // --- Empty lines ---
     if (!trimmed) {
       flushAllLists();
+      flushTable();
       continue;
     }
 
     // --- Horizontal Rule ---
     if (trimmed === "---" || trimmed === "___" || trimmed === "***") {
       flushAllLists();
+      flushTable();
       contentNodes.push({
         type: "horizontalRule",
       });
@@ -552,6 +623,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     const headingMatch = line.match(/^\s*(#{1,6})\s+(.*)$/);
     if (headingMatch) {
       flushAllLists();
+      flushTable();
       const level = headingMatch[1].length;
       const text = headingMatch[2];
       contentNodes.push({
@@ -562,6 +634,40 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
       continue;
     }
 
+    // --- Table Parsing ---
+    const tableRowMatch = line.match(/^\|(.+)\|$/);
+    if (tableRowMatch) {
+      flushAllLists();
+      
+      const cells = tableRowMatch[1].split('|').map(cell => cell.trim());
+      
+      // Check if this is a separator row (e.g., |---|---|)
+      const isSeparator = cells.every(cell => /^[-:]+$/.test(cell));
+      
+      if (isSeparator) {
+        // Separator row marks the end of headers
+        if (currentTable) {
+          // Headers already captured, just continue
+        } else {
+          // No headers before separator, skip
+        }
+      } else {
+        if (!currentTable) {
+          // First row is headers
+          currentTable = { headers: cells, rows: [] };
+        } else {
+          // Subsequent rows are data
+          currentTable.rows.push(cells);
+        }
+      }
+      continue;
+    }
+
+    // If we're not in a table row anymore, flush the table
+    if (currentTable) {
+      flushTable();
+    }
+
     // --- List Parsing with Indentation Stack ---
     const indent = line.match(/^\s*/)?.[0].length || 0;
     
@@ -570,6 +676,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     const orderedMatch = line.match(/^\s*\d+\.\s+(.*)$/);
 
     if (taskMatch || bulletMatch || orderedMatch) {
+      flushTable();
       let listType: "bulletList" | "orderedList" | "taskList";
       let text = "";
       let checked = false;
@@ -667,6 +774,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
 
     // --- Fallback: Paragraph ---
     flushAllLists();
+    flushTable();
     contentNodes.push({
       type: "paragraph",
       content: parseInlineFormatting(line),
@@ -688,6 +796,9 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     }
     contentNodes.push(blockquoteNode);
   }
+
+  // Flush any remaining table
+  flushTable();
 
   if (contentNodes.length === 0) {
     contentNodes.push({
