@@ -146,7 +146,7 @@ export const mastra = new Mastra({
           );
 
           // ── Start persistent stream session ───────────────────────
-          await startStreamSession(threadId, authResult.userId).catch(() => {});
+          await startStreamSession(threadId, authResult.userId).catch(() => { });
 
           // ── Build instructions ────────────────────────────────────
           const agent = c.get("mastra").getAgent("keilhq-ai");
@@ -169,12 +169,12 @@ export const mastra = new Mastra({
           const temporalContext = buildTemporalContext();
           const pageContextBlock = body?.pageContext
             ? [
-                `<page_context>`,
-                `The user is currently on this page:`,
-                body.pageContext,
-                `Use this to answer questions about what the user is currently viewing.`,
-                `</page_context>`,
-              ].join("\n")
+              `<page_context>`,
+              `The user is currently on this page:`,
+              body.pageContext,
+              `Use this to answer questions about what the user is currently viewing.`,
+              `</page_context>`,
+            ].join("\n")
             : "";
 
           const instructionsOverride = [temporalContext, pageContextBlock, baseInstructions]
@@ -205,7 +205,7 @@ export const mastra = new Mastra({
                   // Chunks are persisted and the client can replay on reconnect.
                 });
               } catch (err: any) {
-                await errorStreamSession(threadId, err.message, chunkIndex).catch(() => {});
+                await errorStreamSession(threadId, err.message, chunkIndex).catch(() => { });
                 throw err;
               }
 
@@ -242,7 +242,7 @@ export const mastra = new Mastra({
                     await persistChunk(
                       threadId, authResult.userId, chunkIndex++,
                       "data-agent-activity", val.payload.data
-                    ).catch(() => {});
+                    ).catch(() => { });
                   }
 
                   controller.enqueue(value);
@@ -274,15 +274,18 @@ export const mastra = new Mastra({
                     await persistChunk(
                       threadId, authResult.userId, chunkIndex++,
                       serialised.type, serialised.data
-                    ).catch(() => {});
+                    ).catch(() => { });
                   }
                 }
 
-                await finishStreamSession(threadId, chunkIndex).catch(() => {});
+                await finishStreamSession(threadId, chunkIndex).catch(() => { });
               } catch (err: any) {
-                await errorStreamSession(threadId, err.message, chunkIndex).catch(() => {});
+                await errorStreamSession(threadId, err.message, chunkIndex).catch(() => { });
                 throw err;
               }
+
+              // Increment usage only after the AI has successfully produced output.
+              recordAiChatUsageForUser(authResult.userId);
             },
           });
 
