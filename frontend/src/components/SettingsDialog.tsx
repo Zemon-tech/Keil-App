@@ -3292,28 +3292,6 @@ function ConnectorsTab() {
     },
   ];
 
-  const staticConnectors = [
-    {
-      name: "Linear",
-      description: "Sync project issues and engineering tasks automatically",
-      logo: "/integrations/linear.jpeg",
-    },
-    {
-      name: "Jira",
-      description: "Connect Jira boards to track enterprise team progress",
-      logo: "/integrations/atlassianjira.png",
-    },
-    {
-      name: "Slack",
-      description: "Send instant notifications and feed updates to Slack channels",
-      logo: "/integrations/slack.png",
-    },
-    {
-      name: "ChronicleHQ",
-      description: "Create premium looking PPTs using Ai",
-      logo: "/integrations/chroniclehq.jpeg",
-    },
-  ];
 
   return (
     <div className="space-y-8">
@@ -3327,18 +3305,7 @@ function ConnectorsTab() {
       <Separator />
 
       <div className="space-y-6">
-      {/* ── Google Suite ── */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-3">
-          <img src="/integrations/google.png" alt="Google" className="size-4 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Google Suite</p>
-          {gcalStatus?.connected && (
-            <span className="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-              Connected
-            </span>
-          )}
-        </div>
-
         {/* Google Calendar — primary OAuth connector */}
         <div className={cn(
           "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
@@ -3405,50 +3372,51 @@ function ConnectorsTab() {
         </div>
 
         {/* Google sub-services — status inherits from Calendar OAuth */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-0">
-          {googleSuiteServices.map((svc) => (
-            <div
-              key={svc.name}
-              className={cn(
-                "flex items-center justify-between p-3.5 rounded-xl border transition-colors",
-                gcalStatus?.connected
-                  ? "border-emerald-500/20 bg-emerald-500/5"
-                  : "border-border/60 bg-card opacity-60",
-              )}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="size-8 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-                  <img src={svc.logo} alt={svc.name} className="size-5 object-contain" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-medium text-foreground truncate">{svc.name}</p>
-                    {gcalStatus?.connected && (
-                      <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 line-clamp-1">
-                    {gcalStatus?.connected ? svc.activeDescription : svc.description}
-                  </p>
-                </div>
+        {googleSuiteServices.map((svc) => (
+          <div
+            key={svc.name}
+            className={cn(
+              "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
+              gcalStatus?.connected
+                ? "border-emerald-500/20 bg-emerald-500/5"
+                : "border-border",
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
+                <img src={svc.logo} alt={svc.name} className="size-6 object-contain" />
               </div>
-              <span className={cn(
-                "text-[10px] font-semibold shrink-0 ml-2 px-2 py-0.5 rounded-full border",
-                gcalStatus?.connected
-                  ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
-                  : "text-muted-foreground/50 bg-muted/30 border-border/40",
-              )}>
-                {gcalStatus?.connected ? "Connected" : "Pending"}
-              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    {svc.name}
+                  </p>
+                  {!gcalLoading && (
+                    <span
+                      className={cn(
+                        "inline-block size-2 rounded-full",
+                        gcalStatus?.connected
+                          ? "bg-emerald-500"
+                          : "bg-muted-foreground/40",
+                      )}
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {gcalStatus?.connected ? svc.activeDescription : svc.description}
+                </p>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Other Integrations ── */}
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Other Integrations</p>
-
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs rounded-lg"
+              disabled
+            >
+              {gcalStatus?.connected ? "Connected" : "Pending"}
+            </Button>
+          </div>
+        ))}
         {/* Notion — live integration */}
         <div className={cn(
           "rounded-xl border border-border bg-card transition-colors overflow-hidden",
@@ -3649,35 +3617,7 @@ function ConnectorsTab() {
           )}
         </div>
 
-        {/* Other static placeholder connectors */}
-        {staticConnectors.map((connector, i) => (
-          <div
-            key={`static-${i}`}
-            className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-                <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {connector.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {connector.description}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled
-            >
-              Coming soon
-            </Button>
-          </div>
-        ))}
+
       </div>
       </div>
     </div>
