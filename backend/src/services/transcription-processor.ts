@@ -47,7 +47,41 @@ export async function processCompletedTranscription(
             }
 
             log.info({ recordingId }, "Generating AI summary for meeting transcript");
-            const prompt = `Please provide a concise, structured summary of the following meeting transcript. Highlight key points, decisions, and action items with clear formatting:\n\n${result.transcriptText}`;
+            const prompt = `Please provide a concise, structured summary of the following meeting transcript.
+
+Format your response using these sections:
+
+## Meeting Summary
+Provide a brief 2–4 sentence overview of the discussion.
+
+## Key Points
+- Summarize the main topics discussed.
+- Include only the most important information.
+- Group related points together where appropriate.
+
+## Decisions Made
+- List all decisions reached during the meeting.
+- If no decisions were made, state "No decisions recorded."
+
+## Action Items
+For each action item, use the following format:
+
+- **Task:** <Describe the action>
+  - **Owner:** <Person responsible or "Not specified">
+  - **Due Date:** <Date or "Not specified">
+  - **Status:** Pending
+
+If no action items are mentioned, state:
+**No action items identified.**
+- If an owner or due date is not specified, write "Not specified."
+
+## Open Questions / Follow-ups
+- List any unresolved questions or items requiring further discussion.
+- If none, state "None."
+
+Keep the summary clear, professional, and concise. Do not add information that is not present in the transcript. Use bullet points where appropriate.
+
+${result.transcriptText}`;
             const aiResult = await generateTextResponse([
                 { role: "user", content: prompt }
             ]);
