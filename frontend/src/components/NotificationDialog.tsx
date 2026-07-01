@@ -28,6 +28,9 @@ interface NotificationDialogProps {
 }
 
 import { useNotifications, getNotificationTitle, getNotificationSnippet, groupNotifications } from "@/contexts/NotificationContext";
+import { useSendMessage } from "@/hooks/api/useChat";
+import api from "@/lib/api";
+import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
 import { useAppContext } from "@/contexts/AppContext";
@@ -80,9 +83,70 @@ const getNotificationMeta = (eventType: string) =>
     };
 
 export function NotificationDialog({ open, onOpenChange, onMinimize }: NotificationDialogProps) {
-    const { notifications, unreadCount, markAllAsRead, clearAll, handleNotificationClick } = useNotifications();
-    const { organisations } = useAppContext();
+    const { notifications, unreadCount, markAllAsRead, clearAll, handleNotificationClick, markAsRead } = useNotifications();
+    const { organisations, activeOrgId, activeSpaceId } = useAppContext();
     const [filter, setFilter] = useState<"All" | "Tasks" | "Mentions" | "Chat" | "System">("All");
+
+    const sendMessage = useSendMessage();
+    const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+    const [sendingReplyIds, setSendingReplyIds] = useState<Set<string>>(new Set());
+    const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
+
+    const handleSendQuickReply = async (n: any) => {
+        const text = replyTexts[n.id]?.trim();
+        if (!text) return;
+
+        setSendingReplyIds(prev => {
+            const next = new Set(prev);
+            next.add(n.id);
+            return next;
+        });
+
+        try {
+            let channelId = n.payload.channel_id;
+            if (!channelId && n.sender_id) {
+                const orgIdToUse = n.org_id || activeOrgId;
+                const spaceIdToUse = n.space_id || activeSpaceId;
+                if (orgIdToUse && spaceIdToUse) {
+                    const res = await api.post<{ data: { channel: { id: string } } }>(
+                        `/v1/orgs/${orgIdToUse}/spaces/${spaceIdToUse}/chat/channels/direct`,
+                        { target_user_id: n.sender_id }
+                    );
+                    channelId = res.data.data.channel.id;
+                }
+            }
+
+            if (!channelId) {
+                throw new Error("Could not resolve channel ID for quick reply");
+            }
+
+            sendMessage(channelId, text);
+            
+            // Mark notification as read
+            if (!n.read_at) {
+                await markAsRead(n.id);
+            }
+
+            toast.success("Reply sent");
+            
+            // Clear reply input state
+            setReplyTexts(prev => {
+                const copy = { ...prev };
+                delete copy[n.id];
+                return copy;
+            });
+            setActiveReplyId(null);
+        } catch (err) {
+            console.error("Failed to send quick reply:", err);
+            toast.error("Failed to send reply");
+        } finally {
+            setSendingReplyIds(prev => {
+                const next = new Set(prev);
+                next.delete(n.id);
+                return next;
+            });
+        }
+    };
 
     // Mark all as read when dialog is opened
     useEffect(() => {
@@ -338,11 +402,71 @@ export function NotificationDialog({ open, onOpenChange, onMinimize }: Notificat
                                                         </div>
                                                     )}
 
-                                                    <div className="mt-2.5 flex items-center gap-2">
-                                                        <Badge variant="outline" className="h-5 border-border/40 bg-card/50 px-1.5 text-[9px] font-medium text-muted-foreground shadow-none rounded-md">
-                                                            {meta.label}
-                                                        </Badge>
-                                                    </div>
+                                                    {notification.event_type === "someone_messaged" ? (
+                                                        <div className="mt-2.5 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                                                            {activeReplyId === notification.id ? (
+                                                                <div className="flex items-center gap-2 w-full animate-in slide-in-from-top-1 duration-150">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={replyTexts[notification.id] || ""}
+                                                                        onChange={(e) => setReplyTexts(prev => ({ ...prev, [notification.id]: e.target.value }))}
+                                                                        placeholder="Reply..."
+                                                                        className="flex-1 text-xs bg-muted/65 hover:bg-muted focus:bg-background rounded-lg px-2.5 py-1.5 outline-none placeholder:text-muted-foreground border border-border/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all duration-150"
+                                                                        autoFocus
+                                                                        disabled={sendingReplyIds.has(notification.id)}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === "Enter") handleSendQuickReply(notification);
+                                                                        }}
+                                                                    />
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="h-7 px-2.5 text-xs rounded-lg"
+                                                                        onClick={() => handleSendQuickReply(notification)}
+                                                                        disabled={sendingReplyIds.has(notification.id) || !(replyTexts[notification.id]?.trim())}
+                                                                    >
+                                                                        {sendingReplyIds.has(notification.id) ? "Sending..." : "Send"}
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-7 px-2 text-xs rounded-lg text-muted-foreground hover:text-foreground"
+                                                                        onClick={() => {
+                                                                            setActiveReplyId(null);
+                                                                            setReplyTexts(prev => {
+                                                                                const copy = { ...prev };
+                                                                                delete copy[notification.id];
+                                                                                return copy;
+                                                                            });
+                                                                        }}
+                                                                        disabled={sendingReplyIds.has(notification.id)}
+                                                                    >
+                                                                        Cancel
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-3">
+                                                                    <Badge variant="outline" className="h-5 border-border/40 bg-card/50 px-1.5 text-[9px] font-medium text-muted-foreground shadow-none rounded-md">
+                                                                        {meta.label}
+                                                                    </Badge>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveReplyId(notification.id);
+                                                                        }}
+                                                                        className="text-[10px] font-semibold text-primary hover:underline hover:text-primary/95 transition-all cursor-pointer bg-transparent border-0 p-0"
+                                                                    >
+                                                                        Reply
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="mt-2.5 flex items-center gap-2">
+                                                            <Badge variant="outline" className="h-5 border-border/40 bg-card/50 px-1.5 text-[9px] font-medium text-muted-foreground shadow-none rounded-md">
+                                                                {meta.label}
+                                                            </Badge>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </article>
                                         );

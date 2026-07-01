@@ -443,14 +443,119 @@ export const addMembers = async (
 };
 
 export const removeMember = async (channelId: string, userId: string): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // 1. Check if the user is an admin of a group channel
+    const roleCheck = await client.query(
+      `
+        SELECT cm.role, c.type
+        FROM public.channel_members cm
+        JOIN public.channels c ON c.id = cm.channel_id
+        WHERE cm.channel_id = $1 AND cm.user_id = $2
+      `,
+      [channelId, userId],
+    );
+
+    const row = roleCheck.rows[0];
+    const isGroupAdmin = row && row.type === "group" && row.role === "admin";
+
+    // 2. Delete the member
+    await client.query(
+      `
+        DELETE FROM public.channel_members
+        WHERE channel_id = $1
+          AND user_id = $2
+      `,
+      [channelId, userId],
+    );
+
+    // 3. If they were the admin, ensure there is at least one admin remaining if there are other members
+    if (isGroupAdmin) {
+      const adminCheck = await client.query(
+        `
+          SELECT 1 FROM public.channel_members
+          WHERE channel_id = $1 AND role = 'admin'
+          LIMIT 1
+        `,
+        [channelId],
+      );
+
+      if (adminCheck.rows.length === 0) {
+        // No admin remains. Find the oldest active member (by joined_at, then user_id for deterministic choice)
+        const oldestMemberRes = await client.query(
+          `
+            SELECT user_id FROM public.channel_members
+            WHERE channel_id = $1
+            ORDER BY joined_at ASC, user_id ASC
+            LIMIT 1
+          `,
+          [channelId],
+        );
+
+        if (oldestMemberRes.rows.length > 0) {
+          const oldestMemberId = oldestMemberRes.rows[0].user_id;
+          await client.query(
+            `
+              UPDATE public.channel_members
+              SET role = 'admin'
+              WHERE channel_id = $1 AND user_id = $2
+            `,
+            [channelId, oldestMemberId],
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const renameChannel = async (channelId: string, name: string): Promise<void> => {
   await pool.query(
-    `
-      DELETE FROM public.channel_members
-      WHERE channel_id = $1
-        AND user_id = $2
-    `,
-    [channelId, userId],
+    `UPDATE public.channels SET name = $1 WHERE id = $2`,
+    [name, channelId],
   );
+};
+
+export const transferAdmin = async (channelId: string, currentAdminId: string, newAdminId: string): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    
+    // Set current admin to member
+    await client.query(
+      `
+        UPDATE public.channel_members
+        SET role = 'member'
+        WHERE channel_id = $1 AND user_id = $2
+      `,
+      [channelId, currentAdminId],
+    );
+
+    // Set new member to admin
+    await client.query(
+      `
+        UPDATE public.channel_members
+        SET role = 'admin'
+        WHERE channel_id = $1 AND user_id = $2
+      `,
+      [channelId, newAdminId],
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const getChannelMemberIds = async (channelId: string): Promise<string[]> => {
@@ -467,3 +572,4 @@ export const deleteChannel = async (channelId: string): Promise<void> => {
     [channelId],
   );
 };
+

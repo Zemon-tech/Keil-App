@@ -4,7 +4,6 @@ import {
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -64,7 +63,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSpaceRole } from "@/hooks/useSpaceRole";
 import { useMotionStore } from "@/store/useMotionStore";
-import { useSubpages, useRootPages, type MotionPageDTO } from "@/hooks/api/useMotionPages";
+import { useRootPages, type MotionPageDTO } from "@/hooks/api/useMotionPages";
 import { cn } from "@/lib/utils";
 import { MotionSearchDialog } from "./MotionSearchDialog";
 import {
@@ -166,14 +165,25 @@ function SidebarPageItem({
   const { user } = useAuth();
   const { activeOrgId, activeSpaceId } = useAppContext();
 
-  const isPageReadOnly =
-    spaceRole === "admin"
+  const isPageReadOnly = item.share_permission
+    ? !item.share_permission.startsWith("edit")
+    : spaceRole === "admin"
       ? false
       : spaceRole === "manager"
         ? item.created_by !== user?.id
         : true;
 
-  const subpages = useSubpages(activeOrgId, activeSpaceId, item.id);
+  const { data: localPages = [] } = useMotionPages(activeOrgId, activeSpaceId);
+  const { data: sharedPages = [] } = useSharedToSpace(activeOrgId, activeSpaceId);
+
+  const subpages = useMemo(() => {
+    if (!item.id) return [];
+    const sourceList = item.share_permission ? sharedPages : localPages;
+    return sourceList
+      .filter((p) => p.parent_id === item.id && !p.deleted_at)
+      .sort((a, b) => a.position - b.position);
+  }, [item.id, item.share_permission, localPages, sharedPages]);
+
   const hasSubpages = subpages.length > 0;
   const isActive = pageId === item.id;
   const itemPadding = level * 12 + 8;
@@ -328,8 +338,8 @@ function SidebarPageItem({
                       Add subpage
                     </DropdownMenuItem>
                   )}
-                  {!isPageReadOnly && <DropdownMenuSeparator />}
-                  {!isPageReadOnly && (
+                  {!isPageReadOnly && !item.share_permission && <DropdownMenuSeparator />}
+                  {!isPageReadOnly && !item.share_permission && (
                     <DropdownMenuItem
                       className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-destructive focus:text-destructive"
                       onClick={(e) => {
@@ -482,6 +492,12 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
       )
       .slice(0, 8);
   }, [apiPages, sharedPages, openedIds]);
+
+  const sharedRootPages = useMemo(() => {
+    return sharedPages.filter(
+      (p) => !p.parent_id || !sharedPages.some((parent) => parent.id === p.parent_id)
+    );
+  }, [sharedPages]);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [recentsOpen, setRecentsOpen] = useState(true);
@@ -1129,24 +1145,16 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 </button>
                 {sharedOpen && (
                   <SidebarMenu className="mt-1">
-                    {sharedPages.map((item) => (
-                      <SidebarMenuItem key={item.id}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={pageId === item.id}
-                          className="text-sm font-medium"
-                        >
-                          <Link
-                            to={`/motion/${item.id}`}
-                            onClick={() => {
-                              if (window.innerWidth < 1024) onClose?.();
-                            }}
-                          >
-                            <PageIcon icon={item.icon} className="mr-2" />
-                            <span className="truncate">{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
+                    {sharedRootPages.map((item) => (
+                      <SidebarPageItem
+                        key={`shared-${item.id}`}
+                        item={item}
+                        pageId={pageId}
+                        onClose={onClose}
+                        onDelete={handleDeletePage}
+                        onAddSubpage={handleAddPage}
+                        onRename={handleRenamePage}
+                      />
                     ))}
                   </SidebarMenu>
                 )}

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import axios from "axios";
+import api from "@/lib/api";
 import {
   Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, Lock, Undo2, Loader2, RefreshCw, ArrowUpRight, Link2Off
 } from "lucide-react";
@@ -202,6 +204,24 @@ export function MotionPage() {
   const [emojiSearch, setEmojiSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [unsplashSearch, setUnsplashSearch] = useState("");
+
+  useEffect(() => {
+    if (!showCoverPicker) {
+      setUploadProgress(null);
+      setUploadStatus('idle');
+      setUploadError(null);
+      setLinkUrl("");
+      setLinkError(null);
+    }
+  }, [showCoverPicker]);
+
 
   // -- Dropdown State --
   const [menuSearch, setMenuSearch] = useState("");
@@ -539,6 +559,87 @@ export function MotionPage() {
     },
     [restorePage]
   );
+
+  const handleUploadCover = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("Image file must be under 5MB.");
+      setUploadStatus("error");
+      return;
+    }
+
+    if (!pageId) {
+      setUploadError("Page ID is missing.");
+      setUploadStatus("error");
+      return;
+    }
+
+    setUploadStatus("uploading");
+    setUploadProgress(0);
+    setUploadError(null);
+
+    try {
+      const res = await api.post("v1/s3-upload/motion/asset", {
+        pageId,
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream"
+      });
+
+      const { uploadUrl, publicUrl } = res.data.data;
+
+      await axios.put(uploadUrl, file, {
+        headers: {
+          "Content-Type": file.type || "application/octet-stream"
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+            setUploadProgress(percent);
+          }
+        }
+      });
+
+      await updatePage.mutateAsync({
+        id: pageId,
+        updates: { cover_image: publicUrl }
+      });
+
+      setUploadStatus("success");
+      setUploadProgress(null);
+      setShowCoverPicker(false);
+    } catch (err: any) {
+      console.error("Cover image upload failed:", err);
+      setUploadStatus("error");
+      setUploadError(err.response?.data?.message || err.message || "Failed to upload image. Please try again.");
+    }
+  };
+
+  const handleApplyLink = () => {
+    const urlRegex = /^https?:\/\/.+/i;
+    if (!urlRegex.test(linkUrl)) {
+      setLinkError("Please enter a valid HTTP/HTTPS link.");
+      return;
+    }
+
+    if (!pageId) {
+      setLinkError("Page ID is missing.");
+      return;
+    }
+
+    setLinkError(null);
+    updatePage.mutate({
+      id: pageId,
+      updates: { cover_image: linkUrl }
+    }, {
+      onSuccess: () => {
+        setShowCoverPicker(false);
+        setLinkUrl("");
+      },
+      onError: (err: any) => {
+        setLinkError(err.response?.data?.message || err.message || "Failed to update cover image.");
+      }
+    });
+  };
+
 
   const toggleSmallText = () => {
     if (!pageId || !displayPage) return;
@@ -1005,14 +1106,7 @@ export function MotionPage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            const result = reader.result as string;
-                            if (pageId) {
-                              updatePage.mutate({ id: pageId, updates: { cover_image: result } });
-                            }
-                          };
-                          reader.readAsDataURL(file);
+                          handleUploadCover(file);
                         }
                       }}
                     />
@@ -1164,6 +1258,111 @@ export function MotionPage() {
                               )}
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {activeCoverTab === 'Upload' && (
+                        <div className="space-y-4 py-2">
+                          <div
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const file = e.dataTransfer.files?.[0];
+                              if (file) handleUploadCover(file);
+                            }}
+                            className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center justify-center gap-2 hover:bg-muted/30 transition-colors cursor-pointer text-center"
+                            onClick={() => {
+                              const el = document.createElement("input");
+                              el.type = "file";
+                              el.accept = "image/*";
+                              el.onchange = (e) => {
+                                const file = (e.target as HTMLInputElement).files?.[0];
+                                if (file) handleUploadCover(file);
+                              };
+                              el.click();
+                            }}
+                          >
+                            <Camera className="size-8 text-muted-foreground/60" />
+                            <div className="text-sm font-medium">Drag & drop an image, or click to upload</div>
+                            <div className="text-xs text-muted-foreground">Images up to 5MB are supported</div>
+                          </div>
+
+                          {uploadStatus === 'uploading' && uploadProgress !== null && (
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-xs font-medium">
+                                <span>Uploading...</span>
+                                <span>{uploadProgress}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-primary transition-all duration-150"
+                                  style={{ width: `${uploadProgress}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {uploadStatus === 'error' && uploadError && (
+                            <div className="text-xs text-destructive flex items-center gap-1.5 justify-center">
+                              <AlertTriangle className="size-3.5" />
+                              {uploadError}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {activeCoverTab === 'Link' && (
+                        <div className="space-y-4 py-2">
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">
+                              Link to an image
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Paste an image URL (https://...)"
+                                value={linkUrl}
+                                onChange={(e) => {
+                                  setLinkUrl(e.target.value);
+                                  setLinkError(null);
+                                }}
+                                className="flex-1 px-3 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleApplyLink();
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={handleApplyLink}
+                                className="h-9 px-4"
+                              >
+                                Apply
+                              </Button>
+                            </div>
+                          </div>
+
+                          {linkError && (
+                            <div className="text-xs text-destructive flex items-center gap-1.5">
+                              <AlertTriangle className="size-3.5" />
+                              {linkError}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {activeCoverTab === 'Unsplash' && (
+                        <div className="space-y-4 py-2">
+                          <input
+                            type="text"
+                            placeholder="Search Unsplash (coming soon)..."
+                            value={unsplashSearch}
+                            onChange={(e) => setUnsplashSearch(e.target.value)}
+                            className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+                            disabled
+                          />
+                          <div className="py-4 text-center text-sm text-muted-foreground">
+                            Unsplash search is not supported yet.
+                          </div>
                         </div>
                       )}
                     </div>

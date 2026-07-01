@@ -17,6 +17,10 @@ import { useNotifications, getNotificationTitle, getNotificationSnippet, groupNo
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/contexts/AppContext";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { useSendMessage } from "@/hooks/api/useChat";
+import api from "@/lib/api";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 interface NotificationDrawerProps {
   open: boolean;
@@ -75,9 +79,70 @@ export function NotificationDrawer({
   onOpenFullView,
 }: NotificationDrawerProps) {
   const width = 400;
-  const { organisations } = useAppContext();
+  const { organisations, activeOrgId, activeSpaceId } = useAppContext();
   const [filter, setFilter] = useState<"All" | "Unread" | "Tasks" | "Mentions">("All");
-  const { notifications, unreadCount, markAllAsRead, clearAll, handleNotificationClick } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, clearAll, handleNotificationClick, markAsRead } = useNotifications();
+
+  const sendMessage = useSendMessage();
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [sendingReplyIds, setSendingReplyIds] = useState<Set<string>>(new Set());
+  const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
+
+  const handleSendQuickReply = async (n: any) => {
+    const text = replyTexts[n.id]?.trim();
+    if (!text) return;
+
+    setSendingReplyIds(prev => {
+      const next = new Set(prev);
+      next.add(n.id);
+      return next;
+    });
+
+    try {
+      let channelId = n.payload.channel_id;
+      if (!channelId && n.sender_id) {
+        const orgIdToUse = n.org_id || activeOrgId;
+        const spaceIdToUse = n.space_id || activeSpaceId;
+        if (orgIdToUse && spaceIdToUse) {
+          const res = await api.post<{ data: { channel: { id: string } } }>(
+            `/v1/orgs/${orgIdToUse}/spaces/${spaceIdToUse}/chat/channels/direct`,
+            { target_user_id: n.sender_id }
+          );
+          channelId = res.data.data.channel.id;
+        }
+      }
+
+      if (!channelId) {
+        throw new Error("Could not resolve channel ID for quick reply");
+      }
+
+      sendMessage(channelId, text);
+      
+      // Mark notification as read
+      if (!n.read_at) {
+        await markAsRead(n.id);
+      }
+
+      toast.success("Reply sent");
+      
+      // Clear reply input state
+      setReplyTexts(prev => {
+        const copy = { ...prev };
+        delete copy[n.id];
+        return copy;
+      });
+      setActiveReplyId(null);
+    } catch (err) {
+      console.error("Failed to send quick reply:", err);
+      toast.error("Failed to send reply");
+    } finally {
+      setSendingReplyIds(prev => {
+        const next = new Set(prev);
+        next.delete(n.id);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -276,6 +341,61 @@ export function NotificationDrawer({
                         {calloutText && (
                           <div className="mt-1.5 border-l-2 border-border/80 pl-2 text-xs text-muted-foreground/75 font-normal italic line-clamp-2 leading-relaxed">
                             "{calloutText}"
+                          </div>
+                        )}
+
+                        {notification.event_type === "someone_messaged" && (
+                          <div className="mt-2 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {activeReplyId === notification.id ? (
+                              <div className="flex items-center gap-1.5 w-full animate-in slide-in-from-top-1 duration-150">
+                                <input
+                                  type="text"
+                                  value={replyTexts[notification.id] || ""}
+                                  onChange={(e) => setReplyTexts(prev => ({ ...prev, [notification.id]: e.target.value }))}
+                                  placeholder="Reply..."
+                                  className="flex-1 text-[11px] bg-muted/65 hover:bg-muted focus:bg-background rounded-lg px-2 py-1 outline-none placeholder:text-muted-foreground border border-border/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all duration-150"
+                                  autoFocus
+                                  disabled={sendingReplyIds.has(notification.id)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSendQuickReply(notification);
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-6 px-2 text-[10px] rounded-md shrink-0"
+                                  onClick={() => handleSendQuickReply(notification)}
+                                  disabled={sendingReplyIds.has(notification.id) || !(replyTexts[notification.id]?.trim())}
+                                >
+                                  {sendingReplyIds.has(notification.id) ? "..." : "Send"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-1.5 text-[10px] rounded-md shrink-0 text-muted-foreground hover:text-foreground"
+                                  onClick={() => {
+                                    setActiveReplyId(null);
+                                    setReplyTexts(prev => {
+                                      const copy = { ...prev };
+                                      delete copy[notification.id];
+                                      return copy;
+                                    });
+                                  }}
+                                  disabled={sendingReplyIds.has(notification.id)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveReplyId(notification.id);
+                                }}
+                                className="text-[10px] font-semibold text-primary hover:underline hover:text-primary/95 transition-all text-left cursor-pointer bg-transparent border-0 p-0 self-start animate-in fade-in-50 duration-100"
+                              >
+                                Reply
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

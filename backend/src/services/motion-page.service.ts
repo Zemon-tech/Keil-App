@@ -273,28 +273,49 @@ export const createPage = async (
   userId: string,
   input: CreateMotionPageInput,
 ): Promise<MotionPageDTO> => {
-  // If a parent_id is provided, verify it belongs to the same org+space
+  let parentSpaceId = spaceId;
+  let parentOrgId = orgId;
+
+  // If a parent_id is provided, verify it belongs to the same org+space or is shared with it
   if (input.parent_id) {
-    const parent = await motionPageRepository.findByIdInSpace(
+    let parent = await motionPageRepository.findByIdInSpace(
       input.parent_id,
       orgId,
       spaceId,
     );
+
     if (!parent) {
-      throw new ApiError(400, 'Parent page not found or belongs to a different space');
+      parent = await motionPageShareRepository.findByIdSharedToSpace(input.parent_id, orgId, spaceId);
+      if (!parent) {
+        throw new ApiError(400, 'Parent page not found or belongs to a different space');
+      }
+      
+      const perm = parent.share_permission;
+      if (
+        !perm ||
+        perm === MotionPermission.VIEW_ALL ||
+        perm === MotionPermission.VIEW_MANAGERS ||
+        perm === MotionPermission.VIEW_ADMINS ||
+        perm === MotionPermission.VIEW
+      ) {
+        throw new ApiError(403, 'You do not have permission to create sub-pages under this shared page');
+      }
+      
+      parentSpaceId = parent.space_id;
+      parentOrgId = parent.org_id;
     }
   }
 
   // Append at the end of the sibling group
   const maxPos = await motionPageRepository.getMaxPosition(
-    orgId,
-    spaceId,
+    parentOrgId,
+    parentSpaceId,
     input.parent_id ?? null,
   );
 
   const page = await motionPageRepository.create({
-    org_id: orgId,
-    space_id: spaceId,
+    org_id: parentOrgId,
+    space_id: parentSpaceId,
     created_by: userId,
     updated_by: userId,
     parent_id: input.parent_id ?? null,
@@ -309,6 +330,9 @@ export const createPage = async (
 
   const dto = toPageDTO(page);
   broadcastMotionChange(spaceId, { type: 'create', page: dto, userId });
+  if (parentSpaceId !== spaceId) {
+    broadcastMotionChange(parentSpaceId, { type: 'create', page: dto, userId });
+  }
 
   // Log the page creation asynchronously
   logPageCreation(page.id, userId).catch(err => log.error({ err }, "Error in logPageCreation"));
@@ -335,13 +359,16 @@ export const updatePage = async (
     }
   }
 
-  // If re-parenting, verify the new parent is in the same org+space
+  // If re-parenting, verify the new parent is in the same org+space or shared with it
   if (input.parent_id !== undefined && input.parent_id !== null) {
-    const newParent = await motionPageRepository.findByIdInSpace(
+    let newParent = await motionPageRepository.findByIdInSpace(
       input.parent_id,
       orgId,
       spaceId,
     );
+    if (!newParent) {
+      newParent = await motionPageShareRepository.findByIdSharedToSpace(input.parent_id, orgId, spaceId);
+    }
     if (!newParent) {
       throw new ApiError(400, 'New parent page not found or belongs to a different space');
     }
@@ -826,14 +853,9 @@ export const getPageByPublicToken = async (
 export const getPageByIdIfPublic = async (
   pageId: string,
 ): Promise<MotionPageDTO | null> => {
-  // Check if there is an active public_link share for this page
-  const shares = await motionPageShareRepository.findByPage(pageId);
-  const hasPublicShare = shares.some(
-    (s) =>
-      s.share_type === MotionShareType.PUBLIC_LINK &&
-      (s.expires_at === null || new Date(s.expires_at) > new Date()),
-  );
-  if (!hasPublicShare) return null;
+  // Check if there is an active public_link share for this page or any of its ancestors
+  const publicShare = await motionPageShareRepository.findPublicShareForPageAndAncestors(pageId);
+  if (!publicShare) return null;
 
   // Fetch the page — must be active (not deleted)
   const page = await motionPageRepository.findById(pageId);
