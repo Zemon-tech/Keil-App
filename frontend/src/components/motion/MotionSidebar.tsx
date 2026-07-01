@@ -7,6 +7,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Search,
   Home,
@@ -141,6 +142,9 @@ function SidebarPageItem({
   onAddSubpage,
   onRename,
   level = 0,
+  isChecked,
+  onToggleSelection,
+  isMultiSelecting,
 }: {
   item: MotionPageDTO;
   pageId?: string;
@@ -149,6 +153,9 @@ function SidebarPageItem({
   onAddSubpage: (parentId: string) => void;
   onRename: (id: string, title: string) => void;
   level?: number;
+  isChecked?: boolean;
+  onToggleSelection?: (e: React.MouseEvent, id: string) => void;
+  isMultiSelecting?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -195,7 +202,7 @@ function SidebarPageItem({
         <div
           className={cn(
             "group/item relative flex min-h-8 w-full items-center rounded-md py-1.5 text-muted-foreground transition-colors",
-            isActive
+            isActive && !isMultiSelecting
               ? "bg-accent text-accent-foreground"
               : "hover:bg-accent/50 hover:text-foreground",
           )}
@@ -221,6 +228,23 @@ function SidebarPageItem({
             </div>
           ) : (
             <div className="flex min-w-0 flex-1 items-center gap-2 pr-14">
+              {/* Selection checkbox */}
+              <div
+                className={cn(
+                  "flex items-center overflow-hidden transition-all duration-200 shrink-0 select-none",
+                  !isChecked && !isMultiSelecting
+                    ? "w-0 opacity-0 group-hover/item:w-9 group-hover/item:opacity-100"
+                    : "w-9 opacity-100"
+                )}
+              >
+                <div
+                  className="shrink-0"
+                  onClick={(e) => onToggleSelection?.(e, item.id)}
+                >
+                  <Checkbox checked={isChecked} className="size-3.5" />
+                </div>
+              </div>
+
               <span className="relative flex size-5 shrink-0 items-center justify-center">
                 <PageIcon
                   icon={item.icon}
@@ -252,7 +276,7 @@ function SidebarPageItem({
               <Link
                 to={`/motion/${item.id}`}
                 onClick={() => {
-                  if (window.innerWidth < 1024) onClose?.();
+                  if (!isMultiSelecting && window.innerWidth < 1024) onClose?.();
                 }}
                 className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex items-center gap-2"
               >
@@ -354,6 +378,9 @@ function SidebarPageItem({
                 onAddSubpage={onAddSubpage}
                 onRename={onRename}
                 level={level + 1}
+                isChecked={isChecked}
+                onToggleSelection={onToggleSelection}
+                isMultiSelecting={isMultiSelecting}
               />
             ))}
           </div>
@@ -464,6 +491,8 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<"pages" | "meetings">("pages");
+  const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
   const { data: notionStatus } = useNotionStatus();
 
 
@@ -580,6 +609,46 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
     if (confirm("Permanently delete this page? This cannot be undone.")) {
       hardDelete.mutate(id);
     }
+  };
+
+  // Multi-select logic
+  const isMultiSelecting = selectedPageIds.size > 0;
+
+  const toggleSelection = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const next = new Set(selectedPageIds);
+
+    if (e.shiftKey && lastSelectedId) {
+      // Shift+click for range selection (simplified - just toggle current)
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+    } else {
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+    }
+
+    setSelectedPageIds(next);
+    setLastSelectedId(id);
+  };
+
+  const handleBulkDelete = () => {
+    if (confirm(`Delete ${selectedPageIds.size} page${selectedPageIds.size !== 1 ? 's' : ''}? This action cannot be undone.`)) {
+      selectedPageIds.forEach((id) => {
+        softDelete.mutate({ id, title: "" });
+      });
+      if (pageId && selectedPageIds.has(pageId)) {
+        if (activeOrgId && activeSpaceId) {
+          useMotionStore.getState().setLastOpenedPageId(activeOrgId, activeSpaceId, null);
+        }
+        navigate("/motion");
+      }
+      setSelectedPageIds(new Set());
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedPageIds(new Set());
+    setLastSelectedId(null);
   };
 
   const noContext = !activeOrgId || !activeSpaceId;
@@ -724,7 +793,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+      <SidebarContent className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar relative">
         {noContext ? (
           <div className="px-4 py-8 text-center text-xs text-muted-foreground">
             Select an organisation and space to use Motion.
@@ -898,6 +967,9 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                         onDelete={handleDeletePage}
                         onAddSubpage={handleAddPage}
                         onRename={handleRenamePage}
+                        isChecked={selectedPageIds.has(item.id)}
+                        onToggleSelection={toggleSelection}
+                        isMultiSelecting={isMultiSelecting}
                       />
                     ))
                   ) : (
@@ -956,6 +1028,9 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                         onDelete={handleDeletePage}
                         onAddSubpage={handleAddPage}
                         onRename={handleRenamePage}
+                        isChecked={selectedPageIds.has(item.id)}
+                        onToggleSelection={toggleSelection}
+                        isMultiSelecting={isMultiSelecting}
                       />
                     ))
                   ) : (
@@ -1078,6 +1153,39 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
               </SidebarGroup>
             )}
           </>
+        )}
+
+        {/* ── Floating bulk-action bar ───────────────────────────── */}
+        {isMultiSelecting && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-popover border border-border shadow-lg px-3 py-2 rounded-full flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-3 z-10 whitespace-nowrap">
+            <span className="text-xs font-medium">
+              {selectedPageIds.size} selected
+            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-40 rounded-xl p-1">
+                <DropdownMenuItem
+                  className="rounded-lg cursor-pointer gap-2.5 px-2.5 py-2 text-[13px] text-destructive focus:text-destructive"
+                  onClick={handleBulkDelete}
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearSelection}
+              className="h-7 px-2 text-xs"
+            >
+              Clear
+            </Button>
+          </div>
         )}
       </SidebarContent>
 

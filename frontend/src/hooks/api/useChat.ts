@@ -19,6 +19,7 @@ import { useChatStore } from "@/store/useChatStore";
 export interface ChatMember {
   id: string;
   name: string;
+  email?: string;
   role?: "admin" | "member";
   avatar_url?: string | null;
 }

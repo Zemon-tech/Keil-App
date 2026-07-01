@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { User } from "lucide-react";
 
 interface MessageContentProps {
   content: string;
@@ -17,31 +18,48 @@ export function MessageContent({ content, isMine }: MessageContentProps) {
     : content;
 
   const linkify = (text: string) => {
-    // Regex matching URLs starting with http://, https://, or www.
-    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
-    const parts = text.split(urlRegex);
+    // First, handle @mentions
+    const mentionRegex = /@(\w+(?:\s+\w+)*)/g;
+    const parts = text.split(mentionRegex);
 
     return parts.map((part, i) => {
-      if (part.match(urlRegex)) {
-        const href = part.startsWith("http") ? part : `https://${part}`;
+      if (part.match(mentionRegex)) {
+        const name = part.slice(1); // Remove @
         return (
-          <a
+          <span
             key={i}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`underline hover:opacity-80 transition-opacity break-all cursor-pointer ${
-              isMine 
-                ? "!text-primary-foreground hover:!text-primary-foreground/80" 
-                : "text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300"
-            }`}
-            onClick={(e) => e.stopPropagation()}
+            className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[13px] font-semibold bg-primary/8 text-primary border border-primary/20 dark:bg-primary/15 dark:border-primary/30 transition-colors`}
           >
-            {part}
-          </a>
+            <User className="size-3 shrink-0 opacity-70" />
+            {name}
+          </span>
         );
       }
-      return part;
+      // Then handle URLs
+      const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+      const urlParts = part.split(urlRegex);
+      return urlParts.map((urlPart, j) => {
+        if (urlPart.match(urlRegex)) {
+          const href = urlPart.startsWith("http") ? urlPart : `https://${urlPart}`;
+          return (
+            <a
+              key={`${i}-${j}`}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`underline hover:opacity-80 transition-opacity break-all cursor-pointer ${
+                isMine 
+                  ? "!text-primary-foreground hover:!text-primary-foreground/80" 
+                  : "text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300"
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {urlPart}
+            </a>
+          );
+        }
+        return urlPart;
+      });
     });
   };
 
