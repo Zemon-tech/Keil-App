@@ -155,7 +155,7 @@ export const EventOverviewTab = ({
             </span>
             <div className="space-y-1.5">
               {(event.assignees ?? []).map((a) => {
-                const name = a.name || a.email;
+                const name = a.email.split('@')[0];
                 return (
                   <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 -mx-1">
                     <div className="flex items-center gap-2">
@@ -199,9 +199,9 @@ export const EventOverviewTab = ({
                     <div className="max-h-40 overflow-y-auto space-y-1">
                       {members
                         .filter(m => !(event.assignees ?? []).some(a => a.id === m.user_id))
-                        .filter(m => (m.name || m.email).toLowerCase().includes(assigneeSearch.toLowerCase()))
+                        .filter(m => (m.email?.split('@')[0] || "").toLowerCase().includes(assigneeSearch.toLowerCase()))
                         .map((m) => {
-                          const mName = m.name || m.email;
+                          const mName = m.email?.split('@')[0] || "";
                           return (
                             <button
                               key={m.user_id}

@@ -90,9 +90,10 @@ export function renderMessageContent(
   const candidates: { label: string; type: "user" | "task" | "event" | "page"; id: string }[] = [];
 
   for (const m of members) {
-    const label = m.name || m.email || "";
-    if (label) {
-      candidates.push({ label, type: "user", id: m.user_id });
+    const username = m.email?.split('@')[0] || "";
+    const fullName = m.name || username;
+    if (username) {
+      candidates.push({ label: fullName, type: "user", id: m.user_id });
     }
   }
 

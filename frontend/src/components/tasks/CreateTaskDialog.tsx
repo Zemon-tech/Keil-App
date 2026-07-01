@@ -266,7 +266,7 @@ export function CreateTaskDialog({
     if (allUsers && allUsers.length > 0) return allUsers;
     return spaceMembers.map(m => ({
       id: m.user_id,
-      name: m.name || m.email,
+      name: m.email.split('@')[0],
       avatarUrl: m.avatar_url || m.avatarUrl || undefined,
     }));
   }, [allUsers, spaceMembers]);
@@ -412,7 +412,7 @@ export function CreateTaskDialog({
 
     // Detect Assignees (simple @ match)
     resolvedUsers.forEach(user => {
-      if (lowerTitle.includes(`@${user.name.toLowerCase().replace(/\s/g, "")}`)) {
+      if (lowerTitle.includes(`@${user.name.toLowerCase()}`)) {
         if (!assigneeIds.includes(user.id)) {
           setAssigneeIds(prev => [...prev, user.id]);
         }

@@ -514,7 +514,7 @@ export const OverviewTab = ({
             <div className="space-y-1.5">
               <div className="max-h-[130px] overflow-y-auto pr-1 space-y-1.5 scrollbar-thin">
                 {(task.assignees ?? []).map((a) => {
-                  const name = a.name || a.email;
+                  const name = a.email.split('@')[0];
                   return (
                     <div key={a.id} className="group flex items-center justify-between rounded hover:bg-accent/40 px-1 py-0.5">
                       <div className="flex items-center gap-2">
@@ -567,8 +567,8 @@ export const OverviewTab = ({
                           const isAlreadyAssigned = assignees.some(a => a.id === m.user_id);
                           if (isAlreadyAssigned) continue;
 
-                          const mName = m.name || m.email;
-                          if (!mName.toLowerCase().includes(searchLower)) continue;
+                          const mName = m.email?.split('@')[0];
+                          if (!mName?.toLowerCase().includes(searchLower)) continue;
 
                           elements.push(
                             <button

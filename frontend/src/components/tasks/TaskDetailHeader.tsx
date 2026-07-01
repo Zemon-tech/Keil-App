@@ -196,14 +196,14 @@ function AssigneesChip({
           <Tooltip key={a.id}>
             <TooltipTrigger asChild>
               <Avatar className="size-5 cursor-default ring-1 ring-background">
-                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.name || a.email} />
+                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.email.split('@')[0]} />
                 <AvatarFallback className="text-[9px] font-semibold bg-accent">
-                  {(a.name || a.email).charAt(0).toUpperCase()}
+                  {a.email.split('@')[0].charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              {a.name || a.email}
+              {a.email.split('@')[0]}
             </TooltipContent>
           </Tooltip>
         ))}

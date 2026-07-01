@@ -232,15 +232,15 @@ export function CalendarSidebar({
                                 <Avatar className="size-6 border-2 border-background relative shrink-0">
                                   <AvatarImage
                                     src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 48, height: 48 })}
-                                    alt={a.name || a.email}
+                                    alt={a.email.split('@')[0]}
                                   />
                                   <AvatarFallback className="text-[9px] bg-primary/10 text-primary font-semibold">
-                                    {a.name?.charAt(0) || a.email.charAt(0).toUpperCase()}
+                                    {a.email.split('@')[0].charAt(0).toUpperCase()}
                                   </AvatarFallback>
                                 </Avatar>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" className="text-xs">
-                                {a.name || a.email}
+                                {a.email.split('@')[0]}
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

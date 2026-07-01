@@ -2030,11 +2030,9 @@ export function TaskListPane({
                         onClick={() => handleBulkAssign(member.id)}
                       >
                         <div className="size-5 rounded-full bg-muted flex items-center justify-center mr-2 text-[10px] font-medium">
-                          {member.name
-                            ? member.name.charAt(0).toUpperCase()
-                            : member.email.charAt(0).toUpperCase()}
+                          {member.email.split('@')[0].charAt(0).toUpperCase()}
                         </div>
-                        {member.name || member.email}
+                        {member.email.split('@')[0]}
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />

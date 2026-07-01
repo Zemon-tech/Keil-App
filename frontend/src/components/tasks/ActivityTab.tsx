@@ -315,7 +315,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
   };
 
   const filteredMembers = (members || []).filter((m: any) =>
-    (m.name || m.email || "").toLowerCase().includes(mention.query.toLowerCase())
+    (m.email?.split('@')[0] || "").toLowerCase().includes(mention.query.toLowerCase())
   );
 
   const filteredTasks = allTasks.filter(
@@ -475,7 +475,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
             const type = mention.type === "all" ? uItem.kind : mention.type;
             if (type === "user") {
               const m = uItem as SearchItemUser;
-              handleInsertMention(m.name || m.email || "");
+              handleInsertMention(m.name || m.email?.split('@')[0] || "");
             } else if (type === "task") {
               const t = uItem as SearchItemTask;
               handleInsertMention(t.title);
@@ -679,9 +679,14 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                               <FileText className="size-4 text-muted-foreground shrink-0" />
                             );
 
-                          const title =
+                          const displayTitle =
                             uItem.kind === "user"
-                              ? uItem.name || uItem.email || ""
+                              ? uItem.email?.split('@')[0] || uItem.name || uItem.email || ""
+                              : uItem.title || "Untitled";
+
+                          const insertTitle =
+                            uItem.kind === "user"
+                              ? uItem.name || uItem.email?.split('@')[0] || ""
                               : uItem.title || "Untitled";
 
                           return (
@@ -689,7 +694,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                               key={uItem.kind === "user" ? uItem.user_id : uItem.id}
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => {
-                                handleInsertMention(title);
+                                handleInsertMention(insertTitle);
                               }}
                               className={`w-full flex items-center gap-2 p-1.5 rounded-md text-left transition-colors ${
                                 idx === mention.highlightedIndex
@@ -698,7 +703,7 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
                               }`}
                             >
                               {icon}
-                              <span className="text-sm truncate font-medium flex-1">{title}</span>
+                              <span className="text-sm truncate font-medium flex-1">{displayTitle}</span>
                             </button>
                           );
                         })}
@@ -719,19 +724,21 @@ export function ActivityTab({ task }: { task: TaskDTO }) {
 
                     if (mention.type === "user") {
                       const item = rawItem as SearchItemUser;
-                      title = item.name || item.email || "";
+                      const displayTitle = item.email?.split('@')[0] || item.name || item.email || "";
+                      const insertTitle = item.name || item.email?.split('@')[0] || "";
+                      title = displayTitle;
                       icon = (
                         <Avatar className="size-5 shrink-0">
                           <AvatarImage
                             src={getOptimizedImageUrl(item.avatar_url || item.avatarUrl, { width: 40, height: 40 })}
-                            alt={title}
+                            alt={displayTitle}
                           />
                           <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
-                            {title.charAt(0).toUpperCase()}
+                            {displayTitle.charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                       );
-                      selectHandler = () => handleInsertMention(title);
+                      selectHandler = () => handleInsertMention(insertTitle);
                     } else if (mention.type === "task") {
                       const item = rawItem as TaskDTO;
                       title = item.title;

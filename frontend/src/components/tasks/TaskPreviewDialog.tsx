@@ -427,14 +427,14 @@ export function TaskPreviewDialog({
                           <Tooltip delayDuration={200}>
                             <TooltipTrigger asChild>
                               <Avatar className="size-5 border-[1.5px] border-background relative hover:z-10 hover:scale-105 transition-all">
-                                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.name || a.email} />
+                                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.email.split('@')[0]} />
                                 <AvatarFallback className="text-[8px] bg-primary/10 text-primary font-semibold">
-                                  {a.name?.charAt(0) || a.email.charAt(0).toUpperCase()}
+                                  {a.email.split('@')[0].charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="text-xs">
-                              {a.name || a.email}
+                              {a.email.split('@')[0]}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>

@@ -13,6 +13,7 @@ const toISO = (value: Date | string | null | undefined): string | null => {
 export interface ChatMemberDTO {
   id: string;
   name: string | null;
+  email?: string;
   role: "admin" | "member";
 }
 
@@ -142,7 +143,7 @@ export const getUserChannels = async (
       ) AS unread_count,
       COALESCE(
         json_agg(
-          json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role, 'avatar_url', u.avatar_url)
+          json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'email', u.email, 'role', cm_all.role, 'avatar_url', u.avatar_url)
         ) FILTER (WHERE u.id IS NOT NULL),
         '[]'
       ) AS members
@@ -195,7 +196,7 @@ export const getChannelById = async (channelId: string, userId: string): Promise
         0 AS unread_count,
         COALESCE(
           json_agg(
-            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'role', cm_all.role, 'avatar_url', u.avatar_url)
+            json_build_object('id', u.id, 'name', COALESCE(u.name, u.email), 'email', u.email, 'role', cm_all.role, 'avatar_url', u.avatar_url)
           ) FILTER (WHERE u.id IS NOT NULL),
           '[]'
         ) AS members

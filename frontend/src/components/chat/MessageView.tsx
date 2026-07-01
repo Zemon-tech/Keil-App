@@ -1,6 +1,6 @@
 // src/components/chat/MessageView.tsx
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChatMessages, useSendMessage, useChatChannels, useDeleteChannel } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
 import { ArrowLeft, Send, Check, Trash2, Users, Paperclip, File, Download, Loader2, X, Smile, Maximize } from "lucide-react";
@@ -14,6 +14,7 @@ import { GroupSettingsDialog } from "./GroupSettingsDialog";
 import { motion, AnimatePresence } from "motion/react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +52,15 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Mention state
+  const [mention, setMention] = useState<{ type: "user" | null; triggerIndex: number; query: string; highlightedIndex: number }>({
+    type: null,
+    triggerIndex: -1,
+    query: "",
+    highlightedIndex: 0,
+  });
 
   const handleSelectEmoji = (emoji: string) => {
     const input = inputRef.current;
@@ -184,10 +194,38 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   }, [messages, typingUsers, channelId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setText(e.target.value);
+    const value = e.target.value;
+    setText(value);
+    
+    // Mention detection
+    const caretPos = e.target.selectionStart ?? value.length;
+    for (let i = caretPos - 1; i >= 0; i--) {
+      const ch = value[i];
+      if (ch === "@") {
+        const between = value.slice(i + 1, caretPos);
+        if (!between.includes(" ") && !between.includes("\n")) {
+          setMention({
+            type: "user",
+            triggerIndex: i,
+            query: between,
+            highlightedIndex: 0,
+          });
+        } else {
+          setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+        }
+        break;
+      }
+      if (ch === " " || ch === "\n") {
+        setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+        break;
+      }
+      if (i === 0) {
+        setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+      }
+    }
+    
     const socket = getSocket();
     if (socket) {
-      // Throttle: only emit typing_start once per burst, not on every keystroke
       if (!typingTimeoutRef.current) {
         socket.emit("typing_start", { channel_id: channelId });
       }
@@ -215,6 +253,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
     setReplyingTo(null);
     setAttachmentFile(null);
     setUploadedAttachment(null);
+    setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
     if (fileInputRef.current) fileInputRef.current.value = "";
 
     const socket = getSocket();
@@ -227,11 +266,49 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
     }
   };
 
+  const handleInsertMention = useCallback((label: string) => {
+    if (mention.triggerIndex === -1) return;
+
+    const before = text.slice(0, mention.triggerIndex);
+    const after = text.slice(mention.triggerIndex + 1 + mention.query.length);
+    const inserted = `@${label} `;
+    const newValue = before + inserted + after;
+    setText(newValue);
+
+    const newCaretPos = before.length + inserted.length;
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(newCaretPos, newCaretPos);
+      }
+    });
+
+    setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+  }, [text, mention]);
+
   const otherMember = currentChannel?.type === "direct"
     ? currentChannel.members.find((m) => m.id !== me?.id) || currentChannel.members[0]
     : undefined;
 
   const channelName = otherMember?.name ?? currentChannel?.name ?? "Group Chat";
+
+  // Filter channel members for mentions
+  const channelMembers = useMemo(() => {
+    if (!currentChannel?.members) return [];
+    const queryLower = mention.query.toLowerCase();
+    return currentChannel.members
+      .filter(m => {
+        const username = m.email?.split('@')[0] || "";
+        const fullName = m.name || "";
+        return username.toLowerCase().includes(queryLower) || fullName.toLowerCase().includes(queryLower);
+      })
+      .map(m => ({
+        id: m.id,
+        name: m.name || "",
+        email: m.email,
+        avatar_url: m.avatar_url,
+      }));
+  }, [currentChannel?.members, mention.query]);
 
   return (
     <div 
@@ -625,7 +702,29 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
             ref={inputRef}
             value={text}
             onChange={handleInputChange}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !mention.type) {
+                handleSend();
+              } else if (e.key === "Escape") {
+                setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+              } else if (e.key === "ArrowDown" && mention.type) {
+                setMention(prev => ({
+                  ...prev,
+                  highlightedIndex: Math.min(prev.highlightedIndex + 1, channelMembers.length - 1),
+                }));
+                e.preventDefault();
+              } else if (e.key === "ArrowUp" && mention.type) {
+                setMention(prev => ({
+                  ...prev,
+                  highlightedIndex: Math.max(prev.highlightedIndex - 1, 0),
+                }));
+                e.preventDefault();
+              } else if (e.key === "Enter" && mention.type && channelMembers.length > 0) {
+                const member = channelMembers[mention.highlightedIndex];
+                handleInsertMention(member.name);
+                e.preventDefault();
+              }
+            }}
             onPaste={handlePaste}
             placeholder="Message..."
             className="flex-1 text-sm bg-muted/65 hover:bg-muted/90 focus:bg-background rounded-xl px-3.5 py-2 outline-none placeholder:text-muted-foreground border border-border/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all duration-150 ease-out"
@@ -659,6 +758,71 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
           </button>
         </div>
       </div>
+
+      {/* Mention Picker */}
+      {mention.type === "user" && (
+        <div
+          ref={pickerRef}
+          className="absolute bottom-[80px] left-4 w-72 flex flex-col bg-popover text-popover-foreground rounded-lg border shadow-lg z-50 overflow-hidden font-sans"
+        >
+          <div className="px-3 py-2 border-b bg-muted/50 flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">
+              {mention.query ? `Searching for "${mention.query}"` : "Mention someone"}
+            </span>
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+              }}
+              className="p-1 hover:bg-muted rounded-md text-muted-foreground"
+              aria-label="Close picker"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+
+          <ScrollArea className="max-h-60 overflow-y-auto">
+            <div className="p-1.5 space-y-0.5">
+              {channelMembers.length === 0 ? (
+                <p className="py-4 text-xs text-muted-foreground text-center">No results found</p>
+              ) : (
+                channelMembers.map((member, idx) => {
+                  const isSelected = idx === mention.highlightedIndex;
+                  const displayName = member.email?.split('@')[0] || member.name;
+                  return (
+                    <button
+                      key={member.id}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleInsertMention(member.name)}
+                      className={`w-full flex items-center gap-2 p-1.5 rounded-md text-left transition-colors ${
+                        isSelected
+                          ? "bg-accent text-accent-foreground"
+                          : "hover:bg-accent text-foreground"
+                      }`}
+                    >
+                      <Avatar className="size-5 shrink-0">
+                        <AvatarImage
+                          src={getOptimizedImageUrl(member.avatar_url, { width: 40, height: 40 })}
+                          alt={displayName}
+                        />
+                        <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
+                          {displayName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm truncate font-medium">{displayName}</span>
+                        {member.name !== displayName && (
+                          <span className="text-[10px] text-muted-foreground truncate">{member.name}</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
 
       {/* Image Preview Modal */}
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
