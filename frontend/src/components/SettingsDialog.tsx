@@ -49,8 +49,6 @@ import {
   ListTodo,
   Bell,
   Plug,
-  Code2,
-  Building2,
   LogOut,
   ChevronRight,
   ChevronUp,
@@ -158,7 +156,7 @@ type AccountTab =
   | "sessions"
   | "billing";
 
-type WorkspaceTab = "org-general" | "org-members" | "org-spaces" | "api" | "enterprise";
+type WorkspaceTab = "org-general" | "org-members" | "org-spaces";
 
 export type SettingsTab = AccountTab | WorkspaceTab;
 
@@ -189,8 +187,6 @@ const workspaceNavItems: WorkspaceNavItem[] = [
   { id: "org-general", label: "General", icon: Settings },
   { id: "org-members", label: "Members", icon: User },
   { id: "org-spaces", label: "Spaces", icon: Layers },
-  { id: "api", label: "API", icon: Code2 },
-  { id: "enterprise", label: "Enterprise", icon: Building2 },
 ];
 
 // ─── Tab Content Components ──────────────────────────────────────────
@@ -3538,109 +3534,6 @@ function ConnectorsTab() {
   );
 }
 
-function ApiTab() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">API</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage API keys and integrations.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="p-4 rounded-xl border border-border bg-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-foreground">API Key</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Your secret API key for programmatic access
-            </p>
-          </div>
-          <Button variant="outline" size="sm" className="text-xs rounded-lg">
-            Generate new key
-          </Button>
-        </div>
-        <div className="mt-4">
-          <div className="flex items-center gap-2">
-            <Input
-              value="sk-••••••••••••••••••••••••"
-              readOnly
-              className="font-mono text-xs rounded-lg bg-muted/50"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg shrink-0"
-            >
-              Copy
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Webhook URL</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Receive real-time event notifications
-          </p>
-        </div>
-        <Button variant="outline" size="sm" className="text-xs rounded-lg">
-          Configure
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function EnterpriseTab() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Enterprise</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Enterprise features and team management.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="p-6 rounded-xl border border-border bg-gradient-to-br from-muted/30 to-muted/10 text-center">
-        <Building2 className="size-10 text-muted-foreground mx-auto mb-3" />
-        <h3 className="text-sm font-semibold text-foreground">
-          Upgrade to Enterprise
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1.5 max-w-sm mx-auto">
-          Get access to SSO, advanced analytics, audit logs, and priority
-          support.
-        </p>
-        <Button size="sm" className="mt-4 rounded-lg text-xs">
-          Contact Sales
-        </Button>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Team Members</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Manage who has access to your organisation
-          </p>
-        </div>
-        <Button variant="outline" size="sm" className="text-xs rounded-lg">
-          Manage team
-          <ChevronRight className="size-3 ml-1" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Sessions Tab ─────────────────────────────────────────────────────
 
 function parseBrowserFromUA(ua: string): { browser: string; os: string } {
@@ -4098,7 +3991,7 @@ function BillingTab() {
                 {orgCheckout.isPending ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <Building2 className="size-3.5" />
+                  <Layers className="size-3.5" />
                 )}
                 Upgrade to Teams ($50/user/mo)
               </Button>
@@ -4184,8 +4077,6 @@ const workspaceTabContent: Record<WorkspaceTab, React.FC> = {
   "org-general": OrgGeneralTab,
   "org-members": OrgMembersTab,
   "org-spaces": OrgSpacesTab,
-  api: ApiTab,
-  enterprise: EnterpriseTab,
 };
 
 // ─── Main Settings Dialog ────────────────────────────────────────────
@@ -4345,7 +4236,7 @@ export function SettingsDialog({
                     onClick={() => setMode("workspace")}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/60"
                   >
-                    <Building2 className="size-4 shrink-0" />
+                    <Layers className="size-4 shrink-0" />
                     Organisation
                   </button>
                 </div>
