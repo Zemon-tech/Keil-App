@@ -9,10 +9,11 @@ interface MeetingStore {
   duration: number;
   meetingId: string | null;
   volumes: number[];
-  requestAction: "pause" | "stop" | "resume" | "discard" | null;
+  requestAction: "pause" | "stop" | "resume" | "discard" | "start" | null;
 
   // Actions
   openDialog: (meetingId?: string | null) => void;
+  openDialogAndStartRecording: () => void;
   closeDialog: () => void;
   minimizeDialog: () => void;
   restoreDialog: () => void;
@@ -20,7 +21,7 @@ interface MeetingStore {
   setDuration: (duration: number | ((prev: number) => number)) => void;
   setMeetingId: (meetingId: string | null) => void;
   setVolumes: (volumes: number[]) => void;
-  setRequestAction: (action: "pause" | "stop" | "resume" | "discard" | null) => void;
+  setRequestAction: (action: "pause" | "stop" | "resume" | "discard" | "start" | null) => void;
   reset: () => void;
 }
 
@@ -35,6 +36,15 @@ export const useMeetingStore = create<MeetingStore>((set) => ({
 
   openDialog: (meetingId = null) =>
     set({ isDialogOpen: true, isMinimized: false, meetingId }),
+  openDialogAndStartRecording: () =>
+    set({
+      isDialogOpen: true,
+      isMinimized: false,
+      meetingId: null,
+      requestAction: "start",
+      status: "idle",
+      duration: 0,
+    }),
   closeDialog: () =>
     set({ isDialogOpen: false, isMinimized: false }),
   minimizeDialog: () =>

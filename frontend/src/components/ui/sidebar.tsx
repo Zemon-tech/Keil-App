@@ -70,7 +70,7 @@ function SidebarProvider({
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(SIDEBAR_STATE_KEY)
+      const saved = sessionStorage.getItem(SIDEBAR_STATE_KEY)
       if (saved === "true") return false
       if (saved === "false") return true
     }
@@ -86,9 +86,9 @@ function SidebarProvider({
         _setOpen(openState)
       }
 
-      // Persist the state to localStorage
+      // Persist the state to sessionStorage
       if (typeof window !== "undefined") {
-        localStorage.setItem(SIDEBAR_STATE_KEY, (!openState).toString())
+        sessionStorage.setItem(SIDEBAR_STATE_KEY, (!openState).toString())
       }
     },
     [setOpenProp, open]

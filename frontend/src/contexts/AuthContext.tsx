@@ -87,7 +87,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
                 // Sync with backend in background (non-blocking)
                 if (session) {
-                    connectSocket(session.access_token); // Start socket on login/page refresh
+                    const socket = connectSocket(session.access_token); // Start socket on login/page refresh
+                    
+                    // Listen for real-time user profile updates (e.g., name or avatar changes)
+                    socket.off("user_updated");
+                    socket.on("user_updated", () => {
+                        // Invalidate query caches to fetch fresh names/avatars
+                        queryClient.invalidateQueries({ queryKey: ["me"] });
+                        queryClient.invalidateQueries({ queryKey: ["orgs"] });
+                        queryClient.invalidateQueries({ queryKey: ["spaces"] });
+                        queryClient.invalidateQueries({ queryKey: ["chat"] });
+                        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                        queryClient.invalidateQueries({ queryKey: ["org-tasks"] });
+                    });
+
                     api.get('users/me').catch(err => console.error("Auth sync failed:", err));
                 }
             }

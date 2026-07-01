@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useChatMessages, useSendMessage, useChatChannels, useDeleteChannel } from "@/hooks/api/useChat";
 import { useChatStore } from "@/store/useChatStore";
-import { ArrowLeft, Send, Check, Trash2, Users, Paperclip, File, Download, Loader2, X, Smile } from "lucide-react";
+import { ArrowLeft, Send, Check, Trash2, Users, Paperclip, File, Download, Loader2, X, Smile, Maximize } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { EmojiPicker } from "./EmojiPicker";
 import { getSocket } from "@/lib/socket";
@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogTitle, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 
 import { MessageContent } from "./MessageContent";
 
@@ -48,6 +49,7 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ messageId: string; senderName: string; text: string } | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSelectEmoji = (emoji: string) => {
@@ -431,13 +433,49 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
                       const isImage = att.mimeType.startsWith("image/");
                       if (isImage) {
                         return (
-                          <div key={idx} className="max-w-[240px]">
+                          <div key={idx} className="max-w-[240px] relative group">
                             <img 
-                              src={getOptimizedImageUrl(att.downloadUrl, { width: 800 })} 
+                              src={getOptimizedImageUrl(att.downloadUrl || '', { width: 800 })} 
                               alt={att.fileName} 
                               className="max-h-48 object-contain rounded-lg border border-border hover:scale-[1.01] transition-transform cursor-pointer"
-                              onClick={() => window.open(att.downloadUrl, "_blank")}
+                              onClick={() => setPreviewImage(att.downloadUrl || null)}
                             />
+                            <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewImage(att.downloadUrl || null);
+                                }}
+                                className="flex items-center justify-center size-7 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+                                title="Fullscreen"
+                              >
+                                <Maximize className="size-3.5" />
+                              </button>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const proxyUrl = `${import.meta.env.VITE_API_URL}/api/v1/s3-upload/proxy-image?s3Key=${encodeURIComponent(att.s3Key || '')}`;
+                                    const response = await fetch(proxyUrl);
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = att.fileName || 'image';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    window.URL.revokeObjectURL(url);
+                                  } catch (err) {
+                                    console.error('Failed to download image:', err);
+                                  }
+                                }}
+                                className="flex items-center justify-center size-7 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+                                title="Download"
+                              >
+                                <Download className="size-3.5" />
+                              </button>
+                            </div>
                           </div>
                         );
                       }
@@ -621,6 +659,29 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
           </button>
         </div>
       </div>
+
+      {/* Image Preview Modal */}
+      <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogPortal>
+          <DialogOverlay />
+          <DialogContent showCloseButton={false} className="max-w-[85vw] max-h-[90vh] p-1 bg-transparent border-none shadow-none flex justify-center items-center">
+            <DialogTitle className="sr-only">Image Preview</DialogTitle>
+            {previewImage && (
+              <img 
+                src={getOptimizedImageUrl(previewImage, { width: 1600 })} 
+                alt="Preview" 
+                className="max-h-[85vh] max-w-[85vw] object-contain rounded-md drop-shadow-2xl" 
+              />
+            )}
+          </DialogContent>
+          <button 
+            onClick={() => setPreviewImage(null)}
+            className="fixed right-6 top-6 z-[60] flex size-10 items-center justify-center rounded-full bg-black/40 border border-white/20 text-white hover:bg-black/80 transition-colors"
+          >
+            <X className="size-6" />
+          </button>
+        </DialogPortal>
+      </Dialog>
     </div>
   );
 }

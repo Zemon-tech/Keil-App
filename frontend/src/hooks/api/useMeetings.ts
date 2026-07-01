@@ -147,3 +147,39 @@ export function useTranscribeRecording() {
     },
   });
 }
+
+export interface SaveMeetingToMotionResult {
+  page: {
+    id: string;
+    title: string;
+  };
+  notionExported: boolean;
+}
+
+/**
+ * Saves a meeting summary to Motion and exports to Notion when connected.
+ */
+export function useSaveMeetingToMotion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      recordingId,
+      orgId,
+      spaceId,
+    }: {
+      recordingId: string;
+      orgId?: string;
+      spaceId?: string;
+    }): Promise<SaveMeetingToMotionResult> => {
+      const res = await api.post(`v1/meetings/recording/${recordingId}/save-to-motion`, {
+        orgId,
+        spaceId,
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["motion-pages"] });
+    },
+  });
+}

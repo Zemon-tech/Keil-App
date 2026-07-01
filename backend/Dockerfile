@@ -27,6 +27,6 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 
 # Sevalla injects PORT automatically; this is just documentation
-EXPOSE 5001
+EXPOSE 5000
 
 CMD ["node", "dist/index.js"]

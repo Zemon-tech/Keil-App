@@ -103,7 +103,7 @@ export function HistorySidebar({
         await api.delete(`v1/ai/threads/${id}`);
         setThreads((prev) => prev.filter((t) => t.id !== id));
         const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-        if (localStorage.getItem(key) === id) {
+        if (sessionStorage.getItem(key) === id) {
           onNewChat();
         }
       } catch {

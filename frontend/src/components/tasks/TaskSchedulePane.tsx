@@ -436,14 +436,14 @@ export function TaskSchedulePane({
   >(undefined);
   const [currentViewType, setCurrentViewType] =
     useState<CalendarView>(() => {
-      const stored = localStorage.getItem(STORAGE_CALENDAR_VIEW);
+      const stored = sessionStorage.getItem(STORAGE_CALENDAR_VIEW);
       if (stored === "timeGridDay" || stored === "timeGridWeek" || stored === "dayGridMonth" || stored === "listWeek") {
         return stored;
       }
       return "dayGridMonth";
     });
   const [currentViewDate, setCurrentViewDate] = useState<Date>(() => {
-    const stored = localStorage.getItem(STORAGE_CALENDAR_DATE);
+    const stored = sessionStorage.getItem(STORAGE_CALENDAR_DATE);
     if (stored) {
       const parsed = new Date(stored);
       if (!isNaN(parsed.getTime())) return parsed;
@@ -779,6 +779,10 @@ export function TaskSchedulePane({
               due_date: allDayEnd.toISOString(),
               is_all_day: true,
             }
+          }, {
+            onError: () => {
+              info.revert();
+            }
           });
         } else if (onTaskSchedule) {
           onTaskSchedule(
@@ -800,6 +804,10 @@ export function TaskSchedulePane({
               start_date: timedStart.toISOString(),
               due_date: timedEnd.toISOString(),
               is_all_day: false,
+            }
+          }, {
+            onError: () => {
+              info.revert();
             }
           });
         } else if (onTaskSchedule) {
@@ -860,6 +868,10 @@ export function TaskSchedulePane({
               due_date: endISO,
               is_all_day: true,
             }
+          }, {
+            onError: () => {
+              info.revert();
+            }
           });
         } else if (onTaskSchedule) {
           onTaskSchedule(taskId, startISO, endISO, true);
@@ -878,6 +890,10 @@ export function TaskSchedulePane({
               start_date: timedStart.toISOString(),
               due_date: timedEnd.toISOString(),
               is_all_day: false,
+            }
+          }, {
+            onError: () => {
+              info.revert();
             }
           });
         } else if (onTaskSchedule) {
@@ -1444,8 +1460,8 @@ export function TaskSchedulePane({
                   const view = dateInfo.view.type as CalendarView;
                   setCurrentViewType(view);
                   setCurrentViewDate(dateInfo.view.currentStart);
-                  localStorage.setItem(STORAGE_CALENDAR_VIEW, view);
-                  localStorage.setItem(STORAGE_CALENDAR_DATE, dateInfo.view.currentStart.toISOString());
+                  sessionStorage.setItem(STORAGE_CALENDAR_VIEW, view);
+                  sessionStorage.setItem(STORAGE_CALENDAR_DATE, dateInfo.view.currentStart.toISOString());
                   if (onViewChange) onViewChange(view);
                   if (onDateChange) onDateChange(dateInfo.view.currentStart);
                 }}

@@ -468,6 +468,22 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
 
 
   const openDialog = useMeetingStore((s) => s.openDialog);
+  const openDialogAndStartRecording = useMeetingStore((s) => s.openDialogAndStartRecording);
+  const restoreDialog = useMeetingStore((s) => s.restoreDialog);
+  const meetingStatus = useMeetingStore((s) => s.status);
+  const isMeetingMinimized = useMeetingStore((s) => s.isMinimized);
+
+  const handleStartMeetingRecording = () => {
+    if (isMeetingMinimized) {
+      restoreDialog();
+      return;
+    }
+    if (meetingStatus === "recording" || meetingStatus === "uploading" || meetingStatus === "transcribing") {
+      openDialog();
+      return;
+    }
+    openDialogAndStartRecording();
+  };
 
   // ── Meetings data ──
   const { data: historyData, isLoading: isMeetingsLoading } = useMeetingHistory(1, 50);
@@ -631,19 +647,19 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
           })}
           <div className="flex-1" />
 
-          {canCreatePage && (
-            sidebarMode === "meetings" ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => openDialog()}
-                className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                aria-label="Record meeting"
-                title="Record new meeting"
-              >
-                <Mic className="h-[18px] w-[18px] text-muted-foreground" />
-              </Button>
-            ) : notionStatus?.connected ? (
+          {sidebarMode === "meetings" ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleStartMeetingRecording}
+              className="size-8 shrink-0 rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              aria-label="Record meeting"
+              title="Start recording meeting"
+            >
+              <Mic className="h-[18px] w-[18px] text-muted-foreground" />
+            </Button>
+          ) : canCreatePage ? (
+            notionStatus?.connected ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -693,7 +709,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                 )}
               </Button>
             )
-          )}
+          ) : null}
 
           {onClose && (
             <Button
@@ -724,7 +740,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => openDialog()}
+                onClick={handleStartMeetingRecording}
                 className="gap-1.5 rounded-md border-border hover:border-border text-foreground hover:bg-accent cursor-pointer text-xs"
               >
                 <Mic className="size-3.5" />
@@ -741,17 +757,15 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                   <ChevronDown className="size-3" />
                   Meetings
                 </button>
-                {canCreatePage && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
-                    onClick={() => openDialog()}
-                    aria-label="Record meeting"
-                  >
-                    <Plus className="size-3.5" />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 opacity-0 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground group-hover/section:opacity-100"
+                  onClick={handleStartMeetingRecording}
+                  aria-label="Record meeting"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
               </div>
               <SidebarMenu>
                 {recordings.map((recording) => (

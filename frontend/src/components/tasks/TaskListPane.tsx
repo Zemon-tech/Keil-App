@@ -243,20 +243,30 @@ function SubtaskList({
     <div className="space-y-px">
       {subtasks.map((sub) => {
         const active = sub.id === selectedTaskId;
-        const isDone = sub.status === "done";
+        const isDone = sub.status === "done" || sub.status === "completed";
+        const isDraggable = sub.status !== "done" && sub.status !== "completed";
         const isHighPriority = sub.priority === "high" || sub.priority === "urgent";
 
         return (
           <div
             key={sub.id}
             onClick={() => onSelectTask(sub.id)}
+            data-task-id={sub.id}
+            data-task-title={sub.title}
+            data-task-status={sub.status}
             className={cn(
               "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
               active ? "bg-[#EEF2FF] dark:bg-[#1E1B4B]" : "hover:bg-[#F4F4F5] dark:hover:bg-[#18181B]",
-              isDone && "opacity-50"
+              isDone && "opacity-50",
+              isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
             )}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
+              {isDraggable ? (
+                <GripVertical className="size-3 text-muted-foreground/0 group-hover:text-muted-foreground/30 shrink-0 cursor-grab active:cursor-grabbing transition-all duration-200 mr-0.5" />
+              ) : (
+                <div className="w-[12px] shrink-0 mr-0.5" />
+              )}
               {/* Status icon */}
               <Popover>
                 <PopoverTrigger asChild>

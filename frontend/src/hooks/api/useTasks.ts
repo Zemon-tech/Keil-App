@@ -703,8 +703,9 @@ export function useCreateTaskSlot(orgId: string | null, spaceId: string | null) 
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Task scheduled on calendar");
     },
-    onError: () => {
-      toast.error("Failed to schedule task");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to schedule task");
     },
   });
 }
@@ -726,8 +727,9 @@ export function useUpdateTaskSlot(orgId: string | null, spaceId: string | null) 
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
       toast.success("Calendar slot updated");
     },
-    onError: () => {
-      toast.error("Failed to update calendar slot");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to update calendar slot");
     },
   });
 }
@@ -860,8 +862,9 @@ export function useCreateOrgSubtask(orgId: string | null, spaceId: string | null
       queryClient.invalidateQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, parentTaskId) });
       toast.success("Subtask created successfully");
     },
-    onError: () => {
-      toast.error("Failed to create subtask");
+    onError: (error: any) => {
+      const serverMessage = error?.response?.data?.message;
+      toast.error(serverMessage || "Failed to create subtask");
     },
   });
 }

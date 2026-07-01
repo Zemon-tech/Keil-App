@@ -240,6 +240,28 @@ export function CreateTaskDialog({
   const { data: orgTasks = [] } = useOrgTasks(selectedOrgId, selectedSpaceId);
   const { data: pages = [] } = useMotionPages(selectedOrgId, selectedSpaceId);
 
+  const parentTask = useMemo(() => {
+    const parentId = parentTaskId || initialValues?.parent_task_id;
+    if (!parentId) return undefined;
+    return orgTasks.find((t) => t.id === parentId);
+  }, [parentTaskId, initialValues?.parent_task_id, orgTasks]);
+
+  const calendarDisabledDays = useMemo(() => {
+    if (!parentTask) return undefined;
+
+    return (day: Date) => {
+      if (!parentTask.start_date || !parentTask.due_date) {
+        return true;
+      }
+
+      const pStart = startOfDay(new Date(parentTask.start_date));
+      const pDue = startOfDay(new Date(parentTask.due_date));
+      const dDay = startOfDay(day);
+
+      return dDay < pStart || dDay > pDue;
+    };
+  }, [parentTask]);
+
   const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
     if (allUsers && allUsers.length > 0) return allUsers;
     return spaceMembers.map(m => ({
@@ -490,6 +512,38 @@ export function CreateTaskDialog({
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!title.trim()) return;
+
+    if (parentTask && (date || endDate)) {
+      if (!parentTask.start_date || !parentTask.due_date) {
+        toast.error("Parent task is not scheduled", {
+          description: "Parent task must have start and due dates before scheduling subtasks.",
+        });
+        return;
+      }
+
+      const pStart = new Date(parentTask.start_date);
+      const pDue = new Date(parentTask.due_date);
+
+      if (date) {
+        const sStart = isAllDay ? startOfDay(date) : date;
+        if (sStart < pStart || sStart > pDue) {
+          toast.error("Subtask start date is out of bounds", {
+            description: "Subtask must be scheduled between the start and due date of the parent task.",
+          });
+          return;
+        }
+      }
+
+      if (endDate) {
+        const sEnd = isAllDay ? startOfDay(addDays(endDate, 1)) : endDate;
+        if (sEnd < pStart || sEnd > pDue) {
+          toast.error("Subtask end date is out of bounds", {
+            description: "Subtask must be scheduled between the start and due date of the parent task.",
+          });
+          return;
+        }
+      }
+    }
 
     if (mode === "create" && date) {
       const now = new Date();
@@ -857,6 +911,7 @@ export function CreateTaskDialog({
                   <PopoverClose ref={dateCloseRef} className="hidden" />
                   <Calendar
                     mode="range"
+                    disabled={calendarDisabledDays}
                     selected={
                       isDragging && dragStart && dragEnd
                         ? getOrderedRange(dragStart, dragEnd)
