@@ -808,11 +808,15 @@ export const MeetingDialog: React.FC = () => {
   };
 
   const downloadTextFile = () => {
-    if (!currentTranscript) return;
+    const isSummaryTab = activeTab === "summary";
+    const content = isSummaryTab ? dbRecording?.summary_text : currentTranscript;
+    
+    if (!content) return;
+    
     const element = document.createElement("a");
-    const file = new Blob([currentTranscript], { type: "text/plain" });
+    const file = new Blob([content], { type: "text/plain" });
     element.href = URL.createObjectURL(file);
-    element.download = `meeting-transcript-${deleteRecordingId || "draft"}.txt`;
+    element.download = `meeting-${isSummaryTab ? "summary" : "transcript"}-${deleteRecordingId || "draft"}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -1816,7 +1820,7 @@ export const MeetingDialog: React.FC = () => {
                                   </button>
                                 )}
 
-                                {currentStatus === "completed" && currentTranscript && (
+                                {currentStatus === "completed" && ((activeTab === "transcript" && currentTranscript) || (activeTab === "summary" && dbRecording?.summary_text)) && (
                                   <>
                                     <button
                                       onClick={copyToClipboard}
@@ -1827,7 +1831,7 @@ export const MeetingDialog: React.FC = () => {
                                     </button>
                                     <button
                                       onClick={downloadTextFile}
-                                      title="Download Transcript"
+                                      title={`Download ${activeTab === "summary" ? "Summary" : "Transcript"}`}
                                       className="size-7 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition-colors"
                                     >
                                       <Download className="size-3.5" />
