@@ -249,10 +249,10 @@ export function normalizeAllDayRangeForUpdate(
   range: DateRangeInput
 ): NormalizedTimestampRange {
   const { start, end } = normalizeAllDayRangeLocal(range.start, range.end);
-  
+  const inclusive = fromExclusiveRange(start, end);
   return {
-    startISO: start.toISOString(),
-    endISO: end.toISOString(),
+    startISO: inclusive.start.toISOString(),
+    endISO: inclusive.end.toISOString(),
   };
 }
 

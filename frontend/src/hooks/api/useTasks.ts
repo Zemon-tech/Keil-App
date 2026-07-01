@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useEffect } from "react";
 import api from "@/lib/api";
+import { getSocket } from "@/lib/socket";
 import type { Task, AnyStatus, TaskPriority, EventType, ContextItem } from "@/types/task";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -255,7 +257,7 @@ export function useLocateTask(taskId: string, enabled: boolean) {
     },
     enabled: !!taskId && enabled,
     retry: false,
-    staleTime: 30_000,
+    staleTime: 0,
   });
 }
 
@@ -867,5 +869,70 @@ export function useCreateOrgSubtask(orgId: string | null, spaceId: string | null
       toast.error(serverMessage || "Failed to create subtask");
     },
   });
+}
+
+// ─── useTaskSocketListeners ───
+export function useTaskSocketListeners(
+  orgId: string | null,
+  spaceId: string | null,
+  currentUserId: string | null
+) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !orgId || !spaceId) return;
+
+    const handleTaskChange = (payload: { type: string; taskId?: string; task?: TaskDTO; userId?: string }) => {
+      const { type, taskId, task, userId } = payload;
+
+      // Skip if this change was made by the current user (optimistic updates already handled it)
+      if (userId === currentUserId) return;
+
+      switch (type) {
+        case "create":
+          if (task) {
+            queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+            queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+            if (task.parent_task_id) {
+              queryClient.invalidateQueries({ queryKey: orgTaskKeys.subtasks(orgId, spaceId, task.parent_task_id) });
+              queryClient.invalidateQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, task.parent_task_id) });
+            }
+          }
+          break;
+
+        case "update":
+          if (taskId && task) {
+            // Update individual detail cache
+            queryClient.setQueryData(
+              orgTaskKeys.detail(orgId, spaceId, taskId),
+              task
+            );
+            // Invalidate lists and subtasks to refresh lists in UI
+            queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+            queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+            if (task.parent_task_id) {
+              queryClient.invalidateQueries({ queryKey: orgTaskKeys.subtasks(orgId, spaceId, task.parent_task_id) });
+              queryClient.invalidateQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, task.parent_task_id) });
+            }
+          }
+          break;
+
+        case "delete":
+          if (taskId) {
+            queryClient.removeQueries({ queryKey: orgTaskKeys.detail(orgId, spaceId, taskId) });
+            queryClient.invalidateQueries({ queryKey: orgTaskKeys.lists(orgId, spaceId) });
+            queryClient.invalidateQueries({ queryKey: orgTaskKeys.slots(orgId, spaceId) });
+          }
+          break;
+      }
+    };
+
+    socket.on("task_change", handleTaskChange);
+
+    return () => {
+      socket.off("task_change", handleTaskChange);
+    };
+  }, [orgId, spaceId, currentUserId, queryClient]);
 }
 

@@ -169,7 +169,7 @@ export const listMotionPagesTool = createTool({
 });
 
 // Helper to recursively parse Tiptap JSON node structure into Markdown format
-function tiptapToMarkdown(node: any, parentType?: string, itemIndex = 0): string {
+export function tiptapToMarkdown(node: any, parentType?: string, itemIndex = 0): string {
   if (!node) return "";
   
   if (node.type === "text") {
@@ -262,6 +262,22 @@ function tiptapToMarkdown(node: any, parentType?: string, itemIndex = 0): string
     case "tableHeader":
     case "tableCell":
       return childrenText;
+    case "details":
+      return `<details>\n${childrenText}</details>\n\n`;
+    case "detailsSummary": {
+      const level = node.attrs?.level;
+      const headingPrefix = level ? `${"#".repeat(level)} ` : "";
+      return `<summary>${headingPrefix}${childrenText}</summary>\n`;
+    }
+    case "detailsContent":
+      return `${childrenText}`;
+    case "subpage": {
+      const id = node.attrs?.id || "";
+      const title = node.attrs?.title || "Untitled";
+      const icon = node.attrs?.icon || "";
+      const iconAttr = icon ? ` icon="${icon}"` : "";
+      return `<subpage id="${id}" title="${title}"${iconAttr} />\n\n`;
+    }
     default:
       return childrenText;
   }
@@ -472,7 +488,11 @@ function parseInlineFormatting(text: string): TextToken[] {
 
 // ─── Helper: parse Markdown to Tiptap JSON ───────────────────────────────────
 
-function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<string, any> {
+export async function parseMarkdownToTiptap(
+  markdown: string,
+  pageTitle?: string,
+  contextInfo?: { orgId: string; spaceId: string; userId: string; parentId?: string }
+): Promise<Record<string, any>> {
   let cleanMarkdown = markdown.trim();
   
   // Strip duplicate header if it matches pageTitle
@@ -500,6 +520,43 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
   let inBlockquote = false;
   let isCallout = false;
   let blockquoteLines: string[] = [];
+
+  let inDetails = false;
+  let currentDetailsNode: any = null;
+  let currentDetailsContentNode: any = null;
+  let summaryText = "";
+  let inSummary = false;
+
+  const appendNode = (node: any) => {
+    if (inDetails && currentDetailsContentNode) {
+      currentDetailsContentNode.content.push(node);
+    } else {
+      contentNodes.push(node);
+    }
+  };
+
+  const processSummary = (text: string) => {
+    const cleanText = text.trim();
+    let level: number | null = null;
+    let summaryContent = cleanText;
+
+    const headingMatch = cleanText.match(/^(#{1,4})\s+(.*)$/);
+    if (headingMatch) {
+      level = headingMatch[1].length;
+      summaryContent = headingMatch[2];
+    }
+
+    const summaryNode = {
+      type: "detailsSummary",
+      attrs: { level },
+      content: parseInlineFormatting(summaryContent)
+    };
+    
+    if (currentDetailsNode) {
+      currentDetailsNode.content.push(summaryNode);
+      currentDetailsNode.content.push(currentDetailsContentNode);
+    }
+  };
 
   let currentTable: { headers: string[]; rows: string[][] } | null = null;
 
@@ -529,7 +586,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
         });
       }
       
-      contentNodes.push({
+      appendNode({
         type: 'table',
         content: tableRows
       });
@@ -544,7 +601,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     // --- Code Block Parsing ---
     if (inCodeBlock) {
       if (trimmed.startsWith("```")) {
-        contentNodes.push({
+        appendNode({
           type: "codeBlock",
           attrs: { language: codeLanguage || null },
           content: [{ type: "text", text: codeLines.join("\n") }],
@@ -597,9 +654,104 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
       if (isCallout) {
         blockquoteNode.attrs = { type: "callout" };
       }
-      contentNodes.push(blockquoteNode);
+      appendNode(blockquoteNode);
       inBlockquote = false;
       blockquoteLines = [];
+    }
+
+    // --- Details / Toggle Block parsing ---
+    if (trimmed.toLowerCase().startsWith("<details")) {
+      flushAllLists();
+      inDetails = true;
+      currentDetailsNode = {
+        type: "details",
+        content: []
+      };
+      appendNode(currentDetailsNode);
+      currentDetailsContentNode = {
+        type: "detailsContent",
+        content: []
+      };
+      continue;
+    }
+
+    if (trimmed.toLowerCase() === "</details>") {
+      flushAllLists();
+      inDetails = false;
+      currentDetailsNode = null;
+      currentDetailsContentNode = null;
+      continue;
+    }
+
+    if (trimmed.toLowerCase().startsWith("<summary>")) {
+      const startIdx = line.indexOf("<summary>") + 9;
+      const endIdx = line.indexOf("</summary>");
+      if (endIdx !== -1) {
+        // Single line summary
+        const summaryVal = line.substring(startIdx, endIdx);
+        processSummary(summaryVal);
+      } else {
+        // Multi line summary
+        summaryText = line.substring(startIdx);
+        inSummary = true;
+      }
+      continue;
+    }
+
+    if (inSummary) {
+      const endIdx = line.indexOf("</summary>");
+      if (endIdx !== -1) {
+        summaryText += "\n" + line.substring(0, endIdx);
+        processSummary(summaryText);
+        inSummary = false;
+        summaryText = "";
+      } else {
+        summaryText += "\n" + line;
+      }
+      continue;
+    }
+
+    // --- Subpage block parsing ---
+    if (trimmed.toLowerCase().startsWith("<subpage")) {
+      flushAllLists();
+      
+      const idMatch = trimmed.match(/id="([^"]*)"/i);
+      const titleMatch = trimmed.match(/title="([^"]*)"/i);
+      const iconMatch = trimmed.match(/icon="([^"]*)"/i);
+
+      let subpageId = idMatch ? idMatch[1] : null;
+      const subpageTitle = titleMatch ? titleMatch[1] : "Untitled";
+      const subpageIcon = iconMatch ? iconMatch[1] : null;
+
+      if ((!subpageId || subpageId === "new") && contextInfo) {
+        try {
+          const newPage = await motionPageService.createPage(
+            contextInfo.orgId,
+            contextInfo.spaceId,
+            contextInfo.userId,
+            {
+              title: subpageTitle,
+              parent_id: contextInfo.parentId || null,
+              icon: subpageIcon,
+            }
+          );
+          subpageId = newPage.id;
+        } catch (err) {
+          console.error("Failed to create subpage from AI markdown tag:", err);
+        }
+      }
+
+      if (subpageId) {
+        appendNode({
+          type: "subpage",
+          attrs: {
+            id: subpageId,
+            title: subpageTitle,
+            icon: subpageIcon,
+          },
+        });
+      }
+      continue;
     }
 
     // --- Empty lines ---
@@ -613,7 +765,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     if (trimmed === "---" || trimmed === "___" || trimmed === "***") {
       flushAllLists();
       flushTable();
-      contentNodes.push({
+      appendNode({
         type: "horizontalRule",
       });
       continue;
@@ -626,7 +778,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
       flushTable();
       const level = headingMatch[1].length;
       const text = headingMatch[2];
-      contentNodes.push({
+      appendNode({
         type: "heading",
         attrs: { level },
         content: parseInlineFormatting(text),
@@ -759,7 +911,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
           }
           parentTop.currentListItem.content.push(newListNode);
         } else {
-          contentNodes.push(newListNode);
+          appendNode(newListNode);
         }
 
         listStack.push({
@@ -775,7 +927,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     // --- Fallback: Paragraph ---
     flushAllLists();
     flushTable();
-    contentNodes.push({
+    appendNode({
       type: "paragraph",
       content: parseInlineFormatting(line),
     });
@@ -794,7 +946,7 @@ function parseMarkdownToTiptap(markdown: string, pageTitle?: string): Record<str
     if (isCallout) {
       blockquoteNode.attrs = { type: "callout" };
     }
-    contentNodes.push(blockquoteNode);
+    appendNode(blockquoteNode);
   }
 
   // Flush any remaining table
@@ -850,8 +1002,50 @@ export const createMotionPageTool = createTool({
         parent_id: inputData.parentId || null,
       });
 
+      if (inputData.parentId) {
+        try {
+          const parentPage = await motionPageService.getPageById(orgId, spaceId, inputData.parentId);
+          if (parentPage) {
+            let parentContent = parentPage.content;
+            if (!parentContent || typeof parentContent !== "object") {
+              parentContent = { type: "doc", content: [] };
+            }
+            if (!Array.isArray(parentContent.content)) {
+              parentContent.content = [];
+            }
+            parentContent.content.push({
+              type: "subpage",
+              attrs: {
+                id: page.id,
+                title: page.title || "Untitled",
+                icon: page.icon || null
+              }
+            });
+            await motionPageService.updatePage(
+              orgId,
+              spaceId,
+              inputData.parentId,
+              userId,
+              { content: parentContent },
+              role
+            );
+          }
+        } catch (parentErr) {
+          console.error("Failed to automatically link subpage to parent content:", parentErr);
+        }
+      }
+
       if (inputData.content) {
-        const tiptapContent = parseMarkdownToTiptap(inputData.content, inputData.title);
+        const tiptapContent = await parseMarkdownToTiptap(
+          inputData.content,
+          inputData.title,
+          {
+            orgId,
+            spaceId,
+            userId,
+            parentId: page.id,
+          }
+        );
         const updatedPage = await motionPageService.updatePage(
           orgId,
           spaceId,
@@ -948,7 +1142,16 @@ export const updateMotionPageTool = createTool({
           const existingPage = await motionPageService.getPageById(orgId, spaceId, inputData.pageId);
           resolvedTitle = existingPage?.title;
         }
-        updates.content = parseMarkdownToTiptap(inputData.content, resolvedTitle);
+        updates.content = await parseMarkdownToTiptap(
+          inputData.content,
+          resolvedTitle,
+          {
+            orgId,
+            spaceId,
+            userId,
+            parentId: inputData.pageId,
+          }
+        );
       }
 
       const updatedPage = await motionPageService.updatePage(

@@ -70,6 +70,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCreateOrganisation, useJoinOrganisation, orgKeys } from "@/hooks/api/useOrganisations";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTaskSocketListeners } from "@/hooks/api/useTasks";
 
 // ─── Navigation items ─────────────────────────────────────────────────────────
 
@@ -499,6 +500,8 @@ export function AppSidebar({
     activeSpace,
     setActiveOrganisation,
   } = useAppContext();
+
+  useTaskSocketListeners(activeOrgId, activeSpaceId, user?.id ?? null);
 
   const navigate = useNavigate();
 

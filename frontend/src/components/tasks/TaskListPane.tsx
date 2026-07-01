@@ -100,7 +100,7 @@ function formatTaskDateRange(start?: string, end?: string, isAllDay?: boolean) {
   if (!start) return format(new Date(end), "MMM d");
 
   const startDate = new Date(start);
-  const endDate = isAllDay ? subDays(startOfDay(new Date(end)), 1) : new Date(end);
+  const endDate = new Date(end);
 
   if (isSameDay(startDate, endDate)) {
     return format(startDate, "MMM d");

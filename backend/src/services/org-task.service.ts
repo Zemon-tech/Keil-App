@@ -16,6 +16,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getS3Client } from "../lib/s3";
 import { config } from "../config";
 import pool from "../config/pg";
+import { broadcastTaskChange } from "../socket";
 
 
 const log = createServiceLogger("gcal");
@@ -202,18 +203,6 @@ const validateSubtaskDates = async (
   const pDue = new Date(parentTask.due_date);
 
   const subStart = startDate ? new Date(startDate) : null;
-
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
-
-  if (subStart && isSameDay(subStart, pStart)) {
-    return {
-      start_date: pStart,
-      due_date: pDue,
-    };
-  }
 
   if (startDate) {
     const sStart = new Date(startDate);
@@ -460,6 +449,7 @@ export const createTask = async (
   if (!signed) {
     throw new ApiError(500, "Failed to sign task attachments");
   }
+  broadcastTaskChange(context.spaceId, { type: "create", task: signed, userId: input.created_by });
   return signed;
 };
 
@@ -627,7 +617,11 @@ export const updateTask = async (
     }).catch(err => log.error({ err }, 'Org task update sync failed'));
   }
 
-  return result ? signTaskContextAttachments(toDTO(result)) : null;
+  const signed = result ? await signTaskContextAttachments(toDTO(result)) : null;
+  if (signed) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: signed, userId });
+  }
+  return signed;
 };
 
 export const changeTaskStatus = async (
@@ -719,7 +713,11 @@ export const changeTaskStatus = async (
     return updated;
   });
 
-  return result ? toDTO(result) : null;
+  const dto = result ? toDTO(result) : null;
+  if (dto) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: dto, userId });
+  }
+  return dto;
 };
 
 export const deleteTask = async (
@@ -753,6 +751,8 @@ export const deleteTask = async (
       client,
     );
   });
+
+  broadcastTaskChange(context.spaceId, { type: "delete", taskId, userId });
 };
 
 export const assignUser = async (
@@ -800,6 +800,11 @@ export const assignUser = async (
       );
     }
   });
+
+  const updatedTask = await getTaskById(taskId);
+  if (updatedTask) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: updatedTask, userId });
+  }
 };
 
 export const unassignUser = async (
@@ -821,6 +826,11 @@ export const unassignUser = async (
       client,
     );
   });
+
+  const updatedTask = await getTaskById(taskId);
+  if (updatedTask) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: updatedTask, userId });
+  }
 };
 
 export const addDependency = async (

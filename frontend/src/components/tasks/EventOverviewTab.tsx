@@ -327,9 +327,7 @@ export const EventOverviewTab = ({
                 <span className="font-medium">
                   {event.due_date || event.dueDateISO
                     ? format(
-                      event.is_all_day
-                        ? subDays(startOfDay(new Date(event.due_date || event.dueDateISO!)), 1)
-                        : new Date(event.due_date || event.dueDateISO!),
+                      new Date(event.due_date || event.dueDateISO!),
                       event.is_all_day ? "d MMM" : "d MMM, h:mm a"
                     )
                     : "—"}

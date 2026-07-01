@@ -118,8 +118,7 @@ export const formatDate = (dateStr: string) => format(new Date(dateStr), "d MMM"
  */
 export const formatDueDate = (dateStr: string, isAllDay?: boolean) => {
   const d = new Date(dateStr);
-  const displayDate = isAllDay ? subDays(startOfDay(d), 1) : d;
-  return format(displayDate, "d MMM");
+  return format(d, "d MMM");
 };
 
 export const formatRelTime = (dateStr: string) =>

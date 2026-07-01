@@ -130,7 +130,7 @@ export function useMotionPages(orgId: string | null, spaceId: string | null) {
     },
     enabled: !!orgId && !!spaceId,
     retry: noRetryOn4xx,
-    staleTime: 30_000, // 30s — pages don't change that often
+    staleTime: 0,
   });
 }
 
@@ -185,7 +185,7 @@ export function useMotionPage(
     },
     enabled: !!orgId && !!spaceId && !!pageId,
     retry: noRetryOn4xx,
-    staleTime: 5 * 60 * 1000, // 5 min — cache survives refresh via persister
+    staleTime: 0,
     gcTime: 2 * 60 * 1000, // 2 minutes to free memory for visited pages
   });
 }
@@ -634,8 +634,11 @@ export function useMotionSocketListeners(
     const handleMotionChange = (payload: { type: string; pageId?: string; page?: MotionPageDTO, userId?: string }) => {
       const { type, pageId, page, userId } = payload;
 
-      // Skip if this change was made by the current user (optimistic updates already handled it)
-      if (userId === currentUserId) return;
+      // Skip if this change was made by the current user and editor is actively focused
+      // (to prevent overwriting active typing conflicts)
+      if (userId === currentUserId && document.activeElement?.closest(".simple-editor-content")) {
+        return;
+      }
 
       switch (type) {
         case "create":

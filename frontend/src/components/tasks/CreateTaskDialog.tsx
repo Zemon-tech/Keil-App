@@ -469,8 +469,7 @@ export function CreateTaskDialog({
       const loadedIsAllDay = initialValues.is_all_day ?? true;
       if (start) setDate(parseISO(start));
       if (end) {
-        const parsedEnd = parseISO(end);
-        setEndDate(loadedIsAllDay ? subDays(startOfDay(parsedEnd), 1) : parsedEnd);
+        setEndDate(parseISO(end));
       }
 
       setStoryPoints(initialValues.story_points || undefined);
@@ -570,7 +569,7 @@ export function CreateTaskDialog({
 
     const computedDueDate = (() => {
       if (isAllDay && endDate) {
-        return startOfDay(addDays(endDate, 1)).toISOString();
+        return startOfDay(endDate).toISOString();
       }
       return endDate?.toISOString() || (type === 'task' ? date?.toISOString() : undefined);
     })();
@@ -592,6 +591,7 @@ export function CreateTaskDialog({
       location: type === "event" ? location.trim() || undefined : undefined,
       start_date: isAllDay && date ? startOfDay(date).toISOString() : date?.toISOString(),
       due_date: computedDueDate,
+      is_all_day: isAllDay,
       assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
       status: status as any,
       parent_task_id: parentTaskId,

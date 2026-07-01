@@ -63,6 +63,60 @@ export function markdownToHtml(markdown: string): string {
       continue;
     }
 
+    const trimmed = line.trim();
+
+    // Details/Toggle start tag
+    if (trimmed.toLowerCase().startsWith("<details")) {
+      html += closeBlock();
+      html += '<details data-type="details">';
+      continue;
+    }
+
+    // Details/Toggle end tag
+    if (trimmed.toLowerCase() === "</details>") {
+      html += closeBlock();
+      html += '</div></details>';
+      continue;
+    }
+
+    // Toggle Summary tag
+    if (trimmed.toLowerCase().startsWith("<summary>")) {
+      html += closeBlock();
+      const summaryMatch = line.match(/<summary>(.*)<\/summary>/i);
+      const summaryContent = summaryMatch ? summaryMatch[1] : "";
+      
+      let level: number | null = null;
+      let cleanSummary = summaryContent.trim();
+      const headingMatch = cleanSummary.match(/^(#{1,4})\s+(.*)$/);
+      if (headingMatch) {
+        level = headingMatch[1].length;
+        cleanSummary = headingMatch[2];
+      }
+
+      const parsedSummary = inlineParse(cleanSummary);
+      const levelAttr = level ? ` data-level="${level}"` : "";
+      html += `<summary data-type="detailsSummary"${levelAttr}>${parsedSummary}</summary><div data-type="detailsContent">`;
+      continue;
+    }
+
+    // Subpage tag
+    if (trimmed.toLowerCase().startsWith("<subpage")) {
+      html += closeBlock();
+      const idMatch = line.match(/id="([^"]*)"/i);
+      const titleMatch = line.match(/title="([^"]*)"/i);
+      const iconMatch = line.match(/icon="([^"]*)"/i);
+
+      const id = idMatch ? idMatch[1] : "";
+      const title = titleMatch ? titleMatch[1] : "Untitled";
+      const icon = iconMatch ? iconMatch[1] : "";
+
+      const idAttr = id ? ` id="${id}"` : "";
+      const iconAttr = icon ? ` icon="${icon}"` : "";
+      
+      html += `<div data-type="subpage"${idAttr} title="${title}"${iconAttr}></div>`;
+      continue;
+    }
+
     // Headings: #, ##, ###
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
     if (headingMatch) {
