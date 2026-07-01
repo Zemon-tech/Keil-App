@@ -10,6 +10,8 @@ import {
   markChannelAsRead,
   removeChannelMember,
   deleteChannel,
+  renameChannel,
+  transferAdmin,
 } from "../controllers/org-chat.controller";
 
 const router = Router({ mergeParams: true });
@@ -23,6 +25,8 @@ router.get("/channels/:id/messages", getChannelMessages);
 router.post("/channels/:id/read", markChannelAsRead);
 router.post("/channels/:id/members", addChannelMembers);
 router.delete("/channels/:id/members/:userId", removeChannelMember);
+router.patch("/channels/:id", renameChannel);
+router.post("/channels/:id/transfer-admin", transferAdmin);
 router.delete("/channels/:id", deleteChannel);
 
 export default router;

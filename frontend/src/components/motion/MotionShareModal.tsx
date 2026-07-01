@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   ChevronDown,
   Users,
+  X,
 } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -325,7 +326,17 @@ export function MotionSharePanel({
   // Search View states
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  
+  interface SelectedRecipient {
+    id: string;
+    type: "space" | "user" | "email";
+    name: string;
+    email?: string;
+    orgId?: string;
+    spaceId?: string;
+  }
+  const [selectedRecipients, setSelectedRecipients] = useState<SelectedRecipient[]>([]);
+  const [isSharingLoading, setIsSharingLoading] = useState(false);
 
   // Contact Import popover states
   const [importPopoverOpen, setImportPopoverOpen] = useState(false);
@@ -334,6 +345,74 @@ export function MotionSharePanel({
   // Real-time backend user search states
   const [searchedUsers, setSearchedUsers] = useState<any[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+
+  const handleAddEmailRecipient = (emailVal: string) => {
+    const trimmed = emailVal.trim();
+    if (!trimmed) return;
+    const isEmail = trimmed.includes("@");
+    const email = isEmail ? trimmed : `${trimmed}@keilhq.com`;
+    const itemId = `email-${email.toLowerCase()}`;
+    
+    // Avoid duplicates
+    if (selectedRecipients.some(r => r.id === itemId)) {
+      setSearchQuery("");
+      return;
+    }
+    
+    setSelectedRecipients(prev => [
+      ...prev,
+      { id: itemId, type: "email", name: email, email: email }
+    ]);
+    setSearchQuery("");
+  };
+
+  const handleInputSubmit = (trimmed: string) => {
+    // Try to match a space first
+    const matchedSpace = allSpaces.find(
+      ({ space }) => space.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (matchedSpace) {
+      const itemId = `space-${matchedSpace.space.id}`;
+      if (!selectedRecipients.some(r => r.id === itemId)) {
+        setSelectedRecipients(prev => [
+          ...prev,
+          {
+            id: itemId,
+            type: "space",
+            name: matchedSpace.space.name,
+            orgId: matchedSpace.space.org_id,
+            spaceId: matchedSpace.space.id
+          }
+        ]);
+      }
+      setSearchQuery("");
+      return;
+    }
+
+    // Try to match a user in search list
+    const matchedUser = searchedUsers.find(
+      (u) => (u.name || "").toLowerCase() === trimmed.toLowerCase() || u.email.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (matchedUser) {
+      const itemId = `user-${matchedUser.id}`;
+      if (!selectedRecipients.some(r => r.id === itemId)) {
+        setSelectedRecipients(prev => [
+          ...prev,
+          {
+            id: itemId,
+            type: "user",
+            name: matchedUser.name || matchedUser.email.split("@")[0],
+            email: matchedUser.email
+          }
+        ]);
+      }
+      setSearchQuery("");
+      return;
+    }
+
+    // Otherwise, treat as email
+    handleAddEmailRecipient(trimmed);
+  };
 
   useEffect(() => {
     const search = async () => {
@@ -480,91 +559,114 @@ export function MotionSharePanel({
   );
 
   // Suggestions toggling
-  const toggleSuggestion = (key: string) => {
-    setSelectedSuggestions((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
+  const toggleSuggestion = (itemKey: string) => {
+    setSelectedRecipients(prev => {
+      const exists = prev.some(r => r.id === itemKey);
+      if (exists) {
+        return prev.filter(r => r.id !== itemKey);
       }
-      return next;
+      
+      // If it doesn't exist, we add it!
+      if (itemKey.startsWith("space-")) {
+        const sId = itemKey.replace("space-", "");
+        const matchedSpace = allSpaces.find((s) => s.space.id === sId);
+        if (matchedSpace) {
+          return [
+            ...prev,
+            {
+              id: itemKey,
+              type: "space",
+              name: matchedSpace.space.name,
+              orgId: matchedSpace.space.org_id,
+              spaceId: matchedSpace.space.id
+            }
+          ];
+        }
+      } else if (itemKey.startsWith("user-")) {
+        const uId = itemKey.replace("user-", "");
+        const matchedUser = searchedUsers.find((u) => u.id === uId);
+        if (matchedUser) {
+          return [
+            ...prev,
+            {
+              id: itemKey,
+              type: "user",
+              name: matchedUser.name || matchedUser.email.split("@")[0],
+              email: matchedUser.email
+            }
+          ];
+        }
+      }
+      return prev;
     });
   };
 
   const handleShareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Include whatever is left in the input query if they didn't hit comma/Enter
+    const trimmedInput = searchQuery.trim();
+    let finalRecipients = [...selectedRecipients];
+    if (trimmedInput) {
+      // Try to resolve it
+      const matchedSpace = allSpaces.find(
+        ({ space }) => space.name.toLowerCase() === trimmedInput.toLowerCase()
+      );
+      if (matchedSpace) {
+        const itemId = `space-${matchedSpace.space.id}`;
+        if (!finalRecipients.some(r => r.id === itemId)) {
+          finalRecipients.push({
+            id: itemId,
+            type: "space",
+            name: matchedSpace.space.name,
+            orgId: matchedSpace.space.org_id,
+            spaceId: matchedSpace.space.id
+          });
+        }
+      } else {
+        const isEmail = trimmedInput.includes("@");
+        const email = isEmail ? trimmedInput : `${trimmedInput}@keilhq.com`;
+        const itemId = `email-${email.toLowerCase()}`;
+        if (!finalRecipients.some(r => r.id === itemId)) {
+          finalRecipients.push({ id: itemId, type: "email", name: email, email: email });
+        }
+      }
+    }
 
-    if (selectedSuggestions.size > 0) {
-      selectedSuggestions.forEach((itemKey) => {
-        if (itemKey.startsWith("space-")) {
-          const sId = itemKey.replace("space-", "");
-          const matchedSpace = allSpaces.find((s) => s.space.id === sId);
-          if (matchedSpace) {
-            createShare.mutate({
-              share_type: "space",
-              permission: "view_all",
-              target_org_id: matchedSpace.space.org_id,
-              target_space_id: matchedSpace.space.id,
-            }, {
-              onSuccess: () => {
-                toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
-              }
-            });
-          }
-        } else if (itemKey.startsWith("user-")) {
-          const uId = itemKey.replace("user-", "");
-          const matchedUser = searchedUsers.find((u) => u.id === uId);
-          if (matchedUser) {
-            createShare.mutate({
-              share_type: "space",
-              permission: "view_all",
-              email: matchedUser.email,
-            }, {
-              onSuccess: () => {
-                toast.success(`Shared with user "${matchedUser.name || matchedUser.email}" successfully`);
-              }
-            });
-          }
+    if (finalRecipients.length === 0) return;
+
+    setIsSharingLoading(true);
+
+    try {
+      const promises = finalRecipients.map((recipient) => {
+        if (recipient.type === "space") {
+          return createShare.mutateAsync({
+            share_type: "space",
+            permission: "view_all",
+            target_org_id: recipient.orgId!,
+            target_space_id: recipient.spaceId!,
+          });
+        } else {
+          return createShare.mutateAsync({
+            share_type: "space",
+            permission: "view_all",
+            email: recipient.email!,
+          });
         }
       });
-      setSelectedSuggestions(new Set());
+
+      await Promise.all(promises);
+      toast.success("Successfully shared with all recipients!");
+      
+      // Cleanup
+      setSelectedRecipients([]);
       setSearchQuery("");
       setIsSearching(false);
-    } else {
-      const input = searchQuery.trim();
-      if (!input) return;
-
-      const isEmail = input.includes("@");
-      const matchedSpace = allSpaces.find(
-        ({ space }) => space.name.toLowerCase() === input.toLowerCase()
-      );
-
-      if (matchedSpace) {
-        createShare.mutate({
-          share_type: "space",
-          permission: "view_all",
-          target_org_id: matchedSpace.space.org_id,
-          target_space_id: matchedSpace.space.id,
-        }, {
-          onSuccess: () => {
-            toast.success(`Shared with space "${matchedSpace.space.name}" successfully`);
-          }
-        });
-      } else {
-        const email = isEmail ? input : `${input}@keilhq.com`;
-        createShare.mutate({
-          share_type: "space",
-          permission: "view_all",
-          email: email,
-        }, {
-          onSuccess: (res) => {
-            toast.success(`Shared with user "${res.target_user_name || email}" successfully`);
-          }
-        });
-      }
-      setSearchQuery("");
-      setIsSearching(false);
+    } catch (err: any) {
+      console.error("Failed to share page:", err);
+      toast.error("Failed to share with one or more recipients. Please try again.");
+    } finally {
+      setIsSharingLoading(false);
     }
   };
 
@@ -588,9 +690,9 @@ export function MotionSharePanel({
             onClick={() => {
               setIsSearching(false);
               setSearchQuery("");
-              setSelectedSuggestions(new Set());
+              setSelectedRecipients([]);
             }}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors font-bold cursor-pointer"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors font-bold cursor-pointer bg-transparent border-none p-0"
           >
             <ArrowLeft className="size-4 shrink-0" />
             Share
@@ -634,21 +736,70 @@ export function MotionSharePanel({
           {isSearching ? (
             /* ─── Search View Mode ─── */
             <div className="space-y-4 flex flex-col flex-1 min-h-0">
-              <form onSubmit={handleShareSubmit} className="flex gap-2">
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Email or group, separated by commas"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-background border border-input rounded-lg px-3 py-2 text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring transition-colors shadow-inner"
-                />
+              <form onSubmit={handleShareSubmit} className="flex gap-2 items-start">
+                <div className="flex-1 flex flex-col gap-2 bg-background border border-input rounded-lg p-1.5 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring transition-colors shadow-inner min-h-[38px]">
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {selectedRecipients.map((recipient) => (
+                      <div
+                        key={recipient.id}
+                        className="flex items-center gap-1 bg-muted text-foreground text-[10px] font-medium px-2 py-0.5 rounded-md border border-border"
+                      >
+                        <span>{recipient.name}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRecipients(prev => prev.filter(r => r.id !== recipient.id));
+                          }}
+                          className="text-muted-foreground hover:text-foreground shrink-0 focus:outline-none cursor-pointer bg-transparent border-0 p-0"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <input
+                      type="text"
+                      placeholder={selectedRecipients.length === 0 ? "Email or space name..." : ""}
+                      value={searchQuery}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.endsWith(",") || val.endsWith(" ")) {
+                          const emailVal = val.slice(0, -1).trim();
+                          if (emailVal) {
+                            handleAddEmailRecipient(emailVal);
+                          }
+                        } else {
+                          setSearchQuery(val);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const trimmed = searchQuery.trim();
+                          if (trimmed) {
+                            handleInputSubmit(trimmed);
+                          }
+                        } else if (e.key === "Backspace" && searchQuery === "" && selectedRecipients.length > 0) {
+                          setSelectedRecipients(prev => prev.slice(0, -1));
+                        }
+                      }}
+                      className="flex-1 min-w-[120px] bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none border-none py-1 px-1.5"
+                      autoFocus
+                      disabled={isSharingLoading}
+                    />
+                  </div>
+                </div>
                 <Button
                   type="submit"
                   size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold px-4 cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold px-4 h-9 cursor-pointer"
+                  disabled={isSharingLoading || (selectedRecipients.length === 0 && !searchQuery.trim())}
                 >
-                  Share
+                  {isSharingLoading ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    "Share"
+                  )}
                 </Button>
               </form>
 
@@ -740,7 +891,7 @@ export function MotionSharePanel({
                     {/* Spaces Suggestions */}
                     {filteredSpaces.map(({ space, orgName }) => {
                       const itemKey = `space-${space.id}`;
-                      const isSelected = selectedSuggestions.has(itemKey);
+                      const isSelected = selectedRecipients.some(r => r.id === itemKey);
                       return (
                         <div
                           key={space.id}
@@ -776,7 +927,7 @@ export function MotionSharePanel({
                     {/* Users Suggestions */}
                     {searchedUsers.map((u) => {
                       const itemKey = `user-${u.id}`;
-                      const isSelected = selectedSuggestions.has(itemKey);
+                      const isSelected = selectedRecipients.some(r => r.id === itemKey);
                       const userName = u.name || u.email.split("@")[0];
                       return (
                         <div

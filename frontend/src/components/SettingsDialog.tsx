@@ -3166,46 +3166,271 @@ function ConnectorsTab() {
   const [manualNotionToken, setManualNotionToken] = useState("");
   const [manualNotionWorkspace, setManualNotionWorkspace] = useState("");
 
-  // Google suite services — connected status inherits from Google Calendar OAuth
-  const googleSuiteServices = [
+  interface Connector {
+    id: string;
+    name: string;
+    description: string;
+    activeDescription: string;
+    logo?: string;
+    icon?: React.ComponentType<{ className?: string }>;
+    connected: boolean;
+    isLoading: boolean;
+    comingSoon?: boolean;
+    customActions?: React.ReactNode;
+    extraContent?: React.ReactNode;
+  }
+
+  const connectorList: Connector[] = [
     {
+      id: "google-calendar",
+      name: "Google Calendar",
+      description: "Connect to enable Calendar sync and all Google services",
+      activeDescription: "Scheduled tasks sync automatically · Authorises all Google services below",
+      logo: "/integrations/gcalendar.png",
+      connected: !!gcalStatus?.connected,
+      isLoading: gcalLoading,
+      customActions: gcalStatus?.connected ? (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-lg gap-1.5"
+            disabled={isSyncing}
+            onClick={handleManualSync}
+          >
+            <RefreshCw className={cn("size-3.5 text-muted-foreground", isSyncing && "animate-spin")} />
+            Sync Now
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-lg"
+            disabled={disconnectGcal.isPending}
+            onClick={() => disconnectGcal.mutate()}
+          >
+            {disconnectGcal.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Disconnect"}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="default"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={gcalLoading}
+          onClick={connectGcal}
+        >
+          {gcalLoading ? <Loader2 className="size-3.5 animate-spin" /> : "Connect"}
+        </Button>
+      )
+    },
+    {
+      id: "gmail",
       name: "Google Mail",
       description: "Sync contacts and import task items from emails",
-      logo: "/integrations/gmail.png",
       activeDescription: "Email contacts and task imports are available",
+      logo: "/integrations/gmail.png",
+      connected: !!gcalStatus?.connected,
+      isLoading: gcalLoading,
     },
     {
+      id: "gmeet",
       name: "Google Meet",
       description: "Schedule and join video calls directly from events",
-      logo: "/integrations/gmeet.png",
       activeDescription: "Video call links auto-generated on events",
+      logo: "/integrations/gmeet.png",
+      connected: !!gcalStatus?.connected,
+      isLoading: gcalLoading,
     },
     {
+      id: "gdrive",
       name: "Google Drive",
       description: "Browse and reference workspace files from your chats",
-      logo: "/integrations/gdrive.png",
       activeDescription: "Drive files accessible across your workspace",
+      logo: "/integrations/gdrive.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
     {
+      id: "gdocs",
       name: "Google Docs",
       description: "Create, view, and sync document content inline",
-      logo: "/integrations/gdocs.png",
       activeDescription: "Docs can be linked and previewed in tasks",
+      logo: "/integrations/gdocs.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
     {
+      id: "gsheets",
       name: "Google Sheets",
       description: "Link spreadsheet metrics and tables directly",
-      logo: "/integrations/gsheets.png",
       activeDescription: "Sheets data available for task context",
+      logo: "/integrations/gsheets.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
     {
+      id: "gslides",
       name: "Google Slides",
       description: "Embed presentations and presentation details",
-      logo: "/integrations/gslides.png",
       activeDescription: "Presentations can be linked to events",
+      logo: "/integrations/gslides.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
+    {
+      id: "notion",
+      name: "Notion",
+      description: "Import Notion pages, export pages, and sync content bidirectionally",
+      activeDescription: `Connected to workspace: ${notionStatus?.workspace_name || "Notion Workspace"}`,
+      logo: "/integrations/Notion-logo.svg",
+      connected: !!notionStatus?.connected,
+      isLoading: notionLoading,
+      customActions: notionStatus?.connected ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={disconnectNotion.isPending}
+          onClick={() => disconnectNotion.mutate()}
+        >
+          {disconnectNotion.isPending ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            "Disconnect"
+          )}
+        </Button>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-lg"
+            onClick={() => setShowManualNotion(!showManualNotion)}
+          >
+            {showManualNotion ? "Cancel" : "Use Token"}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="text-xs rounded-lg"
+            disabled={notionLoading}
+            onClick={connectNotion}
+          >
+            {notionLoading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              "Connect"
+            )}
+          </Button>
+        </div>
+      ),
+      extraContent: !notionStatus?.connected && showManualNotion && (
+        <div className="px-4 pb-4 pt-2 border-t border-border/50 bg-muted/20 space-y-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-foreground">Connect via Notion Internal Integration Token</p>
+            <p className="text-[11px] text-muted-foreground leading-normal">
+              Create an Internal Integration in your Notion Workspace, copy the token (starts with <code className="text-xs font-mono bg-muted/80 px-1 rounded">secret_</code>), and share the target Notion pages with your Integration.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="notion-token" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Integration Token (secret_...)
+              </Label>
+              <Input
+                id="notion-token"
+                type="password"
+                placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={manualNotionToken}
+                onChange={(e) => setManualNotionToken(e.target.value)}
+                className="h-9 text-xs rounded-lg bg-background"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="notion-workspace" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Workspace Name (Optional)
+              </Label>
+              <Input
+                id="notion-workspace"
+                type="text"
+                placeholder="My Notion Workspace"
+                value={manualNotionWorkspace}
+                onChange={(e) => setManualNotionWorkspace(e.target.value)}
+                className="h-9 text-xs rounded-lg bg-background"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="text-xs rounded-lg px-4 h-9 shadow-md shadow-primary/10"
+              disabled={!manualNotionToken.trim() || connectNotionManual.isPending}
+              onClick={() => {
+                connectNotionManual.mutate(
+                  { token: manualNotionToken.trim(), workspaceName: manualNotionWorkspace.trim() || undefined },
+                  {
+                    onSuccess: () => {
+                      setManualNotionToken("");
+                      setManualNotionWorkspace("");
+                      setShowManualNotion(false);
+                    }
+                  }
+                );
+              }}
+            >
+              {connectNotionManual.isPending ? (
+                <Loader2 className="size-3.5 animate-spin mr-1.5" />
+              ) : null}
+              Link Account
+            </Button>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: "github",
+      name: "GitHub",
+      description: "Link your GitHub account to read issues & PRs",
+      activeDescription: "Repository issues and PRs connected",
+      icon: Github,
+      connected: !!githubStatus?.connected,
+      isLoading: githubLoading,
+      customActions: githubStatus?.connected ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={disconnectGithub.isPending}
+          onClick={() => disconnectGithub.mutate()}
+        >
+          {disconnectGithub.isPending ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            "Disconnect"
+          )}
+        </Button>
+      ) : (
+        <Button
+          variant="default"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={githubLoading}
+          onClick={connectGithub}
+        >
+          {githubLoading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            "Connect"
+          )}
+        </Button>
+      )
+    }
   ];
-
 
   return (
     <div className="space-y-8">
@@ -3219,320 +3444,88 @@ function ConnectorsTab() {
       <Separator />
 
       <div className="space-y-6">
-      <div className="space-y-2">
-        {/* Google Calendar — primary OAuth connector */}
-        <div className={cn(
-          "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
-          gcalStatus?.connected ? "border-emerald-500/30 bg-emerald-500/5" : "border-border",
-        )}>
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-              <img src="/integrations/gcalendar.png" alt="Google Calendar" className="size-6 object-contain" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Google Calendar</p>
-                {gcalLoading ? (
-                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                ) : gcalStatus?.connected ? (
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-500">
-                    <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                    Active
-                  </span>
-                ) : (
-                  <span className="size-2 rounded-full bg-muted-foreground/40 inline-block" />
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {gcalStatus?.connected
-                  ? "Scheduled tasks sync automatically · Authorises all Google services below"
-                  : "Connect to enable Calendar sync and all Google services"}
-              </p>
-            </div>
-          </div>
-          {gcalStatus?.connected ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs rounded-lg gap-1.5"
-                disabled={isSyncing}
-                onClick={handleManualSync}
-              >
-                <RefreshCw className={cn("size-3.5 text-muted-foreground", isSyncing && "animate-spin")} />
-                Sync Now
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs rounded-lg"
-                disabled={disconnectGcal.isPending}
-                onClick={() => disconnectGcal.mutate()}
-              >
-                {disconnectGcal.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Disconnect"}
-              </Button>
-            </div>
-          ) : (
-            <Button
-              variant="default"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled={gcalLoading}
-              onClick={connectGcal}
-            >
-              {gcalLoading ? <Loader2 className="size-3.5 animate-spin" /> : "Connect"}
-            </Button>
-          )}
-        </div>
-
-        {/* Google sub-services — status inherits from Calendar OAuth */}
-        {googleSuiteServices.map((svc) => (
-          <div
-            key={svc.name}
-            className={cn(
-              "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
-              gcalStatus?.connected
-                ? "border-emerald-500/20 bg-emerald-500/5"
-                : "border-border",
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
-                <img src={svc.logo} alt={svc.name} className="size-6 object-contain" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">
-                    {svc.name}
-                  </p>
-                  {!gcalLoading && (
-                    <span
-                      className={cn(
-                        "inline-block size-2 rounded-full",
-                        gcalStatus?.connected
-                          ? "bg-emerald-500"
-                          : "bg-muted-foreground/40",
-                      )}
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {gcalStatus?.connected ? svc.activeDescription : svc.description}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled
-            >
-              {gcalStatus?.connected ? "Connected" : "Pending"}
-            </Button>
-          </div>
-        ))}
-        {/* Notion — live integration */}
-        <div className={cn(
-          "rounded-xl border border-border bg-card transition-colors overflow-hidden",
-          notionStatus?.connected ? "border-emerald-500/30 bg-emerald-500/5" : ""
-        )}>
-          <div className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors">
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
-                <img src="/integrations/Notion-logo.svg" alt="Notion" className="size-6 object-contain" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">
-                    Notion
-                  </p>
-                  {!notionLoading && (
-                    <span
-                      className={cn(
-                        "inline-block size-2 rounded-full",
-                        notionStatus?.connected
-                          ? "bg-emerald-500"
-                          : "bg-muted-foreground/40",
-                      )}
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {notionStatus?.connected
-                    ? `Connected to workspace: ${notionStatus.workspace_name || "Notion Workspace"}`
-                    : "Import Notion pages, export pages, and sync content bidirectionally"}
-                </p>
-              </div>
-            </div>
-            {notionStatus?.connected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs rounded-lg"
-                disabled={disconnectNotion.isPending}
-                onClick={() => disconnectNotion.mutate()}
-              >
-                {disconnectNotion.isPending ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  "Disconnect"
-                )}
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs rounded-lg"
-                  onClick={() => setShowManualNotion(!showManualNotion)}
-                >
-                  {showManualNotion ? "Cancel" : "Use Token"}
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="text-xs rounded-lg"
-                  disabled={notionLoading}
-                  onClick={connectNotion}
-                >
-                  {notionLoading ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    "Connect"
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Manual Token connection form */}
-          {!notionStatus?.connected && showManualNotion && (
-            <div className="px-4 pb-4 pt-2 border-t border-border/50 bg-muted/20 space-y-4 animate-in slide-in-from-top-2 duration-200">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-foreground">Connect via Notion Internal Integration Token</p>
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  Create an Internal Integration in your Notion Workspace, copy the token (starts with <code className="text-xs font-mono bg-muted/80 px-1 rounded">secret_</code>), and share the target Notion pages with your Integration.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="notion-token" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Integration Token (secret_...)
-                  </Label>
-                  <Input
-                    id="notion-token"
-                    type="password"
-                    placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    value={manualNotionToken}
-                    onChange={(e) => setManualNotionToken(e.target.value)}
-                    className="h-9 text-xs rounded-lg bg-background"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="notion-workspace" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Workspace Name (Optional)
-                  </Label>
-                  <Input
-                    id="notion-workspace"
-                    type="text"
-                    placeholder="My Notion Workspace"
-                    value={manualNotionWorkspace}
-                    onChange={(e) => setManualNotionWorkspace(e.target.value)}
-                    className="h-9 text-xs rounded-lg bg-background"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="text-xs rounded-lg px-4 h-9 shadow-md shadow-primary/10"
-                  disabled={!manualNotionToken.trim() || connectNotionManual.isPending}
-                  onClick={() => {
-                    connectNotionManual.mutate(
-                      { token: manualNotionToken.trim(), workspaceName: manualNotionWorkspace.trim() || undefined },
-                      {
-                        onSuccess: () => {
-                          setManualNotionToken("");
-                          setManualNotionWorkspace("");
-                          setShowManualNotion(false);
-                        }
-                      }
-                    );
-                  }}
-                >
-                  {connectNotionManual.isPending ? (
-                    <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                  ) : null}
-                  Link Account
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* GitHub — live integration */}
-        <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20">
-              <Github className="size-5 text-foreground" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">
-                  GitHub
-                </p>
-                {!githubLoading && (
-                  <span
-                    className={cn(
-                      "inline-block size-2 rounded-full",
-                      githubStatus?.connected
-                        ? "bg-emerald-500"
-                        : "bg-muted-foreground/40",
-                    )}
-                  />
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {githubStatus?.connected
-                  ? "Repository issues and PRs connected"
-                  : "Link your GitHub account to read issues & PRs"}
-              </p>
-            </div>
-          </div>
-          {githubStatus?.connected ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled={disconnectGithub.isPending}
-              onClick={() => disconnectGithub.mutate()}
-            >
-              {disconnectGithub.isPending ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                "Disconnect"
+        <div className="space-y-4">
+          {connectorList.map((connector) => (
+            <div
+              key={connector.id}
+              className={cn(
+                "rounded-xl border bg-card transition-colors overflow-hidden",
+                connector.connected
+                  ? "border-emerald-500/30 bg-emerald-500/5"
+                  : "border-border hover:bg-muted/10"
               )}
-            </Button>
-          ) : (
-            <Button
-              variant="default"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled={githubLoading}
-              onClick={connectGithub}
             >
-              {githubLoading ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                "Connect"
-              )}
-            </Button>
-          )}
+              <div className="flex items-center justify-between p-4 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
+                    {connector.icon ? (
+                      <connector.icon className="size-5 text-foreground" />
+                    ) : connector.logo ? (
+                      <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
+                    ) : null}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        {connector.name}
+                      </p>
+                      {connector.isLoading ? (
+                        <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                      ) : connector.connected ? (
+                        connector.id === "google-calendar" ? (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-500">
+                            <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-block size-2 rounded-full bg-emerald-500" />
+                        )
+                      ) : (
+                        <span className="inline-block size-2 rounded-full bg-muted-foreground/40" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {connector.connected ? connector.activeDescription : connector.description}
+                    </p>
+                  </div>
+                </div>
+
+                {connector.customActions ? (
+                  connector.customActions
+                ) : connector.comingSoon ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-lg"
+                    disabled
+                  >
+                    Coming Soon
+                  </Button>
+                ) : connector.connected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-lg"
+                    disabled
+                  >
+                    Connected
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-lg"
+                    disabled
+                  >
+                    Disconnected
+                  </Button>
+                )}
+              </div>
+
+              {connector.extraContent && connector.extraContent}
+            </div>
+          ))}
         </div>
-
-
-      </div>
       </div>
     </div>
   );

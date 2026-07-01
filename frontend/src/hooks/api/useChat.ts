@@ -261,6 +261,56 @@ export function useDeleteChannel(orgId: string | null, spaceId: string | null) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PART 3I — useRenameChannel & useTransferAdmin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useRenameChannel(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { channelId: string; name: string }) => {
+      await api.patch(
+        `v1/orgs/${orgId}/spaces/${spaceId}/chat/channels/${payload.channelId}`,
+        { name: payload.name }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: chatKeys.channels(orgId, spaceId),
+      });
+      toast.success("Group renamed successfully");
+    },
+    onError: (err: any) => {
+      const errMsg = err.response?.data?.message || err.message || "Failed to rename group";
+      toast.error(errMsg);
+    }
+  });
+}
+
+export function useTransferAdmin(orgId: string | null, spaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { channelId: string; newAdminId: string }) => {
+      await api.post(
+        `v1/orgs/${orgId}/spaces/${spaceId}/chat/channels/${payload.channelId}/transfer-admin`,
+        { newAdminId: payload.newAdminId }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: chatKeys.channels(orgId, spaceId),
+      });
+      toast.success("Admin role transferred successfully");
+    },
+    onError: (err: any) => {
+      const errMsg = err.response?.data?.message || err.message || "Failed to transfer admin role";
+      toast.error(errMsg);
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PART 4 — useChatSocketListeners
 //
 // ⚠️ Mount this hook ONCE — inside <ChatDialog> only.
