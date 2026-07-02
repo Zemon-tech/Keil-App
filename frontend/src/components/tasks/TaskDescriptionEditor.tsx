@@ -39,7 +39,7 @@ export const MentionSuggestionPluginKey = new PluginKey("mentionSuggestion");
 
 export type MentionItem =
   | { kind: "category"; type: "user" | "task" | "event" | "page"; id: string; label: string }
-  | { kind: "user"; id: string; label: string; email?: string | null; avatar_url?: string | null; avatarUrl?: string | null }
+  | { kind: "user"; id: string; label: string; displayName?: string; email?: string | null; avatar_url?: string | null; avatarUrl?: string | null }
   | { kind: "task"; id: string; label: string }
   | { kind: "event"; id: string; label: string }
   | { kind: "page"; id: string; label: string };
@@ -261,13 +261,14 @@ export function TaskDescriptionEditor({
 
     const filteredMembers: MentionItem[] = currentMembers
       .filter((m) => {
-        const name = m.name || m.email || "";
+        const name = m.email?.split('@')[0] || "";
         return name.toLowerCase().includes(query);
       })
       .map((m) => ({
         kind: "user",
         id: m.user_id,
-        label: m.name || m.email || "",
+        label: m.name || m.email?.split('@')[0] || "",
+        displayName: m.email?.split('@')[0] || "",
         email: m.email,
         avatar_url: (m as any).avatar_url || (m as any).avatarUrl,
       }));
@@ -492,7 +493,7 @@ export function TaskDescriptionEditor({
     const candidates: { label: string; type: "user" | "task" | "event" | "page"; id: string }[] = [];
 
     for (const m of currentMembers) {
-      const label = m.name || m.email || "";
+      const label = m.email?.split('@')[0] || "";
       if (label) {
         candidates.push({ label, type: "user", id: m.user_id });
       }
@@ -826,7 +827,7 @@ export function TaskDescriptionEditor({
     const isSelected = clampedIndex === idx;
 
     let icon: React.ReactNode;
-    let label = item.label;
+    let label = item.kind === "user" ? (item.displayName || item.label) : item.label;
     let sublabel: string | undefined;
 
     if (item.kind === "category") {
@@ -840,10 +841,10 @@ export function TaskDescriptionEditor({
         <Avatar className="size-5 shrink-0">
           <AvatarImage
             src={getOptimizedImageUrl(item.avatar_url || item.avatarUrl, { width: 40, height: 40 })}
-            alt={item.label}
+            alt={label}
           />
           <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
-            {item.label.charAt(0).toUpperCase()}
+            {label.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
       );

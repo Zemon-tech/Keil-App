@@ -196,8 +196,10 @@ export const addChannelMembers = catchAsync(async (req: Request, res: Response) 
 export const removeChannelMember = catchAsync(async (req: Request, res: Response) => {
   const userId = (req as any).user?.id as string;
   const targetUserId = asString(req.params.userId);
+  const channelId = asString(req.params.id);
 
-  if (targetUserId !== userId) {
+  if (targetUserId === userId) {
+    // Admin leaving check
     const roleCheck = await pool.query(
       `
         SELECT cm.role, c.type
@@ -205,18 +207,111 @@ export const removeChannelMember = catchAsync(async (req: Request, res: Response
         JOIN public.channels c ON c.id = cm.channel_id
         WHERE cm.channel_id = $1 AND cm.user_id = $2
       `,
-      [asString(req.params.id), userId],
+      [channelId, userId],
+    );
+    const row = roleCheck.rows[0];
+    if (row && row.type === "group" && row.role === "admin") {
+      const countCheck = await pool.query(
+        `SELECT COUNT(*) as count FROM public.channel_members WHERE channel_id = $1`,
+        [channelId],
+      );
+      const memberCount = parseInt(countCheck.rows[0].count, 10);
+      if (memberCount > 1) {
+        throw new ApiError(400, "Admin must transfer ownership to another member before leaving.");
+      }
+    }
+  } else {
+    // Admin kicking another member check
+    const roleCheck = await pool.query(
+      `
+        SELECT cm.role, c.type
+        FROM public.channel_members cm
+        JOIN public.channels c ON c.id = cm.channel_id
+        WHERE cm.channel_id = $1 AND cm.user_id = $2
+      `,
+      [channelId, userId],
     );
     const row = roleCheck.rows[0];
     if (!row || row.type !== "group") throw new ApiError(400, "Invalid channel or not a group");
     if (row.role !== "admin") throw new ApiError(403, "Only group admins can remove other members");
   }
 
-  await orgChatService.removeMember(asString(req.params.id), targetUserId);
-  io.to(`user:${targetUserId}`).emit("channel_removed", { channel_id: asString(req.params.id) });
-  io.to(`channel:${asString(req.params.id)}`).emit("channel_updated", { channel_id: asString(req.params.id) });
+  await orgChatService.removeMember(channelId, targetUserId);
+  io.to(`user:${targetUserId}`).emit("channel_removed", { channel_id: channelId });
+  io.to(`channel:${channelId}`).emit("channel_updated", { channel_id: channelId });
 
   res.status(200).json({ success: true, message: "Member removed successfully" });
+});
+
+export const renameChannel = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const channelId = asString(req.params.id);
+  const { name } = req.body;
+
+  if (!name || name.trim().length === 0 || name.length > 50) {
+    throw new ApiError(400, "Name is required and must be under 50 characters");
+  }
+
+  const roleCheck = await pool.query(
+    `
+      SELECT cm.role, c.type
+      FROM public.channel_members cm
+      JOIN public.channels c ON c.id = cm.channel_id
+      WHERE cm.channel_id = $1 AND cm.user_id = $2
+    `,
+    [channelId, userId],
+  );
+  const row = roleCheck.rows[0];
+  if (!row) throw new ApiError(404, "Channel not found or you are not a member");
+  if (row.type !== "group") throw new ApiError(400, "Cannot rename a direct channel");
+  if (row.role !== "admin") throw new ApiError(403, "Only group admins can rename the channel");
+
+  await orgChatService.renameChannel(channelId, name.trim());
+
+  io.to(`channel:${channelId}`).emit("channel_updated", { channel_id: channelId });
+
+  res.status(200).json({ success: true, message: "Channel renamed successfully" });
+});
+
+export const transferAdmin = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  const channelId = asString(req.params.id);
+  const { newAdminId } = req.body;
+
+  if (!newAdminId) {
+    throw new ApiError(400, "newAdminId is required");
+  }
+
+  const roleCheck = await pool.query(
+    `
+      SELECT cm.role, c.type
+      FROM public.channel_members cm
+      JOIN public.channels c ON c.id = cm.channel_id
+      WHERE cm.channel_id = $1 AND cm.user_id = $2
+    `,
+    [channelId, userId],
+  );
+  const row = roleCheck.rows[0];
+  if (!row) throw new ApiError(404, "Channel not found or you are not a member");
+  if (row.type !== "group") throw new ApiError(400, "Invalid channel type");
+  if (row.role !== "admin") throw new ApiError(403, "Only the group admin can transfer ownership");
+
+  const targetCheck = await pool.query(
+    `
+      SELECT 1 FROM public.channel_members
+      WHERE channel_id = $1 AND user_id = $2
+    `,
+    [channelId, newAdminId],
+  );
+  if (targetCheck.rows.length === 0) {
+    throw new ApiError(400, "Target user is not a member of this channel");
+  }
+
+  await orgChatService.transferAdmin(channelId, userId, newAdminId);
+
+  io.to(`channel:${channelId}`).emit("channel_updated", { channel_id: channelId });
+
+  res.status(200).json({ success: true, message: "Admin role transferred successfully" });
 });
 
 export const deleteChannel = catchAsync(async (req: Request, res: Response) => {

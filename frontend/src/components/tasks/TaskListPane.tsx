@@ -95,12 +95,12 @@ type Props = {
   onCollapse?: () => void;
 };
 
-function formatTaskDateRange(start?: string, end?: string, isAllDay?: boolean) {
+function formatTaskDateRange(start?: string, end?: string) {
   if (!end) return start ? format(new Date(start), "MMM d") : "\u2014";
   if (!start) return format(new Date(end), "MMM d");
 
   const startDate = new Date(start);
-  const endDate = isAllDay ? subDays(startOfDay(new Date(end)), 1) : new Date(end);
+  const endDate = new Date(end);
 
   if (isSameDay(startDate, endDate)) {
     return format(startDate, "MMM d");
@@ -243,20 +243,30 @@ function SubtaskList({
     <div className="space-y-px">
       {subtasks.map((sub) => {
         const active = sub.id === selectedTaskId;
-        const isDone = sub.status === "done";
+        const isDone = sub.status === "done" || sub.status === "completed";
+        const isDraggable = sub.status !== "done" && sub.status !== "completed";
         const isHighPriority = sub.priority === "high" || sub.priority === "urgent";
 
         return (
           <div
             key={sub.id}
             onClick={() => onSelectTask(sub.id)}
+            data-task-id={sub.id}
+            data-task-title={sub.title}
+            data-task-status={sub.status}
             className={cn(
               "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md transition-colors cursor-pointer group w-full min-w-0",
               active ? "bg-[#EEF2FF] dark:bg-[#1E1B4B]" : "hover:bg-[#F4F4F5] dark:hover:bg-[#18181B]",
-              isDone && "opacity-50"
+              isDone && "opacity-50",
+              isDraggable && "draggable-task-card cursor-grab active:cursor-grabbing"
             )}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
+              {isDraggable ? (
+                <GripVertical className="size-3 text-muted-foreground/0 group-hover:text-muted-foreground/30 shrink-0 cursor-grab active:cursor-grabbing transition-all duration-200 mr-0.5" />
+              ) : (
+                <div className="w-[12px] shrink-0 mr-0.5" />
+              )}
               {/* Status icon */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -315,7 +325,7 @@ function SubtaskList({
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
               {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
               <span className="tabular-nums text-right leading-tight">
-                {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined, (sub as any).is_all_day)}
+                {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined)}
               </span>
             </div>
           </div>
@@ -1234,7 +1244,7 @@ export function TaskListPane({
               "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight w-full",
               isDone && "opacity-40"
             )}>
-              {formatTaskDateRange(t.start_date, t.due_date, t.is_all_day)}
+              {formatTaskDateRange(t.start_date, t.due_date)}
             </span>
 
             {/* Hover Action Menu */}
@@ -2020,11 +2030,9 @@ export function TaskListPane({
                         onClick={() => handleBulkAssign(member.id)}
                       >
                         <div className="size-5 rounded-full bg-muted flex items-center justify-center mr-2 text-[10px] font-medium">
-                          {member.name
-                            ? member.name.charAt(0).toUpperCase()
-                            : member.email.charAt(0).toUpperCase()}
+                          {member.email.split('@')[0].charAt(0).toUpperCase()}
                         </div>
-                        {member.name || member.email}
+                        {member.email.split('@')[0]}
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />

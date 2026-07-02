@@ -3,9 +3,7 @@ import { MeetingRecording } from "./meeting.service";
 import { broadcastMeetingUpdate } from "../socket";
 import { createServiceLogger } from "../lib/logger";
 import { generateTextResponse } from "./ai.service";
-import { createPage } from "./motion-page.service";
-import { markdownToTiptap } from "./notion.service";
-import { taskRepository, organisationRepository, spaceRepository } from "../repositories";
+import { saveMeetingSummaryToMotion } from "./meeting-motion.service";
 
 const log = createServiceLogger("transcription-processor");
 
@@ -49,7 +47,41 @@ export async function processCompletedTranscription(
             }
 
             log.info({ recordingId }, "Generating AI summary for meeting transcript");
-            const prompt = `Please provide a concise, structured summary of the following meeting transcript. Highlight key points, decisions, and action items with clear formatting:\n\n${result.transcriptText}`;
+            const prompt = `Please provide a concise, structured summary of the following meeting transcript.
+
+Format your response using these sections:
+
+## Meeting Summary
+Provide a brief 2–4 sentence overview of the discussion.
+
+## Key Points
+- Summarize the main topics discussed.
+- Include only the most important information.
+- Group related points together where appropriate.
+
+## Decisions Made
+- List all decisions reached during the meeting.
+- If no decisions were made, state "No decisions recorded."
+
+## Action Items
+For each action item, use the following format:
+
+- **Task:** <Describe the action>
+  - **Owner:** <Person responsible or "Not specified">
+  - **Due Date:** <Date or "Not specified">
+  - **Status:** Pending
+
+If no action items are mentioned, state:
+**No action items identified.**
+- If an owner or due date is not specified, write "Not specified."
+
+## Open Questions / Follow-ups
+- List any unresolved questions or items requiring further discussion.
+- If none, state "None."
+
+Keep the summary clear, professional, and concise. Do not add information that is not present in the transcript. Use bullet points where appropriate.
+
+${result.transcriptText}`;
             const aiResult = await generateTextResponse([
                 { role: "user", content: prompt }
             ]);
@@ -60,53 +92,21 @@ export async function processCompletedTranscription(
                 return;
             }
 
-            // Resolve target org_id and space_id
-            let orgId: string | null = null;
-            let spaceId: string | null = null;
-
-            if (updated.meeting_id) {
-                const task = await taskRepository.findById(updated.meeting_id);
-                if (task) {
-                    orgId = task.org_id ?? null;
-                    spaceId = task.space_id ?? null;
-                }
-            }
-
-            if (!orgId || !spaceId) {
-                const orgs = await organisationRepository.findByUserId(userId);
-                if (orgs && orgs.length > 0) {
-                    orgId = orgs[0].id;
-                    const defaultSpace = await spaceRepository.findDefaultSpace(orgId);
-                    if (defaultSpace) {
-                        spaceId = defaultSpace.id;
-                    } else {
-                        const visibleSpaces = await spaceRepository.findVisibleByOrgAndUser(orgId, userId);
-                        if (visibleSpaces && visibleSpaces.length > 0) {
-                            spaceId = visibleSpaces[0].id;
-                        }
-                    }
-                }
-            }
-
-            if (!orgId || !spaceId) {
-                log.warn({ recordingId, userId }, "Could not resolve org_id or space_id for saving meeting summary");
-                return;
-            }
-
-            // Convert markdown to tiptap json
-            const tiptapContent = markdownToTiptap(summaryText);
-
-            // Save the summary as a MotionPage
-            const pageTitle = `Meeting Summary: ${new Date(updated.created_at).toLocaleDateString()}`;
-            await createPage(orgId, spaceId, userId, {
-                title: pageTitle,
-                content: tiptapContent
-            });
-
-            log.info({ recordingId, orgId, spaceId }, "Meeting summary successfully saved to Motion page");
-
-            // Save summary_text to database
+            // Save summary_text to database before creating Motion/Notion pages
             const finalUpdatedWithSummary = await meetingService.updateRecordingSummary(recordingId, summaryText);
+
+            try {
+                const { page, notionExported } = await saveMeetingSummaryToMotion(
+                    finalUpdatedWithSummary,
+                    userId
+                );
+                log.info(
+                    { recordingId, pageId: page.id, notionExported },
+                    "Meeting summary saved to Motion page"
+                );
+            } catch (saveErr) {
+                log.warn({ err: saveErr, recordingId }, "Could not save meeting summary to Motion");
+            }
 
             // Re-broadcast transcription complete with the newly populated summary
             try {

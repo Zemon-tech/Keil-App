@@ -196,14 +196,14 @@ function AssigneesChip({
           <Tooltip key={a.id}>
             <TooltipTrigger asChild>
               <Avatar className="size-5 cursor-default ring-1 ring-background">
-                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.name || a.email} />
+                <AvatarImage src={getOptimizedImageUrl(a.avatar_url || a.avatarUrl, { width: 40, height: 40 })} alt={a.email.split('@')[0]} />
                 <AvatarFallback className="text-[9px] font-semibold bg-accent">
-                  {(a.name || a.email).charAt(0).toUpperCase()}
+                  {a.email.split('@')[0].charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              {a.name || a.email}
+              {a.email.split('@')[0]}
             </TooltipContent>
           </Tooltip>
         ))}
@@ -467,7 +467,7 @@ export function TaskDetailHeader({
         {(task.due_date || task.dueDateISO) && (
           <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[11px]">
             <Calendar className="size-3" />
-            {formatDueDate(task.due_date || task.dueDateISO!, task.is_all_day)}
+            {formatDueDate(task.due_date || task.dueDateISO!)}
           </Badge>
         )}
 

@@ -44,7 +44,7 @@ describe("Org Task Service Unit Tests", () => {
             `INSERT INTO public.space_members (org_id, space_id, user_id, role)
              VALUES ($1, $2, $3, 'member')
              ON CONFLICT (space_id, user_id) DO UPDATE SET role = 'member'`,
-             [orgId, spaceId, memberUserId]
+            [orgId, spaceId, memberUserId]
         );
     });
 
@@ -94,6 +94,144 @@ describe("Org Task Service Unit Tests", () => {
             ).rejects.toThrowError(
                 new ApiError(400, "due_date must be on or after start_date")
             );
+        });
+    });
+
+    // ── Subtask Date Bounds Validation ─────────────────────────────────────────
+    describe("Subtask Date Bounds Validation", () => {
+        it("should throw ApiError when scheduling a subtask outside of parent's dates", async () => {
+            const start = new Date("2026-07-01T10:00:00Z");
+            const due = new Date("2026-07-10T10:00:00Z");
+
+            const parentTask = await orgTaskService.createTask(context, {
+                org_id: orgId,
+                space_id: spaceId,
+                created_by: adminUserId,
+                title: "Parent Task",
+                start_date: start,
+                due_date: due,
+            });
+
+            // Out of bounds: start date before parent start
+            const beforeStart = new Date("2026-06-30T10:00:00Z");
+            await expect(
+                orgTaskService.createTask(context, {
+                    org_id: orgId,
+                    space_id: spaceId,
+                    created_by: adminUserId,
+                    title: "Subtask Before Parent",
+                    parent_task_id: parentTask.id,
+                    start_date: beforeStart,
+                    due_date: due,
+                })
+            ).rejects.toThrowError(
+                new ApiError(400, "Subtask dates are out of bounds of the parent task")
+            );
+
+            // Out of bounds: due date after parent due
+            const afterDue = new Date("2026-07-11T10:00:00Z");
+            await expect(
+                orgTaskService.createTask(context, {
+                    org_id: orgId,
+                    space_id: spaceId,
+                    created_by: adminUserId,
+                    title: "Subtask After Parent",
+                    parent_task_id: parentTask.id,
+                    start_date: start,
+                    due_date: afterDue,
+                })
+            ).rejects.toThrowError(
+                new ApiError(400, "Subtask dates are out of bounds of the parent task")
+            );
+        });
+
+        it("should throw ApiError when scheduling a subtask but parent is not scheduled", async () => {
+            const parentTask = await orgTaskService.createTask(context, {
+                org_id: orgId,
+                space_id: spaceId,
+                created_by: adminUserId,
+                title: "Unscheduled Parent Task",
+            });
+
+            await expect(
+                orgTaskService.createTask(context, {
+                    org_id: orgId,
+                    space_id: spaceId,
+                    created_by: adminUserId,
+                    title: "Subtask",
+                    parent_task_id: parentTask.id,
+                    start_date: new Date("2026-07-01T10:00:00Z"),
+                    due_date: new Date("2026-07-05T10:00:00Z"),
+                })
+            ).rejects.toThrowError(
+                new ApiError(400, "Parent task must be scheduled (have start and due dates) before scheduling subtasks")
+            );
+        });
+
+        it("should throw ApiError when updating a parent task's dates to be narrower than its subtask's dates", async () => {
+            const start = new Date("2026-07-01T10:00:00Z");
+            const due = new Date("2026-07-10T10:00:00Z");
+
+            const parentTask = await orgTaskService.createTask(context, {
+                org_id: orgId,
+                space_id: spaceId,
+                created_by: adminUserId,
+                title: "Parent Task",
+                start_date: start,
+                due_date: due,
+            });
+
+            const subtask = await orgTaskService.createTask(context, {
+                org_id: orgId,
+                space_id: spaceId,
+                created_by: adminUserId,
+                title: "Subtask",
+                parent_task_id: parentTask.id,
+                start_date: new Date("2026-07-02T10:00:00Z"),
+                due_date: new Date("2026-07-09T10:00:00Z"),
+            });
+
+            // Updating parent start to be after subtask start
+            const newStart = new Date("2026-07-03T10:00:00Z");
+            await expect(
+                orgTaskService.updateTask(context, parentTask.id, adminUserId, {
+                    start_date: newStart,
+                })
+            ).rejects.toThrowError(
+                new ApiError(400, `Subtask "${subtask.title}" dates would fall out of bounds of the parent task's new dates`)
+            );
+        });
+
+        it("should align subtask start and due dates/times to parent's exact dates/times if scheduled on the same day", async () => {
+            const start = new Date("2026-07-01T10:00:00Z");
+            const due = new Date("2026-07-01T12:00:00Z");
+
+            const parentTask = await orgTaskService.createTask(context, {
+                org_id: orgId,
+                space_id: spaceId,
+                created_by: adminUserId,
+                title: "Parent Task",
+                start_date: start,
+                due_date: due,
+            });
+
+            // Dragged/scheduled on the same day: Jul 1 at a different time (e.g. 10:30 AM)
+            const sameDayDragStart = new Date("2026-07-01T10:30:00Z");
+            const sameDayDragDue = new Date("2026-07-01T11:30:00Z");
+
+            const subtask = await orgTaskService.createTask(context, {
+                org_id: orgId,
+                space_id: spaceId,
+                created_by: adminUserId,
+                title: "Subtask Same Day",
+                parent_task_id: parentTask.id,
+                start_date: sameDayDragStart,
+                due_date: sameDayDragDue,
+            });
+
+            // The subtask should have aligned start and due dates to match the parent exactly
+            expect(new Date(subtask.start_date!).toISOString()).toBe(start.toISOString());
+            expect(new Date(subtask.due_date!).toISOString()).toBe(due.toISOString());
         });
     });
 

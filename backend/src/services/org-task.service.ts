@@ -16,6 +16,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getS3Client } from "../lib/s3";
 import { config } from "../config";
 import pool from "../config/pg";
+import { broadcastTaskChange } from "../socket";
 
 
 const log = createServiceLogger("gcal");
@@ -177,6 +178,100 @@ const validateDateOrder = (startDate?: Date | null, dueDate?: Date | null): void
   }
 };
 
+const validateSubtaskDates = async (
+  parentTaskId: string,
+  startDate?: Date | null,
+  dueDate?: Date | null,
+  client?: any
+): Promise<{ start_date: Date | null; due_date: Date | null }> => {
+  if (startDate === undefined && dueDate === undefined) return { start_date: null, due_date: null };
+  if (startDate === null && dueDate === null) return { start_date: null, due_date: null };
+
+  const parentTask = await orgTaskRepository.findById(parentTaskId, client);
+  if (!parentTask) {
+    throw new ApiError(404, "Parent task not found");
+  }
+
+  if (!parentTask.start_date || !parentTask.due_date) {
+    throw new ApiError(
+      400,
+      "Parent task must be scheduled (have start and due dates) before scheduling subtasks"
+    );
+  }
+
+  const pStart = new Date(parentTask.start_date);
+  const pDue = new Date(parentTask.due_date);
+
+  const subStart = startDate ? new Date(startDate) : null;
+
+  if (startDate) {
+    const sStart = new Date(startDate);
+    if (sStart < pStart || sStart > pDue) {
+      throw new ApiError(
+        400,
+        "Subtask dates are out of bounds of the parent task"
+      );
+    }
+  }
+
+  if (dueDate) {
+    const sDue = new Date(dueDate);
+    if (sDue < pStart || sDue > pDue) {
+      throw new ApiError(
+        400,
+        "Subtask dates are out of bounds of the parent task"
+      );
+    }
+  }
+
+  return {
+    start_date: startDate ? new Date(startDate) : null,
+    due_date: dueDate ? new Date(dueDate) : null,
+  };
+};
+
+const validateParentDatesForSubtasks = async (
+  parentTaskId: string,
+  newStartDate: Date | null | undefined,
+  newDueDate: Date | null | undefined,
+  client?: any
+): Promise<void> => {
+  const subtasks = await orgTaskRepository.findSubtasks(parentTaskId, client);
+  const scheduledSubtasks = subtasks.filter((s) => s.start_date || s.due_date);
+  if (scheduledSubtasks.length === 0) return;
+
+  if (!newStartDate || !newDueDate) {
+    throw new ApiError(
+      400,
+      "Cannot unschedule parent task while it has scheduled subtasks"
+    );
+  }
+
+  const pStart = new Date(newStartDate);
+  const pDue = new Date(newDueDate);
+
+  for (const sub of scheduledSubtasks) {
+    if (sub.start_date) {
+      const sStart = new Date(sub.start_date);
+      if (sStart < pStart || sStart > pDue) {
+        throw new ApiError(
+          400,
+          `Subtask "${sub.title}" dates would fall out of bounds of the parent task's new dates`
+        );
+      }
+    }
+    if (sub.due_date) {
+      const sDue = new Date(sub.due_date);
+      if (sDue < pStart || sDue > pDue) {
+        throw new ApiError(
+          400,
+          `Subtask "${sub.title}" dates would fall out of bounds of the parent task's new dates`
+        );
+      }
+    }
+  }
+};
+
 const logSpaceActivity = async (
   context: OrgTaskContext,
   userId: string | null,
@@ -250,6 +345,12 @@ export const createTask = async (
   input: CreateOrgTaskInput,
 ): Promise<OrgTaskDTO> => {
   validateDateOrder(input.start_date ?? null, input.due_date ?? null);
+
+  if (input.parent_task_id) {
+    const adjusted = await validateSubtaskDates(input.parent_task_id, input.start_date ?? null, input.due_date ?? null);
+    input.start_date = adjusted.start_date;
+    input.due_date = adjusted.due_date;
+  }
 
   // Separate assignee_ids from the DB columns
   const { assignee_ids, story_points, time_estimate, create_meet_link, ...taskData } = input;
@@ -348,6 +449,7 @@ export const createTask = async (
   if (!signed) {
     throw new ApiError(500, "Failed to sign task attachments");
   }
+  broadcastTaskChange(context.spaceId, { type: "create", task: signed, userId: input.created_by });
   return signed;
 };
 
@@ -367,6 +469,18 @@ export const updateTask = async (
     input.start_date !== undefined ? input.start_date : existingTask.start_date,
     input.due_date !== undefined ? input.due_date : existingTask.due_date,
   );
+
+  if (existingTask.parent_task_id) {
+    const finalStart = input.start_date !== undefined ? input.start_date : existingTask.start_date;
+    const finalDue = input.due_date !== undefined ? input.due_date : existingTask.due_date;
+    const adjusted = await validateSubtaskDates(existingTask.parent_task_id, finalStart, finalDue);
+    input.start_date = adjusted.start_date ?? undefined;
+    input.due_date = adjusted.due_date ?? undefined;
+  } else {
+    const finalStart = input.start_date !== undefined ? input.start_date : existingTask.start_date;
+    const finalDue = input.due_date !== undefined ? input.due_date : existingTask.due_date;
+    await validateParentDatesForSubtasks(taskId, finalStart, finalDue);
+  }
 
   // Auto-generate Google Meet space if requested on update
   if (input.create_meet_link && !existingTask.meet_link) {
@@ -421,7 +535,7 @@ export const updateTask = async (
       // Trigger task_status_changed outbox job
       const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
       const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
-      
+
       if (assigneeIds.length > 0) {
         const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
         const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
@@ -503,7 +617,11 @@ export const updateTask = async (
     }).catch(err => log.error({ err }, 'Org task update sync failed'));
   }
 
-  return result ? signTaskContextAttachments(toDTO(result)) : null;
+  const signed = result ? await signTaskContextAttachments(toDTO(result)) : null;
+  if (signed) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: signed, userId });
+  }
+  return signed;
 };
 
 export const changeTaskStatus = async (
@@ -567,7 +685,7 @@ export const changeTaskStatus = async (
     // Trigger task_status_changed outbox job
     const assigneesRes = await client.query('SELECT user_id FROM public.task_assignees WHERE task_id = $1', [taskId]);
     const assigneeIds = assigneesRes.rows.map((r: any) => r.user_id as string);
-    
+
     if (assigneeIds.length > 0) {
       const senderRes = await client.query('SELECT name, email FROM public.users WHERE id = $1', [userId]);
       const senderName = senderRes.rows[0]?.name || senderRes.rows[0]?.email || 'Someone';
@@ -595,7 +713,11 @@ export const changeTaskStatus = async (
     return updated;
   });
 
-  return result ? toDTO(result) : null;
+  const dto = result ? toDTO(result) : null;
+  if (dto) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: dto, userId });
+  }
+  return dto;
 };
 
 export const deleteTask = async (
@@ -629,6 +751,8 @@ export const deleteTask = async (
       client,
     );
   });
+
+  broadcastTaskChange(context.spaceId, { type: "delete", taskId, userId });
 };
 
 export const assignUser = async (
@@ -676,6 +800,11 @@ export const assignUser = async (
       );
     }
   });
+
+  const updatedTask = await getTaskById(taskId);
+  if (updatedTask) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: updatedTask, userId });
+  }
 };
 
 export const unassignUser = async (
@@ -697,6 +826,11 @@ export const unassignUser = async (
       client,
     );
   });
+
+  const updatedTask = await getTaskById(taskId);
+  if (updatedTask) {
+    broadcastTaskChange(context.spaceId, { type: "update", taskId, task: updatedTask, userId });
+  }
 };
 
 export const addDependency = async (
@@ -910,6 +1044,16 @@ export const createSlot = async (
   userId: string,
   input: { start_date: Date; due_date: Date; is_all_day?: boolean; checklist_id?: string | null; notes?: string }
 ): Promise<TaskSlot> => {
+  const initialTask = await orgTaskRepository.findById(taskId);
+  if (!initialTask) {
+    throw new ApiError(404, "Task not found");
+  }
+  if (initialTask.parent_task_id) {
+    const adjusted = await validateSubtaskDates(initialTask.parent_task_id, input.start_date, input.due_date);
+    if (adjusted.start_date) input.start_date = adjusted.start_date;
+    if (adjusted.due_date) input.due_date = adjusted.due_date;
+  }
+
   await pool.query(
     `UPDATE public.tasks 
      SET start_date = $1, due_date = $2, is_all_day = $3, updated_at = NOW() 
@@ -962,6 +1106,23 @@ export const updateSlot = async (
   spaceRole: string,
   updates: { start_date?: Date; due_date?: Date; is_all_day?: boolean; notes?: string; status?: string }
 ): Promise<TaskSlot | null> => {
+  const existingSlotRes = await pool.query(
+    `SELECT task_id, start_date, due_date FROM public.task_slots WHERE id = $1`,
+    [slotId]
+  );
+  const existingSlot = existingSlotRes.rows[0];
+  if (!existingSlot) {
+    return null;
+  }
+
+  const initialTask = await orgTaskRepository.findById(existingSlot.task_id);
+  if (initialTask && initialTask.parent_task_id) {
+    const finalStart = updates.start_date !== undefined ? updates.start_date : new Date(existingSlot.start_date);
+    const finalDue = updates.due_date !== undefined ? updates.due_date : new Date(existingSlot.due_date);
+    const adjusted = await validateSubtaskDates(initialTask.parent_task_id, finalStart, finalDue);
+    updates.start_date = adjusted.start_date ?? undefined;
+    updates.due_date = adjusted.due_date ?? undefined;
+  }
   const fields: string[] = [];
   const params: any[] = [slotId];
 

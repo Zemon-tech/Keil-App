@@ -3,6 +3,7 @@ import { protect } from "../middlewares/auth.middleware";
 import {
     getMe,
     completeOnboarding,
+    updateProfile,
     searchUsers,
     getUserSessions,
     revokeUserSession,
@@ -18,6 +19,13 @@ const router = Router();
  * @access  Private (Requires Supabase JWT)
  */
 router.get("/me", protect, getMe);
+
+/**
+ * @desc    Update user profile name/avatar
+ * @route   PATCH /api/users/profile
+ * @access  Private
+ */
+router.patch("/profile", protect, updateProfile);
 
 /**
  * @desc    Complete user onboarding and mark in DB

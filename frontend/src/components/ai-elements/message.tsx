@@ -38,24 +38,29 @@ import { Streamdown } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
+  isError?: boolean;
 };
 
-export const Message = ({ className, from, ...props }: MessageProps) => (
+export const Message = ({ className, from, isError, ...props }: MessageProps) => (
   <div
     className={cn(
       "group flex w-full max-w-full flex-col gap-2",
       from === "user" ? "is-user ml-auto justify-end items-end" : "is-assistant",
+      isError && "is-error",
       className,
     )}
     {...props}
   />
 );
 
-export type MessageContentProps = HTMLAttributes<HTMLDivElement>;
+export type MessageContentProps = HTMLAttributes<HTMLDivElement> & {
+  isError?: boolean;
+};
 
 export const MessageContent = ({
   children,
   className,
+  isError,
   ...props
 }: MessageContentProps) => (
   <div

@@ -49,8 +49,6 @@ import {
   ListTodo,
   Bell,
   Plug,
-  Code2,
-  Building2,
   LogOut,
   ChevronRight,
   ChevronUp,
@@ -150,9 +148,7 @@ const handleCopyToClipboard = async (text: string, label: string) => {
 // ─── Settings Tabs ───────────────────────────────────────────────────
 type AccountTab =
   | "account"
-  | "preferences"
   | "personalization"
-  | "assistant"
   | "shortcuts"
   | "tasks"
   | "notifications"
@@ -160,7 +156,7 @@ type AccountTab =
   | "sessions"
   | "billing";
 
-type WorkspaceTab = "org-general" | "org-members" | "org-spaces" | "api" | "enterprise";
+type WorkspaceTab = "org-general" | "org-members" | "org-spaces";
 
 export type SettingsTab = AccountTab | WorkspaceTab;
 
@@ -178,9 +174,7 @@ interface WorkspaceNavItem {
 
 const accountNavItems: AccountNavItem[] = [
   { id: "account", label: "Account", icon: User },
-  { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
   { id: "personalization", label: "Personalization", icon: Sparkles },
-  { id: "assistant", label: "Assistant", icon: Bot },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -193,8 +187,6 @@ const workspaceNavItems: WorkspaceNavItem[] = [
   { id: "org-general", label: "General", icon: Settings },
   { id: "org-members", label: "Members", icon: User },
   { id: "org-spaces", label: "Spaces", icon: Layers },
-  { id: "api", label: "API", icon: Code2 },
-  { id: "enterprise", label: "Enterprise", icon: Building2 },
 ];
 
 // ─── Tab Content Components ──────────────────────────────────────────
@@ -1097,10 +1089,23 @@ function AccountTab() {
     setLoading(true);
     setError(null);
     try {
+      // 1. Update Supabase metadata for local auth context
       const { error } = await supabase.auth.updateUser({
         data: { full_name: newName.trim() },
       });
       if (error) throw error;
+
+      // 2. Call backend to update database and broadcast changes to other users
+      await api.patch("users/profile", { name: newName.trim() });
+
+      // 3. Immediately invalidate local queries so current user sees updates instantly
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      await queryClient.invalidateQueries({ queryKey: ["orgs"] });
+      await queryClient.invalidateQueries({ queryKey: ["spaces"] });
+      await queryClient.invalidateQueries({ queryKey: ["chat"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["org-tasks"] });
+
       setSuccess("Name updated successfully");
       setIsEditingName(false);
     } catch (err: any) {
@@ -1182,10 +1187,16 @@ function AccountTab() {
       });
       if (metaError) throw metaError;
 
+      // Call backend to update database and broadcast changes to other users
+      await api.patch("users/profile", { avatar_url: publicUrl });
+
       // Invalidate queries to reload updated profile info
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      await queryClient.invalidateQueries({ queryKey: ["organisations"] });
+      await queryClient.invalidateQueries({ queryKey: ["orgs"] });
+      await queryClient.invalidateQueries({ queryKey: ["spaces"] });
       await queryClient.invalidateQueries({ queryKey: ["chat"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["org-tasks"] });
 
       setSuccess("Avatar updated successfully");
     } catch (err: any) {
@@ -1611,8 +1622,187 @@ function AccountTab() {
   );
 }
 
-function PreferencesTab() {
+
+function CalendarPreferenceSection() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateDeleteSlots = useUpdateDeleteSlotsOnComplete();
+
+  const deleteSlotsOnComplete = prefs?.delete_slots_on_complete || false;
+
+  const handleToggle = (checked: boolean) => {
+    updateDeleteSlots.mutate(checked, {
+      onSuccess: () => {
+        toast.success(
+          checked
+            ? "Calendar slots will be deleted when task is completed"
+            : "Calendar slots will be kept when task is completed"
+        );
+      },
+      onError: () => {
+        toast.error("Failed to update calendar preference");
+      },
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading calendar preference...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <CalendarDays className="size-4 text-muted-foreground" />
+        Calendar Slots
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose how calendar slots behave when tasks are completed.
+      </p>
+      <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+        <div>
+          <p className="text-xs font-semibold text-foreground">
+            Delete Slots on Completion
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+            Automatically delete calendar slots associated with a task when it is marked completed.
+          </p>
+        </div>
+        <Switch
+          checked={deleteSlotsOnComplete}
+          onCheckedChange={handleToggle}
+          disabled={updateDeleteSlots.isPending}
+        />
+      </div>
+    </div>
+  );
+}
+
+const STT_PROVIDERS: Array<{
+  id: SttProvider;
+  name: string;
+  badge?: string;
+  description: string;
+  features: string[];
+}> = [
+    {
+      id: "sarvam",
+      name: "Sarvam AI",
+      badge: "Recommended",
+      description: "Saaras v3 — purpose-built for Indian languages and English.",
+      features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
+    },
+    {
+      id: "elevenlabs",
+      name: "ElevenLabs",
+      description: "Scribe v2 — broad language support with word-level detail.",
+      features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
+    },
+  ];
+
+function SttProviderSelector() {
+  const { data: prefs, isLoading } = usePreferences();
+  const updateProvider = useUpdateSttProvider();
+
+  const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
+
+  const handleProviderChange = (provider: SttProvider) => {
+    if (provider === currentProvider || updateProvider.isPending) return;
+    const label = STT_PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
+    updateProvider.mutate(provider, {
+      onSuccess: () => toast.success(`Speech-to-text provider changed to ${label}`),
+      onError: () => toast.error("Failed to update STT provider"),
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Loading preferences...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <Mic className="size-4 text-muted-foreground" />
+        Speech-to-Text Provider
+      </h3>
+      <p className="text-xs text-muted-foreground mt-1 mb-4">
+        Choose which AI service transcribes your meeting recordings.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {STT_PROVIDERS.map((provider) => {
+          const isActive = currentProvider === provider.id;
+          return (
+            <button
+              key={provider.id}
+              onClick={() => handleProviderChange(provider.id)}
+              disabled={updateProvider.isPending}
+              className={cn(
+                "flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
+                isActive
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+                updateProvider.isPending && "opacity-60 cursor-not-allowed",
+              )}
+            >
+              {/* Header row */}
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">{provider.name}</span>
+                  {provider.badge && (
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
+                      {provider.badge}
+                    </span>
+                  )}
+                </div>
+                {isActive && (
+                  updateProvider.isPending
+                    ? <Loader2 className="size-4 animate-spin text-primary" />
+                    : <Check className="size-4 text-primary shrink-0" />
+                )}
+              </div>
+
+              {/* Description */}
+              <span className="text-[11px] text-muted-foreground leading-tight">
+                {provider.description}
+              </span>
+
+              {/* Feature pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {provider.features.map((f) => (
+                  <span
+                    key={f}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const BACKGROUNDS = [
+  { id: "none", name: "None", url: "" },
+  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
+  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
+  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
+];
+
+function PersonalizationTab() {
   const { theme, setTheme } = useTheme();
+  const showLocalAISettings = import.meta.env.VITE_ENABLE_LOCAL_AI_SETTINGS === 'true';
   const [chatView, setChatView] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("default_chat_view") || "sidebar";
@@ -1668,12 +1858,76 @@ function PreferencesTab() {
     window.dispatchEvent(new Event("calendar_day_headers_preference_changed"));
   };
 
+  const [dashboardBackground, setDashboardBackground] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dashboard_background") || "open-garden";
+    }
+    return "open-garden";
+  });
+
+  const handleBackgroundChange = (val: string) => {
+    setDashboardBackground(val);
+    localStorage.setItem("dashboard_background", val);
+    window.dispatchEvent(new Event("dashboard_background_changed"));
+  };
+
+  const [localUrl, setLocalUrl] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
+    }
+    return "http://localhost:8080/v1";
+  });
+
+  const [localModel, setLocalModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("local_ai_model") || "gemma-4";
+    }
+    return "gemma-4";
+  });
+
+  const handleUrlChange = (val: string) => {
+    setLocalUrl(val);
+    localStorage.setItem("local_ai_base_url", val);
+  };
+
+  const handleModelChange = (val: string) => {
+    setLocalModel(val);
+    localStorage.setItem("local_ai_model", val);
+  };
+
+  const [openRouterModel, setOpenRouterModel] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini";
+    }
+    return "openai/gpt-4o-mini";
+  });
+
+  const handleOpenRouterModelChange = (val: string) => {
+    setOpenRouterModel(val);
+    localStorage.setItem("openrouter_model", val);
+  };
+
+  const [modelSelection, setModelSelection] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("ai_model_selection") || "gemini";
+    }
+    return "gemini";
+  });
+
+  const handleGlobalModelChange = (val: string) => {
+    setModelSelection(val);
+    localStorage.setItem("ai_model_selection", val);
+    window.dispatchEvent(new Event("ai_model_selection_changed"));
+  };
+
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Preferences</h2>
+        <h2 className="text-lg font-semibold text-foreground">
+          Personalization
+        </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Customize how KeilHQ works for you.
+          Customize your KeilHQ experience.
         </p>
       </div>
 
@@ -1983,290 +2237,10 @@ function PreferencesTab() {
 
       {/* Speech-to-Text Provider */}
       <SttProviderSelector />
-    </div>
-  );
-}
-
-function CalendarPreferenceSection() {
-  const { data: prefs, isLoading } = usePreferences();
-  const updateDeleteSlots = useUpdateDeleteSlotsOnComplete();
-
-  const deleteSlotsOnComplete = prefs?.delete_slots_on_complete || false;
-
-  const handleToggle = (checked: boolean) => {
-    updateDeleteSlots.mutate(checked, {
-      onSuccess: () => {
-        toast.success(
-          checked
-            ? "Calendar slots will be deleted when task is completed"
-            : "Calendar slots will be kept when task is completed"
-        );
-      },
-      onError: () => {
-        toast.error("Failed to update calendar preference");
-      },
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 py-2">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Loading calendar preference...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <CalendarDays className="size-4 text-muted-foreground" />
-        Calendar Slots
-      </h3>
-      <p className="text-xs text-muted-foreground mt-1 mb-4">
-        Choose how calendar slots behave when tasks are completed.
-      </p>
-      <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
-        <div>
-          <p className="text-xs font-semibold text-foreground">
-            Delete Slots on Completion
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-            Automatically delete calendar slots associated with a task when it is marked completed.
-          </p>
-        </div>
-        <Switch
-          checked={deleteSlotsOnComplete}
-          onCheckedChange={handleToggle}
-          disabled={updateDeleteSlots.isPending}
-        />
-      </div>
-    </div>
-  );
-}
-
-const STT_PROVIDERS: Array<{
-  id: SttProvider;
-  name: string;
-  badge?: string;
-  description: string;
-  features: string[];
-}> = [
-    {
-      id: "sarvam",
-      name: "Sarvam AI",
-      badge: "Recommended",
-      description: "Saaras v3 — purpose-built for Indian languages and English.",
-      features: ["23 Indian languages", "Speaker diarization", "Auto language detection", "Up to 2h audio"],
-    },
-    {
-      id: "elevenlabs",
-      name: "ElevenLabs",
-      description: "Scribe v2 — broad language support with word-level detail.",
-      features: ["90+ languages", "Word-level timestamps", "Fast processing", "Speaker diarization"],
-    },
-  ];
-
-function SttProviderSelector() {
-  const { data: prefs, isLoading } = usePreferences();
-  const updateProvider = useUpdateSttProvider();
-
-  const currentProvider: SttProvider = prefs?.stt_provider || "sarvam";
-
-  const handleProviderChange = (provider: SttProvider) => {
-    if (provider === currentProvider || updateProvider.isPending) return;
-    const label = STT_PROVIDERS.find((p) => p.id === provider)?.name ?? provider;
-    updateProvider.mutate(provider, {
-      onSuccess: () => toast.success(`Speech-to-text provider changed to ${label}`),
-      onError: () => toast.error("Failed to update STT provider"),
-    });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 py-2">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Loading preferences...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-        <Mic className="size-4 text-muted-foreground" />
-        Speech-to-Text Provider
-      </h3>
-      <p className="text-xs text-muted-foreground mt-1 mb-4">
-        Choose which AI service transcribes your meeting recordings.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {STT_PROVIDERS.map((provider) => {
-          const isActive = currentProvider === provider.id;
-          return (
-            <button
-              key={provider.id}
-              onClick={() => handleProviderChange(provider.id)}
-              disabled={updateProvider.isPending}
-              className={cn(
-                "flex flex-col items-start gap-3 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer text-left",
-                isActive
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
-                updateProvider.isPending && "opacity-60 cursor-not-allowed",
-              )}
-            >
-              {/* Header row */}
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">{provider.name}</span>
-                  {provider.badge && (
-                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-primary/10 text-primary">
-                      {provider.badge}
-                    </span>
-                  )}
-                </div>
-                {isActive && (
-                  updateProvider.isPending
-                    ? <Loader2 className="size-4 animate-spin text-primary" />
-                    : <Check className="size-4 text-primary shrink-0" />
-                )}
-              </div>
-
-              {/* Description */}
-              <span className="text-[11px] text-muted-foreground leading-tight">
-                {provider.description}
-              </span>
-
-              {/* Feature pills */}
-              <div className="flex flex-wrap gap-1.5">
-                {provider.features.map((f) => (
-                  <span
-                    key={f}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50"
-                  >
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const BACKGROUNDS = [
-  { id: "none", name: "None", url: "" },
-  { id: "lib-gate", name: "Library Gate", url: "/backgrounds/lib-gate.png" },
-  { id: "mountain-garden", name: "Mountain Garden", url: "/backgrounds/mountain-garden.jpg" },
-  { id: "open-garden", name: "Open Garden", url: "/backgrounds/open-garden.png" }
-];
-
-function PersonalizationTab() {
-  const [dashboardBackground, setDashboardBackground] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("dashboard_background") || "open-garden";
-    }
-    return "open-garden";
-  });
-
-  const handleBackgroundChange = (val: string) => {
-    setDashboardBackground(val);
-    localStorage.setItem("dashboard_background", val);
-    window.dispatchEvent(new Event("dashboard_background_changed"));
-  };
-
-  const [localUrl, setLocalUrl] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("local_ai_base_url") || "http://localhost:8080/v1";
-    }
-    return "http://localhost:8080/v1";
-  });
-
-  const [localModel, setLocalModel] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("local_ai_model") || "gemma-4";
-    }
-    return "gemma-4";
-  });
-
-  const handleUrlChange = (val: string) => {
-    setLocalUrl(val);
-    localStorage.setItem("local_ai_base_url", val);
-  };
-
-  const handleModelChange = (val: string) => {
-    setLocalModel(val);
-    localStorage.setItem("local_ai_model", val);
-  };
-
-  const [openRouterModel, setOpenRouterModel] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("openrouter_model") || "openai/gpt-4o-mini";
-    }
-    return "openai/gpt-4o-mini";
-  });
-
-  const handleOpenRouterModelChange = (val: string) => {
-    setOpenRouterModel(val);
-    localStorage.setItem("openrouter_model", val);
-  };
-
-  const [modelSelection, setModelSelection] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("ai_model_selection") || "gemini";
-    }
-    return "gemini";
-  });
-
-  const handleGlobalModelChange = (val: string) => {
-    setModelSelection(val);
-    localStorage.setItem("ai_model_selection", val);
-    window.dispatchEvent(new Event("ai_model_selection_changed"));
-  };
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">
-          Personalization
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Tell KeilHQ about yourself for a better experience.
-        </p>
-      </div>
 
       <Separator />
 
-      <div>
-        <Label htmlFor="role" className="text-sm font-medium">
-          Your Role
-        </Label>
-        <Input
-          id="role"
-          placeholder="e.g., Product Manager, Developer"
-          className="mt-2 rounded-lg"
-        />
-        <p className="text-xs text-muted-foreground mt-1.5">
-          This helps tailor the dashboard to your needs.
-        </p>
-      </div>
-
-      <div>
-        <Label htmlFor="team" className="text-sm font-medium">
-          Team / Department
-        </Label>
-        <Input
-          id="team"
-          placeholder="e.g., Engineering, Design"
-          className="mt-2 rounded-lg"
-        />
-      </div>
-
-      <Separator />
-
+      {/* Dashboard Background */}
       <div className="space-y-4">
         <div>
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -2330,113 +2304,118 @@ function PersonalizationTab() {
 
       <Separator />
 
-      {/* Model Selection section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Bot className="size-4 text-muted-foreground" />
-          Default AI Model
-        </h3>
+      {showLocalAISettings && (
+        <>
+          {/* Model Selection section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Bot className="size-4 text-muted-foreground" />
+              Default AI Model
+            </h3>
 
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Model Selection
-            </Label>
-            <Select value={modelSelection} onValueChange={handleGlobalModelChange}>
-              <SelectTrigger className="w-full mt-2 rounded-lg">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gemini">Gemini 3.5 Flash (Default)</SelectItem>
-                <SelectItem value="github-models">GitHub Models</SelectItem>
-                <SelectItem value="openrouter">OpenRouter AI</SelectItem>
-                <SelectItem value="local">Local LLM</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Choose the default model to use for AI responses.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* OpenRouter AI Configuration Section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Globe className="size-4 text-muted-foreground" />
-          OpenRouter Model Configuration
-        </h3>
-
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              OpenRouter Model
-            </Label>
-            <Select value={openRouterModel} onValueChange={handleOpenRouterModelChange}>
-              <SelectTrigger className="w-full mt-2 rounded-lg">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
-                <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
-                <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
-                <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Select which OpenRouter model to query when OpenRouter AI is selected.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Local AI Configuration Section */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <SlidersHorizontal className="size-4 text-muted-foreground" />
-          Local AI Model Integration
-        </h3>
-
-        <div className="space-y-3 pt-1">
-          <div>
-            <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Local AI Connection URL
-            </Label>
-            <Input
-              id="local_ai_url"
-              value={localUrl}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              placeholder="e.g., http://localhost:8080/v1"
-              className="mt-2 rounded-lg font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              The OpenAI-compatible endpoint URL of your locally running LLM (e.g. llama.cpp or Ollama).
-            </p>
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Model Selection
+                </Label>
+                <Select value={modelSelection} onValueChange={handleGlobalModelChange}>
+                  <SelectTrigger className="w-full mt-2 rounded-lg">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini 3.5 Flash (Default)</SelectItem>
+                    <SelectItem value="github-models">GitHub Models</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter AI</SelectItem>
+                    <SelectItem value="local">Local LLM</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Choose the default model to use for AI responses.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="local_ai_model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Local Model Identifier
-            </Label>
-            <Input
-              id="local_ai_model"
-              value={localModel}
-              onChange={(e) => handleModelChange(e.target.value)}
-              placeholder="e.g., gemma-4, llama3"
-              className="mt-2 rounded-lg font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              The exact name or identifier of the local model currently loaded in your server.
-            </p>
-          </div>
-        </div>
-      </div>
+          <Separator />
 
-      <Separator />
+          {/* OpenRouter AI Configuration Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Globe className="size-4 text-muted-foreground" />
+              OpenRouter Model Configuration
+            </h3>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  OpenRouter Model
+                </Label>
+                <Select value={openRouterModel} onValueChange={handleOpenRouterModelChange}>
+                  <SelectTrigger className="w-full mt-2 rounded-lg">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai/gpt-4o-mini">OpenAI GPT-4o Mini (openai/gpt-4o-mini)</SelectItem>
+                    <SelectItem value="google/gemini-2.5-flash-lite">Google Gemini 2.5 Flash Lite (google/gemini-2.5-flash-lite)</SelectItem>
+                    <SelectItem value="google/gemma-4-31b-it">Google Gemma 4 31B IT (google/gemma-4-31b-it)</SelectItem>
+                    <SelectItem value="z-ai/glm-4.7-flash">Z-AI GLM-4.7 Flash (z-ai/glm-4.7-flash)</SelectItem>
+                    <SelectItem value="qwen/qwen3.5-flash-02-23">Qwen 3.5 Flash 02-23 (qwen/qwen3.5-flash-02-23)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Select which OpenRouter model to query when OpenRouter AI is selected.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Local AI Configuration Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <SlidersHorizontal className="size-4 text-muted-foreground" />
+              Local AI Model Integration
+            </h3>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <Label htmlFor="local_ai_url" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Local AI Connection URL
+                </Label>
+                <Input
+                  id="local_ai_url"
+                  value={localUrl}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  placeholder="e.g., http://localhost:8080/v1"
+                  className="mt-2 rounded-lg font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  The OpenAI-compatible endpoint URL of your locally running LLM (e.g. llama.cpp or Ollama).
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="local_ai_model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Local Model Identifier
+                </Label>
+                <Input
+                  id="local_ai_model"
+                  value={localModel}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  placeholder="e.g., gemma-4, llama3"
+                  className="mt-2 rounded-lg font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  The exact name or identifier of the local model currently loaded in your server.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+        </>
+      )}
 
       <div className="flex items-center justify-between">
         <div>
@@ -2463,56 +2442,6 @@ function PersonalizationTab() {
   );
 }
 
-function AssistantTab() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Assistant</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure your AI assistant preferences.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">AI Assistant</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Get intelligent help across all features
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Auto-complete</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Suggest completions as you type
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Context Awareness
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Allow the assistant to understand your current context
-          </p>
-        </div>
-        <Switch defaultChecked />
-      </div>
-    </div>
-  );
-}
 
 function ShortcutsTab() {
   const isMac = typeof navigator !== "undefined" && /mac/i.test(navigator.platform);
@@ -3233,67 +3162,270 @@ function ConnectorsTab() {
   const [manualNotionToken, setManualNotionToken] = useState("");
   const [manualNotionWorkspace, setManualNotionWorkspace] = useState("");
 
-  // Google suite services — connected status inherits from Google Calendar OAuth
-  const googleSuiteServices = [
+  interface Connector {
+    id: string;
+    name: string;
+    description: string;
+    activeDescription: string;
+    logo?: string;
+    icon?: React.ComponentType<{ className?: string }>;
+    connected: boolean;
+    isLoading: boolean;
+    comingSoon?: boolean;
+    customActions?: React.ReactNode;
+    extraContent?: React.ReactNode;
+  }
+
+  const connectorList: Connector[] = [
     {
+      id: "google-calendar",
+      name: "Google Calendar",
+      description: "Connect to enable Calendar sync and all Google services",
+      activeDescription: "Scheduled tasks sync automatically · Authorises all Google services below",
+      logo: "/integrations/gcalendar.png",
+      connected: !!gcalStatus?.connected,
+      isLoading: gcalLoading,
+      customActions: gcalStatus?.connected ? (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-lg gap-1.5"
+            disabled={isSyncing}
+            onClick={handleManualSync}
+          >
+            <RefreshCw className={cn("size-3.5 text-muted-foreground", isSyncing && "animate-spin")} />
+            Sync Now
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-lg"
+            disabled={disconnectGcal.isPending}
+            onClick={() => disconnectGcal.mutate()}
+          >
+            {disconnectGcal.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Disconnect"}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="default"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={gcalLoading}
+          onClick={connectGcal}
+        >
+          {gcalLoading ? <Loader2 className="size-3.5 animate-spin" /> : "Connect"}
+        </Button>
+      )
+    },
+    {
+      id: "gmail",
       name: "Google Mail",
       description: "Sync contacts and import task items from emails",
-      logo: "/integrations/gmail.png",
       activeDescription: "Email contacts and task imports are available",
+      logo: "/integrations/gmail.png",
+      connected: !!gcalStatus?.connected,
+      isLoading: gcalLoading,
     },
     {
+      id: "gmeet",
       name: "Google Meet",
       description: "Schedule and join video calls directly from events",
-      logo: "/integrations/gmeet.png",
       activeDescription: "Video call links auto-generated on events",
+      logo: "/integrations/gmeet.png",
+      connected: !!gcalStatus?.connected,
+      isLoading: gcalLoading,
     },
     {
+      id: "gdrive",
       name: "Google Drive",
       description: "Browse and reference workspace files from your chats",
-      logo: "/integrations/gdrive.png",
       activeDescription: "Drive files accessible across your workspace",
+      logo: "/integrations/gdrive.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
     {
+      id: "gdocs",
       name: "Google Docs",
       description: "Create, view, and sync document content inline",
-      logo: "/integrations/gdocs.png",
       activeDescription: "Docs can be linked and previewed in tasks",
+      logo: "/integrations/gdocs.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
     {
+      id: "gsheets",
       name: "Google Sheets",
       description: "Link spreadsheet metrics and tables directly",
-      logo: "/integrations/gsheets.png",
       activeDescription: "Sheets data available for task context",
+      logo: "/integrations/gsheets.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
     {
+      id: "gslides",
       name: "Google Slides",
       description: "Embed presentations and presentation details",
-      logo: "/integrations/gslides.png",
       activeDescription: "Presentations can be linked to events",
-    },
-  ];
-
-  const staticConnectors = [
-    {
-      name: "Linear",
-      description: "Sync project issues and engineering tasks automatically",
-      logo: "/integrations/linear.jpeg",
+      logo: "/integrations/gslides.png",
+      connected: false,
+      isLoading: false,
+      comingSoon: true,
     },
     {
-      name: "Jira",
-      description: "Connect Jira boards to track enterprise team progress",
-      logo: "/integrations/atlassianjira.png",
+      id: "notion",
+      name: "Notion",
+      description: "Import Notion pages, export pages, and sync content bidirectionally",
+      activeDescription: `Connected to workspace: ${notionStatus?.workspace_name || "Notion Workspace"}`,
+      logo: "/integrations/Notion-logo.svg",
+      connected: !!notionStatus?.connected,
+      isLoading: notionLoading,
+      customActions: notionStatus?.connected ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={disconnectNotion.isPending}
+          onClick={() => disconnectNotion.mutate()}
+        >
+          {disconnectNotion.isPending ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            "Disconnect"
+          )}
+        </Button>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs rounded-lg"
+            onClick={() => setShowManualNotion(!showManualNotion)}
+          >
+            {showManualNotion ? "Cancel" : "Use Token"}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="text-xs rounded-lg"
+            disabled={notionLoading}
+            onClick={connectNotion}
+          >
+            {notionLoading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              "Connect"
+            )}
+          </Button>
+        </div>
+      ),
+      extraContent: !notionStatus?.connected && showManualNotion && (
+        <div className="px-4 pb-4 pt-2 border-t border-border/50 bg-muted/20 space-y-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-foreground">Connect via Notion Internal Integration Token</p>
+            <p className="text-[11px] text-muted-foreground leading-normal">
+              Create an Internal Integration in your Notion Workspace, copy the token (starts with <code className="text-xs font-mono bg-muted/80 px-1 rounded">secret_</code>), and share the target Notion pages with your Integration.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="notion-token" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Integration Token (secret_...)
+              </Label>
+              <Input
+                id="notion-token"
+                type="password"
+                placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={manualNotionToken}
+                onChange={(e) => setManualNotionToken(e.target.value)}
+                className="h-9 text-xs rounded-lg bg-background"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="notion-workspace" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Workspace Name (Optional)
+              </Label>
+              <Input
+                id="notion-workspace"
+                type="text"
+                placeholder="My Notion Workspace"
+                value={manualNotionWorkspace}
+                onChange={(e) => setManualNotionWorkspace(e.target.value)}
+                className="h-9 text-xs rounded-lg bg-background"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="text-xs rounded-lg px-4 h-9 shadow-md shadow-primary/10"
+              disabled={!manualNotionToken.trim() || connectNotionManual.isPending}
+              onClick={() => {
+                connectNotionManual.mutate(
+                  { token: manualNotionToken.trim(), workspaceName: manualNotionWorkspace.trim() || undefined },
+                  {
+                    onSuccess: () => {
+                      setManualNotionToken("");
+                      setManualNotionWorkspace("");
+                      setShowManualNotion(false);
+                    }
+                  }
+                );
+              }}
+            >
+              {connectNotionManual.isPending ? (
+                <Loader2 className="size-3.5 animate-spin mr-1.5" />
+              ) : null}
+              Link Account
+            </Button>
+          </div>
+        </div>
+      )
     },
     {
-      name: "Slack",
-      description: "Send instant notifications and feed updates to Slack channels",
-      logo: "/integrations/slack.png",
-    },
-    {
-      name: "ChronicleHQ",
-      description: "Create premium looking PPTs using Ai",
-      logo: "/integrations/chroniclehq.jpeg",
-    },
+      id: "github",
+      name: "GitHub",
+      description: "Link your GitHub account to read issues & PRs",
+      activeDescription: "Repository issues and PRs connected",
+      icon: Github,
+      connected: !!githubStatus?.connected,
+      isLoading: githubLoading,
+      customActions: githubStatus?.connected ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={disconnectGithub.isPending}
+          onClick={() => disconnectGithub.mutate()}
+        >
+          {disconnectGithub.isPending ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            "Disconnect"
+          )}
+        </Button>
+      ) : (
+        <Button
+          variant="default"
+          size="sm"
+          className="text-xs rounded-lg"
+          disabled={githubLoading}
+          onClick={connectGithub}
+        >
+          {githubLoading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            "Connect"
+          )}
+        </Button>
+      )
+    }
   ];
 
   return (
@@ -3308,461 +3440,88 @@ function ConnectorsTab() {
       <Separator />
 
       <div className="space-y-6">
-      {/* ── Google Suite ── */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-3">
-          <img src="/integrations/google.png" alt="Google" className="size-4 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Google Suite</p>
-          {gcalStatus?.connected && (
-            <span className="text-[10px] font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-              Connected
-            </span>
-          )}
-        </div>
-
-        {/* Google Calendar — primary OAuth connector */}
-        <div className={cn(
-          "flex items-center justify-between p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors",
-          gcalStatus?.connected ? "border-emerald-500/30 bg-emerald-500/5" : "border-border",
-        )}>
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-              <img src="/integrations/gcalendar.png" alt="Google Calendar" className="size-6 object-contain" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Google Calendar</p>
-                {gcalLoading ? (
-                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                ) : gcalStatus?.connected ? (
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-500">
-                    <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                    Active
-                  </span>
-                ) : (
-                  <span className="size-2 rounded-full bg-muted-foreground/40 inline-block" />
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {gcalStatus?.connected
-                  ? "Scheduled tasks sync automatically · Authorises all Google services below"
-                  : "Connect to enable Calendar sync and all Google services"}
-              </p>
-            </div>
-          </div>
-          {gcalStatus?.connected ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs rounded-lg gap-1.5"
-                disabled={isSyncing}
-                onClick={handleManualSync}
-              >
-                <RefreshCw className={cn("size-3.5 text-muted-foreground", isSyncing && "animate-spin")} />
-                Sync Now
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs rounded-lg"
-                disabled={disconnectGcal.isPending}
-                onClick={() => disconnectGcal.mutate()}
-              >
-                {disconnectGcal.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Disconnect"}
-              </Button>
-            </div>
-          ) : (
-            <Button
-              variant="default"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled={gcalLoading}
-              onClick={connectGcal}
-            >
-              {gcalLoading ? <Loader2 className="size-3.5 animate-spin" /> : "Connect"}
-            </Button>
-          )}
-        </div>
-
-        {/* Google sub-services — status inherits from Calendar OAuth */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-0">
-          {googleSuiteServices.map((svc) => (
+        <div className="space-y-4">
+          {connectorList.map((connector) => (
             <div
-              key={svc.name}
+              key={connector.id}
               className={cn(
-                "flex items-center justify-between p-3.5 rounded-xl border transition-colors",
-                gcalStatus?.connected
-                  ? "border-emerald-500/20 bg-emerald-500/5"
-                  : "border-border/60 bg-card opacity-60",
+                "rounded-xl border bg-card transition-colors overflow-hidden",
+                connector.connected
+                  ? "border-emerald-500/30 bg-emerald-500/5"
+                  : "border-border hover:bg-muted/10"
               )}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="size-8 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-                  <img src={svc.logo} alt={svc.name} className="size-5 object-contain" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-medium text-foreground truncate">{svc.name}</p>
-                    {gcalStatus?.connected && (
-                      <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    )}
+              <div className="flex items-center justify-between p-4 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
+                    {connector.icon ? (
+                      <connector.icon className="size-5 text-foreground" />
+                    ) : connector.logo ? (
+                      <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
+                    ) : null}
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 line-clamp-1">
-                    {gcalStatus?.connected ? svc.activeDescription : svc.description}
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">
+                        {connector.name}
+                      </p>
+                      {connector.isLoading ? (
+                        <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                      ) : connector.connected ? (
+                        connector.id === "google-calendar" ? (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-500">
+                            <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-block size-2 rounded-full bg-emerald-500" />
+                        )
+                      ) : (
+                        <span className="inline-block size-2 rounded-full bg-muted-foreground/40" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {connector.connected ? connector.activeDescription : connector.description}
+                    </p>
+                  </div>
                 </div>
+
+                {connector.customActions ? (
+                  connector.customActions
+                ) : connector.comingSoon ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-lg"
+                    disabled
+                  >
+                    Coming Soon
+                  </Button>
+                ) : connector.connected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-lg"
+                    disabled
+                  >
+                    Connected
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs rounded-lg"
+                    disabled
+                  >
+                    Disconnected
+                  </Button>
+                )}
               </div>
-              <span className={cn(
-                "text-[10px] font-semibold shrink-0 ml-2 px-2 py-0.5 rounded-full border",
-                gcalStatus?.connected
-                  ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
-                  : "text-muted-foreground/50 bg-muted/30 border-border/40",
-              )}>
-                {gcalStatus?.connected ? "Connected" : "Pending"}
-              </span>
+
+              {connector.extraContent && connector.extraContent}
             </div>
           ))}
         </div>
-      </div>
-
-      {/* ── Other Integrations ── */}
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Other Integrations</p>
-
-        {/* Notion — live integration */}
-        <div className={cn(
-          "rounded-xl border border-border bg-card transition-colors overflow-hidden",
-          notionStatus?.connected ? "border-emerald-500/30 bg-emerald-500/5" : ""
-        )}>
-          <div className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors">
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20 overflow-hidden">
-                <img src="/integrations/Notion-logo.svg" alt="Notion" className="size-6 object-contain" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">
-                    Notion
-                  </p>
-                  {!notionLoading && (
-                    <span
-                      className={cn(
-                        "inline-block size-2 rounded-full",
-                        notionStatus?.connected
-                          ? "bg-emerald-500"
-                          : "bg-muted-foreground/40",
-                      )}
-                    />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {notionStatus?.connected
-                    ? `Connected to workspace: ${notionStatus.workspace_name || "Notion Workspace"}`
-                    : "Import Notion pages, export pages, and sync content bidirectionally"}
-                </p>
-              </div>
-            </div>
-            {notionStatus?.connected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs rounded-lg"
-                disabled={disconnectNotion.isPending}
-                onClick={() => disconnectNotion.mutate()}
-              >
-                {disconnectNotion.isPending ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  "Disconnect"
-                )}
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs rounded-lg"
-                  onClick={() => setShowManualNotion(!showManualNotion)}
-                >
-                  {showManualNotion ? "Cancel" : "Use Token"}
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="text-xs rounded-lg"
-                  disabled={notionLoading}
-                  onClick={connectNotion}
-                >
-                  {notionLoading ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    "Connect"
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Manual Token connection form */}
-          {!notionStatus?.connected && showManualNotion && (
-            <div className="px-4 pb-4 pt-2 border-t border-border/50 bg-muted/20 space-y-4 animate-in slide-in-from-top-2 duration-200">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-foreground">Connect via Notion Internal Integration Token</p>
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  Create an Internal Integration in your Notion Workspace, copy the token (starts with <code className="text-xs font-mono bg-muted/80 px-1 rounded">secret_</code>), and share the target Notion pages with your Integration.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="notion-token" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Integration Token (secret_...)
-                  </Label>
-                  <Input
-                    id="notion-token"
-                    type="password"
-                    placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    value={manualNotionToken}
-                    onChange={(e) => setManualNotionToken(e.target.value)}
-                    className="h-9 text-xs rounded-lg bg-background"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="notion-workspace" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Workspace Name (Optional)
-                  </Label>
-                  <Input
-                    id="notion-workspace"
-                    type="text"
-                    placeholder="My Notion Workspace"
-                    value={manualNotionWorkspace}
-                    onChange={(e) => setManualNotionWorkspace(e.target.value)}
-                    className="h-9 text-xs rounded-lg bg-background"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="text-xs rounded-lg px-4 h-9 shadow-md shadow-primary/10"
-                  disabled={!manualNotionToken.trim() || connectNotionManual.isPending}
-                  onClick={() => {
-                    connectNotionManual.mutate(
-                      { token: manualNotionToken.trim(), workspaceName: manualNotionWorkspace.trim() || undefined },
-                      {
-                        onSuccess: () => {
-                          setManualNotionToken("");
-                          setManualNotionWorkspace("");
-                          setShowManualNotion(false);
-                        }
-                      }
-                    );
-                  }}
-                >
-                  {connectNotionManual.isPending ? (
-                    <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                  ) : null}
-                  Link Account
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* GitHub — live integration */}
-        <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border/20">
-              <Github className="size-5 text-foreground" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">
-                  GitHub
-                </p>
-                {!githubLoading && (
-                  <span
-                    className={cn(
-                      "inline-block size-2 rounded-full",
-                      githubStatus?.connected
-                        ? "bg-emerald-500"
-                        : "bg-muted-foreground/40",
-                    )}
-                  />
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {githubStatus?.connected
-                  ? "Repository issues and PRs connected"
-                  : "Link your GitHub account to read issues & PRs"}
-              </p>
-            </div>
-          </div>
-          {githubStatus?.connected ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled={disconnectGithub.isPending}
-              onClick={() => disconnectGithub.mutate()}
-            >
-              {disconnectGithub.isPending ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                "Disconnect"
-              )}
-            </Button>
-          ) : (
-            <Button
-              variant="default"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled={githubLoading}
-              onClick={connectGithub}
-            >
-              {githubLoading ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                "Connect"
-              )}
-            </Button>
-          )}
-        </div>
-
-        {/* Other static placeholder connectors */}
-        {staticConnectors.map((connector, i) => (
-          <div
-            key={`static-${i}`}
-            className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/20">
-                <img src={connector.logo} alt={connector.name} className="size-6 object-contain" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {connector.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {connector.description}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg"
-              disabled
-            >
-              Coming soon
-            </Button>
-          </div>
-        ))}
-      </div>
-      </div>
-    </div>
-  );
-}
-
-function ApiTab() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">API</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage API keys and integrations.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="p-4 rounded-xl border border-border bg-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-foreground">API Key</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Your secret API key for programmatic access
-            </p>
-          </div>
-          <Button variant="outline" size="sm" className="text-xs rounded-lg">
-            Generate new key
-          </Button>
-        </div>
-        <div className="mt-4">
-          <div className="flex items-center gap-2">
-            <Input
-              value="sk-••••••••••••••••••••••••"
-              readOnly
-              className="font-mono text-xs rounded-lg bg-muted/50"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs rounded-lg shrink-0"
-            >
-              Copy
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Webhook URL</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Receive real-time event notifications
-          </p>
-        </div>
-        <Button variant="outline" size="sm" className="text-xs rounded-lg">
-          Configure
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function EnterpriseTab() {
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Enterprise</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Enterprise features and team management.
-        </p>
-      </div>
-
-      <Separator />
-
-      <div className="p-6 rounded-xl border border-border bg-gradient-to-br from-muted/30 to-muted/10 text-center">
-        <Building2 className="size-10 text-muted-foreground mx-auto mb-3" />
-        <h3 className="text-sm font-semibold text-foreground">
-          Upgrade to Enterprise
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1.5 max-w-sm mx-auto">
-          Get access to SSO, advanced analytics, audit logs, and priority
-          support.
-        </p>
-        <Button size="sm" className="mt-4 rounded-lg text-xs">
-          Contact Sales
-        </Button>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">Team Members</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Manage who has access to your organisation
-          </p>
-        </div>
-        <Button variant="outline" size="sm" className="text-xs rounded-lg">
-          Manage team
-          <ChevronRight className="size-3 ml-1" />
-        </Button>
       </div>
     </div>
   );
@@ -4225,7 +3984,7 @@ function BillingTab() {
                 {orgCheckout.isPending ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <Building2 className="size-3.5" />
+                  <Layers className="size-3.5" />
                 )}
                 Upgrade to Teams ($50/user/mo)
               </Button>
@@ -4298,9 +4057,7 @@ function BillingTab() {
 // ─── Tab Content Map ─────────────────────────────────────────────────
 const accountTabContent: Record<AccountTab, React.FC> = {
   account: AccountTab,
-  preferences: PreferencesTab,
   personalization: PersonalizationTab,
-  assistant: AssistantTab,
   shortcuts: ShortcutsTab,
   tasks: TasksTab,
   notifications: NotificationsTab,
@@ -4313,8 +4070,6 @@ const workspaceTabContent: Record<WorkspaceTab, React.FC> = {
   "org-general": OrgGeneralTab,
   "org-members": OrgMembersTab,
   "org-spaces": OrgSpacesTab,
-  api: ApiTab,
-  enterprise: EnterpriseTab,
 };
 
 // ─── Main Settings Dialog ────────────────────────────────────────────
@@ -4474,7 +4229,7 @@ export function SettingsDialog({
                     onClick={() => setMode("workspace")}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted/60"
                   >
-                    <Building2 className="size-4 shrink-0" />
+                    <Layers className="size-4 shrink-0" />
                     Organisation
                   </button>
                 </div>

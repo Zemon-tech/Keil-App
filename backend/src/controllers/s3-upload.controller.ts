@@ -194,4 +194,36 @@ export const getAiChatImageUploadUrl = catchAsync(async (req: Request, res: Resp
     }
 });
 
+/**
+ * Controller to proxy image fetch from S3 to avoid CORS issues.
+ */
+export const proxyImage = catchAsync(async (req: Request, res: Response) => {
+    const { s3Key } = req.query;
+    if (!s3Key || typeof s3Key !== 'string') {
+        throw new ApiError(400, "S3 key is required");
+    }
 
+    try {
+        const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+        const { getS3Client } = await import("../lib/s3");
+        const { config } = await import("../config");
+
+        const command = new GetObjectCommand({
+            Bucket: config.awsS3BucketName,
+            Key: s3Key,
+        });
+
+        const s3Client = getS3Client();
+        const response = await s3Client.send(command);
+        
+        const buffer = Buffer.from(await response.Body?.transformToByteArray() || []);
+        const contentType = response.ContentType || 'image/jpeg';
+        
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.send(buffer);
+    } catch (err: any) {
+        log.error({ err, s3Key }, "Error proxying image from S3");
+        throw new ApiError(500, "Failed to proxy image from S3");
+    }
+});

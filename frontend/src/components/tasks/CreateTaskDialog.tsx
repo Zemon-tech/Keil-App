@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { format, addDays, subDays, nextMonday, startOfToday, startOfDay, parseISO } from "date-fns";
+import { format, addDays, nextMonday, startOfToday, startOfDay, parseISO } from "date-fns";
 import {
   CalendarIcon,
   Flag,
@@ -240,11 +240,33 @@ export function CreateTaskDialog({
   const { data: orgTasks = [] } = useOrgTasks(selectedOrgId, selectedSpaceId);
   const { data: pages = [] } = useMotionPages(selectedOrgId, selectedSpaceId);
 
+  const parentTask = useMemo(() => {
+    const parentId = parentTaskId || initialValues?.parent_task_id;
+    if (!parentId) return undefined;
+    return orgTasks.find((t) => t.id === parentId);
+  }, [parentTaskId, initialValues?.parent_task_id, orgTasks]);
+
+  const calendarDisabledDays = useMemo(() => {
+    if (!parentTask) return undefined;
+
+    return (day: Date) => {
+      if (!parentTask.start_date || !parentTask.due_date) {
+        return true;
+      }
+
+      const pStart = startOfDay(new Date(parentTask.start_date));
+      const pDue = startOfDay(new Date(parentTask.due_date));
+      const dDay = startOfDay(day);
+
+      return dDay < pStart || dDay > pDue;
+    };
+  }, [parentTask]);
+
   const resolvedUsers = useMemo<SimpleAssigneeOption[]>(() => {
     if (allUsers && allUsers.length > 0) return allUsers;
     return spaceMembers.map(m => ({
       id: m.user_id,
-      name: m.name || m.email,
+      name: m.email.split('@')[0],
       avatarUrl: m.avatar_url || m.avatarUrl || undefined,
     }));
   }, [allUsers, spaceMembers]);
@@ -390,7 +412,7 @@ export function CreateTaskDialog({
 
     // Detect Assignees (simple @ match)
     resolvedUsers.forEach(user => {
-      if (lowerTitle.includes(`@${user.name.toLowerCase().replace(/\s/g, "")}`)) {
+      if (lowerTitle.includes(`@${user.name.toLowerCase()}`)) {
         if (!assigneeIds.includes(user.id)) {
           setAssigneeIds(prev => [...prev, user.id]);
         }
@@ -444,11 +466,9 @@ export function CreateTaskDialog({
 
       const start = (initialValues as any).start_date;
       const end = (initialValues as any).due_date;
-      const loadedIsAllDay = initialValues.is_all_day ?? true;
       if (start) setDate(parseISO(start));
       if (end) {
-        const parsedEnd = parseISO(end);
-        setEndDate(loadedIsAllDay ? subDays(startOfDay(parsedEnd), 1) : parsedEnd);
+        setEndDate(parseISO(end));
       }
 
       setStoryPoints(initialValues.story_points || undefined);
@@ -491,6 +511,38 @@ export function CreateTaskDialog({
     e?.preventDefault();
     if (!title.trim()) return;
 
+    if (parentTask && (date || endDate)) {
+      if (!parentTask.start_date || !parentTask.due_date) {
+        toast.error("Parent task is not scheduled", {
+          description: "Parent task must have start and due dates before scheduling subtasks.",
+        });
+        return;
+      }
+
+      const pStart = new Date(parentTask.start_date);
+      const pDue = new Date(parentTask.due_date);
+
+      if (date) {
+        const sStart = isAllDay ? startOfDay(date) : date;
+        if (sStart < pStart || sStart > pDue) {
+          toast.error("Subtask start date is out of bounds", {
+            description: "Subtask must be scheduled between the start and due date of the parent task.",
+          });
+          return;
+        }
+      }
+
+      if (endDate) {
+        const sEnd = isAllDay ? startOfDay(addDays(endDate, 1)) : endDate;
+        if (sEnd < pStart || sEnd > pDue) {
+          toast.error("Subtask end date is out of bounds", {
+            description: "Subtask must be scheduled between the start and due date of the parent task.",
+          });
+          return;
+        }
+      }
+    }
+
     if (mode === "create" && date) {
       const now = new Date();
       if (isAllDay) {
@@ -516,7 +568,7 @@ export function CreateTaskDialog({
 
     const computedDueDate = (() => {
       if (isAllDay && endDate) {
-        return startOfDay(addDays(endDate, 1)).toISOString();
+        return startOfDay(endDate).toISOString();
       }
       return endDate?.toISOString() || (type === 'task' ? date?.toISOString() : undefined);
     })();
@@ -538,6 +590,7 @@ export function CreateTaskDialog({
       location: type === "event" ? location.trim() || undefined : undefined,
       start_date: isAllDay && date ? startOfDay(date).toISOString() : date?.toISOString(),
       due_date: computedDueDate,
+      is_all_day: isAllDay,
       assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
       status: status as any,
       parent_task_id: parentTaskId,
@@ -857,6 +910,7 @@ export function CreateTaskDialog({
                   <PopoverClose ref={dateCloseRef} className="hidden" />
                   <Calendar
                     mode="range"
+                    disabled={calendarDisabledDays}
                     selected={
                       isDragging && dragStart && dragEnd
                         ? getOrderedRange(dragStart, dragEnd)

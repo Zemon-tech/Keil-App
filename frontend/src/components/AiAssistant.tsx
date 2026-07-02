@@ -565,7 +565,10 @@ export function AiAssistant() {
         }),
     }), [threadId, userId, modelSelection, activeOrgId, activeSpaceId, pageContext]);
 
-    const { messages, sendMessage, status, setMessages } = useChat({ transport });
+    const { messages, sendMessage, status, setMessages } = useChat({
+        id: threadId,
+        transport,
+    });
 
     // Track the highest chunk index we've received so the resume hook
     // knows where to start fetching from after a reconnect.
@@ -696,6 +699,11 @@ export function AiAssistant() {
         setMessages([]);
         setShowThreadList(false);
     }, [setMessages]);
+
+    // Start a new chat session automatically when switching workspaces
+    useEffect(() => {
+        handleNewChat();
+    }, [activeOrgId, activeSpaceId, handleNewChat]);
 
     const mapMastraMessageToFrontend = useCallback((msg: any) => {
         let text = "";

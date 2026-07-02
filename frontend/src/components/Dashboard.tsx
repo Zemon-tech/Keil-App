@@ -8,6 +8,7 @@ import { HistorySidebar } from "./dashboard/HistorySidebar";
 import { useOrgDashboard } from "@/hooks/api/useDashboard";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppContext } from "@/contexts/AppContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import {
   SquarePen,
   History,
@@ -216,7 +217,7 @@ const getToolDescription = (toolName: string, _args: any, result: any) => {
   if (result?.activity?.details) {
     return result.activity.details;
   }
-  if (!result) return "";
+  if (!result) return "Running...";
 
   if (result.success === false || result.error) {
     return `Error: ${result.error || result.message || "Failed to execute"}`;
@@ -265,6 +266,8 @@ const getToolDescription = (toolName: string, _args: any, result: any) => {
       return `Found ${result.contributors?.length || 0} contributor(s)`;
     case "create_github_issue_from_task":
       return `Created issue successfully`;
+    default:
+      return "Completed tool execution";
   }
 };
 
@@ -275,83 +278,286 @@ const formatToolResult = (toolName: string, result: any) => {
     return `Error: ${result.error || result.message || "Failed to execute"}`;
   }
 
-  if (toolName === "auto_schedule_tasks") {
-    const lines = [];
-    if (result.message) lines.push(result.message);
-    if (Array.isArray(result.scheduledTasks) && result.scheduledTasks.length > 0) {
-      lines.push("\nScheduled Tasks:");
-      result.scheduledTasks.forEach((t: any) => {
-        if (!t.error) {
-          lines.push(`- ${t.title}: ${new Date(t.start_date).toLocaleString()} to ${new Date(t.due_date).toLocaleString()}`);
-        } else {
-          lines.push(`- ${t.title}: Error (${t.error})`);
-        }
+  // Helper to format date
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "None";
+    try {
+      return new Date(dateStr).toLocaleString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
       });
+    } catch {
+      return dateStr;
     }
-    if (Array.isArray(result.unscheduledTasks) && result.unscheduledTasks.length > 0) {
-      lines.push("\nCould not schedule (calendar full):");
-      result.unscheduledTasks.forEach((t: any) => {
-        lines.push(`- ${t.title} (Priority: ${t.priority || "Medium"})`);
-      });
+  };
+
+  switch (toolName) {
+    case "resolve_workspace": {
+      if (!result.workspaces || result.workspaces.length === 0) return "No workspaces resolved.";
+      return `Resolved Workspaces:\n` + result.workspaces.map((w: any) => 
+        `- Org: ${w.orgName || w.orgId} | Space: ${w.spaceName || w.spaceId} (Role: ${w.role || "Member"})`
+      ).join("\n");
     }
-    return lines.join("\n");
+
+    case "list_tasks":
+    case "search_tasks":
+    case "get_unscheduled_tasks": {
+      const tasks = result.tasks || [];
+      if (tasks.length === 0) return "No matching tasks found.";
+      return `Tasks Retrieved (${tasks.length}):\n` + tasks.map((t: any) => 
+        `- [${t.status || "TODO"}] ${t.title} (Priority: ${t.priority || "Medium"}${t.due_date ? `, Due: ${formatDate(t.due_date)}` : ""})`
+      ).join("\n");
+    }
+
+    case "get_task": {
+      if (!result.task) return "No task found.";
+      const t = result.task;
+      return `Task Details:
+• Title: ${t.title}
+• Status: ${t.status || "TODO"}
+• Priority: ${t.priority || "Medium"}
+• Due Date: ${formatDate(t.due_date)}
+• Start Date: ${formatDate(t.start_date)}
+• Description: ${t.description || "No description provided."}
+${t.objectives ? `• Objectives: ${t.objectives}` : ""}
+${t.criteria ? `• Criteria: ${t.criteria}` : ""}`;
+    }
+
+    case "create_task": {
+      if (!result.task) return "Task creation succeeded.";
+      const t = result.task;
+      return `Task Created:
+• ID: ${t.id}
+• Title: ${t.title}
+• Status: ${t.status || "TODO"}
+• Priority: ${t.priority || "Medium"}
+• Due Date: ${formatDate(t.due_date)}`;
+    }
+
+    case "update_task": {
+      if (!result.task) return "Task updated successfully.";
+      const t = result.task;
+      return `Task Updated:
+• Title: ${t.title}
+• Status: ${t.status || "TODO"}
+• Priority: ${t.priority || "Medium"}
+• Due Date: ${formatDate(t.due_date)}`;
+    }
+
+    case "delete_task":
+      return "Task deleted successfully.";
+
+    case "auto_schedule_tasks": {
+      const lines = [];
+      if (result.message) lines.push(result.message);
+      if (Array.isArray(result.scheduledTasks) && result.scheduledTasks.length > 0) {
+        lines.push("\nScheduled Tasks:");
+        result.scheduledTasks.forEach((t: any) => {
+          if (!t.error) {
+            lines.push(`- ${t.title}: ${formatDate(t.start_date)} to ${formatDate(t.due_date)}`);
+          } else {
+            lines.push(`- ${t.title}: Failed (${t.error})`);
+          }
+        });
+      }
+      if (Array.isArray(result.unscheduledTasks) && result.unscheduledTasks.length > 0) {
+        lines.push("\nCould not schedule (calendar full):");
+        result.unscheduledTasks.forEach((t: any) => {
+          lines.push(`- ${t.title} (Priority: ${t.priority || "Medium"})`);
+        });
+      }
+      return lines.join("\n");
+    }
+
+    case "get_calendar_events": {
+      const events = result.events || [];
+      if (events.length === 0) return "No calendar events found.";
+      return `Calendar Events:\n` + events.map((e: any) => 
+        `- ${e.title} (${formatDate(e.start_date)} to ${formatDate(e.due_date)})`
+      ).join("\n");
+    }
+
+    case "get_user_channels": {
+      const channels = result.channels || [];
+      if (channels.length === 0) return "No chat channels found.";
+      return `Channels list:\n` + channels.map((c: any) => 
+        `- #${c.name} ${c.unread_count ? `(${c.unread_count} unread)` : ""}`
+      ).join("\n");
+    }
+
+    case "get_channel_messages": {
+      const messages = result.messages || [];
+      if (messages.length === 0) return "No messages in this channel.";
+      return `Recent Channel Messages:\n` + messages.map((m: any) => 
+        `- [${m.user_id ? m.user_id.substring(0, 8) : "User"}] at ${formatDate(m.created_at)}:\n  "${m.content}"`
+      ).join("\n");
+    }
+
+    case "list_motion_pages":
+    case "search_motion_pages": {
+      const pages = result.pages || [];
+      if (pages.length === 0) return "No motion pages found.";
+      return `Pages:\n` + pages.map((p: any) => 
+        `- ${p.title} (ID: ${p.id})`
+      ).join("\n");
+    }
+
+    case "get_motion_page": {
+      if (!result.page) return "No page content retrieved.";
+      return `Page: ${result.page.title} (ID: ${result.page.id})\n\n` + (result.markdown || result.page.content || "No text content.");
+    }
+
+    case "create_motion_page": {
+      if (!result.page) return "Motion page created successfully.";
+      const p = result.page;
+      return `Motion Page Created:\n• Title: ${p.title}\n• ID: ${p.id}\n• Parent ID: ${p.parent_id || "None"}`;
+    }
+
+    case "update_motion_page": {
+      if (!result.page) return "Motion page updated successfully.";
+      const p = result.page;
+      return `Motion Page Updated:\n• Title: ${p.title}\n• ID: ${p.id}`;
+    }
+
+    case "web_search_exa": {
+      const results = result.results || [];
+      if (results.length === 0) return "No web search results found.";
+      return `Web Search Results:\n` + results.map((r: any) => 
+        `• [${r.title || "Link"}](${r.url})\n  ${r.snippet || r.text || ""}`
+      ).join("\n\n");
+    }
+
+    case "list_github_issues": {
+      const issues = result.issues || [];
+      if (issues.length === 0) return "No open GitHub issues found.";
+      return `GitHub Issues:\n` + issues.map((i: any) => 
+        `- #${i.number}: ${i.title} (${i.state}) - ${i.html_url || ""}`
+      ).join("\n");
+    }
+
+    case "get_github_issue": {
+      if (!result.issue) return "No GitHub issue found.";
+      const i = result.issue;
+      return `GitHub Issue #${i.number}: ${i.title}\nState: ${i.state}\nLink: ${i.html_url}\n\n${i.body || "No description provided."}`;
+    }
+
+    case "list_github_prs": {
+      const prs = result.prs || [];
+      if (prs.length === 0) return "No pull requests found.";
+      return `GitHub Pull Requests:\n` + prs.map((p: any) => 
+        `- #${p.number}: ${p.title} (${p.state}) by ${p.user?.login || "unknown"} - ${p.html_url || ""}`
+      ).join("\n");
+    }
+
+    case "list_github_contributors": {
+      const contributors = result.contributors || [];
+      if (contributors.length === 0) return "No GitHub contributors found.";
+      return `GitHub Contributors:\n` + contributors.map((c: any) => 
+        `- ${c.login} (${c.contributions} contributions)`
+      ).join("\n");
+    }
+
+    case "create_github_issue_from_task": {
+      if (!result.issue) return "Failed to create GitHub issue.";
+      const i = result.issue;
+      return `GitHub Issue Created:\n• Issue #${i.number}: ${i.title}\n• URL: ${i.html_url}`;
+    }
+
+    default: {
+      // Fallback: pretty print the JSON, but limit length
+      const jsonStr = JSON.stringify(result, null, 2);
+      if (jsonStr.length > 500) {
+        return jsonStr.substring(0, 500) + "\n... (truncated)";
+      }
+      return jsonStr;
+    }
+  }
+};
+
+const getCollapsedOneLiner = (timeline: any[], isAgentRunning: boolean) => {
+  if (timeline.length === 0) {
+    return isAgentRunning ? "KeilHQ AI is initializing..." : "No actions taken";
   }
 
-  // Handle tasks lists
-  if (Array.isArray(result.tasks)) {
-    if (result.tasks.length === 0) return "No tasks found.";
-    return result.tasks.map((t: any) => `- [${t.status || "TODO"}] ${t.title} (Priority: ${t.priority || "Medium"})`).join("\n");
+  // If the agent is running, find the active step (usually the last one or the one with status === "active")
+  if (isAgentRunning) {
+    const activeItem = timeline.find(t => t.status === "active") || timeline[timeline.length - 1];
+    if (!activeItem) return "KeilHQ AI is processing...";
+
+    if (activeItem.type === "thinking") {
+      return "KeilHQ AI is thinking...";
+    }
+
+    // It's an activity/tool call
+    let agentName = activeItem.agent;
+    if (!agentName && activeItem.tool) {
+      if (activeItem.tool.includes("task") || activeItem.tool.includes("org") || activeItem.tool.includes("workspace")) {
+        agentName = "Task Manager";
+      } else if (activeItem.tool.includes("chat") || activeItem.tool.includes("message") || activeItem.tool.includes("channel")) {
+        agentName = "Chat";
+      } else if (activeItem.tool.includes("motion") || activeItem.tool.includes("page") || activeItem.tool.includes("note")) {
+        agentName = "Notes";
+      } else if (activeItem.tool.includes("schedule") || activeItem.tool.includes("calendar")) {
+        agentName = "Scheduler";
+      } else if (activeItem.tool.includes("github")) {
+        agentName = "GitHub";
+      } else {
+        agentName = "KeilHQ AI";
+      }
+    }
+    if (!agentName) agentName = "KeilHQ AI";
+    if (agentName === "keilhq-task-agent") agentName = "Task Manager";
+    if (agentName === "keilhq-chat-agent") agentName = "Chat";
+    if (agentName === "keilhq-motion-agent") agentName = "Notes";
+    if (agentName === "keilhq-scheduler-agent") agentName = "Scheduler";
+    if (agentName === "keilhq-github-agent") agentName = "GitHub";
+    if (agentName === "keilhq-ai") agentName = "KeilHQ AI";
+
+    const toolLabel = getToolLabel(activeItem.tool || "", activeItem.args, activeItem.result) || activeItem.action || `running ${activeItem.tool}`;
+    const actionText = toolLabel.charAt(0).toLowerCase() + toolLabel.slice(1);
+    
+    return `${agentName} is ${actionText}...`;
   }
 
-  // Handle single task result
-  if (result.task) {
-    const t = result.task;
-    return `Task Details:
-- Title: ${t.title}
-- Status: ${t.status || "TODO"}
-- Priority: ${t.priority || "Medium"}
-- Due: ${t.due_date || "None"}`;
+  // If the agent is done, summarize the last action or say they completed execution
+  const lastItem = timeline[timeline.length - 1];
+  if (!lastItem) return "Process completed";
+
+  if (lastItem.type === "thinking") {
+    return "KeilHQ AI finished thinking";
   }
 
-  // Handle events lists
-  if (Array.isArray(result.events)) {
-    if (result.events.length === 0) return "No events found.";
-    return result.events.map((e: any) => `- ${e.title} (${e.start_date || ""} to ${e.due_date || ""})`).join("\n");
+  let agentName = lastItem.agent;
+  if (!agentName && lastItem.tool) {
+    if (lastItem.tool.includes("task") || lastItem.tool.includes("org") || lastItem.tool.includes("workspace")) {
+      agentName = "Task Manager";
+    } else if (lastItem.tool.includes("chat") || lastItem.tool.includes("message") || lastItem.tool.includes("channel")) {
+      agentName = "Chat";
+    } else if (lastItem.tool.includes("motion") || lastItem.tool.includes("page") || lastItem.tool.includes("note")) {
+      agentName = "Notes";
+    } else if (lastItem.tool.includes("schedule") || lastItem.tool.includes("calendar")) {
+      agentName = "Scheduler";
+    } else if (lastItem.tool.includes("github")) {
+      agentName = "GitHub";
+    } else {
+      agentName = "KeilHQ AI";
+    }
   }
+  if (!agentName) agentName = "KeilHQ AI";
+  if (agentName === "keilhq-task-agent") agentName = "Task Manager";
+  if (agentName === "keilhq-chat-agent") agentName = "Chat";
+  if (agentName === "keilhq-motion-agent") agentName = "Notes";
+  if (agentName === "keilhq-scheduler-agent") agentName = "Scheduler";
+  if (agentName === "keilhq-github-agent") agentName = "GitHub";
+  if (agentName === "keilhq-ai") agentName = "KeilHQ AI";
 
-  // Handle channels lists
-  if (Array.isArray(result.channels)) {
-    if (result.channels.length === 0) return "No channels found.";
-    return result.channels.map((c: any) => `# ${c.name} (ID: ${c.id})`).join("\n");
-  }
+  const toolLabel = getToolLabel(lastItem.tool || "", lastItem.args, lastItem.result) || lastItem.action || `running ${lastItem.tool}`;
+  const actionText = toolLabel.charAt(0).toLowerCase() + toolLabel.slice(1);
 
-  // Handle messages lists
-  if (Array.isArray(result.messages)) {
-    if (result.messages.length === 0) return "No messages found.";
-    return result.messages.map((m: any) => `[${m.user_id?.substring(0, 8) || "User"}]: ${m.content}`).join("\n");
-  }
-
-  // Handle motion pages list
-  if (Array.isArray(result.pages)) {
-    if (result.pages.length === 0) return "No pages found.";
-    return result.pages.map((p: any) => `- ${p.title} (ID: ${p.id})`).join("\n");
-  }
-
-  // Handle single motion page result
-  if (result.page) {
-    return `Page: ${result.page.title} (ID: ${result.page.id})\n\n${result.markdown || result.page.content || ""}`;
-  }
-
-  if (result.markdown) {
-    return result.markdown;
-  }
-
-  // Fallback: pretty print the JSON, but limit length
-  const jsonStr = JSON.stringify(result, null, 2);
-  if (jsonStr.length > 500) {
-    return jsonStr.substring(0, 500) + "\n... (truncated)";
-  }
-  return jsonStr;
+  return `${agentName} completed ${actionText}`;
 };
 
 const BACKGROUNDS = [
@@ -376,6 +582,7 @@ export function Dashboard() {
 
   // ── Dashboard Data ─────────────────────────────────────────
   const { activeOrgId, activeSpaceId } = useAppContext();
+  const { limits, usage } = useSubscription();
 
   // ── Org/space-scoped dashboard ──────────
   const {
@@ -386,7 +593,7 @@ export function Dashboard() {
 
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("dashboard_expanded") === "true";
+      return sessionStorage.getItem("dashboard_expanded") === "true";
     }
     return false;
   });
@@ -394,7 +601,7 @@ export function Dashboard() {
   const handleToggleDashboard = useCallback(() => {
     setIsDashboardExpanded((prev) => {
       const next = !prev;
-      localStorage.setItem("dashboard_expanded", String(next));
+      sessionStorage.setItem("dashboard_expanded", String(next));
       return next;
     });
   }, []);
@@ -488,6 +695,64 @@ export function Dashboard() {
             },
           };
         },
+        fetch: async (url, options) => {
+          const parseErrorMessage = (raw: string): string => {
+            try {
+              const parsed = JSON.parse(raw);
+              return parsed.message || raw;
+            } catch {
+              return raw;
+            }
+          };
+
+          try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+              let serverErrorMsg = "";
+              try {
+                const data = await response.json();
+                serverErrorMsg = data.message || data.error || "";
+              } catch (e) {
+                // Ignore JSON parse failure
+              }
+
+              if (serverErrorMsg) {
+                throw new Error(serverErrorMsg);
+              }
+
+              // Fallbacks for different HTTP statuses
+              if (response.status === 402) {
+                throw new Error("Billing limit reached or insufficient credits. Please check your AI model provider account details or credit balance.");
+              } else if (response.status === 429) {
+                throw new Error("We've hit an AI service rate limit. Please wait a moment before trying again.");
+              } else if (response.status >= 500) {
+                throw new Error("The AI server is currently busy or under heavy load. Please try again in a few moments.");
+              } else {
+                throw new Error(`An error occurred (HTTP ${response.status}). Please try again.`);
+              }
+            }
+            return response;
+          } catch (err: any) {
+            // Re-throw if it's already an error we created with custom message
+            if (err instanceof Error && (
+              err.message.includes("limit") || 
+              err.message.includes("busy") || 
+              err.message.includes("exceeded") || 
+              err.message.includes("load") || 
+              err.message.includes("credits") || 
+              err.message.includes("billing") || 
+              err.message.includes("HTTP")
+            )) {
+              throw err;
+            }
+            // Check for connection/fetch errors
+            const errMsg = parseErrorMessage(err.message || "");
+            if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError") || errMsg.includes("Load failed")) {
+              throw new Error("Connection failed. The AI assistant server seems to be offline or busy. Please make sure the backend is running.");
+            }
+            throw new Error(errMsg || "Failed to connect to the AI assistant");
+          }
+        }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [threadId, modelSelection, activeOrgId, activeSpaceId]
@@ -506,9 +771,13 @@ export function Dashboard() {
           parts: [
             {
               type: "text" as const,
-              text: "I'm sorry, I encountered an issue connecting to the AI assistant. Please check your backend server status and ensure your API keys are configured.",
+              text: (() => {
+                const raw = error.message || "I'm sorry, I encountered an issue connecting to the AI assistant.";
+                try { return (JSON.parse(raw) as any).message || raw; } catch { return raw; }
+              })(),
             },
           ],
+          isError: true,
         },
       ]);
     },
@@ -656,7 +925,48 @@ export function Dashboard() {
 
       if (!content) return;
 
+      const dailyLimit = limits?.ai_chats_daily ?? null;
+      const hourlyLimit = limits?.ai_chats_hourly ?? null;
+      const dailyUsed = usage?.ai_chats_today ?? 0;
+      const hourlyUsed = usage?.ai_chats_this_hour ?? 0;
+
+      const isDailyLimitHit = dailyLimit !== null && dailyUsed >= dailyLimit;
+      const isHourlyLimitHit = hourlyLimit !== null && hourlyUsed >= hourlyLimit;
+
       const msgPayload = { text: content, files: uploadedFiles };
+
+      if (isDailyLimitHit || isHourlyLimitHit) {
+        if (!threadId) {
+          const newThreadId = crypto.randomUUID();
+          pendingInitialMessageRef.current = msgPayload;
+          isNewThreadRef.current = true;
+          navigate(`/c/${newThreadId}`);
+          return;
+        }
+
+        setMessages((current: any[]) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            role: "user" as const,
+            parts: [{ type: "text" as const, text: content }],
+          },
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            parts: [
+              {
+                type: "text" as const,
+                text: isDailyLimitHit
+                  ? `Daily AI chat limit of ${dailyLimit} requests reached. Please try again tomorrow.`
+                  : `Hourly AI chat limit of ${hourlyLimit} requests reached. Please try again in an hour.`,
+              },
+            ],
+            isError: true,
+          } as any,
+        ]);
+        return;
+      }
 
       if (!threadId) {
         // Home page: queue the message and navigate to a new thread.
@@ -745,6 +1055,7 @@ export function Dashboard() {
       parts: Array.isArray(parts) ? parts : [],
       toolInvocations: Array.isArray(toolInvocations) ? toolInvocations : [],
       createdAt: msg.createdAt ? new Date(msg.createdAt) : undefined,
+      isError: msg.isError,
     };
   }, []);
 
@@ -781,7 +1092,39 @@ export function Dashboard() {
     if (!threadId || !pendingInitialMessageRef.current) return;
     const msg = pendingInitialMessageRef.current;
     pendingInitialMessageRef.current = null;
-    sendMessage(msg);
+
+    const dailyLimit = limits?.ai_chats_daily ?? null;
+    const hourlyLimit = limits?.ai_chats_hourly ?? null;
+    const dailyUsed = usage?.ai_chats_today ?? 0;
+    const hourlyUsed = usage?.ai_chats_this_hour ?? 0;
+
+    const isDailyLimitHit = dailyLimit !== null && dailyUsed >= dailyLimit;
+    const isHourlyLimitHit = hourlyLimit !== null && hourlyUsed >= hourlyLimit;
+
+    if (isDailyLimitHit || isHourlyLimitHit) {
+      setMessages([
+        {
+          id: crypto.randomUUID(),
+          role: "user" as const,
+          parts: [{ type: "text" as const, text: msg.text }],
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "assistant" as const,
+          parts: [
+            {
+              type: "text" as const,
+              text: isDailyLimitHit
+                ? `Daily AI chat limit of ${dailyLimit} requests reached. Please try again tomorrow.`
+                : `Hourly AI chat limit of ${hourlyLimit} requests reached. Please try again in an hour.`,
+            },
+          ],
+          isError: true,
+        } as any,
+      ]);
+    } else {
+      sendMessage(msg);
+    }
 
     // Auto-generate title
     let title = msg.text.trim();
@@ -790,7 +1133,7 @@ export function Dashboard() {
     }
     api.put(`v1/ai/threads/${threadId}`, { title }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId]); // intentionally omit sendMessage — it's stable and we only want this to fire on threadId change
+  }, [threadId, limits, usage]); // intentionally omit sendMessage — it's stable and we only want this to fire when threadId or limits change
 
   // ── Load chat history for existing threads ────────────────────────────────
   useEffect(() => {
@@ -802,12 +1145,12 @@ export function Dashboard() {
       if (isNewThreadRef.current) {
         isNewThreadRef.current = false; // reset so subsequent threadId changes load normally
         const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-        localStorage.setItem(key, threadId);
+        sessionStorage.setItem(key, threadId);
         return;
       }
 
       const key = `chat_thread_id_${activeOrgId || "personal"}_${activeSpaceId || "default"}`;
-      localStorage.setItem(key, threadId);
+      sessionStorage.setItem(key, threadId);
 
       setIsLoadingHistory(true);
       try {
@@ -1047,15 +1390,21 @@ export function Dashboard() {
                   const showShimmer =
                     isAssistant && isLoading && isLastMessage && !hasTimeline && text.trim() === "";
 
+                  const isAgentRunning = isAssistant && isLoading && isLastMessage;
+
+                  const isErrorMsg = message.isError === true;
+
                   return (
                     <Message
-                      from={message.role}
+                       from={message.role}
                       key={message.id}
+                      isError={isErrorMsg}
                       className={cn(
                         message.role === "user" ? "w-fit ml-auto max-w-[50%]" : "max-w-full w-full"
                       )}
                     >
                       <MessageContent
+                        isError={isErrorMsg}
                         className={cn(
                           isAssistant && "w-full text-[0.95rem] leading-7",
                           showShimmer && "px-0 py-0",
@@ -1069,126 +1418,164 @@ export function Dashboard() {
                           </div>
                         ) : isAssistant ? (
                           <div className="space-y-4">
-                            {/* 1. Chain of Thought Component */}
-                            {hasTimeline && (
-                              <ChainOfThought defaultOpen={true}>
-                                <ChainOfThoughtHeader className="text-xs uppercase tracking-wider font-semibold py-1">
-                                  {timeline.filter(t => t.status === "active").length === 0
-                                    ? `${timeline.length} ${timeline.length === 1 ? "action" : "actions"} taken`
-                                    : `${timeline.length} ${timeline.length === 1 ? "step" : "steps"} in progress`}
-                                </ChainOfThoughtHeader>
-                                <ChainOfThoughtContent className="mt-1.5 space-y-0">
-                                  {timeline.map((item, idx) => {
-                                    if (item.type === "thinking") {
-                                      return (
-                                        <ChainOfThoughtStep
-                                          key={item.id}
-                                          icon={BrainIcon}
-                                          label="Thinking"
-                                          status={item.status}
-                                        >
-                                          {item.text && (
-                                            <div className="text-[12px] text-muted-foreground/90 pl-2 leading-relaxed whitespace-pre-line border-l border-border/40 ml-[7.5px] py-1">
-                                              {item.text}
-                                            </div>
-                                          )}
-                                        </ChainOfThoughtStep>
-                                      );
-                                    }
+                            {isErrorMsg ? (
+                              <p className="text-[13px] text-destructive/80 leading-relaxed whitespace-pre-wrap">
+                                {text}
+                              </p>
+                            ) : (
+                              <>
+                                {/* 1. Chain of Thought Component */}
+                                {hasTimeline && (
+                                  <ChainOfThought defaultOpen={false}>
+                                    <ChainOfThoughtHeader className="text-xs uppercase tracking-wider font-semibold py-1">
+                                      {isAgentRunning ? (
+                                        <Shimmer className="font-semibold text-xs tracking-wider" duration={1.6}>
+                                          {getCollapsedOneLiner(timeline, isAgentRunning)}
+                                        </Shimmer>
+                                      ) : (
+                                        getCollapsedOneLiner(timeline, isAgentRunning)
+                                      )}
+                                    </ChainOfThoughtHeader>
+                                    <ChainOfThoughtContent className="mt-1.5 space-y-0 max-h-[280px] overflow-y-auto pr-1">
+                                      {timeline.map((item, idx) => {
+                                        if (item.type === "thinking") {
+                                          return (
+                                            <ChainOfThoughtStep
+                                              key={item.id}
+                                              icon={BrainIcon}
+                                              label={
+                                                item.status === "active" ? (
+                                                  <Shimmer className="font-semibold text-sm" duration={1.6}>
+                                                    Thinking
+                                                  </Shimmer>
+                                                ) : (
+                                                  "Thinking"
+                                                )
+                                              }
+                                              status={item.status}
+                                            >
+                                              {item.text && (
+                                                <div className="text-[12px] text-muted-foreground/90 leading-relaxed whitespace-pre-line py-1">
+                                                  {item.status === "active" ? (
+                                                    <Shimmer duration={1.6} className="text-[12px] text-muted-foreground/90">
+                                                      {item.text}
+                                                    </Shimmer>
+                                                  ) : (
+                                                    item.text
+                                                  )}
+                                                </div>
+                                              )}
+                                            </ChainOfThoughtStep>
+                                          );
+                                        }
 
-                                    const Icon = item.agent
-                                      ? getAgentIcon(item.agent)
-                                      : getToolIcon(item.tool || "", item.result);
+                                        const Icon = item.agent
+                                          ? getAgentIcon(item.agent)
+                                          : getToolIcon(item.tool || "", item.result);
 
-                                    const label = getToolLabel(item.tool || "", item.args, item.result) || item.action || `Running: ${item.tool}`;
-                                    const description = getToolDescription(item.tool || "", item.args, item.result);
+                                        const label = getToolLabel(item.tool || "", item.args, item.result) || item.action || `Running: ${item.tool}`;
+                                        const description = getToolDescription(item.tool || "", item.args, item.result);
 
-                                    let agentDisplay = item.agent;
-                                    if (!agentDisplay && item.tool) {
-                                      if (item.tool.includes("task") || item.tool.includes("org") || item.tool.includes("workspace")) {
-                                        agentDisplay = "Task Manager";
-                                      } else if (item.tool.includes("chat") || item.tool.includes("message") || item.tool.includes("channel")) {
-                                        agentDisplay = "Chat";
-                                      } else if (item.tool.includes("motion") || item.tool.includes("page") || item.tool.includes("note")) {
-                                        agentDisplay = "Notes";
-                                      } else if (item.tool.includes("schedule") || item.tool.includes("calendar")) {
-                                        agentDisplay = "Scheduler";
-                                      } else if (item.tool.includes("github")) {
-                                        agentDisplay = "GitHub";
-                                      } else {
-                                        agentDisplay = "KeilHQ AI";
-                                      }
-                                    }
-                                    if (!agentDisplay) agentDisplay = "KeilHQ AI";
+                                        let agentDisplay = item.agent;
+                                        if (!agentDisplay && item.tool) {
+                                          if (item.tool.includes("task") || item.tool.includes("org") || item.tool.includes("workspace")) {
+                                            agentDisplay = "Task Manager";
+                                          } else if (item.tool.includes("chat") || item.tool.includes("message") || item.tool.includes("channel")) {
+                                            agentDisplay = "Chat";
+                                          } else if (item.tool.includes("motion") || item.tool.includes("page") || item.tool.includes("note")) {
+                                            agentDisplay = "Notes";
+                                          } else if (item.tool.includes("schedule") || item.tool.includes("calendar")) {
+                                            agentDisplay = "Scheduler";
+                                          } else if (item.tool.includes("github")) {
+                                            agentDisplay = "GitHub";
+                                          } else {
+                                            agentDisplay = "KeilHQ AI";
+                                          }
+                                        }
+                                        if (!agentDisplay) agentDisplay = "KeilHQ AI";
 
-                                    if (agentDisplay === "keilhq-task-agent") agentDisplay = "Task Manager";
-                                    if (agentDisplay === "keilhq-chat-agent") agentDisplay = "Chat";
-                                    if (agentDisplay === "keilhq-motion-agent") agentDisplay = "Notes";
-                                    if (agentDisplay === "keilhq-scheduler-agent") agentDisplay = "Scheduler";
-                                    if (agentDisplay === "keilhq-github-agent") agentDisplay = "GitHub";
-                                    if (agentDisplay === "keilhq-ai") agentDisplay = "KeilHQ AI";
+                                        if (agentDisplay === "keilhq-task-agent") agentDisplay = "Task Manager";
+                                        if (agentDisplay === "keilhq-chat-agent") agentDisplay = "Chat";
+                                        if (agentDisplay === "keilhq-motion-agent") agentDisplay = "Notes";
+                                        if (agentDisplay === "keilhq-scheduler-agent") agentDisplay = "Scheduler";
+                                        if (agentDisplay === "keilhq-github-agent") agentDisplay = "GitHub";
+                                        if (agentDisplay === "keilhq-ai") agentDisplay = "KeilHQ AI";
 
-                                    const status = item.status;
+                                        const status = item.status;
 
-                                    return (
-                                      <ChainOfThoughtStep
-                                        key={item.id || `act-${idx}`}
-                                        icon={Icon}
-                                        label={
-                                          <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-[10px] text-muted-foreground/80 uppercase font-bold tracking-wider">
-                                              {agentDisplay}
-                                            </span>
-                                            <span className="text-muted-foreground/40 text-[10px]">•</span>
-                                            <span>{label}</span>
-                                            {item.tool && !item.result && (
-                                              <span className="text-[10px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
-                                                (calling: {item.tool})
+                                        return (
+                                          <ChainOfThoughtStep
+                                            key={item.id || `act-${idx}`}
+                                            icon={Icon}
+                                            label={
+                                              <span className="font-medium text-foreground text-[13px] flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-[10px] text-muted-foreground/80 uppercase font-bold tracking-wider">
+                                                  {agentDisplay}
+                                                </span>
+                                                <span className="text-muted-foreground/40 text-[10px]">•</span>
+                                                {status === "active" ? (
+                                                  <Shimmer className="font-medium text-[13px] text-foreground" duration={1.6}>
+                                                    {label}
+                                                  </Shimmer>
+                                                ) : (
+                                                  <span>{label}</span>
+                                                )}
+                                                {item.tool && !item.result && (
+                                                  <span className="text-[10px] text-muted-foreground/70 font-mono ml-0.5 bg-muted/40 px-1 py-0.5 rounded border border-border/10">
+                                                    (calling: {item.tool})
+                                                  </span>
+                                                )}
                                               </span>
+                                            }
+                                            description={
+                                              description && (
+                                                <span className="text-muted-foreground text-xs block mt-0.5 font-normal">
+                                                  {status === "active" ? (
+                                                    <Shimmer className="text-xs text-muted-foreground" duration={1.6}>
+                                                      {description}
+                                                    </Shimmer>
+                                                  ) : (
+                                                    description
+                                                  )}
+                                                </span>
+                                              )
+                                            }
+                                            status={status}
+                                          >
+                                            {item.result && (
+                                              <div className="mt-1 max-w-full text-[11px] bg-muted/40 p-2 rounded-lg border border-border/40 font-mono overflow-auto max-h-36 no-scrollbar leading-relaxed">
+                                                {formatToolResult(item.tool || "", item.result)}
+                                              </div>
                                             )}
-                                          </span>
-                                        }
-                                        description={
-                                          description && (
-                                            <span className="text-muted-foreground text-xs block mt-0.5 font-normal">
-                                              {description}
-                                            </span>
-                                          )
-                                        }
-                                        status={status}
-                                      >
-                                        {item.result && (
-                                          <div className="mt-1 max-w-full text-[11px] bg-muted/40 p-2 rounded-lg border border-border/40 font-mono overflow-auto max-h-36 no-scrollbar leading-relaxed">
-                                            {formatToolResult(item.tool || "", item.result)}
-                                          </div>
-                                        )}
-                                      </ChainOfThoughtStep>
-                                    );
-                                  })}
-                                </ChainOfThoughtContent>
-                              </ChainOfThought>
-                            )}
+                                          </ChainOfThoughtStep>
+                                        );
+                                      })}
+                                    </ChainOfThoughtContent>
+                                  </ChainOfThought>
+                                )}
 
-                            {/* 3. Final Text Response */}
-                            {text.trim() !== "" && (
-                              <MessageResponse>{text}</MessageResponse>
-                            )}
+                                {/* 3. Final Text Response */}
+                                {text.trim() !== "" && (
+                                  <MessageResponse>{text}</MessageResponse>
+                                )}
 
-                            {/* 4. Actions — only shown when streaming is complete and there is text */}
-                            {!isLoading && text.trim() !== "" && (
-                              <MessageActions className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <LikeAction
-                                  isLiked={liked[message.id] ?? false}
-                                  messageKey={message.id}
-                                  onToggle={handleToggleLike}
-                                />
-                                <DislikeAction
-                                  isDisliked={disliked[message.id] ?? false}
-                                  messageKey={message.id}
-                                  onToggle={handleToggleDislike}
-                                />
-                                <CopyAction content={text} />
-                              </MessageActions>
+                                {/* 4. Actions — only shown when streaming is complete and there is text */}
+                                {!isLoading && text.trim() !== "" && (
+                                  <MessageActions className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                    <LikeAction
+                                      isLiked={liked[message.id] ?? false}
+                                      messageKey={message.id}
+                                      onToggle={handleToggleLike}
+                                    />
+                                    <DislikeAction
+                                      isDisliked={disliked[message.id] ?? false}
+                                      messageKey={message.id}
+                                      onToggle={handleToggleDislike}
+                                    />
+                                    <CopyAction content={text} />
+                                  </MessageActions>
+                                )}
+                              </>
                             )}
                           </div>
                         ) : (

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { format, subDays, startOfDay } from "date-fns";
+import { format } from "date-fns";
 import {
   AlertCircle,
   Calendar,
@@ -65,8 +65,7 @@ function formatDate(dateStr: string, isAllDay?: boolean): string {
     const d = new Date(dateStr);
     // All-day due_date is stored as exclusive end (next day midnight).
     // Subtract 1 day so the displayed date reflects the actual last day.
-    const displayDate = isAllDay ? subDays(startOfDay(d), 1) : d;
-    return format(displayDate, isAllDay ? "d MMM yyyy" : "d MMM yyyy, h:mm a");
+    return format(d, isAllDay ? "d MMM yyyy" : "d MMM yyyy, h:mm a");
   } catch {
     return dateStr;
   }

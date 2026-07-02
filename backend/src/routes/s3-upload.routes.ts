@@ -32,4 +32,7 @@ router.post(
 );
 router.post("/task/download", s3UploadController.getTaskAttachmentDownloadUrl);
 
+// Endpoint to proxy image fetch from S3 to avoid CORS issues
+router.get("/proxy-image", s3UploadController.proxyImage);
+
 export default router;

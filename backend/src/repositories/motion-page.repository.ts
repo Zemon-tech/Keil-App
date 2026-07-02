@@ -290,21 +290,75 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
    * Returns all pages shared INTO a given space (cross-space shares).
    * Joins motion_pages to return the full page data.
    */
+  /**
+   * Returns all pages shared INTO a given space (cross-space shares).
+   * Joins motion_pages to return the full page data, recursively resolving subpages.
+   */
   async findPagesSharedToSpace(
     targetOrgId: string,
     targetSpaceId: string,
     client?: PoolClient,
   ): Promise<MotionPage[]> {
     const query = `
-      SELECT mp.*, mps.permission as share_permission
-      FROM public.motion_page_shares mps
-      INNER JOIN public.motion_pages mp ON mp.id = mps.page_id
-      WHERE mps.target_org_id = $1
-        AND mps.target_space_id = $2
-        AND mps.share_type = 'space'
-        AND (mps.expires_at IS NULL OR mps.expires_at > NOW())
-        AND mp.deleted_at IS NULL
-      ORDER BY mp.updated_at DESC
+      WITH RECURSIVE shared_roots AS (
+        SELECT 
+          mp.id, 
+          mp.org_id, 
+          mp.space_id, 
+          mp.created_by, 
+          mp.updated_by, 
+          mp.parent_id, 
+          mp.title, 
+          mp.content, 
+          mp.icon, 
+          mp.cover_image, 
+          mp.cover_position, 
+          mp.position, 
+          mp.small_text, 
+          mp.full_width, 
+          mp.created_at, 
+          mp.updated_at, 
+          mp.deleted_at, 
+          mp.notion_page_id, 
+          mp.notion_last_synced_at,
+          mps.permission as share_permission
+        FROM public.motion_page_shares mps
+        INNER JOIN public.motion_pages mp ON mp.id = mps.page_id
+        WHERE mps.target_org_id = $1
+          AND mps.target_space_id = $2
+          AND mps.share_type = 'space'
+          AND (mps.expires_at IS NULL OR mps.expires_at > NOW())
+          AND mp.deleted_at IS NULL
+        
+        UNION ALL
+        
+        SELECT 
+          child.id, 
+          child.org_id, 
+          child.space_id, 
+          child.created_by, 
+          child.updated_by, 
+          child.parent_id, 
+          child.title, 
+          child.content, 
+          child.icon, 
+          child.cover_image, 
+          child.cover_position, 
+          child.position, 
+          child.small_text, 
+          child.full_width, 
+          child.created_at, 
+          child.updated_at, 
+          child.deleted_at, 
+          child.notion_page_id, 
+          child.notion_last_synced_at,
+          parent.share_permission
+        FROM public.motion_pages child
+        INNER JOIN shared_roots parent ON child.parent_id = parent.id
+        WHERE child.deleted_at IS NULL
+      )
+      SELECT * FROM shared_roots
+      ORDER BY updated_at DESC
     `;
     const executor = client || this.pool;
     const result = await executor.query(query, [targetOrgId, targetSpaceId]);
@@ -312,8 +366,7 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
   }
 
   /**
-   * Finds a single page that has been shared INTO a given space.
-   * Joins motion_pages to return the full page data and includes the share permission.
+   * Finds a single page that has been shared INTO a given space, recursively resolving parent page sharing.
    */
   async findByIdSharedToSpace(
     pageId: string,
@@ -322,20 +375,85 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
     client?: PoolClient,
   ): Promise<MotionPage | null> {
     const query = `
-      SELECT mp.*, mps.permission as share_permission
-      FROM public.motion_page_shares mps
-      INNER JOIN public.motion_pages mp ON mp.id = mps.page_id
-      WHERE mps.page_id = $1
-        AND mps.target_org_id = $2
+      WITH RECURSIVE page_ancestors AS (
+        SELECT id, parent_id, org_id, space_id, title, content, icon, cover_image, cover_position, position, small_text, full_width, created_by, updated_by, notion_page_id, notion_last_synced_at, created_at, updated_at, deleted_at,
+               id as original_page_id
+        FROM public.motion_pages
+        WHERE id = $1 AND deleted_at IS NULL
+        
+        UNION ALL
+        
+        SELECT mp.id, mp.parent_id, mp.org_id, mp.space_id, mp.title, mp.content, mp.icon, mp.cover_image, mp.cover_position, mp.position, mp.small_text, mp.full_width, mp.created_by, mp.updated_by, mp.notion_page_id, mp.notion_last_synced_at, mp.created_at, mp.updated_at, mp.deleted_at,
+               pa.original_page_id
+        FROM public.motion_pages mp
+        INNER JOIN page_ancestors pa ON pa.parent_id = mp.id
+        WHERE mp.deleted_at IS NULL
+      )
+      SELECT 
+        mp.id, 
+        mp.org_id, 
+        mp.space_id, 
+        mp.created_by, 
+        mp.updated_by, 
+        mp.parent_id, 
+        mp.title, 
+        mp.content, 
+        mp.icon, 
+        mp.cover_image, 
+        mp.cover_position, 
+        mp.position, 
+        mp.small_text, 
+        mp.full_width, 
+        mp.created_at, 
+        mp.updated_at, 
+        mp.deleted_at, 
+        mp.notion_page_id, 
+        mp.notion_last_synced_at,
+        mps.permission as share_permission
+      FROM page_ancestors pa
+      INNER JOIN public.motion_pages mp ON mp.id = pa.original_page_id
+      INNER JOIN public.motion_page_shares mps ON mps.page_id = pa.id
+      WHERE mps.target_org_id = $2
         AND mps.target_space_id = $3
         AND mps.share_type = 'space'
         AND (mps.expires_at IS NULL OR mps.expires_at > NOW())
-        AND mp.deleted_at IS NULL
       LIMIT 1
     `;
     const executor = client || this.pool;
     const result = await executor.query(query, [pageId, targetOrgId, targetSpaceId]);
     return result.rows.length > 0 ? (result.rows[0] as MotionPage) : null;
+  }
+
+  /**
+   * Finds if a page or any of its ancestors has an active public link share.
+   */
+  async findPublicShareForPageAndAncestors(
+    pageId: string,
+    client?: PoolClient,
+  ): Promise<MotionPageShare | null> {
+    const query = `
+      WITH RECURSIVE page_ancestors AS (
+        SELECT id, parent_id, deleted_at
+        FROM public.motion_pages
+        WHERE id = $1 AND deleted_at IS NULL
+        
+        UNION ALL
+        
+        SELECT mp.id, mp.parent_id, mp.deleted_at
+        FROM public.motion_pages mp
+        INNER JOIN page_ancestors pa ON pa.parent_id = mp.id
+        WHERE mp.deleted_at IS NULL
+      )
+      SELECT mps.*
+      FROM page_ancestors pa
+      INNER JOIN public.motion_page_shares mps ON mps.page_id = pa.id
+      WHERE mps.share_type = 'public_link'
+        AND (mps.expires_at IS NULL OR mps.expires_at > NOW())
+      LIMIT 1
+    `;
+    const executor = client || this.pool;
+    const result = await executor.query(query, [pageId]);
+    return result.rows.length > 0 ? (result.rows[0] as MotionPageShare) : null;
   }
 
   /**

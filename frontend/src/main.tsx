@@ -20,7 +20,7 @@ import { supabase } from './lib/supabase'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,   // 5 minutes
+      staleTime: 0,
       gcTime: 24 * 60 * 60 * 1000, // 24 hours — keep cache alive for persister
       retry: 1,
     },

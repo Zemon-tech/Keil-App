@@ -30,6 +30,12 @@ async function isAssignedToTask(taskId: string, userId: string): Promise<boolean
   return (result.rowCount ?? 0) > 0;
 }
 
+function mapStatus(status?: string): TaskStatus | undefined {
+  if (!status) return undefined;
+  if (status === 'in_progress') return TaskStatus.IN_PROGRESS;
+  return status as TaskStatus;
+}
+
 // ─── Personal org/space resolver ──────────────────────────────────────────────
 
 async function getPersonalOrgSpace(userId: string): Promise<{ orgId: string; spaceId: string } | null> {
@@ -110,7 +116,7 @@ export const listTasksTool = createTool({
       if (!personal) return { error: "Personal organisation not found." };
       tasks = await orgTaskService.getTasksBySpace(personal.orgId, personal.spaceId, {
         filters: {
-          status: inputData.status as TaskStatus | undefined,
+          status: mapStatus(inputData.status),
           priority: inputData.priority as TaskPriority | undefined,
         },
         pagination: { limit: inputData.limit ?? 20, offset: 0 },
@@ -130,7 +136,7 @@ export const listTasksTool = createTool({
       `;
 
       if (inputData.status) {
-        params.push(inputData.status);
+        params.push(mapStatus(inputData.status));
         query += ` AND t.status = $${params.length}`;
       }
       if (inputData.priority) {
@@ -161,7 +167,7 @@ export const listTasksTool = createTool({
 
       tasks = await orgTaskService.getTasksBySpace(orgId, spaceId, {
         filters: {
-          status: inputData.status as TaskStatus | undefined,
+          status: mapStatus(inputData.status),
           priority: inputData.priority as TaskPriority | undefined,
         },
         pagination: { limit: inputData.limit ?? 20, offset: 0 },
@@ -319,7 +325,7 @@ export const createTaskTool = createTool({
       title: inputData.title,
       description: inputData.description ?? null,
       priority: inputData.priority as TaskPriority | undefined,
-      status: inputData.status as TaskStatus | undefined,
+      status: mapStatus(inputData.status),
       type: inputData.type as "task" | "event" | undefined,
       event_type: inputData.event_type,
       location: inputData.location ?? null,
@@ -403,7 +409,7 @@ export const updateTaskTool = createTool({
       title: rest.title,
       description: rest.description,
       priority: rest.priority as TaskPriority | undefined,
-      status: rest.status as TaskStatus | undefined,
+      status: mapStatus(rest.status),
       location: rest.location,
       is_all_day: rest.is_all_day,
       meet_link: rest.meet_link,
@@ -527,7 +533,7 @@ export const resolveWorkspaceTool = createTool({
     });
 
     const orgsResult = await pool.query(
-      `SELECT o.id, o.name, o.slug, om.role
+      `SELECT o.id, o.name, om.role
        FROM public.organisations o
        INNER JOIN public.organisation_members om ON om.org_id = o.id
        WHERE om.user_id = $1 AND o.deleted_at IS NULL
@@ -541,7 +547,7 @@ export const resolveWorkspaceTool = createTool({
         continue;
       }
       const spacesResult = await pool.query(
-        `SELECT s.id, s.name, s.slug, sm.role
+        `SELECT s.id, s.name, sm.role
          FROM public.spaces s
          INNER JOIN public.space_members sm ON sm.space_id = s.id
          WHERE sm.user_id = $1 AND s.org_id = $2 AND s.deleted_at IS NULL
@@ -738,3 +744,146 @@ export const getCalendarEventsTool = createTool({
     };
   },
 });
+
+
+// ─── Tool: create_subtask ─────────────────────────────────────────────────────
+
+export const createSubtaskTool = createTool({
+  id: 'create_subtask',
+  description: 'Create a new subtask under an existing parent task. The subtask inherits organization and space from the parent task.',
+  inputSchema: z.object({
+    parentTaskId: z.string().uuid().describe('The UUID of the parent task under which to create the subtask'),
+    title: z.string().min(1).describe('The title of the subtask'),
+    description: z.string().optional().describe('Optional description for the subtask'),
+    priority: z.enum(['urgent', 'high', 'medium', 'low']).optional().default('medium').describe('Priority level'),
+    status: z.enum(['backlog', 'todo', 'in_progress']).optional().default('todo').describe('Initial task status'),
+    start_date: z.string().optional().describe('Optional ISO 8601 start date-time string'),
+    due_date: z.string().optional().describe('Optional ISO 8601 due date-time string'),
+    assignee_ids: z.array(z.string().uuid()).optional().describe('Optional array of user UUIDs assigned to the subtask'),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Creating subtask "${inputData.title}"`,
+      status: "running",
+    });
+
+    const parentTask = await orgTaskService.getTaskById(inputData.parentTaskId);
+    if (!parentTask) {
+      return { error: "Parent task not found." };
+    }
+    if (parentTask.parent_task_id) {
+      return { error: "Subtasks cannot have their own subtasks." };
+    }
+
+    const parentOrgId = parentTask.org_id as string;
+    const parentSpaceId = parentTask.space_id as string;
+
+    const personal = await getPersonalOrgSpace(userId);
+    const isPersonalTask = personal && parentOrgId === personal.orgId && parentSpaceId === personal.spaceId;
+
+    if (!isPersonalTask) {
+      const role = await getSpaceRole(userId, parentOrgId, parentSpaceId);
+      if (!role) return { error: "You are not a member of this space." };
+      if (role === "member" && inputData.assignee_ids?.length) {
+        const onlySelf = inputData.assignee_ids.length === 1 && inputData.assignee_ids[0] === userId;
+        if (!onlySelf) return { error: "Members can only assign subtasks to themselves." };
+      }
+    }
+
+    const payload = {
+      org_id: parentOrgId,
+      space_id: parentSpaceId,
+      parent_task_id: inputData.parentTaskId,
+      title: inputData.title,
+      description: inputData.description ?? null,
+      priority: inputData.priority as TaskPriority | undefined,
+      status: mapStatus(inputData.status),
+      type: "task" as const,
+      start_date: inputData.start_date ? new Date(inputData.start_date) : null,
+      due_date: inputData.due_date ? new Date(inputData.due_date) : null,
+      assignee_ids: isPersonalTask ? [userId] : inputData.assignee_ids,
+      created_by: userId,
+    };
+
+    const task = await orgTaskService.createTask({ orgId: parentOrgId, spaceId: parentSpaceId }, payload);
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: `Creating subtask "${inputData.title}"`,
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'create_subtask',
+        icon: 'plus-circle',
+        action: `Creating subtask "${inputData.title}" under parent task "${parentTask.title}"`,
+        details: `Created subtask "${task.title}" — ${task.status}, ${task.priority} priority`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      task,
+    };
+  }
+});
+
+// ─── Tool: get_subtasks ───────────────────────────────────────────────────────
+
+export const getSubtasksTool = createTool({
+  id: 'get_subtasks',
+  description: 'Fetch the list of subtasks for a parent task by its UUID.',
+  inputSchema: z.object({
+    parentTaskId: z.string().uuid().describe('The UUID of the parent task'),
+  }),
+  execute: async (inputData, context) => {
+    const userId = context?.requestContext?.get("userId") as string;
+    if (!userId) return { error: "Not authenticated." };
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Reading subtasks list",
+      status: "running",
+    });
+
+    const parentTask = await orgTaskService.getTaskById(inputData.parentTaskId);
+    if (!parentTask) {
+      return { error: "Parent task not found." };
+    }
+
+    const personal = await getPersonalOrgSpace(userId);
+    const isPersonalTask = personal && parentTask.org_id === personal.orgId && parentTask.space_id === personal.spaceId;
+
+    if (!isPersonalTask) {
+      const role = await getSpaceRole(userId, parentTask.org_id as string, parentTask.space_id as string);
+      if (!role) return { error: "You do not have access to this task's subtasks." };
+    }
+
+    const subtasks = await orgTaskService.getSubtasks(inputData.parentTaskId);
+
+    await emitActivity(context, {
+      agentLabel: "Task Manager",
+      action: "Reading subtasks list",
+      status: "complete",
+    });
+
+    return {
+      activity: {
+        agent: 'keilhq-task-agent',
+        agentLabel: 'Task Manager',
+        tool: 'get_subtasks',
+        icon: 'list',
+        action: `Reading subtasks for "${parentTask.title}"`,
+        details: `Fetched ${subtasks.length} subtask(s)`,
+        status: 'complete',
+        timestamp: new Date().toISOString(),
+      },
+      subtasks,
+    };
+  }
+});

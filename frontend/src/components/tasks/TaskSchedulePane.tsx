@@ -25,6 +25,7 @@ import {
   normalizeAllDayRangeForUpdate,
   ensureAllDayDropEndDate,
   DEFAULT_TIMED_DURATION_MINUTES,
+  fromExclusiveRange,
 } from "@/lib/date-utils";
 import {
   Bell,
@@ -436,14 +437,14 @@ export function TaskSchedulePane({
   >(undefined);
   const [currentViewType, setCurrentViewType] =
     useState<CalendarView>(() => {
-      const stored = localStorage.getItem(STORAGE_CALENDAR_VIEW);
+      const stored = sessionStorage.getItem(STORAGE_CALENDAR_VIEW);
       if (stored === "timeGridDay" || stored === "timeGridWeek" || stored === "dayGridMonth" || stored === "listWeek") {
         return stored;
       }
       return "dayGridMonth";
     });
   const [currentViewDate, setCurrentViewDate] = useState<Date>(() => {
-    const stored = localStorage.getItem(STORAGE_CALENDAR_DATE);
+    const stored = sessionStorage.getItem(STORAGE_CALENDAR_DATE);
     if (stored) {
       const parsed = new Date(stored);
       if (!isNaN(parsed.getTime())) return parsed;
@@ -678,8 +679,9 @@ export function TaskSchedulePane({
         if (startDate) {
           const { start: allDayStart, end: allDayEnd } =
             normalizeAllDayRangeLocal(startDate, endDate);
-          const startISO = allDayStart.toISOString();
-          const endISO = allDayEnd.toISOString();
+          const inclusive = fromExclusiveRange(allDayStart, allDayEnd);
+          const startISO = inclusive.start.toISOString();
+          const endISO = inclusive.end.toISOString();
 
           if (activeOrgId && activeSpaceId) {
             createTaskSlot.mutate({
@@ -695,11 +697,11 @@ export function TaskSchedulePane({
           }
 
           const isMultiDay =
-            allDayEnd.getTime() - allDayStart.getTime() > 24 * 60 * 60 * 1000;
+            inclusive.end.getTime() - inclusive.start.getTime() > 0;
           toast.success("Task scheduled", {
             description: isMultiDay
-              ? `${info.event.title} scheduled from ${format(allDayStart, "MMM dd")} to ${format(new Date(allDayEnd.getTime() - 86400000), "MMM dd")}`
-              : `${info.event.title} scheduled for ${format(allDayStart, "MMM dd, yyyy")}`,
+              ? `${info.event.title} scheduled from ${format(inclusive.start, "MMM dd")} to ${format(inclusive.end, "MMM dd")}`
+              : `${info.event.title} scheduled for ${format(inclusive.start, "MMM dd, yyyy")}`,
           });
 
           if (viewType === "dayGridMonth") {
@@ -771,20 +773,25 @@ export function TaskSchedulePane({
       if (isAllDay) {
         const { start: allDayStart, end: allDayEnd } =
           normalizeAllDayRangeLocal(startDate, endDate);
+        const inclusive = fromExclusiveRange(allDayStart, allDayEnd);
         if (activeOrgId && activeSpaceId) {
           updateTaskSlot.mutate({
             slotId,
             updates: {
-              start_date: allDayStart.toISOString(),
-              due_date: allDayEnd.toISOString(),
+              start_date: inclusive.start.toISOString(),
+              due_date: inclusive.end.toISOString(),
               is_all_day: true,
+            }
+          }, {
+            onError: () => {
+              info.revert();
             }
           });
         } else if (onTaskSchedule) {
           onTaskSchedule(
             taskId,
-            allDayStart.toISOString(),
-            allDayEnd.toISOString(),
+            inclusive.start.toISOString(),
+            inclusive.end.toISOString(),
             true,
           );
         }
@@ -800,6 +807,10 @@ export function TaskSchedulePane({
               start_date: timedStart.toISOString(),
               due_date: timedEnd.toISOString(),
               is_all_day: false,
+            }
+          }, {
+            onError: () => {
+              info.revert();
             }
           });
         } else if (onTaskSchedule) {
@@ -860,6 +871,10 @@ export function TaskSchedulePane({
               due_date: endISO,
               is_all_day: true,
             }
+          }, {
+            onError: () => {
+              info.revert();
+            }
           });
         } else if (onTaskSchedule) {
           onTaskSchedule(taskId, startISO, endISO, true);
@@ -878,6 +893,10 @@ export function TaskSchedulePane({
               start_date: timedStart.toISOString(),
               due_date: timedEnd.toISOString(),
               is_all_day: false,
+            }
+          }, {
+            onError: () => {
+              info.revert();
             }
           });
         } else if (onTaskSchedule) {
@@ -1379,9 +1398,10 @@ export function TaskSchedulePane({
                   let defaultDueDate: Date;
                   if (arg.allDay) {
                     // Month view or all-day row click → schedule as a full-day event (exclusive end = next midnight)
-                    const { end: allDayEnd } =
+                    const { start: allDayStart, end: allDayEnd } =
                       normalizeAllDayRangeLocal(clickedDate);
-                    defaultDueDate = allDayEnd;
+                    const inclusive = fromExclusiveRange(allDayStart, allDayEnd);
+                    defaultDueDate = inclusive.end;
                   } else {
                     // Timed view click → default to 1-hour slot (matches DEFAULT_TIMED_DURATION_MINUTES)
                     defaultDueDate = addMinutes(
@@ -1415,8 +1435,9 @@ export function TaskSchedulePane({
                       arg.start,
                       arg.end,
                     );
-                    startISO = start.toISOString();
-                    endISO = end.toISOString();
+                    const inclusive = fromExclusiveRange(start, end);
+                    startISO = inclusive.start.toISOString();
+                    endISO = inclusive.end.toISOString();
                   } else {
                     // Timed selection (day/week view drag)
                     const { start, end } = normalizeTimedRange(
@@ -1444,8 +1465,8 @@ export function TaskSchedulePane({
                   const view = dateInfo.view.type as CalendarView;
                   setCurrentViewType(view);
                   setCurrentViewDate(dateInfo.view.currentStart);
-                  localStorage.setItem(STORAGE_CALENDAR_VIEW, view);
-                  localStorage.setItem(STORAGE_CALENDAR_DATE, dateInfo.view.currentStart.toISOString());
+                  sessionStorage.setItem(STORAGE_CALENDAR_VIEW, view);
+                  sessionStorage.setItem(STORAGE_CALENDAR_DATE, dateInfo.view.currentStart.toISOString());
                   if (onViewChange) onViewChange(view);
                   if (onDateChange) onDateChange(dateInfo.view.currentStart);
                 }}
