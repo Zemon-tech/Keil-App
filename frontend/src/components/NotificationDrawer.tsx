@@ -145,12 +145,9 @@ export function NotificationDrawer({
   };
 
   useEffect(() => {
-    if (open) {
-      markAllAsRead();
-    }
-    // markAllAsRead is recreated by the notification context on state changes.
-    // The drawer should mark once when it opens, not after every notification update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // We intentionally DO NOT markAllAsRead() here,
+    // so that the "Unread" tab can actually show unread notifications.
+    // The user can manually mark all as read, or individual items mark as read on click.
   }, [open]);
 
   const filteredNotifications = notifications.filter((n) => {

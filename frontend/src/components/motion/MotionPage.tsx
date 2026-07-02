@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import axios from "axios";
 import api from "@/lib/api";
 import {
-  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, Lock, Undo2, Loader2, RefreshCw, ArrowUpRight, Link2Off
+  Menu, MoreHorizontal, Trash2, ChevronRight, Share2, Search, Plane, Heart, Star, Cloud, Moon, Sun, Bell, Camera, Gift, Coffee, Music, Code, Terminal, Database, Shield, Layout, Settings, User, Users, Mail, Map, Flag, Bookmark, Calendar, CheckCircle, HelpCircle, Info, AlertTriangle, AlertCircle, XCircle, Clock, Zap, Sparkles, FileText, Image as ImageLucide, Smile, Copy, AArrowDown, MoveHorizontal, Lock, Undo2, Loader2, RefreshCw, ArrowUpRight, Link2Off, Eye, Pen
 } from "lucide-react";
 import {
   useNotionStatus,
@@ -1576,6 +1576,23 @@ export function MotionPage() {
             )}
 
             <main className="motion-page-container mx-auto relative">
+              {isSharedPage && (
+                <div className="absolute top-4 right-6 lg:right-24 z-10 hidden sm:flex items-center">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-medium border border-border/50 uppercase tracking-wider">
+                    {sharedPageCanEdit ? (
+                      <>
+                        <Pen className="size-3" />
+                        Can Edit
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="size-3" />
+                        View Only
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="group/title-area">
                 <div className={cn(
                   "flex items-center gap-3 text-muted-foreground/40 text-[13px] font-medium transition-all duration-300 px-0",

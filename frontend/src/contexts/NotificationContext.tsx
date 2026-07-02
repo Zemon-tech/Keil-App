@@ -51,6 +51,7 @@ interface NotificationContextType {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   clearAll: () => Promise<void>;
+  markChatNotificationsAsRead: (channelId: string) => Promise<void>;
   handleNotificationClick: (notification: Notification) => Promise<void>;
 }
 
@@ -242,6 +243,26 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const markChatNotificationsAsRead = async (channelId: string) => {
+    const unreadChatNotifs = notifications.filter(
+      (n) => n.event_type === "someone_messaged" && !n.read_at && n.payload.channel_id === channelId
+    );
+    if (unreadChatNotifs.length === 0) return;
+    try {
+      await Promise.all(unreadChatNotifs.map((n) => api.patch(`/v1/notifications/${n.id}/read`)));
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.event_type === "someone_messaged" && !n.read_at && n.payload.channel_id === channelId
+            ? { ...n, read_at: new Date().toISOString() }
+            : n
+        )
+      );
+      setUnreadCount((prev) => Math.max(0, prev - unreadChatNotifs.length));
+    } catch (err) {
+      console.error("Failed to mark chat notifications as read:", err);
+    }
+  };
+
   const markAllAsRead = async () => {
     try {
       await api.post("/v1/notifications/read-all", { orgId });
@@ -272,6 +293,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
         loading,
         fetchNotifications,
         markAsRead,
+        markChatNotificationsAsRead,
         markAllAsRead,
         clearAll,
         handleNotificationClick,

@@ -150,9 +150,8 @@ export function NotificationDialog({ open, onOpenChange, onMinimize }: Notificat
 
     // Mark all as read when dialog is opened
     useEffect(() => {
-        if (open) {
-            markAllAsRead();
-        }
+        // We intentionally DO NOT markAllAsRead() here,
+        // so that the unread notifications remain visible.
     }, [open]);
 
     const categories = [

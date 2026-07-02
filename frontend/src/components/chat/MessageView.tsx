@@ -12,6 +12,7 @@ import { useMe } from "@/hooks/api/useMe";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { GroupSettingsDialog } from "./GroupSettingsDialog";
+import { useNotifications } from "@/contexts/NotificationContext";
 import { motion, AnimatePresence } from "motion/react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
@@ -98,6 +99,13 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const { markChatNotificationsAsRead } = useNotifications() || {};
+
+  useEffect(() => {
+    if (channelId && markChatNotificationsAsRead) {
+      markChatNotificationsAsRead(channelId);
+    }
+  }, [channelId, markChatNotificationsAsRead]);
 
   // Mention state
   const [mention, setMention] = useState<{ type: "user" | null; triggerIndex: number; query: string; highlightedIndex: number }>({
