@@ -15,13 +15,16 @@ import taskLocatorRoutes from "./task-locator.routes";
 import publicTaskRoutes from "./public-task.routes";
 import meetingRoutes from "./meeting.routes";
 import motionRoutes from "./motion.routes";
-
+import analyticsRoutes from "./analytics.routes";
 import aiRoutes from "./ai.routes";
 import notificationRoutes from "./notification.routes";
 import preferencesRoutes from "./preferences.routes";
 import s3UploadRoutes from "./s3-upload.routes";
 
 const router = Router();
+
+//--------Analytics-------
+router.use("/orgs/:orgId/spaces/:spaceId/analytics", analyticsRoutes);
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 router.use("/notifications", notificationRoutes);

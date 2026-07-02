@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
+import { analyticsRecomputeWorkerService } from "./jobs/analytics-recompute.worker";
 
 import app, { initMastraServer } from "./app";
 import { config } from "./config";
@@ -102,6 +103,9 @@ const startServer = async () => {
         // Start background worker for outbox notifications fanning
         NotificationWorkerService.start();
 
+        // Start background worker for analytics pipeline recompute (dashboard metrics)
+        analyticsRecomputeWorkerService.start();
+
         // Start trial expiry job (checks every hour for expired trials & lockouts)
         startTrialExpiryJob();
 
@@ -130,6 +134,7 @@ const startServer = async () => {
             log.info({ signal }, "Received shutdown signal. Shutting down gracefully...");
             NotificationWorkerService.stop();
             taskOverdueWorkerService.stop();
+            analyticsRecomputeWorkerService.stop();
             stopTrialExpiryJob();
             server.close(() => {
                 pool.end().then(() => {
@@ -147,5 +152,6 @@ const startServer = async () => {
         process.exit(1);
     }
 };
+
 
 startServer();
