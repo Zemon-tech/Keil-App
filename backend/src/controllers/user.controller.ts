@@ -66,7 +66,7 @@ export const completeOnboarding = async (req: any, res: Response, next: NextFunc
 export const updateProfile = async (req: any, res: Response, next: NextFunction) => {
     try {
         const userId = req.user?.id;
-        const { name, avatar_url } = req.body;
+        const { name, avatar_url, username } = req.body;
 
         if (!userId) {
             throw new ApiError(401, "Unauthorized access");
@@ -85,6 +85,10 @@ export const updateProfile = async (req: any, res: Response, next: NextFunction)
             updates.push(`avatar_url = $${index++}`);
             values.push(avatar_url);
         }
+        if (username !== undefined) {
+            updates.push(`username = $${index++}`);
+            values.push(username);
+        }
 
         if (updates.length > 0) {
             values.push(userId);
@@ -94,9 +98,16 @@ export const updateProfile = async (req: any, res: Response, next: NextFunction)
                 WHERE id = $${index}
                 RETURNING *
             `;
-            const result = await pool.query(query, values);
-            if (result.rows.length === 0) {
-                throw new ApiError(404, "User profile not found");
+            try {
+                const result = await pool.query(query, values);
+                if (result.rows.length === 0) {
+                    throw new ApiError(404, "User profile not found");
+                }
+            } catch (err: any) {
+                if (err.code === '23505' && err.constraint === 'users_username_key') {
+                    throw new ApiError(400, "This username is already in use. Please choose a different username.");
+                }
+                throw err;
             }
             
             // If the name was updated, rename their personal organization (Workspace) to match
@@ -137,7 +148,7 @@ export const updateProfile = async (req: any, res: Response, next: NextFunction)
         return res.status(200).json(
             new ApiResponse(
                 200,
-                { name, avatar_url },
+                { name, avatar_url, username },
                 "Profile updated and broadcasted successfully"
             )
         );

@@ -71,6 +71,14 @@ const startServer = async () => {
             dbLog.warn({ err }, "Note on altering messages table for attachments");
         }
 
+        // Ensure username column exists on users table
+        try {
+            await pool.query("ALTER TABLE public.users ADD COLUMN IF NOT EXISTS username TEXT UNIQUE");
+            dbLog.info("Successfully verified and applied users table username column");
+        } catch (err: unknown) {
+            dbLog.warn({ err }, "Note on altering users table for username");
+        }
+
         // Ensure summary_text column exists on meeting_recordings table
         try {
             await pool.query("ALTER TABLE public.meeting_recordings ADD COLUMN IF NOT EXISTS summary_text TEXT DEFAULT NULL");

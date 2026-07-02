@@ -1124,14 +1124,19 @@ function AccountTab() {
     setLoading(true);
     setError(null);
     try {
+      // 1. Call backend to update database and enforce uniqueness
+      await api.patch("users/profile", { username: newUsername.trim() });
+
+      // 2. Update Supabase metadata for local auth context
       const { error } = await supabase.auth.updateUser({
         data: { username: newUsername.trim() },
       });
       if (error) throw error;
+      
       setSuccess("Username updated successfully");
       setIsEditingUsername(false);
     } catch (err: any) {
-      setError(err.message || "Failed to update username");
+      setError(err.response?.data?.message || err.message || "Failed to update username");
     } finally {
       setLoading(false);
     }
