@@ -26,6 +26,7 @@ const validatePermission = (value: unknown): value is MotionPermission =>
   value === MotionPermission.EDIT_ALL ||
   value === MotionPermission.EDIT_MANAGERS ||
   value === MotionPermission.EDIT_ADMINS ||
+  value === MotionPermission.FULL_ALL ||
   value === MotionPermission.VIEW ||
   value === MotionPermission.EDIT;
 

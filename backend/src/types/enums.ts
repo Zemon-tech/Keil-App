@@ -68,6 +68,7 @@ export enum MotionPermission {
   EDIT_ALL = 'edit_all',
   EDIT_MANAGERS = 'edit_managers',
   EDIT_ADMINS = 'edit_admins',
+  FULL_ALL = 'full_all',
   VIEW = 'view',
   EDIT = 'edit',
 }

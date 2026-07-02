@@ -1029,14 +1029,14 @@ export function MotionSharePanel({
 
                   const spaceName = space?.name || "General";
                   const orgName = org?.name || "Workspace";
-                  const accessValue = share.permission.startsWith("edit_") ? "edit" : "view";
+                  const accessValue = share.permission === "full_all" ? "full" : share.permission.startsWith("edit_") ? "edit" : "view";
 
                   const handleAccessChange = (val: string) => {
                     if (val === "remove") {
                       revokeShare.mutate(share.id);
                       toast.success(`Removed space "${spaceName}" access`);
                     } else {
-                      const permission = (val === "edit" ? "edit_all" : "view_all") as MotionPermission;
+                      const permission = (val === "full" ? "full_all" : val === "edit" ? "edit_all" : "view_all") as MotionPermission;
                       updateShare.mutate({ shareId: share.id, permission });
                       toast.success(`Updated space "${spaceName}" access to ${val}`);
                     }
@@ -1072,14 +1072,14 @@ export function MotionSharePanel({
                 {userShares.map((share) => {
                   const userName = share.target_user_name || share.target_user_email?.split("@")[0] || "User";
                   const userEmail = share.target_user_email || "";
-                  const accessValue = share.permission.startsWith("edit_") ? "edit" : "view";
+                  const accessValue = share.permission === "full_all" ? "full" : share.permission.startsWith("edit_") ? "edit" : "view";
 
                   const handleAccessChange = (val: string) => {
                     if (val === "remove") {
                       revokeShare.mutate(share.id);
                       toast.success(`Removed user "${userName}" access`);
                     } else {
-                      const permission = (val === "edit" ? "edit_all" : "view_all") as MotionPermission;
+                      const permission = (val === "full" ? "full_all" : val === "edit" ? "edit_all" : "view_all") as MotionPermission;
                       updateShare.mutate({ shareId: share.id, permission });
                       toast.success(`Updated user "${userName}" access to ${val}`);
                     }

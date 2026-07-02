@@ -39,6 +39,7 @@ export type MotionPermission =
   | "edit_all"
   | "edit_managers"
   | "edit_admins"
+  | "full_all"
   | "view"
   | "edit";
 

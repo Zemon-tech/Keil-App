@@ -420,7 +420,10 @@ export const updatePage = async (
         });
     }
 
-    const dto = toPageDTO(updated);
+    const dto = toPageDTO({
+      ...updated,
+      share_permission: page.share_permission,
+    });
     await broadcastToAllAccessSpaces(pageId, spaceId, { type: 'update', pageId, page: dto, userId });
     return dto;
   }
@@ -795,6 +798,8 @@ export const updateShare = async (
         readablePerm = `edit (${permission.replace('edit_', '')})`;
       } else if (permission.startsWith('view_')) {
         readablePerm = `view (${permission.replace('view_', '')})`;
+      } else if (permission.startsWith('full_')) {
+        readablePerm = `full (${permission.replace('full_', '')})`;
       }
 
       await motionAnalyticsRepository.logUpdate({

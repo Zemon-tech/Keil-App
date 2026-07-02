@@ -49,6 +49,7 @@ const startServer = async () => {
             await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_all'");
             await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_managers'");
             await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'edit_admins'");
+            await pool.query("ALTER TYPE public.motion_permission ADD VALUE IF NOT EXISTS 'full_all'");
             dbLog.info("Successfully added new motion_permission values");
         } catch (err: unknown) {
             dbLog.warn({ err }, "Note on altering motion_permission enum");
