@@ -1,5 +1,5 @@
 import { FileText, Box, Github, Link2, Circle, CircleDashed, CheckCircle2, XCircle, type LucideProps } from "lucide-react";
-import { format, formatDistanceToNow, startOfDay, subDays } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import type { TaskPriority, TaskStatus, EventStatus, AnyStatus } from "@/types/task";
 import { cn } from "@/lib/utils";
 
@@ -116,7 +116,7 @@ export const formatDate = (dateStr: string) => format(new Date(dateStr), "d MMM"
  * All-day due_date is stored as the exclusive end (day after last included day)
  * for FullCalendar compatibility. Subtract 1 day to show the correct last day.
  */
-export const formatDueDate = (dateStr: string, isAllDay?: boolean) => {
+export const formatDueDate = (dateStr: string) => {
   const d = new Date(dateStr);
   return format(d, "d MMM");
 };

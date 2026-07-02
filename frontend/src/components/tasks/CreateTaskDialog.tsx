@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { format, addDays, subDays, nextMonday, startOfToday, startOfDay, parseISO } from "date-fns";
+import { format, addDays, nextMonday, startOfToday, startOfDay, parseISO } from "date-fns";
 import {
   CalendarIcon,
   Flag,
@@ -466,7 +466,6 @@ export function CreateTaskDialog({
 
       const start = (initialValues as any).start_date;
       const end = (initialValues as any).due_date;
-      const loadedIsAllDay = initialValues.is_all_day ?? true;
       if (start) setDate(parseISO(start));
       if (end) {
         setEndDate(parseISO(end));

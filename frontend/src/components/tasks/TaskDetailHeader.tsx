@@ -467,7 +467,7 @@ export function TaskDetailHeader({
         {(task.due_date || task.dueDateISO) && (
           <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[11px]">
             <Calendar className="size-3" />
-            {formatDueDate(task.due_date || task.dueDateISO!, task.is_all_day)}
+            {formatDueDate(task.due_date || task.dueDateISO!)}
           </Badge>
         )}
 

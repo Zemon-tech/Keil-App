@@ -95,7 +95,7 @@ type Props = {
   onCollapse?: () => void;
 };
 
-function formatTaskDateRange(start?: string, end?: string, isAllDay?: boolean) {
+function formatTaskDateRange(start?: string, end?: string) {
   if (!end) return start ? format(new Date(start), "MMM d") : "\u2014";
   if (!start) return format(new Date(end), "MMM d");
 
@@ -325,7 +325,7 @@ function SubtaskList({
             <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-muted-foreground ml-auto">
               {isHighPriority && <Flag className="size-2.5 text-orange-400 shrink-0" />}
               <span className="tabular-nums text-right leading-tight">
-                {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined, (sub as any).is_all_day)}
+                {formatTaskDateRange(sub.start_date ?? undefined, sub.due_date ?? undefined)}
               </span>
             </div>
           </div>
@@ -1244,7 +1244,7 @@ export function TaskListPane({
               "tabular-nums transition-opacity group-hover/item:opacity-0 text-right leading-tight w-full",
               isDone && "opacity-40"
             )}>
-              {formatTaskDateRange(t.start_date, t.due_date, t.is_all_day)}
+              {formatTaskDateRange(t.start_date, t.due_date)}
             </span>
 
             {/* Hover Action Menu */}
