@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ChangeEvent, type ElementType } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent, type ElementType } from "react";
 import {
   ArrowRight,
   FileText,
@@ -10,6 +10,10 @@ import {
   SearchIcon,
   Mic,
   Brain,
+  CheckSquare,
+  CalendarDays,
+  User,
+  X,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,6 +50,14 @@ import {
 import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input-context";
 import type { AttachmentData } from "@/components/ai-elements/attachments-utils";
 import { cn } from "@/lib/utils";
+import { useAppContext } from "@/contexts/AppContext";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useOrgTasks } from "@/hooks/api/useTasks";
+import { useMotionPages, useSharedToSpace } from "@/hooks/api/useMotionPages";
+import { preprocessMentions } from "../tasks/renderMessageContent";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Models are defined dynamically based on user settings
 
@@ -136,6 +148,15 @@ const PromptInputAttachmentsDisplay = () => {
   );
 };
 
+type PickerType = "all" | "user" | "task" | "event" | "page";
+
+interface MentionState {
+  type: PickerType | null;
+  triggerIndex: number;
+  query: string;
+  highlightedIndex: number;
+}
+
 interface HeroPromptSurfaceProps {
   isChatStarted: boolean;
   onSuggestionClick: (suggestion: (typeof suggestions)[number]) => void;
@@ -145,6 +166,7 @@ interface HeroPromptSurfaceProps {
   showCommandMenu: boolean;
   status?: "submitted" | "streaming" | "ready" | "error";
   text: string;
+  setText: (value: string) => void;
   useWebSearch: boolean;
   useThinking: boolean;
   valueChanged: (event: ChangeEvent<HTMLTextAreaElement>) => void;
@@ -159,6 +181,7 @@ function HeroPromptSurface({
   showCommandMenu,
   status,
   text,
+  setText,
   useWebSearch,
   useThinking,
   valueChanged,
@@ -167,6 +190,256 @@ function HeroPromptSurface({
   const hasAttachments = attachments.files.length > 0;
   const canSubmit = Boolean(text.trim()) || hasAttachments || useWebSearch;
   const isActive = status === "submitted" || status === "streaming";
+
+  // --- Universal Mentions Data ---
+  const { user } = useAuth();
+  const userId = user?.id;
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
+  const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
+  const { data: pages = [] } = useMotionPages(activeOrgId, activeSpaceId);
+  const { data: sharedPages = [] } = useSharedToSpace(activeOrgId, activeSpaceId);
+
+  const [mention, setMention] = useState<MentionState>({
+    type: null,
+    triggerIndex: -1,
+    query: "",
+    highlightedIndex: 0,
+  });
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  const filteredMembers = useMemo(() => {
+    return (members || []).filter((m: any) => {
+      const name = m.name || m.email || "";
+      return name.toLowerCase().includes(mention.query.toLowerCase());
+    });
+  }, [members, mention.query]);
+
+  const filteredTasks = useMemo(() => {
+    return allTasks
+      .filter(
+        (t: any) =>
+          t.type === "task" &&
+          t.title.toLowerCase().includes(mention.query.toLowerCase())
+      )
+      .sort((a: any, b: any) => {
+        if (!userId) return 0;
+        const aAssigned = a.assignees?.some((asg: any) => asg.id === userId);
+        const bAssigned = b.assignees?.some((asg: any) => asg.id === userId);
+        if (aAssigned && !bAssigned) return -1;
+        if (!aAssigned && bAssigned) return 1;
+        return 0;
+      });
+  }, [allTasks, mention.query, userId]);
+
+  const filteredEvents = useMemo(() => {
+    return allTasks.filter(
+      (t: any) =>
+        t.type === "event" &&
+        t.title.toLowerCase().includes(mention.query.toLowerCase())
+    );
+  }, [allTasks, mention.query]);
+
+  const filteredPages = useMemo(() => {
+    const combined = [...pages, ...sharedPages];
+    const unique = combined.reduce((acc: any[], current: any) => {
+      if (!acc.some(p => p.id === current.id)) {
+        acc.push(current);
+      }
+      return acc;
+    }, []);
+    return unique.filter(
+      (p: any) =>
+        !p.deleted_at &&
+        (p.title || "Untitled").toLowerCase().includes(mention.query.toLowerCase())
+    );
+  }, [pages, sharedPages, mention.query]);
+
+  const categories = useMemo(() => [
+    { id: "cat-user", kind: "category" as const, type: "user" as const, title: "People", icon: <User className="size-4" /> },
+    { id: "cat-task", kind: "category" as const, type: "task" as const, title: "Tasks", icon: <CheckSquare className="size-4" /> },
+    { id: "cat-event", kind: "category" as const, type: "event" as const, title: "Events", icon: <CalendarDays className="size-4" /> },
+    { id: "cat-page", kind: "category" as const, type: "page" as const, title: "Pages", icon: <FileText className="size-4" /> },
+  ], []);
+
+  const groupedResults = useMemo(() => {
+    if (mention.type !== "all" || !mention.query) return [];
+    return [
+      { label: "People", items: filteredMembers.slice(0, 3).map((m: any) => ({ ...m, kind: "user" as const })) },
+      { label: "Tasks", items: filteredTasks.slice(0, 3).map((t: any) => ({ ...t, kind: "task" as const })) },
+      { label: "Events", items: filteredEvents.slice(0, 3).map((e: any) => ({ ...e, kind: "event" as const })) },
+      { label: "Pages", items: filteredPages.slice(0, 3).map((p: any) => ({ ...p, kind: "page" as const })) },
+    ].filter(g => g.items.length > 0);
+  }, [mention.type, mention.query, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
+
+  const flatResults = useMemo(() => {
+    if (mention.type === "all") {
+      if (!mention.query) {
+        return categories;
+      }
+      return groupedResults.flatMap(g => g.items);
+    }
+    if (mention.type === "user") return filteredMembers.map((m: any) => ({ ...m, kind: "user" as const }));
+    if (mention.type === "task") return filteredTasks.map((t: any) => ({ ...t, kind: "task" as const }));
+    if (mention.type === "event") return filteredEvents.map((e: any) => ({ ...e, kind: "event" as const }));
+    if (mention.type === "page") return filteredPages.map((p: any) => ({ ...p, kind: "page" as const }));
+    return [];
+  }, [mention.type, mention.query, categories, groupedResults, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
+
+  const clampedIndex = useMemo(() => {
+    return flatResults.length > 0
+      ? Math.min(Math.max(0, mention.highlightedIndex), flatResults.length - 1)
+      : 0;
+  }, [flatResults.length, mention.highlightedIndex]);
+
+  const detectMentionFromInput = useCallback(
+    (value: string, caretPos: number) => {
+      const MENTION_TRIGGERS: Record<string, "all" | "user" | "task" | "event" | "page"> = {
+        "@": "all",
+      };
+      for (let i = caretPos - 1; i >= 0; i--) {
+        const ch = value[i];
+        if (ch in MENTION_TRIGGERS) {
+          const between = value.slice(i + 1, caretPos);
+          if (!between.includes(" ") && !between.includes("\n")) {
+            setMention((prev) => {
+              const keepType =
+                prev.type && prev.type !== "all" && prev.triggerIndex === i
+                  ? prev.type
+                  : MENTION_TRIGGERS[ch];
+              const nextHighlighted = prev.query === between ? prev.highlightedIndex : 0;
+              return {
+                type: keepType,
+                triggerIndex: i,
+                query: between,
+                highlightedIndex: nextHighlighted,
+              };
+            });
+            return;
+          }
+          break;
+        }
+        if (ch === " " || ch === "\n") break;
+      }
+      setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+    },
+    []
+  );
+
+  const closePicker = useCallback(() => {
+    setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (!mention.type) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(e.target as Node) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(e.target as Node)
+      ) {
+        closePicker();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [mention.type, closePicker]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    valueChanged(e);
+    const value = e.target.value;
+    const caretPos = e.target.selectionStart ?? value.length;
+    detectMentionFromInput(value, caretPos);
+  };
+
+  const handleInputSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = e.target as HTMLTextAreaElement;
+    detectMentionFromInput(target.value, target.selectionStart ?? target.value.length);
+  };
+
+  const handleInsertMention = useCallback(
+    (label: string, _type: string, _id: string) => {
+      if (mention.triggerIndex === -1) return;
+
+      const before = text.slice(0, mention.triggerIndex);
+      const after = text.slice(mention.triggerIndex + 1 + mention.query.length);
+      const inserted = `@${label} `;
+      const newValue = before + inserted + after;
+      
+      setText(newValue);
+
+      const newCaretPos = before.length + inserted.length;
+      requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (textarea) {
+          textarea.focus();
+          textarea.setSelectionRange(newCaretPos, newCaretPos);
+        }
+      });
+
+      closePicker();
+    },
+    [text, mention, setText, closePicker]
+  );
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mention.type) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMention((prev) => ({
+          ...prev,
+          highlightedIndex: Math.min(prev.highlightedIndex + 1, flatResults.length - 1),
+        }));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMention((prev) => ({
+          ...prev,
+          highlightedIndex: Math.max(prev.highlightedIndex - 1, 0),
+        }));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const item = flatResults[clampedIndex];
+        if (item) {
+          if (item.kind === "category") {
+            setMention((prev) => ({
+              ...prev,
+              type: item.type,
+              highlightedIndex: 0,
+            }));
+          } else {
+            const type = item.kind;
+            const label = item.kind === "user"
+              ? (item.name || item.email?.split('@')[0] || "")
+              : (item.title || "Untitled");
+            const id = item.kind === "user" ? item.user_id : item.id;
+            handleInsertMention(label, type, id);
+          }
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closePicker();
+        return;
+      }
+    }
+  };
+
+  const pickerLabel =
+    mention.type === "user"
+      ? "people"
+      : mention.type === "event"
+      ? "events"
+      : mention.type === "task"
+      ? "tasks"
+      : "pages";
 
   return (
     <>
@@ -178,7 +451,190 @@ function HeroPromptSurface({
 
       <PromptInputBody>
         <div className="relative w-full px-4 sm:px-5">
+          {mention.type && (
+            <div
+              ref={pickerRef}
+              className="absolute bottom-[calc(100%+8px)] left-4 right-4 flex flex-col bg-popover text-popover-foreground rounded-xl border shadow-2xl z-[9999] overflow-hidden font-sans border-border/70"
+            >
+              <div className="px-3 py-2 border-b bg-muted/50 border-border/50 flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {mention.type === "all" && !mention.query
+                    ? "Tag everything..."
+                    : mention.type === "all"
+                    ? `Searching for "${mention.query}"`
+                    : mention.query
+                    ? `Searching ${pickerLabel} for "${mention.query}"`
+                    : `Matching ${pickerLabel}…`}
+                </span>
+                <button
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    closePicker();
+                  }}
+                  className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors"
+                  aria-label="Close picker"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+
+              <ScrollArea className="max-h-48 overflow-y-auto">
+                {mention.type === "all" && !mention.query ? (
+                  <div className="p-1.5 space-y-0.5">
+                    {categories.map((cat, idx) => (
+                      <button
+                        key={cat.id}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setMention((prev) => ({
+                            ...prev,
+                            type: cat.type,
+                            highlightedIndex: 0,
+                          }));
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors ${
+                          idx === clampedIndex
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent/60 text-foreground"
+                        }`}
+                      >
+                        <span className="shrink-0 size-6 rounded flex items-center justify-center bg-muted text-muted-foreground">
+                          {cat.icon}
+                        </span>
+                        <span className="text-xs font-medium">{cat.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-1.5 space-y-2">
+                    {flatResults.length === 0 ? (
+                      <p className="py-4 text-xs text-muted-foreground text-center">No results found</p>
+                    ) : mention.type === "all" ? (
+                      (() => {
+                        let flatIdx = 0;
+                        return groupedResults.map((group) => (
+                          <div key={group.label} className="space-y-0.5">
+                            <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                              {group.label}
+                            </p>
+                            {group.items.map((item: any) => {
+                              const idx = flatIdx++;
+                              const icon =
+                                item.kind === "user" ? (
+                                  <Avatar className="size-5 shrink-0">
+                                    <AvatarImage
+                                      src={getOptimizedImageUrl(item.avatar_url || item.avatarUrl, { width: 40, height: 40 })}
+                                      alt={item.name || item.email || "User"}
+                                    />
+                                    <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
+                                      {(item.name || item.email || "U").charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                ) : item.kind === "task" ? (
+                                  <CheckSquare className="size-4 text-muted-foreground shrink-0" />
+                                ) : item.kind === "event" ? (
+                                  <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <FileText className="size-4 text-muted-foreground shrink-0" />
+                                );
+
+                              const displayTitle =
+                                item.kind === "user"
+                                  ? item.email?.split('@')[0] || item.name || item.email || ""
+                                  : item.title || "Untitled";
+
+                              const label = item.kind === "user"
+                                ? item.name || item.email?.split('@')[0] || ""
+                                : item.title || "Untitled";
+
+                              return (
+                                <button
+                                  key={item.kind === "user" ? item.user_id : item.id}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    handleInsertMention(label, item.kind, item.kind === "user" ? item.user_id : item.id);
+                                  }}
+                                  className={`w-full flex items-center gap-2.5 p-1.5 rounded-md text-left transition-colors ${
+                                    idx === clampedIndex
+                                      ? "bg-accent text-accent-foreground"
+                                      : "hover:bg-accent/60 text-foreground"
+                                  }`}
+                                >
+                                  {icon}
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="text-xs font-medium truncate">{displayTitle}</span>
+                                    {item.kind === "user" && item.email && (
+                                      <span className="text-[9px] text-muted-foreground truncate">{item.email}</span>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ));
+                      })()
+                    ) : (
+                      flatResults.map((item: any, idx) => {
+                        const icon =
+                          item.kind === "user" ? (
+                            <Avatar className="size-5 shrink-0">
+                              <AvatarImage
+                                src={getOptimizedImageUrl(item.avatar_url || item.avatarUrl, { width: 40, height: 40 })}
+                                alt={item.name || item.email || "User"}
+                              />
+                              <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
+                                {(item.name || item.email || "U").charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                          ) : item.kind === "task" ? (
+                            <CheckSquare className="size-4 text-muted-foreground shrink-0" />
+                          ) : item.kind === "event" ? (
+                            <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                          ) : (
+                            <FileText className="size-4 text-muted-foreground shrink-0" />
+                          );
+
+                        const displayTitle =
+                          item.kind === "user"
+                            ? item.email?.split('@')[0] || item.name || item.email || ""
+                            : item.title || "Untitled";
+
+                        const label = item.kind === "user"
+                          ? item.name || item.email?.split('@')[0] || ""
+                          : item.title || "Untitled";
+
+                        return (
+                          <button
+                            key={item.kind === "user" ? item.user_id : item.id}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              handleInsertMention(label, item.kind, item.kind === "user" ? item.user_id : item.id);
+                            }}
+                            className={`w-full flex items-center gap-2.5 p-1.5 rounded-md text-left transition-colors ${
+                              idx === clampedIndex
+                                ? "bg-accent text-accent-foreground"
+                                : "hover:bg-accent/60 text-foreground"
+                            }`}
+                          >
+                            {icon}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-medium truncate">{displayTitle}</span>
+                              {item.kind === "user" && item.email && (
+                                <span className="text-[9px] text-muted-foreground truncate">{item.email}</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          )}
+
           <PromptInputTextarea
+            ref={textareaRef}
             className={cn(
               "bg-transparent border-none px-0 text-foreground placeholder:text-muted-foreground/55 focus-visible:ring-0 resize-none font-normal transition-all duration-200",
               isChatStarted
@@ -187,7 +643,9 @@ function HeroPromptSurface({
                   ? "min-h-[5rem] pt-3 pb-2 text-base sm:text-lg max-h-48 overflow-y-auto"
                   : "min-h-[5rem] pt-3 pb-2 text-[1rem] sm:text-[1.05rem] max-h-48 overflow-y-auto",
             )}
-            onChange={valueChanged}
+            onChange={handleInputChange}
+            onSelect={handleInputSelect}
+            onKeyDown={handleKeyDown}
             placeholder={
               isChatStarted ? "Write a message..." : "How can I help you today?"
             }
@@ -313,6 +771,12 @@ export function HeroPromptInput({
   onStop,
 }: HeroPromptInputProps) {
   const { user } = useAuth();
+  const { activeOrgId, activeSpaceId } = useAppContext();
+  const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
+  const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
+  const { data: pages = [] } = useMotionPages(activeOrgId, activeSpaceId);
+  const { data: sharedPages = [] } = useSharedToSpace(activeOrgId, activeSpaceId);
+
   const [text, setText] = useState("");
   const [useWebSearch, setUseWebSearch] = useState(false);
   const [useThinking, setUseThinking] = useState(false);
@@ -352,7 +816,12 @@ export function HeroPromptInput({
       return;
     }
 
-    onSubmit?.(message);
+    const processedText = preprocessMentions(message.text || "", members, allTasks, pages, sharedPages);
+
+    onSubmit?.({
+      ...message,
+      text: processedText,
+    });
     setText("");
     setShowCommandMenu(false);
   };
@@ -414,6 +883,7 @@ export function HeroPromptInput({
             showCommandMenu={showCommandMenu}
             status={status}
             text={text}
+            setText={setText}
             useWebSearch={useWebSearch}
             useThinking={useThinking}
             valueChanged={handleTextChange}

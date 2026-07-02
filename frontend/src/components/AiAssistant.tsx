@@ -7,13 +7,20 @@ import { supabase } from "@/lib/supabase";
 import api from "@/lib/api";
 import { useAppContext } from "@/contexts/AppContext";
 import { useMe } from "@/hooks/api/useMe";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getToolActivity, extractToolInvocations } from "@/lib/agent-activity";
 import { extractStreamingActivities, buildChainOfThoughtTimeline } from "@/lib/activity-stream";
 import { uploadChatAttachment } from "@/lib/s3-upload";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useOrgTasks } from "@/hooks/api/useTasks";
+import { useMotionPages, useSharedToSpace } from "@/hooks/api/useMotionPages";
+import { renderMessageContent, preprocessMentions } from "./tasks/renderMessageContent";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { CheckSquare, CalendarDays, User } from "lucide-react";
 
 import {
     Message,
@@ -23,7 +30,6 @@ import {
     LikeAction,
     DislikeAction,
     CopyAction,
-    TruncatedMessage,
 } from "@/components/ai-elements/message";
 import {
     PromptInput,
@@ -55,7 +61,7 @@ import {
     AttachmentRemove,
     Attachments,
 } from "@/components/ai-elements/attachments";
-import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input-context";
+import { usePromptInputAttachments, usePromptInputController } from "@/components/ai-elements/prompt-input-context";
 import {
     X,
     PanelRight,
@@ -490,6 +496,12 @@ export function AiAssistant() {
     const { data: me } = useMe();
     const userId = me?.id;
 
+    const navigate = useNavigate();
+    const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
+    const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
+    const { data: pages = [] } = useMotionPages(activeOrgId, activeSpaceId);
+    const { data: sharedPages = [] } = useSharedToSpace(activeOrgId, activeSpaceId);
+
     // ─── Page Context Detection ────────────────────────────────────────────
     // NOTE: AiAssistant lives in Layout (parent of all routes), so useParams()
     // never captures child-route params. We parse them directly from pathname.
@@ -817,6 +829,7 @@ export function AiAssistant() {
 
         try {
             let text = message.text.trim();
+            text = preprocessMentions(text, members, allTasks, pages, sharedPages);
             let uploadedFiles: any[] = [];
 
             if (message.files && message.files.length > 0) {
@@ -871,7 +884,7 @@ export function AiAssistant() {
         } finally {
             setIsUploadingFiles(false);
         }
-    }, [isStreaming, isUploadingFiles, sendMessage]);
+    }, [isStreaming, isUploadingFiles, sendMessage, members, allTasks, pages, sharedPages]);
 
     const handleSuggestionClick = useCallback((prompt: string) => {
         if (isStreaming) return;
@@ -1077,73 +1090,543 @@ export function AiAssistant() {
         </div>
     );
 
+type PickerType = "all" | "user" | "task" | "event" | "page";
+
+interface MentionState {
+    type: PickerType | null;
+    triggerIndex: number;
+    query: string;
+    highlightedIndex: number;
+}
+
+const AiAssistantInputInner = ({
+    onSubmit,
+    isStreaming,
+    members,
+    allTasks,
+    pages,
+    sharedPages = [],
+    userId,
+}: {
+    onSubmit: (message: PromptInputMessage, event: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
+    isStreaming: boolean;
+    members: any[];
+    allTasks: any[];
+    pages: any[];
+    sharedPages?: any[];
+    userId?: string;
+}) => {
+    const controller = usePromptInputController();
+
+    const [mention, setMention] = useState<MentionState>({
+        type: null,
+        triggerIndex: -1,
+        query: "",
+        highlightedIndex: 0,
+    });
+
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const pickerRef = useRef<HTMLDivElement>(null);
+
+    const filteredMembers = useMemo(() => {
+        return (members || []).filter((m: any) => {
+            const name = m.name || m.email || "";
+            return name.toLowerCase().includes(mention.query.toLowerCase());
+        });
+    }, [members, mention.query]);
+
+    const filteredTasks = useMemo(() => {
+        return allTasks
+            .filter(
+                (t: any) =>
+                    t.type === "task" &&
+                    t.title.toLowerCase().includes(mention.query.toLowerCase())
+            )
+            .sort((a: any, b: any) => {
+                if (!userId) return 0;
+                const aAssigned = a.assignees?.some((asg: any) => asg.id === userId);
+                const bAssigned = b.assignees?.some((asg: any) => asg.id === userId);
+                if (aAssigned && !bAssigned) return -1;
+                if (!aAssigned && bAssigned) return 1;
+                return 0;
+            });
+    }, [allTasks, mention.query, userId]);
+
+    const filteredEvents = useMemo(() => {
+        return allTasks.filter(
+            (t: any) =>
+                t.type === "event" &&
+                t.title.toLowerCase().includes(mention.query.toLowerCase())
+        );
+    }, [allTasks, mention.query]);
+
+    const filteredPages = useMemo(() => {
+        const combined = [...pages, ...sharedPages];
+        const unique = combined.reduce((acc: any[], current: any) => {
+            if (!acc.some(p => p.id === current.id)) {
+                acc.push(current);
+            }
+            return acc;
+        }, []);
+        return unique.filter(
+            (p: any) =>
+                !p.deleted_at &&
+                (p.title || "Untitled").toLowerCase().includes(mention.query.toLowerCase())
+        );
+    }, [pages, sharedPages, mention.query]);
+
+    const categories = useMemo(() => [
+        { id: "cat-user", kind: "category" as const, type: "user" as const, title: "People", icon: <User className="size-4" /> },
+        { id: "cat-task", kind: "category" as const, type: "task" as const, title: "Tasks", icon: <CheckSquare className="size-4" /> },
+        { id: "cat-event", kind: "category" as const, type: "event" as const, title: "Events", icon: <CalendarDays className="size-4" /> },
+        { id: "cat-page", kind: "category" as const, type: "page" as const, title: "Pages", icon: <FileText className="size-4" /> },
+    ], []);
+
+    const groupedResults = useMemo(() => {
+        if (mention.type !== "all" || !mention.query) return [];
+        return [
+            { label: "People", items: filteredMembers.slice(0, 3).map((m: any) => ({ ...m, kind: "user" as const })) },
+            { label: "Tasks", items: filteredTasks.slice(0, 3).map((t: any) => ({ ...t, kind: "task" as const })) },
+            { label: "Events", items: filteredEvents.slice(0, 3).map((e: any) => ({ ...e, kind: "event" as const })) },
+            { label: "Pages", items: filteredPages.slice(0, 3).map((p: any) => ({ ...p, kind: "page" as const })) },
+        ].filter(g => g.items.length > 0);
+    }, [mention.type, mention.query, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
+
+    const flatResults = useMemo(() => {
+        if (mention.type === "all") {
+            if (!mention.query) {
+                return categories;
+            }
+            return groupedResults.flatMap(g => g.items);
+        }
+        if (mention.type === "user") return filteredMembers.map((m: any) => ({ ...m, kind: "user" as const }));
+        if (mention.type === "task") return filteredTasks.map((t: any) => ({ ...t, kind: "task" as const }));
+        if (mention.type === "event") return filteredEvents.map((e: any) => ({ ...e, kind: "event" as const }));
+        if (mention.type === "page") return filteredPages.map((p: any) => ({ ...p, kind: "page" as const }));
+        return [];
+    }, [mention.type, mention.query, categories, groupedResults, filteredMembers, filteredTasks, filteredEvents, filteredPages]);
+
+    const clampedIndex = useMemo(() => {
+        return flatResults.length > 0
+            ? Math.min(Math.max(0, mention.highlightedIndex), flatResults.length - 1)
+            : 0;
+    }, [flatResults.length, mention.highlightedIndex]);
+
+    const detectMentionFromInput = useCallback(
+        (value: string, caretPos: number) => {
+            const MENTION_TRIGGERS: Record<string, "all" | "user" | "task" | "event" | "page"> = {
+                "@": "all",
+            };
+            for (let i = caretPos - 1; i >= 0; i--) {
+                const ch = value[i];
+                if (ch in MENTION_TRIGGERS) {
+                    const between = value.slice(i + 1, caretPos);
+                    if (!between.includes(" ") && !between.includes("\n")) {
+                        setMention((prev) => {
+                            const keepType =
+                                prev.type && prev.type !== "all" && prev.triggerIndex === i
+                                    ? prev.type
+                                    : MENTION_TRIGGERS[ch];
+                            const nextHighlighted = prev.query === between ? prev.highlightedIndex : 0;
+                            return {
+                                type: keepType,
+                                triggerIndex: i,
+                                query: between,
+                                highlightedIndex: nextHighlighted,
+                            };
+                        });
+                        return;
+                    }
+                    break;
+                }
+                if (ch === " " || ch === "\n") break;
+            }
+            setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+        },
+        []
+    );
+
+    const closePicker = useCallback(() => {
+        setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+    }, []);
+
+    useEffect(() => {
+        if (!mention.type) return;
+        const handlePointerDown = (e: PointerEvent) => {
+            if (
+                pickerRef.current &&
+                !pickerRef.current.contains(e.target as Node) &&
+                textareaRef.current &&
+                !textareaRef.current.contains(e.target as Node)
+            ) {
+                closePicker();
+            }
+        };
+        document.addEventListener("pointerdown", handlePointerDown);
+        return () => document.removeEventListener("pointerdown", handlePointerDown);
+    }, [mention.type, closePicker]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        const caretPos = e.target.selectionStart ?? value.length;
+        detectMentionFromInput(value, caretPos);
+    };
+
+    const handleInputSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+        const target = e.target as HTMLTextAreaElement;
+        detectMentionFromInput(target.value, target.selectionStart ?? target.value.length);
+    };
+
+    const handleInsertMention = useCallback(
+        (label: string, _type: string, _id: string) => {
+            if (mention.triggerIndex === -1) return;
+
+            const textVal = controller.textInput.value;
+            const before = textVal.slice(0, mention.triggerIndex);
+            const after = textVal.slice(mention.triggerIndex + 1 + mention.query.length);
+            const inserted = `@${label} `;
+            const newValue = before + inserted + after;
+            
+            controller.textInput.setInput(newValue);
+
+            const newCaretPos = before.length + inserted.length;
+            requestAnimationFrame(() => {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                    textarea.focus();
+                    textarea.setSelectionRange(newCaretPos, newCaretPos);
+                }
+            });
+
+            closePicker();
+        },
+        [controller.textInput, mention, closePicker]
+    );
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (mention.type) {
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setMention((prev) => ({
+                    ...prev,
+                    highlightedIndex: Math.min(prev.highlightedIndex + 1, flatResults.length - 1),
+                }));
+                return;
+            }
+            if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setMention((prev) => ({
+                    ...prev,
+                    highlightedIndex: Math.max(prev.highlightedIndex - 1, 0),
+                }));
+                return;
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                const item = flatResults[clampedIndex];
+                if (item) {
+                    if (item.kind === "category") {
+                        setMention((prev) => ({
+                            ...prev,
+                            type: item.type,
+                            highlightedIndex: 0,
+                        }));
+                    } else {
+                        const type = item.kind;
+                        const label = item.kind === "user"
+                            ? (item.name || item.email?.split('@')[0] || "")
+                            : (item.title || "Untitled");
+                        const id = item.kind === "user" ? item.user_id : item.id;
+                        handleInsertMention(label, type, id);
+                    }
+                }
+                return;
+            }
+            if (e.key === "Escape") {
+                e.preventDefault();
+                closePicker();
+                return;
+            }
+        }
+    };
+
+    const pickerLabel =
+        mention.type === "user"
+            ? "people"
+            : mention.type === "event"
+            ? "events"
+            : mention.type === "task"
+            ? "tasks"
+            : "pages";
+
+    return (
+        <div className="relative w-full overflow-visible">
+            {mention.type && (
+                <div
+                    ref={pickerRef}
+                    className="absolute bottom-[calc(100%+8px)] left-0 right-0 flex flex-col bg-popover text-popover-foreground rounded-xl border shadow-2xl z-[9999] overflow-hidden font-sans border-border/70"
+                >
+                    <div className="px-3 py-2 border-b bg-muted/50 border-border/50 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground">
+                            {mention.type === "all" && !mention.query
+                                ? "Tag everything..."
+                                : mention.type === "all"
+                                ? `Searching for "${mention.query}"`
+                                : mention.query
+                                ? `Searching ${pickerLabel} for "${mention.query}"`
+                                : `Matching ${pickerLabel}…`}
+                        </span>
+                        <button
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                closePicker();
+                            }}
+                            className="p-1 hover:bg-muted rounded-md text-muted-foreground transition-colors"
+                            aria-label="Close picker"
+                        >
+                            <X className="size-3.5" />
+                        </button>
+                    </div>
+
+                    <ScrollArea className="max-h-48 overflow-y-auto">
+                        {mention.type === "all" && !mention.query ? (
+                            <div className="p-1.5 space-y-0.5">
+                                {categories.map((cat, idx) => (
+                                    <button
+                                        key={cat.id}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                            setMention((prev) => ({
+                                                ...prev,
+                                                type: cat.type,
+                                                highlightedIndex: 0,
+                                            }));
+                                        }}
+                                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left transition-colors ${
+                                            idx === clampedIndex
+                                                ? "bg-accent text-accent-foreground"
+                                                : "hover:bg-accent/60 text-foreground"
+                                        }`}
+                                    >
+                                        <span className="shrink-0 size-6 rounded flex items-center justify-center bg-muted text-muted-foreground">
+                                            {cat.icon}
+                                        </span>
+                                        <span className="text-xs font-medium">{cat.title}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-1.5 space-y-2">
+                                {flatResults.length === 0 ? (
+                                    <p className="py-4 text-xs text-muted-foreground text-center">No results found</p>
+                                ) : mention.type === "all" ? (
+                                    (() => {
+                                        let flatIdx = 0;
+                                        return groupedResults.map((group) => (
+                                            <div key={group.label} className="space-y-0.5">
+                                                <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                                                    {group.label}
+                                                </p>
+                                                {group.items.map((item: any) => {
+                                                    const idx = flatIdx++;
+                                                    const icon =
+                                                        item.kind === "user" ? (
+                                                            <Avatar className="size-5 shrink-0">
+                                                                <AvatarImage
+                                                                    src={getOptimizedImageUrl(item.avatar_url || item.avatarUrl, { width: 40, height: 40 })}
+                                                                    alt={item.name || item.email || "User"}
+                                                                />
+                                                                <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
+                                                                    {(item.name || item.email || "U").charAt(0).toUpperCase()}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                        ) : item.kind === "task" ? (
+                                                            <CheckSquare className="size-4 text-muted-foreground shrink-0" />
+                                                        ) : item.kind === "event" ? (
+                                                            <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                                                        ) : (
+                                                            <FileText className="size-4 text-muted-foreground shrink-0" />
+                                                        );
+
+                                                    const displayTitle =
+                                                        item.kind === "user"
+                                                            ? item.email?.split('@')[0] || item.name || item.email || ""
+                                                            : item.title || "Untitled";
+
+                                                    const label = item.kind === "user"
+                                                        ? item.name || item.email?.split('@')[0] || ""
+                                                        : item.title || "Untitled";
+
+                                                    return (
+                                                        <button
+                                                            key={item.kind === "user" ? item.user_id : item.id}
+                                                            onMouseDown={(e) => e.preventDefault()}
+                                                            onClick={() => {
+                                                                handleInsertMention(label, item.kind, item.kind === "user" ? item.user_id : item.id);
+                                                            }}
+                                                            className={`w-full flex items-center gap-2.5 p-1.5 rounded-md text-left transition-colors ${
+                                                                idx === clampedIndex
+                                                                    ? "bg-accent text-accent-foreground"
+                                                                    : "hover:bg-accent/60 text-foreground"
+                                                            }`}
+                                                        >
+                                                            {icon}
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="text-xs font-medium truncate">{displayTitle}</span>
+                                                                {item.kind === "user" && item.email && (
+                                                                    <span className="text-[9px] text-muted-foreground truncate">{item.email}</span>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ));
+                                    })()
+                                ) : (
+                                    flatResults.map((item: any, idx) => {
+                                        const icon =
+                                            item.kind === "user" ? (
+                                                <Avatar className="size-5 shrink-0">
+                                                    <AvatarImage
+                                                        src={getOptimizedImageUrl(item.avatar_url || item.avatarUrl, { width: 40, height: 40 })}
+                                                        alt={item.name || item.email || "User"}
+                                                    />
+                                                    <AvatarFallback className="text-[9px] bg-indigo-500/10 text-indigo-500 font-semibold">
+                                                        {(item.name || item.email || "U").charAt(0).toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                            ) : item.kind === "task" ? (
+                                                <CheckSquare className="size-4 text-muted-foreground shrink-0" />
+                                            ) : item.kind === "event" ? (
+                                                <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                                            ) : (
+                                                <FileText className="size-4 text-muted-foreground shrink-0" />
+                                            );
+
+                                        const displayTitle =
+                                            item.kind === "user"
+                                                ? item.email?.split('@')[0] || item.name || item.email || ""
+                                                : item.title || "Untitled";
+
+                                        const label = item.kind === "user"
+                                            ? item.name || item.email?.split('@')[0] || ""
+                                            : item.title || "Untitled";
+
+                                        return (
+                                            <button
+                                                key={item.kind === "user" ? item.user_id : item.id}
+                                                onMouseDown={(e) => e.preventDefault()}
+                                                onClick={() => {
+                                                    handleInsertMention(label, item.kind, item.kind === "user" ? item.user_id : item.id);
+                                                }}
+                                                className={`w-full flex items-center gap-2.5 p-1.5 rounded-md text-left transition-colors ${
+                                                    idx === clampedIndex
+                                                        ? "bg-accent text-accent-foreground"
+                                                        : "hover:bg-accent/60 text-foreground"
+                                                }`}
+                                            >
+                                                {icon}
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-xs font-medium truncate">{displayTitle}</span>
+                                                    {item.kind === "user" && item.email && (
+                                                        <span className="text-[9px] text-muted-foreground truncate">{item.email}</span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        )}
+                    </ScrollArea>
+                </div>
+            )}
+
+            <PromptInput
+                globalDrop
+                multiple
+                onSubmit={onSubmit}
+                className={cn(
+                    "w-full bg-transparent overflow-visible",
+                    "[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:overflow-visible",
+                    "[&_[data-slot=input-group]]:rounded-[1.35rem]",
+                    "[&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
+                    "[&_[data-slot=input-group]]:has-[[data-slot=input-group-control]:focus-visible]:border-border/70",
+                    "[&_[data-slot=input-group]]:bg-background/88",
+                    "[&_[data-slot=input-group]]:shadow-[0_18px_55px_-36px_rgba(15,23,42,0.4)]",
+                    "[&_[data-slot=input-group]]:backdrop-blur-xl",
+                    "[&_[data-slot=input-group]]:px-3.5 [&_[data-slot=input-group]]:py-2.5",
+                    "[&_[data-slot=input-group]]:flex [&_[data-slot=input-group]]:flex-col [&_[data-slot=input-group]]:items-stretch [&_[data-slot=input-group]]:gap-1.5",
+                    "transition-all duration-300 dark:shadow-[0_30px_80px_-42px_rgba(0,0,0,0.65)]",
+                    "[&_[data-slot=input-group]]:before:pointer-events-none [&_[data-slot=input-group]]:before:absolute [&_[data-slot=input-group]]:before:inset-x-6 [&_[data-slot=input-group]]:before:top-0 [&_[data-slot=input-group]]:before:h-px [&_[data-slot=input-group]]:before:bg-white/10 [&_[data-slot=input-group]]:before:content-['']"
+                )}
+            >
+                <PromptInputHeader className="p-0 border-none">
+                    <PromptInputAttachmentsDisplay />
+                </PromptInputHeader>
+                <PromptInputBody>
+                    <PromptInputTextarea
+                        ref={textareaRef}
+                        placeholder="Write a message..."
+                        onChange={handleInputChange}
+                        onSelect={handleInputSelect}
+                        onKeyDown={handleKeyDown}
+                        className="w-full resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 p-0 border-none min-h-[36px] max-h-[100px]"
+                    />
+                </PromptInputBody>
+                <PromptInputFooter className="border-none pt-1 mt-0">
+                    <PromptInputTools>
+                        <PromptInputActionMenu>
+                            <PromptInputActionMenuTrigger
+                                className="rounded-full border border-border/60 bg-background/60 text-muted-foreground shadow-none transition-colors hover:bg-background hover:text-foreground size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
+                                variant="ghost"
+                            >
+                                <Plus className="size-3.5" />
+                            </PromptInputActionMenuTrigger>
+                            <PromptInputActionMenuContent>
+                                <PromptInputActionAddAttachments label="Add photos or files" />
+                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); alert("Screenshot feature is coming soon!"); }}>
+                                    <Camera className="mr-2 size-4" /> Add screenshot
+                                </DropdownMenuItem>
+                            </PromptInputActionMenuContent>
+                        </PromptInputActionMenu>
+                    </PromptInputTools>
+                    <div className="ml-auto flex items-center gap-1.5">
+                        <PromptInputButton
+                            className="rounded-full text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
+                            variant="ghost"
+                            onClick={() => alert("Voice input feature is coming soon!")}
+                        >
+                            <Mic className="size-3.5" />
+                        </PromptInputButton>
+                        <div className="h-4 w-px bg-border/60" />
+                        <PromptInputSubmit
+                            className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92 size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
+                            status={isStreaming ? "streaming" : "ready"}
+                            variant="ghost"
+                        />
+                    </div>
+                </PromptInputFooter>
+            </PromptInput>
+        </div>
+    );
+};
+
     // ─── Render: Input ─────────────────────────────────────────────────
     const renderInput = () => {
         return (
             <div className="bg-transparent shrink-0 px-3 pb-2 pt-1.5 flex flex-col gap-1.5">
                 <PromptInputProvider>
-                    <PromptInput
-                        globalDrop
-                        multiple
+                    <AiAssistantInputInner
                         onSubmit={handlePromptSubmit}
-                        className={cn(
-                            "w-full bg-transparent overflow-visible",
-                            "[&_[data-slot=input-group]]:relative [&_[data-slot=input-group]]:overflow-visible",
-                            "[&_[data-slot=input-group]]:rounded-[1.35rem]",
-                            "[&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
-                            "[&_[data-slot=input-group]]:has-[[data-slot=input-group-control]:focus-visible]:border-border/70",
-                            "[&_[data-slot=input-group]]:bg-background/88",
-                            "[&_[data-slot=input-group]]:shadow-[0_18px_55px_-36px_rgba(15,23,42,0.4)]",
-                            "[&_[data-slot=input-group]]:backdrop-blur-xl",
-                            "[&_[data-slot=input-group]]:px-3.5 [&_[data-slot=input-group]]:py-2.5",
-                            "[&_[data-slot=input-group]]:flex [&_[data-slot=input-group]]:flex-col [&_[data-slot=input-group]]:items-stretch [&_[data-slot=input-group]]:gap-1.5",
-                            "transition-all duration-300 dark:shadow-[0_30px_80px_-42px_rgba(0,0,0,0.65)]",
-                            "[&_[data-slot=input-group]]:before:pointer-events-none [&_[data-slot=input-group]]:before:absolute [&_[data-slot=input-group]]:before:inset-x-6 [&_[data-slot=input-group]]:before:top-0 [&_[data-slot=input-group]]:before:h-px [&_[data-slot=input-group]]:before:bg-white/10 [&_[data-slot=input-group]]:before:content-['']"
-                        )}
-                    >
-                        <PromptInputHeader className="p-0 border-none">
-                            <PromptInputAttachmentsDisplay />
-                        </PromptInputHeader>
-                        <PromptInputBody>
-                            <PromptInputTextarea
-                                placeholder="Write a message..."
-                                className="w-full resize-none bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/50 focus-visible:ring-0 p-0 border-none min-h-[36px] max-h-[100px]"
-                            />
-                        </PromptInputBody>
-                        <PromptInputFooter className="border-none pt-1 mt-0">
-                            <PromptInputTools>
-                                <PromptInputActionMenu>
-                                    <PromptInputActionMenuTrigger
-                                        className="rounded-full border border-border/60 bg-background/60 text-muted-foreground shadow-none transition-colors hover:bg-background hover:text-foreground size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
-                                        variant="ghost"
-                                    >
-                                        <Plus className="size-3.5" />
-                                    </PromptInputActionMenuTrigger>
-                                    <PromptInputActionMenuContent>
-                                        <PromptInputActionAddAttachments label="Add photos or files" />
-                                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); alert("Screenshot feature is coming soon!"); }}>
-                                            <Camera className="mr-2 size-4" /> Add screenshot
-                                        </DropdownMenuItem>
-                                    </PromptInputActionMenuContent>
-                                </PromptInputActionMenu>
-                            </PromptInputTools>
-                            <div className="ml-auto flex items-center gap-1.5">
-                                <PromptInputButton
-                                    className="rounded-full text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
-                                    variant="ghost"
-                                    onClick={() => alert("Voice input feature is coming soon!")}
-                                >
-                                    <Mic className="size-3.5" />
-                                </PromptInputButton>
-                                <div className="h-4 w-px bg-border/60" />
-                                <PromptInputSubmit
-                                    className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92 size-7 [&>svg]:size-3.5 p-0 flex items-center justify-center"
-                                    status={isStreaming ? "streaming" : "ready"}
-                                    variant="ghost"
-                                />
-                            </div>
-                        </PromptInputFooter>
-                    </PromptInput>
+                        isStreaming={isStreaming}
+                        members={members}
+                        allTasks={allTasks}
+                        pages={pages}
+                        sharedPages={sharedPages}
+                        userId={userId}
+                    />
                 </PromptInputProvider>
                 <p className="text-center text-[10px] text-muted-foreground/60 leading-none pb-1">
                     Keil AI can make mistakes. Check important details.
@@ -1243,7 +1726,16 @@ export function AiAssistant() {
                                         ) : (
                                             <div className="flex flex-col gap-2">
                                                 {text.trim() !== "" && (
-                                                    <TruncatedMessage text={text} />
+                                                    <div className="whitespace-pre-wrap text-[12.5px] leading-relaxed break-words">
+                                                        {renderMessageContent(
+                                                            text,
+                                                            allTasks,
+                                                            (taskId) => navigate(`/tasks/${taskId}`),
+                                                            members,
+                                                            (pageId) => navigate(`/motion/${pageId}`),
+                                                            pages
+                                                        )}
+                                                    </div>
                                                 )}
                                                 {messageParts.length > 0 && (
                                                     <div className="flex flex-col gap-1.5 mt-1">

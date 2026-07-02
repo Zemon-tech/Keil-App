@@ -134,7 +134,13 @@ export function renderMessageContent(
         }
         const [fullMatch, label, type, id] = match;
 
+        let displayLabel = label;
         if (type === "user") {
+          const matchedUser = members.find((m) => m.user_id === id);
+          if (matchedUser) {
+            const username = matchedUser.email?.split('@')[0] || "";
+            displayLabel = matchedUser.name || username || displayLabel;
+          }
           segments.push(
             <span
               key={`mention-${id}-${keyCounter++}`}
@@ -146,11 +152,15 @@ export function renderMessageContent(
               )}
             >
               <AtSign className="size-3 shrink-0 opacity-70" />
-              {label}
+              {displayLabel}
             </span>
           );
         } else if (type === "task" || type === "event") {
           const isEvent = type === "event";
+          const matchedTask = allTasks.find((t) => t.id === id);
+          if (matchedTask) {
+            displayLabel = matchedTask.title || displayLabel;
+          }
           segments.push(
             <button
               key={`${type}-${id}-${keyCounter++}`}
@@ -168,10 +178,14 @@ export function renderMessageContent(
               ) : (
                 <CheckSquare className="size-3.5 shrink-0" />
               )}
-              {label}
+              {displayLabel}
             </button>
           );
         } else if (type === "page") {
+          const matchedPage = pages.find((p) => p.id === id);
+          if (matchedPage) {
+            displayLabel = matchedPage.title || displayLabel;
+          }
           segments.push(
             <button
               key={`page-${id}-${keyCounter++}`}
@@ -183,7 +197,7 @@ export function renderMessageContent(
               )}
             >
               <FileText className="size-3.5 shrink-0" />
-              {label}
+              {displayLabel}
             </button>
           );
         }
@@ -196,8 +210,8 @@ export function renderMessageContent(
       const restAfterAt = content.slice(i + 1);
       let matchedCandidate: typeof candidates[number] | null = null;
       for (const cand of candidates) {
-        const labelLower = cand.label.toLowerCase();
-        if (restAfterAt.toLowerCase().startsWith(labelLower)) {
+        // Case-sensitive match: @bugs and @Bugs are distinct entities
+        if (restAfterAt.startsWith(cand.label)) {
           const afterMatch = restAfterAt[cand.label.length];
           if (
             afterMatch === undefined ||
@@ -349,3 +363,63 @@ export function renderMessageContent(
 
   return <>{segments}</>;
 }
+
+export function preprocessMentions(
+  text: string,
+  members: any[],
+  allTasks: any[],
+  pages: any[],
+  sharedPages: any[] = []
+): string {
+  if (!text) return "";
+
+  // 1. Build candidates
+  const candidates: { label: string; type: string; id: string }[] = [];
+
+  for (const m of members) {
+    const username = m.email?.split('@')[0] || "";
+    const fullName = m.name || username;
+    if (fullName) {
+      candidates.push({ label: fullName, type: "user", id: m.user_id });
+    }
+  }
+
+  for (const t of allTasks) {
+    if (t.title) {
+      candidates.push({ label: t.title, type: t.type, id: t.id });
+    }
+  }
+
+  const allPages = [...pages, ...sharedPages];
+  const uniquePages = allPages.reduce((acc: any[], current: any) => {
+    if (!acc.some((p: any) => p.id === current.id)) {
+      acc.push(current);
+    }
+    return acc;
+  }, []);
+
+  for (const p of uniquePages) {
+    const title = p.title || "Untitled";
+    if (title) {
+      candidates.push({ label: title, type: "page", id: p.id });
+    }
+  }
+
+  // Sort candidates by label length descending to match the longest label first
+  candidates.sort((a, b) => b.label.length - a.label.length);
+
+  // Replace clean mentions in the text
+  let processedText = text;
+
+  for (const cand of candidates) {
+    const escapedLabel = cand.label.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    // Use case-sensitive 'g' flag (not 'gi') so that @bugs and @Bugs match their
+    // respective pages distinctly — pages with the same name but different casing
+    // are treated as separate entities.
+    const regex = new RegExp(`@${escapedLabel}(?=\\s|[.,!?;:\\)\\(\\)\\[\\]]|$|')`, 'g');
+    processedText = processedText.replace(regex, `@[${cand.label}](${cand.type}:${cand.id})`);
+  }
+
+  return processedText;
+}
+

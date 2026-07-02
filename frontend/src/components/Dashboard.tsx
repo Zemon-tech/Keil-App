@@ -6,6 +6,10 @@ import { HeroSection } from "./dashboard/HeroSection";
 import { DashboardPanel } from "./dashboard/DashboardPanel";
 import { HistorySidebar } from "./dashboard/HistorySidebar";
 import { useOrgDashboard } from "@/hooks/api/useDashboard";
+import { useSpaceMembers } from "@/hooks/api/useSpaces";
+import { useOrgTasks } from "@/hooks/api/useTasks";
+import { useMotionPages, useSharedToSpace } from "@/hooks/api/useMotionPages";
+import { renderMessageContent } from "./tasks/renderMessageContent";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
@@ -50,7 +54,6 @@ import {
   LikeAction,
   DislikeAction,
   CopyAction,
-  TruncatedMessage,
 } from "@/components/ai-elements/message";
 import {
   Conversation,
@@ -583,6 +586,11 @@ export function Dashboard() {
   // ── Dashboard Data ─────────────────────────────────────────
   const { activeOrgId, activeSpaceId } = useAppContext();
   const { limits, usage } = useSubscription();
+
+  const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
+  const { data: allTasks = [] } = useOrgTasks(activeOrgId, activeSpaceId);
+  const { data: pages = [] } = useMotionPages(activeOrgId, activeSpaceId);
+  const { data: sharedPages = [] } = useSharedToSpace(activeOrgId, activeSpaceId);
 
   // ── Org/space-scoped dashboard ──────────
   const {
@@ -1580,9 +1588,18 @@ export function Dashboard() {
                           </div>
                         ) : (
                           <div className="flex flex-col gap-2">
-                            {text.trim() !== "" && (
-                              <TruncatedMessage text={text} />
-                            )}
+                             {text.trim() !== "" && (
+                               <div className="whitespace-pre-wrap text-[14px] leading-relaxed break-words">
+                                 {renderMessageContent(
+                                   text,
+                                   allTasks,
+                                   (taskId) => navigate(`/tasks/${taskId}`),
+                                   members,
+                                   (pageId) => navigate(`/motion/${pageId}`),
+                                   [...pages, ...sharedPages]
+                                 )}
+                               </div>
+                             )}
                             {messageParts.length > 0 && (
                               <div className="flex flex-col gap-1.5 mt-1">
                                 {messageParts.map((part: any, idx: number) => {
