@@ -65,7 +65,7 @@ export const MessageContent = ({
 }: MessageContentProps) => (
   <div
     className={cn(
-      "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
+      "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-x-clip text-sm",
       "group-[.is-user]:ml-auto group-[.is-user]:max-w-full group-[.is-user]:break-words group-[.is-user]:rounded-2xl group-[.is-user]:rounded-tr-sm group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
       "group-[.is-assistant]:text-foreground group-[.is-assistant]:w-full",
       className,
@@ -344,8 +344,9 @@ export const MessageResponse = memo(
         "[&_code]:bg-transparent [&_code]:p-0",
         // Remove table borders/backgrounds if any
         "[&_table]:border-none [&_td]:border-none [&_th]:border-none",
-        // Padding horizontally from sides for list markdown
-        "[&_ul]:px-4 [&_ol]:px-4 [&_ul]:list-disc [&_ol]:list-decimal",
+        // Padding for list markdown — use asymmetric padding so number markers are not clipped.
+        // ol needs pl-6 (24px) to accommodate double-digit numbers (10+) without overflow.
+        "[&_ul]:pl-5 [&_ul]:pr-2 [&_ol]:pl-6 [&_ol]:pr-2 [&_ul]:list-disc [&_ol]:list-decimal",
         className,
       )}
       plugins={streamdownPlugins}
