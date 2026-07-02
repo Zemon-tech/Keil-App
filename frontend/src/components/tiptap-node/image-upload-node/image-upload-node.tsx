@@ -1,12 +1,12 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import type { NodeViewProps } from "@tiptap/react"
 import { NodeViewWrapper } from "@tiptap/react"
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { CloseIcon } from "@/components/tiptap-icons/close-icon"
 import "@/components/tiptap-node/image-upload-node/image-upload-node.scss"
-import { focusNextNode, isValidPosition } from "@/lib/tiptap-utils"
+import { focusNextNode, isValidPosition, getPendingPasteFiles } from "@/lib/tiptap-utils"
 
 export interface FileItem {
   /**
@@ -449,6 +449,13 @@ export const ImageUploadNode: React.FC<NodeViewProps> = (props) => {
 
   const { fileItems, uploadFiles, removeFileItem, clearAllFiles } =
     useFileUpload(uploadOptions)
+
+  useEffect(() => {
+    const files = getPendingPasteFiles()
+    if (files && files.length > 0) {
+      handleUpload(files)
+    }
+  }, [])
 
   const handleUpload = async (files: File[]) => {
     const urls = await uploadFiles(files)

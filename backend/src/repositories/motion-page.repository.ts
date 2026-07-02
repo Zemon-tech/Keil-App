@@ -321,9 +321,15 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
           mp.deleted_at, 
           mp.notion_page_id, 
           mp.notion_last_synced_at,
-          mps.permission as share_permission
+          mps.permission as share_permission,
+          mps.created_by as shared_by_user_id,
+          mps.created_at as shared_at,
+          u.name as sharer_name,
+          u.avatar_url as sharer_avatar_url,
+          u.email as sharer_email
         FROM public.motion_page_shares mps
         INNER JOIN public.motion_pages mp ON mp.id = mps.page_id
+        LEFT JOIN public.users u ON u.id = mps.created_by
         WHERE mps.target_org_id = $1
           AND mps.target_space_id = $2
           AND mps.share_type = 'space'
@@ -352,7 +358,12 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
           child.deleted_at, 
           child.notion_page_id, 
           child.notion_last_synced_at,
-          parent.share_permission
+          parent.share_permission,
+          parent.shared_by_user_id,
+          parent.shared_at,
+          parent.sharer_name,
+          parent.sharer_avatar_url,
+          parent.sharer_email
         FROM public.motion_pages child
         INNER JOIN shared_roots parent ON child.parent_id = parent.id
         WHERE child.deleted_at IS NULL
@@ -409,10 +420,16 @@ export class MotionPageShareRepository extends BaseRepository<MotionPageShare> {
         mp.deleted_at, 
         mp.notion_page_id, 
         mp.notion_last_synced_at,
-        mps.permission as share_permission
+        mps.permission as share_permission,
+        mps.created_by as shared_by_user_id,
+        mps.created_at as shared_at,
+        u.name as sharer_name,
+        u.avatar_url as sharer_avatar_url,
+        u.email as sharer_email
       FROM page_ancestors pa
       INNER JOIN public.motion_pages mp ON mp.id = pa.original_page_id
       INNER JOIN public.motion_page_shares mps ON mps.page_id = pa.id
+      LEFT JOIN public.users u ON u.id = mps.created_by
       WHERE mps.target_org_id = $2
         AND mps.target_space_id = $3
         AND mps.share_type = 'space'

@@ -126,9 +126,9 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
   const isDark = resolvedTheme === "dark";
 
   return (
-    <div className="h-dvh w-full bg-background text-foreground relative overflow-y-auto">
+    <div className="min-h-dvh w-full bg-background text-foreground relative overflow-y-auto">
       {/* Floating theme toggle */}
-      <div className="absolute top-4 right-4 z-50">
+      <div className="fixed top-4 right-4 z-50">
         <Button
           variant="outline"
           size="icon"
@@ -144,8 +144,8 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
         </Button>
       </div>
 
-      {/* Cover image */}
-      <div className="h-[240px] w-full overflow-hidden bg-muted">
+      {/* Cover image — responsive height */}
+      <div className="h-[160px] sm:h-[240px] w-full overflow-hidden bg-muted">
         <img
           src={
             page.cover_image ??
@@ -153,13 +153,14 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
           }
           alt="cover"
           className="size-full object-cover opacity-80"
+          style={{ objectPosition: `center ${page.cover_position ?? 50}%` }}
         />
       </div>
 
-      <main className="max-w-[900px] mx-auto w-full pt-6 px-6 pb-24">
+      <main className="max-w-[900px] mx-auto w-full pt-6 px-4 sm:px-6 pb-24">
         {/* Branding strip */}
         <div className="flex items-center gap-1.5 mb-6 text-xs text-muted-foreground/50">
-          <FileText className="size-3.5" />
+          <FileText className="size-3.5 shrink-0" />
           <span>Shared via</span>
           <Link
             to="/"
@@ -169,8 +170,8 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
           </Link>
         </div>
 
-        {/* Title */}
-        <h1 className="text-[44px] leading-[1.1] font-bold tracking-tight text-foreground/90 mb-6">
+        {/* Title — responsive font size */}
+        <h1 className="text-3xl sm:text-[44px] leading-tight sm:leading-[1.1] font-bold tracking-tight text-foreground/90 mb-6">
           {page.title}
         </h1>
 
@@ -195,3 +196,4 @@ export function MotionPublicPage({ mode = "token" }: MotionPublicPageProps) {
     </div>
   );
 }
+

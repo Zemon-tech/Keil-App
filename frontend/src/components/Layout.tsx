@@ -18,7 +18,7 @@ import { useSettingsStore } from "@/store/useSettingsStore";
 import { Toaster } from "@/components/ui/sonner";
 import { useTaskOverdueAutoRefresh } from "@/hooks/useTaskOverdueAutoRefresh";
 import { useMotionStore } from "@/store/useMotionStore";
-import { useCachedPageById, useCreateMotionPage } from "@/hooks/api/useMotionPages";
+import { useCachedPageById, useCreateMotionPage, useSharedToSpace } from "@/hooks/api/useMotionPages";
 import { UpdatesAnalyticsDrawer } from "./motion/UpdatesAnalyticsDrawer";
 import { CreateTaskDialog } from "./tasks/CreateTaskDialog";
 import { LockoutOverlay } from "./billing/LockoutOverlay";
@@ -26,6 +26,7 @@ import { TrialBanner } from "./billing/TrialBanner";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { useAppContext } from "@/contexts/AppContext";
+import { MotionSidebar } from "./motion/MotionSidebar";
 
 type LayoutProps = {
   children?: ReactNode;
@@ -42,6 +43,7 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [sharedSidebarOpen, setSharedSidebarOpen] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();
   const { pageId } = useParams<{ pageId: string }>();
@@ -49,7 +51,22 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
 
   const { setDrawerOpen } = useMotionStore();
   const page = useCachedPageById(pageId);
-  const pageTitle = page?.title ?? "Untitled";
+  const { data: sharedPagesInSpace = [] } = useSharedToSpace(activeOrgId, activeSpaceId);
+
+  // A shared page is one where the pageId is found in the sharedPages list
+  // (which contains pages belonging to OTHER orgs/spaces shared into this space).
+  // We cannot rely on useCachedPageById alone because it only searches the
+  // active space's OWN pages — shared pages would never appear there.
+  const sharedPageData = pageId
+    ? sharedPagesInSpace.find((p) => p.id === pageId)
+    : undefined;
+
+  const pageTitle = (page ?? sharedPageData)?.title ?? "Untitled";
+
+  // isSharedMotionPage is true when the current pageId is found only in the
+  // shared pages list (not the own-space pages), meaning the viewer is
+  // accessing a page that belongs to a different org/space.
+  const isSharedMotionPage = Boolean(pageId && sharedPageData);
 
   // Auto-close Updates & Analytics drawer if path changes away from motion page details
   useEffect(() => {
@@ -198,6 +215,38 @@ export function Layout({ children, className, sidebar }: LayoutProps) {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, [navigate, theme, setTheme, createPage]);
+
+  // ── Shared Motion Viewer ───────────────────────────────────────────────────
+  // When the user is viewing a page that belongs to another org/space,
+  // render a clean, stripped-down layout that only shows the shared content.
+  // No main sidebar, chat, notifications, or any private workspace context.
+  if (isSharedMotionPage) {
+    return (
+      <div className="flex h-screen w-screen overflow-hidden bg-background">
+        <LockoutOverlay />
+        <SidebarProvider>
+          {/* Lightweight sidebar: only shared-with-me pages */}
+          <div
+            className={cn(
+              "h-full transition-all duration-300 ease-in-out overflow-hidden border-r border-border",
+              sharedSidebarOpen ? "w-72 opacity-100" : "w-0 opacity-0 border-none"
+            )}
+          >
+            <MotionSidebar
+              onClose={() => setSharedSidebarOpen(false)}
+              isSharedMode
+            />
+          </div>
+          <SidebarInset className="bg-background">
+            <main className={cn("flex-1 min-w-0", className)}>
+              {children || <Outlet />}
+            </main>
+          </SidebarInset>
+          <Toaster />
+        </SidebarProvider>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">

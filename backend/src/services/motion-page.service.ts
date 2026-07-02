@@ -32,6 +32,11 @@ export interface MotionPageDTO {
   share_permission?: MotionPermission;
   notion_page_id?: string | null;
   notion_last_synced_at?: string | null;
+  shared_by_user_id?: string | null;
+  shared_at?: string | null;
+  sharer_name?: string | null;
+  sharer_avatar_url?: string | null;
+  sharer_email?: string | null;
 }
 
 export interface MotionPageShareDTO {
@@ -111,6 +116,11 @@ const toPageDTO = (page: any): MotionPageDTO => ({
   share_permission: page.share_permission,
   notion_page_id: page.notion_page_id ?? null,
   notion_last_synced_at: toISO(page.notion_last_synced_at),
+  shared_by_user_id: page.shared_by_user_id ?? null,
+  shared_at: toISO(page.shared_at),
+  sharer_name: page.sharer_name ?? null,
+  sharer_avatar_url: page.sharer_avatar_url ?? null,
+  sharer_email: page.sharer_email ?? null,
 });
 
 const toShareDTO = (share: any): MotionPageShareDTO => ({

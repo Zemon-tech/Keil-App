@@ -23,6 +23,14 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+function getInitials(name: string | null | undefined, email: string): string {
+  if (name) {
+    return name.charAt(0).toUpperCase();
+  }
+  return email.charAt(0).toUpperCase();
+}
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -772,6 +780,43 @@ export function MotionPage() {
             {/* Save status */}
             <SaveIndicator status={saveStatus} />
 
+            {/* Share attribution */}
+            {isSharedPage && displayPage && displayPage.sharer_name && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1.5 bg-muted/40 border border-border/50 rounded-full pl-1.5 pr-2.5 py-0.5 text-xs text-muted-foreground select-none cursor-help shrink-0">
+                      {displayPage.sharer_avatar_url ? (
+                        <img
+                          src={displayPage.sharer_avatar_url}
+                          alt={displayPage.sharer_name}
+                          className="size-4.5 rounded-full object-cover border border-border/50 shrink-0"
+                        />
+                      ) : (
+                        <span className="size-4.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0">
+                          {getInitials(displayPage.sharer_name, displayPage.sharer_email || "")}
+                        </span>
+                      )}
+                      <span className="font-medium max-w-[120px] truncate text-foreground/80">
+                        Shared by {displayPage.sharer_name}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="end" className="text-xs p-2.5 max-w-xs space-y-1 bg-popover border border-border text-popover-foreground rounded-lg shadow-md z-50">
+                    <p className="font-semibold text-foreground/90">{displayPage.sharer_name}</p>
+                    {displayPage.sharer_email && (
+                      <p className="text-muted-foreground">{displayPage.sharer_email}</p>
+                    )}
+                    {displayPage.shared_at && (
+                      <p className="text-[10px] text-muted-foreground/60">
+                        Shared on {new Date(displayPage.shared_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
             {/* Share button — opens panel anchored below */}
             {!isPageReadOnly && !isSharedPage && activeOrgId && activeSpaceId && (
               <Popover open={shareOpen || shareModalOpen} onOpenChange={(open) => { setShareOpen(open); setShareModalOpen(open); }}>
@@ -885,7 +930,7 @@ export function MotionPage() {
                   )}
 
                   {/* Section 4 — Page Settings */}
-                  {matchesSearch("Lock page") && !isPageReadOnly && (
+                  {matchesSearch("Lock page") && !isPageReadOnly && !isSharedPage && (
                     <>
                       <div className="py-1">
                         <div className="flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors group" onClick={() => setIsLocked(!isLocked)}>
@@ -926,7 +971,7 @@ export function MotionPage() {
                   )}
 
                   {/* Section 5.5 — Notion Integration */}
-                  {!isPageReadOnly && (matchesSearch("Notion") || matchesSearch("Sync") || matchesSearch("Export")) && (
+                  {!isSharedPage && !isPageReadOnly && (matchesSearch("Notion") || matchesSearch("Sync") || matchesSearch("Export")) && (
                     <>
                       <div className="py-1">
                         {notionStatus?.connected ? (
@@ -1012,7 +1057,7 @@ export function MotionPage() {
                   )}
 
                   {/* Section 6 — Advanced */}
-                  {matchesSearch("Updates & analytics") && (
+                  {!isSharedPage && matchesSearch("Updates & analytics") && (
                     <>
                       <div className="py-1">
                         <div

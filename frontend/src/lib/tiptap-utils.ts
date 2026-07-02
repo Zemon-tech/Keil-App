@@ -638,3 +638,15 @@ export function getSelectedBlockNodes(editor: Editor): PMNode[] {
 
   return blocks
 }
+
+let pendingPasteFiles: File[] | null = null
+
+export function setPendingPasteFiles(files: File[] | null) {
+  pendingPasteFiles = files
+}
+
+export function getPendingPasteFiles(): File[] | null {
+  const files = pendingPasteFiles
+  pendingPasteFiles = null
+  return files
+}

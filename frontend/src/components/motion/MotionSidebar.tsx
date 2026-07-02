@@ -7,6 +7,14 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+function getInitials(name: string | null | undefined, email: string): string {
+  if (name) {
+    return name.charAt(0).toUpperCase();
+  }
+  return email.charAt(0).toUpperCase();
+}
 import {
   Search,
   Home,
@@ -283,15 +291,55 @@ function SidebarPageItem({
                   )}
                 </button>
               </span>
-              <Link
-                to={`/motion/${item.id}`}
-                onClick={() => {
-                  if (!isMultiSelecting && window.innerWidth < 1024) onClose?.();
-                }}
-                className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex items-center gap-2"
-              >
-                <span className="truncate">{item.title}</span>
-              </Link>
+              {item.sharer_name ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link
+                        to={`/motion/${item.id}`}
+                        onClick={() => {
+                          if (!isMultiSelecting && window.innerWidth < 1024) onClose?.();
+                        }}
+                        className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex items-center gap-2"
+                      >
+                        <span className="truncate">{item.title}</span>
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="text-xs p-2 max-w-xs space-y-0.5 bg-popover border border-border text-popover-foreground rounded shadow z-50">
+                      <div className="flex items-center gap-1.5">
+                        {item.sharer_avatar_url ? (
+                          <img
+                            src={item.sharer_avatar_url}
+                            alt={item.sharer_name}
+                            className="size-4 rounded-full object-cover border border-border/50"
+                          />
+                        ) : (
+                          <span className="size-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center text-[8px] font-bold">
+                            {getInitials(item.sharer_name, item.sharer_email || "")}
+                          </span>
+                        )}
+                        <span className="font-semibold text-foreground">{item.sharer_name}</span>
+                      </div>
+                      {item.sharer_email && <p className="text-muted-foreground text-[10px] pl-5.5">{item.sharer_email}</p>}
+                      {item.shared_at && (
+                        <p className="text-[9px] text-muted-foreground/75 pl-5.5">
+                          Shared {new Date(item.shared_at).toLocaleDateString([], { dateStyle: 'short' })}
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <Link
+                  to={`/motion/${item.id}`}
+                  onClick={() => {
+                    if (!isMultiSelecting && window.innerWidth < 1024) onClose?.();
+                  }}
+                  className="min-w-0 flex-1 truncate text-[13.5px] font-medium leading-snug transition-colors group-hover/item:text-foreground flex items-center gap-2"
+                >
+                  <span className="truncate">{item.title}</span>
+                </Link>
+              )}
             </div>
           )}
 
@@ -412,9 +460,11 @@ function SidebarPageItem({
 
 type MotionSidebarProps = {
   onClose?: () => void;
+  /** When true, renders a lightweight viewer showing only pages shared with the current space. */
+  isSharedMode?: boolean;
 };
 
-export function MotionSidebar({ onClose }: MotionSidebarProps) {
+export function MotionSidebar({ onClose, isSharedMode = false }: MotionSidebarProps) {
   const navigate = useNavigate();
   const { pageId } = useParams();
 
@@ -668,6 +718,77 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
   };
 
   const noContext = !activeOrgId || !activeSpaceId;
+
+  // ── Shared Motion Viewer ────────────────────────────────────────────────────
+  // When isSharedMode=true we render a stripped-down sidebar that only shows
+  // the pages shared with this space. No private pages, trash, meetings, etc.
+  if (isSharedMode) {
+    return (
+      <Sidebar
+        collapsible="none"
+        className="size-full border-r border-border/50 bg-card flex flex-col select-none"
+      >
+        {/* Header */}
+        <SidebarHeader className="h-12 justify-center px-4 border-b border-border/40">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold tracking-tight text-foreground truncate">
+              Shared with Me
+            </span>
+            <div className="flex-1" />
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label="Close sidebar"
+              >
+                <X className="size-4" />
+              </Button>
+            )}
+          </div>
+        </SidebarHeader>
+
+        <SidebarContent className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+          {noContext ? (
+            <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+              Select an organisation and space to view shared pages.
+            </div>
+          ) : sharedRootPages.length === 0 ? (
+            <div className="px-4 py-10 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+              <span>No pages have been shared with you yet.</span>
+            </div>
+          ) : (
+            <SidebarGroup>
+              <SidebarMenu>
+                {sharedRootPages.map((item) => (
+                  <SidebarPageItem
+                    key={`shared-${item.id}`}
+                    item={item}
+                    pageId={pageId}
+                    onClose={onClose}
+                    onDelete={handleDeletePage}
+                    onAddSubpage={handleAddPage}
+                    onRename={handleRenamePage}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          )}
+        </SidebarContent>
+
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+            .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; }
+            .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: var(--muted); }
+          `,
+          }}
+        />
+      </Sidebar>
+    );
+  }
 
   return (
     <Sidebar
@@ -1141,7 +1262,7 @@ export function MotionSidebar({ onClose }: MotionSidebarProps) {
                   >
                     <ChevronDown className="size-3" />
                   </div>
-                  Shared with this space
+                  Shared with Me
                 </button>
                 {sharedOpen && (
                   <SidebarMenu className="mt-1">

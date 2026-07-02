@@ -730,7 +730,7 @@ function HeroPromptSurface({
 
           {isActive ? (
             <PromptInputSubmit
-              className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
+              className="rounded-full bg-foreground text-background hover:bg-foreground/92 hover:text-background active:bg-foreground/90 active:text-background shadow-none transition-transform hover:scale-[1.02]"
               status={status}
               onClick={onStop}
               type="button"
@@ -738,13 +738,13 @@ function HeroPromptSurface({
             />
           ) : canSubmit ? (
             <PromptInputSubmit
-              className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
+              className="rounded-full bg-foreground text-background hover:bg-foreground/92 hover:text-background active:bg-foreground/90 active:text-background shadow-none transition-transform hover:scale-[1.02]"
               status={status}
               variant="ghost"
             />
           ) : (
             <PromptInputButton
-              className="rounded-full bg-foreground text-background shadow-none transition-transform hover:scale-[1.02] hover:bg-foreground/92"
+              className="rounded-full bg-foreground text-background hover:bg-foreground/92 hover:text-background active:bg-foreground/90 active:text-background shadow-none transition-transform hover:scale-[1.02]"
               size="icon-sm"
               variant="ghost"
             >

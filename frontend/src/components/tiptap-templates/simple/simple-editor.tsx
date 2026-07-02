@@ -33,6 +33,8 @@ import { AiBubbleMenu, AiStreamToolbar } from "./AiBubbleMenu"
 import { AiBlock } from "@/components/tiptap-node/ai-block-node/ai-block-extension"
 import { useAppContext } from "@/contexts/AppContext"
 import { useParams } from "react-router-dom"
+import api from "@/lib/api"
+import axios from "axios"
 import { Extension } from "@tiptap/core"
 import { markdownToHtml } from "@/utils/markdown-parser"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
@@ -317,7 +319,7 @@ import "@/components/tiptap-node/heading-node/heading-node.scss"
 import "@/components/tiptap-node/paragraph-node/paragraph-node.scss"
 
 // --- Lib ---
-import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
+import { MAX_FILE_SIZE, setPendingPasteFiles } from "@/lib/tiptap-utils"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
@@ -389,10 +391,54 @@ export function SimpleEditor({
   const activeItemRef = useRef<HTMLDivElement>(null)
   const [slashOpen, setSlashOpen] = useState(false)
 
-  // --- Motion AI Integration ---
   const { pageId } = useParams<{ pageId: string }>();
   const { activeOrgId, activeSpaceId } = useAppContext();
   const { stream, isStreaming } = useMotionAi(activeOrgId, activeSpaceId, pageId ?? null);
+
+  const pageIdRef = useRef(pageId)
+  useEffect(() => {
+    pageIdRef.current = pageId
+  }, [pageId])
+
+  const stableUploadHandler = useCallback(async (
+    file: File,
+    onProgress?: (event: { progress: number }) => void,
+    abortSignal?: AbortSignal
+  ): Promise<string> => {
+    const currentPageId = pageIdRef.current
+    if (!currentPageId) {
+      throw new Error("No active page ID found for editor uploads")
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error(`File size exceeds maximum allowed (${MAX_FILE_SIZE / 1024 / 1024}MB)`)
+    }
+
+    // 1. Get presigned URL
+    const res = await api.post("v1/s3-upload/motion/asset", {
+      pageId: currentPageId,
+      fileName: file.name,
+      contentType: file.type || "image/png",
+    })
+
+    const { uploadUrl, publicUrl } = res.data.data
+
+    // 2. Upload to S3
+    await axios.put(uploadUrl, file, {
+      headers: {
+        "Content-Type": file.type || "image/png",
+      },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          onProgress?.({ progress })
+        }
+      },
+      signal: abortSignal,
+    })
+
+    return publicUrl
+  }, [])
 
   // --- Universal Mentions Data Loading ---
   const { data: members = [] } = useSpaceMembers(activeOrgId, activeSpaceId);
@@ -816,7 +862,7 @@ export function SimpleEditor({
       accept: "image/*",
       maxSize: MAX_FILE_SIZE,
       limit: 3,
-      upload: handleImageUpload,
+      upload: stableUploadHandler,
       onError: (error) => console.error("Upload failed:", error),
     }),
     AiBlock,
@@ -942,6 +988,29 @@ export function SimpleEditor({
           console.error("Error transforming pasted table HTML:", e)
         }
         return html
+      },
+      handlePaste: (_view, event) => {
+        const files = event.clipboardData?.files ? Array.from(event.clipboardData.files) : []
+        const hasImages = files.length > 0 && files.every(file => file.type.startsWith("image/"))
+
+        if (hasImages) {
+          event.preventDefault()
+          setPendingPasteFiles(files)
+
+          const e = editorRef.current as any
+          if (e) {
+            e.commands.insertContent({
+              type: "imageUpload",
+              attrs: {
+                accept: "image/*",
+                maxSize: MAX_FILE_SIZE,
+                limit: 3,
+              }
+            })
+          }
+          return true
+        }
+        return false
       }
     },
     extensions: uniqueExtensions,

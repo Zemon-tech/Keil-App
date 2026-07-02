@@ -8,6 +8,14 @@ import { useNavigate } from "react-router-dom";
 import { useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useMotionPages, useCreateMotionPage, useSharedToSpace, type MotionPageDTO } from "@/hooks/api/useMotionPages";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+
+function getInitials(name: string | null | undefined, email: string): string {
+  if (name) {
+    return name.charAt(0).toUpperCase();
+  }
+  return email.charAt(0).toUpperCase();
+}
 
 interface PageCardGridProps {
   pages: MotionPageDTO[];
@@ -91,16 +99,50 @@ function PageCardGrid({
               <h3 className="text-xs font-semibold truncate leading-tight text-foreground/90">
                 {item.title}
               </h3>
-              <p className="text-[10px] text-muted-foreground/50 flex items-center gap-1 mt-1">
-                <span className="size-3 bg-muted-foreground/20 rounded-full flex items-center justify-center text-[6px] font-bold text-muted-foreground shrink-0">
-                  {item.title.charAt(0).toUpperCase()}
-                </span>
-                <span className="truncate">
-                  {formatDistanceToNow(new Date(item.updated_at), {
-                    addSuffix: true,
-                  })}
-                </span>
-              </p>
+              {item.sharer_name ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="text-[10px] text-muted-foreground/60 flex items-center gap-1.5 mt-1 min-w-0 w-full">
+                        {item.sharer_avatar_url ? (
+                          <img
+                            src={item.sharer_avatar_url}
+                            alt={item.sharer_name}
+                            className="size-3.5 rounded-full object-cover border border-border/50 shrink-0"
+                          />
+                        ) : (
+                          <span className="size-3.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center text-[7px] font-bold shrink-0">
+                            {getInitials(item.sharer_name, item.sharer_email || "")}
+                          </span>
+                        )}
+                        <span className="truncate max-w-[85px]">
+                          {item.sharer_name}
+                        </span>
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs p-2 max-w-xs space-y-0.5 bg-popover border border-border text-popover-foreground rounded shadow z-50">
+                      <p className="font-semibold text-foreground">{item.sharer_name}</p>
+                      {item.sharer_email && <p className="text-muted-foreground">{item.sharer_email}</p>}
+                      {item.shared_at && (
+                        <p className="text-[10px] text-muted-foreground/75">
+                          Shared {formatDistanceToNow(new Date(item.shared_at), { addSuffix: true })}
+                        </p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <p className="text-[10px] text-muted-foreground/50 flex items-center gap-1 mt-1">
+                  <span className="size-3 bg-muted-foreground/20 rounded-full flex items-center justify-center text-[6px] font-bold text-muted-foreground shrink-0">
+                    {item.title.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="truncate">
+                    {formatDistanceToNow(new Date(item.updated_at), {
+                      addSuffix: true,
+                    })}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
         ))
