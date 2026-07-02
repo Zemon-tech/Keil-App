@@ -353,6 +353,13 @@ export function MotionSharePanel({
     const email = isEmail ? trimmed : `${trimmed}@keilhq.com`;
     const itemId = `email-${email.toLowerCase()}`;
     
+    // Check if already shared
+    if (shares.some(s => s.target_user_email === email)) {
+      setSearchQuery("");
+      toast.error("This page is already shared with that user");
+      return;
+    }
+    
     // Avoid duplicates
     if (selectedRecipients.some(r => r.id === itemId)) {
       setSearchQuery("");
@@ -372,6 +379,11 @@ export function MotionSharePanel({
       ({ space }) => space.name.toLowerCase() === trimmed.toLowerCase()
     );
     if (matchedSpace) {
+      if (shares.some((s) => s.share_type === "space" && s.target_space_id === matchedSpace.space.id)) {
+        setSearchQuery("");
+        toast.error("This page is already shared with that space");
+        return;
+      }
       const itemId = `space-${matchedSpace.space.id}`;
       if (!selectedRecipients.some(r => r.id === itemId)) {
         setSelectedRecipients(prev => [
@@ -394,6 +406,11 @@ export function MotionSharePanel({
       (u) => (u.name || "").toLowerCase() === trimmed.toLowerCase() || u.email.toLowerCase() === trimmed.toLowerCase()
     );
     if (matchedUser) {
+      if (shares.some((s) => s.target_user_email === matchedUser.email)) {
+        setSearchQuery("");
+        toast.error("This page is already shared with that user");
+        return;
+      }
       const itemId = `user-${matchedUser.id}`;
       if (!selectedRecipients.some(r => r.id === itemId)) {
         setSelectedRecipients(prev => [
@@ -496,6 +513,11 @@ export function MotionSharePanel({
       const uniqueOrgIds = Array.from(new Set(sharedOrgIds));
       
       for (const targetId of uniqueOrgIds) {
+        // Skip fetching spaces if the user is not a member of the organization
+        if (!organisations.some(org => org.id === targetId)) {
+          continue;
+        }
+
         if (!orgSpaces[targetId]) {
           try {
             const res = await api.get<{ data: { spaces: Space[] } }>(`v1/orgs/${targetId}/spaces`);
@@ -551,11 +573,18 @@ export function MotionSharePanel({
 
   // Suggestions filter matching logic
   // Exclude current space of current page from search suggestions since it's managed via General Access
+  // Exclude already shared spaces
   const filteredSpaces = allSpaces.filter(
     ({ space }) =>
       !(space.org_id === orgId && space.id === spaceId) &&
+      !shares.some((s) => s.share_type === "space" && s.target_space_id === space.id) &&
       (searchQuery.trim() === "" ||
         space.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Exclude already shared users
+  const availableSearchedUsers = searchedUsers.filter(
+    (u) => !shares.some((s) => s.target_user_email === u.email)
   );
 
   // Suggestions toggling
@@ -604,34 +633,8 @@ export function MotionSharePanel({
   const handleShareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Include whatever is left in the input query if they didn't hit comma/Enter
-    const trimmedInput = searchQuery.trim();
+    // Ignore leftover search text
     let finalRecipients = [...selectedRecipients];
-    if (trimmedInput) {
-      // Try to resolve it
-      const matchedSpace = allSpaces.find(
-        ({ space }) => space.name.toLowerCase() === trimmedInput.toLowerCase()
-      );
-      if (matchedSpace) {
-        const itemId = `space-${matchedSpace.space.id}`;
-        if (!finalRecipients.some(r => r.id === itemId)) {
-          finalRecipients.push({
-            id: itemId,
-            type: "space",
-            name: matchedSpace.space.name,
-            orgId: matchedSpace.space.org_id,
-            spaceId: matchedSpace.space.id
-          });
-        }
-      } else {
-        const isEmail = trimmedInput.includes("@");
-        const email = isEmail ? trimmedInput : `${trimmedInput}@keilhq.com`;
-        const itemId = `email-${email.toLowerCase()}`;
-        if (!finalRecipients.some(r => r.id === itemId)) {
-          finalRecipients.push({ id: itemId, type: "email", name: email, email: email });
-        }
-      }
-    }
 
     if (finalRecipients.length === 0) return;
 
@@ -925,7 +928,7 @@ export function MotionSharePanel({
                     })}
 
                     {/* Users Suggestions */}
-                    {searchedUsers.map((u) => {
+                    {availableSearchedUsers.map((u) => {
                       const itemKey = `user-${u.id}`;
                       const isSelected = selectedRecipients.some(r => r.id === itemKey);
                       const userName = u.name || u.email.split("@")[0];
@@ -976,7 +979,7 @@ export function MotionSharePanel({
                       </div>
                     )}
 
-                    {!isSearchingUsers && filteredSpaces.length === 0 && searchedUsers.length === 0 && (
+                    {!isSearchingUsers && filteredSpaces.length === 0 && availableSearchedUsers.length === 0 && (
                       <div className="text-center py-6 text-xs text-muted-foreground">
                         {searchQuery.trim().length >= 2 ? "No results found" : "Type at least 2 characters to search users..."}
                       </div>
