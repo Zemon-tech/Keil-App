@@ -262,29 +262,35 @@ export function MessageView({ channelId, orgId, spaceId, hideHeader }: MessageVi
     const value = e.target.value;
     setText(value);
     
-    // Mention detection
-    const caretPos = e.target.selectionStart ?? value.length;
-    for (let i = caretPos - 1; i >= 0; i--) {
-      const ch = value[i];
-      if (ch === "@") {
-        const between = value.slice(i + 1, caretPos);
-        if (!between.includes(" ") && !between.includes("\n")) {
-          setMention({
-            type: "user",
-            triggerIndex: i,
-            query: between,
-            highlightedIndex: 0,
-          });
-        } else {
+    // Mention detection (only in group chats)
+    if (currentChannel?.type === "group") {
+      const caretPos = e.target.selectionStart ?? value.length;
+      for (let i = caretPos - 1; i >= 0; i--) {
+        const ch = value[i];
+        if (ch === "@") {
+          const between = value.slice(i + 1, caretPos);
+          if (!between.includes(" ") && !between.includes("\n")) {
+            setMention({
+              type: "user",
+              triggerIndex: i,
+              query: between,
+              highlightedIndex: 0,
+            });
+          } else {
+            setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+          }
+          break;
+        }
+        if (ch === " " || ch === "\n") {
+          setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
+          break;
+        }
+        if (i === 0) {
           setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
         }
-        break;
       }
-      if (ch === " " || ch === "\n") {
-        setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
-        break;
-      }
-      if (i === 0) {
+    } else {
+      if (mention.type !== null) {
         setMention({ type: null, triggerIndex: -1, query: "", highlightedIndex: 0 });
       }
     }

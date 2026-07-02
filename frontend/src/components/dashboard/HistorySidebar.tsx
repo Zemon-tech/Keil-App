@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
+import { useChatStore } from "@/store/useChatStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ export function HistorySidebar({
   onSelectThread,
   onNewChat,
 }: HistorySidebarProps) {
+  const { isChatOpen } = useChatStore();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -172,7 +174,10 @@ export function HistorySidebar({
       <Sidebar
         side="right"
         collapsible="offcanvas"
-        className="border-l border-sidebar-border shadow-none bg-sidebar text-sidebar-foreground z-20"
+        className={cn(
+          "border-l border-sidebar-border shadow-none bg-sidebar text-sidebar-foreground z-20 transition-all duration-300",
+          isChatOpen && "right-[400px]"
+        )}
       >
         {/* ── Header: Motion-style Tabs ── */}
         <SidebarHeader className="h-12 justify-center px-3 border-b border-sidebar-border shrink-0 bg-sidebar">
